@@ -42,7 +42,7 @@
   "homepage": "https://asciify.org",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayangabryl/asciify"
+    "url": "https://github.com/ayangabryl/asciify-engine"
   },
   "dependencies": {
     "gifuct-js": "^2.1.2"
