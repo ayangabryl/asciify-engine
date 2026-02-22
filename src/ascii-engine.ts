@@ -74,3 +74,7 @@ export { buildTextFrame, renderTextBackground } from './core/text-frame';
 // ── Recording API ─────────────────────────────────────────────────────────────
 export type { RecorderOptions, Recorder } from './core/record';
 export { createRecorder, recordAndDownload } from './core/record';
+
+// ── Webcam API ────────────────────────────────────────────────────────────────
+export type { WebcamOptions } from './core/webcam';
+export { asciifyWebcam } from './core/webcam';
