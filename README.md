@@ -16,7 +16,7 @@
 - **Media → ASCII** — images, videos, and animated GIFs
 - **13 art styles** — Standard, Blocks, Circles, Braille, Katakana, Dense, and more
 - **4 color modes** — Grayscale, Full Color, Matrix, Accent
-- **10 animated backgrounds** — Wave, Rain, Stars, Pulse, Noise, Grid, Aurora, Silk, Void, Morph
+- **14 animated backgrounds** — Wave, Rain, Stars, Pulse, Noise, Grid, Aurora, Silk, Void, Morph, Fire, DNA, Terrain, Circuit
 - **Interactive hover effects** — Spotlight, Flashlight, Magnifier, Force Field, Neon, Fire, Ice, Gravity, Shatter, Ghost
 - **Light & dark mode** — via `colorScheme: 'auto'` or explicit `light` / `dark`
 - **Embed generation** — self-contained HTML output (static or animated)
@@ -54,6 +54,25 @@ await asciify('photo.jpg', canvas, {
     hoverStrength: 0.5,
   },
 });
+```
+
+> **Canvas sizing:** Set `width` and `height` as HTML attributes on the `<canvas>` element — these control the pixel grid. CSS sizing alone (`style="width:100%"`) won't work (the canvas will be 0×0). Use `canvas.width = el.clientWidth` to fill a container.
+
+### Webcam → ASCII
+
+```ts
+import { asciifyWebcam } from 'asciify-engine';
+
+const canvas = document.querySelector('canvas')!;
+
+// Requests camera access, starts a live rAF loop, returns stop()
+const stop = await asciifyWebcam(canvas, {
+  artStyle: 'terminal',
+  mirror: true,           // horizontal flip (selfie mode)
+});
+
+// Release camera + cancel loop
+stop();
 ```
 
 ### GIF Animation
@@ -172,8 +191,8 @@ asciiBackground('#hero', { type: 'aurora', colorScheme: 'auto' });
 asciiBackground('#hero', { type: 'wave', colorScheme: 'light' });
 
 // Stop / clean up
-const stop = asciiBackground('#hero', { type: 'stars' });
-stop();
+const { destroy } = asciiBackground('#hero', { type: 'stars' });
+destroy();
 ```
 
 ### Background Types
@@ -190,6 +209,10 @@ stop();
 | `silk` | Silky fluid swirls following the cursor |
 | `void` | Gravitational singularity — characters spiral inward toward cursor |
 | `morph` | Characters morph between shapes driven by noise |
+| `fire` | Upward-drifting flame columns with heat-gradient character mapping |
+| `dna` | Rotating double-helix strands with base-pair characters |
+| `terrain` | Procedural heightmap landscape with parallax depth layers |
+| `circuit` | PCB trace network that pulses with traveling electric signals |
 
 ### `asciiBackground` Options
 
@@ -324,14 +347,15 @@ animId = requestAnimationFrame(tick);
 
 | Function | Returns | Description |
 |---|---|---|
-| `asciify(source, canvas, opts?)` | `Promise<void>` | Convert an image/video/canvas (or URL) to ASCII and render — handles loading automatically |
+| `asciify(source, canvas, opts?)` | `Promise<void>` | Render a **single** ASCII frame from an image (or URL). For animated loops use `asciifyGif` / `asciifyVideo` |
 | `asciifyGif(source, canvas, opts?)` | `Promise<() => void>` | Fetch a GIF, convert, and start an animation loop — returns `stop()` |
 | `asciifyVideo(source, canvas, opts?)` | `Promise<() => void>` | Convert a video and start an animation loop — returns `stop()` |
 | `imageToAsciiFrame(source, options, w?, h?)` | `{ frame, cols, rows }` | Convert an image, video frame, or canvas to a raw ASCII frame |
 | `renderFrameToCanvas(ctx, frame, options, w, h, time?, hoverPos?)` | `void` | Render a raw ASCII frame to a 2D canvas context |
 | `gifToAsciiFrames(buffer, options, w, h, onProgress?)` | `{ frames, cols, rows, fps }` | Parse an animated GIF `ArrayBuffer` into ASCII frames |
 | `videoToAsciiFrames(video, options, w, h, fps?, maxDuration?, onProgress?)` | `{ frames, cols, rows, fps }` | Extract and convert video frames to ASCII |
-| `asciiBackground(selector, options)` | `() => void` | Mount a live animated ASCII background; returns a cleanup function |
+| `asciifyWebcam(canvas, opts?)` | `Promise<() => void>` | Start a live webcam → ASCII loop; returns `stop()` to cancel and release the camera |
+| `asciiBackground(target, options)` | `{ destroy: () => void }` | Mount a live animated ASCII background; call `destroy()` to stop and remove |
 | `generateEmbedCode(frame, options)` | `string` | Self-contained static HTML embed |
 | `generateAnimatedEmbedCode(frames, options, fps)` | `string` | Self-contained animated HTML embed |
 
@@ -363,6 +387,24 @@ Used by `asciify()`, `asciifyGif()`, and `asciifyVideo()`:
 | `artStyle` | `ArtStyle` | `'classic'` | Art style preset (see `ART_STYLE_PRESETS`) |
 | `ditherStrength` | `number` | `0` | Floyd-Steinberg dither intensity (0–1) |
 | `dotSizeRatio` | `number` | `0.8` | Dot size when `renderMode === 'dots'` (fraction of cell) |
+
+### Art Styles (`artStyle`)
+
+| Value | Color mode | Description |
+|---|---|---|
+| `classic` | Grayscale | Standard density ramp — clean, universally readable |
+| `art` | Full color | 70-char dense ramp for maximum tonal detail |
+| `particles` | Full color | Dot circles (`renderMode: 'dots'`) — great for photos |
+| `letters` | Full color | Alphabet characters with pixel-accurate color |
+| `terminal` | Matrix | Classic charset with green phosphor / Matrix look |
+| `claudeCode` | Accent | Box-drawing chars with accent color — technical/hacker aesthetic |
+| `braille` | Full color | 256-char braille block — ultra-dense, printed feel |
+| `katakana` | Matrix | Half-width katakana — anime / cyberpunk aesthetic |
+| `box` | Grayscale | Filled block elements `▪◾◼■█` |
+| `lines` | Grayscale | Dash/em-dash ramp — minimalist typographic look |
+| `circles` | Accent | Concentric circle chars with accent highlight |
+| `musical` | Accent | Music notation ♩♪♫♬♭♮♯ — playful, low density |
+| `emoji` | Full color | Block emoji mosaic — best at larger `fontSize` |
 
 ### Background Options
 
