@@ -71,9 +71,9 @@ export { asciiText, asciiTextAnsi } from './core/ascii-text';
 export type { TextBackgroundOptions } from './core/text-frame';
 export { buildTextFrame, renderTextBackground } from './core/text-frame';
 
-// ── Recording API ─────────────────────────────────────────────────────────────
-export type { RecorderOptions, Recorder } from './core/record';
-export { createRecorder, recordAndDownload } from './core/record';
+// ── Recording & Snapshot API ──────────────────────────────────────────────────
+export type { RecorderOptions, Recorder, SnapshotOptions } from './core/record';
+export { createRecorder, recordAndDownload, captureSnapshot, snapshotAndDownload } from './core/record';
 
 // ── Webcam API ────────────────────────────────────────────────────────────────
 export type { WebcamOptions } from './core/webcam';
