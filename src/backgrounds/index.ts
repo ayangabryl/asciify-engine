@@ -154,6 +154,18 @@ export interface AsciiBackgroundOptions extends
 }
 
 /**
+ * All supported background type identifiers — single source of truth for
+ * counts, type-safe option values, and documentation.
+ */
+export const BACKGROUND_TYPES = [
+  'wave', 'rain', 'stars', 'pulse', 'noise', 'grid',
+  'aurora', 'silk', 'void', 'morph',
+  'fire', 'dna', 'terrain', 'circuit',
+] as const;
+
+export type BackgroundType = typeof BACKGROUND_TYPES[number];
+
+/**
  * Drop-in helper that mounts an interactive ASCII background onto any element.
  * Injects a canvas, wires DPR resize, mouse tracking, and the RAF loop.
  * Auto-detects light/dark mode and stays in sync if the system theme changes.

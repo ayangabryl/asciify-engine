@@ -61,8 +61,8 @@ export type { CircuitBackgroundOptions } from './backgrounds/circuit';
 export { renderCircuitBackground }       from './backgrounds/circuit';
 
 // ── Mount helper + combined options ──────────────────────────────────────────
-export type { AsciiBackgroundOptions, MountWaveOptions } from './backgrounds/index';
-export { asciiBackground, mountWaveBackground }          from './backgrounds/index';
+export type { AsciiBackgroundOptions, BackgroundType, MountWaveOptions } from './backgrounds/index';
+export { asciiBackground, BACKGROUND_TYPES, mountWaveBackground }        from './backgrounds/index';
 
 // ── asciiText / ANSI export ───────────────────────────────────────────────────
 export { asciiText, asciiTextAnsi } from './core/ascii-text';
