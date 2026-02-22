@@ -87,6 +87,24 @@ export interface AsciiOptions {
    */
   ditherStrength: number;
   /**
+   * Assumed aspect ratio (width ÷ height) of a single output character.
+   * Controls how many rows vs columns are generated — must match your rendering
+   * environment to preserve the source image's proportions.
+   * - `0.55` — browser monospace at `line-height: 1.09` (default)
+   * - `0.52` — browser monospace at `line-height: 1.15`
+   * - `0.5`  — most terminal emulators
+   * Default: `0.55`
+   */
+  charAspect: number;
+  /**
+   * Auto-stretch the luminance range before charset mapping.
+   * When `true`, the darkest pixel in the frame maps to the first charset character
+   * and the brightest to the last, maximising perceived detail and contrast.
+   * Particularly useful for images with low inherent contrast or muted tones.
+   * Default: `false`
+   */
+  normalize: boolean;
+  /**
    * Overall intensity of the hover / cursor interaction effect.
    * `0` disables the effect. Default: `0`
    */
@@ -245,6 +263,8 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   animationSpeed: 1,
   dotSizeRatio: 0.8,
   ditherStrength: 0,
+  charAspect: 0.55,
+  normalize: false,
   hoverStrength: 0,
   hoverRadius: 0.2,
   hoverEffect: 'spotlight',
