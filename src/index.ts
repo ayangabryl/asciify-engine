@@ -50,6 +50,7 @@ export type {
   DnaBackgroundOptions,
   TerrainBackgroundOptions,
   CircuitBackgroundOptions,
+  BackgroundType,
   SnapshotOptions,
   TextBackgroundOptions,
 } from './ascii-engine';
@@ -73,6 +74,7 @@ export {
   renderTerrainBackground,
   renderCircuitBackground,
   asciiBackground,
+  BACKGROUND_TYPES,
   mountWaveBackground,
   asciiText,
   asciiTextAnsi,
