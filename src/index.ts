@@ -50,8 +50,6 @@ export type {
   DnaBackgroundOptions,
   TerrainBackgroundOptions,
   CircuitBackgroundOptions,
-  RecorderOptions,
-  Recorder,
   SnapshotOptions,
   TextBackgroundOptions,
 } from './ascii-engine';
@@ -80,8 +78,6 @@ export {
   asciiTextAnsi,
   buildTextFrame,
   renderTextBackground,
-  createRecorder,
-  recordAndDownload,
   captureSnapshot,
   snapshotAndDownload,
 } from './ascii-engine';
