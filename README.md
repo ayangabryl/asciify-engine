@@ -387,6 +387,8 @@ Used by `asciify()`, `asciifyGif()`, and `asciifyVideo()`:
 | `artStyle` | `ArtStyle` | `'classic'` | Art style preset (see `ART_STYLE_PRESETS`) |
 | `ditherStrength` | `number` | `0` | Floyd-Steinberg dither intensity (0–1) |
 | `dotSizeRatio` | `number` | `0.8` | Dot size when `renderMode === 'dots'` (fraction of cell) |
+| `charAspect` | `number` | `0.55` | Width ÷ height of a single output character. Set to `0.5` for terminal emulators, `0.52` for browser `line-height: 1.15`, `0.55` for `line-height: 1.09`. Ensuring this matches your rendering environment keeps the output proportional to the source. |
+| `normalize` | `boolean` | `false` | Auto-stretch the luminance range of the frame before charset mapping. Maximises detail and contrast for low-contrast or muted images. |
 
 ### Art Styles (`artStyle`)
 

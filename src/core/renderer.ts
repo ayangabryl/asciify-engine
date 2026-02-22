@@ -37,7 +37,7 @@ export function imageToAsciiFrame(
     return { frame: [], cols: 0, rows: 0 };
   }
 
-  const charAspect = 0.55;
+  const charAspect = options.charAspect;
   const cellW = options.fontSize * options.charSpacing;
   const cellH = options.fontSize / charAspect * options.charSpacing;
 
@@ -55,6 +55,22 @@ export function imageToAsciiFrame(
   const imageData = ctx.getImageData(0, 0, cols, rows);
   const pixels = imageData.data;
 
+  // ── Optional normalize pre-scan ──────────────────────────────────
+  // Find the actual luminance range in the frame so we can stretch it
+  // to full [0, 255] before charset mapping — maximises perceived detail.
+  let normMin = 0;
+  let normRange = 255;
+  if (options.normalize) {
+    let lo = 255, hi = 0;
+    for (let k = 0; k < pixels.length; k += 4) {
+      const l = 0.299 * pixels[k] + 0.587 * pixels[k + 1] + 0.114 * pixels[k + 2];
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+    }
+    normMin = lo;
+    normRange = hi > lo ? hi - lo : 255;
+  }
+
   const frame: AsciiFrame = [];
 
   for (let y = 0; y < rows; y++) {
@@ -66,7 +82,10 @@ export function imageToAsciiFrame(
       const b = pixels[i + 2];
       const a = pixels[i + 3];
 
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const lum = options.normalize
+        ? ((rawLum - normMin) / normRange) * 255
+        : rawLum;
       const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
       const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
       const char = options.customText
