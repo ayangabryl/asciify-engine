@@ -24,24 +24,99 @@ export const PALETTE_THEMES: Record<PaletteTheme, { name: string; accent: string
 export type SourceType = 'image' | 'video' | 'gif' | null;
 
 export interface AsciiOptions {
+  /** Character cell size in pixels. Smaller = more detail, more cells. Default: `10` */
   fontSize: number;
+  /** Extra horizontal spacing between characters (pixels). Default: `1` */
   charSpacing: number;
+  /**
+   * Brightness adjustment applied before luminance mapping.
+   * Range −1 (black) → 0 (unchanged) → 1 (white). Default: `0`
+   */
   brightness: number;
+  /**
+   * Contrast boost applied before luminance mapping.
+   * `0` = unchanged, positive values increase contrast, negative decrease it.
+   * Default: `0`
+   */
   contrast: number;
+  /**
+   * Character density ramp — ordered from lightest to darkest.
+   * Use `CHARSETS` for pre-built ramps or supply your own string.
+   * Default: `' .:-=+*#%@'`
+   */
   charset: string;
+  /**
+   * Colour output mode.
+   * - `'grayscale'` — white-on-black monochrome
+   * - `'fullcolor'` — samples pixel colours from the source
+   * - `'matrix'` — green phosphor terminal look
+   * - `'accent'` — single accent colour with intensity-driven brightness
+   * Default: `'grayscale'`
+   */
   colorMode: ColorMode;
+  /**
+   * The accent colour used when `colorMode` is `'accent'` or `'matrix'`.
+   * Any CSS colour string. Default: `'#d4ff00'`
+   */
   accentColor: string;
+  /** Invert luminance mapping (light pixels → dense chars). Default: `false` */
   invert: boolean;
+  /**
+   * Render mode.
+   * - `'ascii'` — characters drawn as text
+   * - `'dots'` — each cell rendered as a filled circle (particle look)
+   * Default: `'ascii'`
+   */
   renderMode: RenderMode;
+  /**
+   * Per-character animation driven over time.
+   * Applies wave, glitch, rain-drop, spiral, and other effects to the rendered text.
+   * Default: `'none'`
+   */
   animationStyle: AnimationStyle;
+  /** Speed multiplier for `animationStyle` effects. Default: `1` */
   animationSpeed: number;
+  /**
+   * Size of each dot relative to the cell when `renderMode === 'dots'`.
+   * `1` fills the whole cell, `0.5` draws half-size circles. Default: `0.8`
+   */
   dotSizeRatio: number;
+  /**
+   * Floyd-Steinberg dither strength applied to the luminance map.
+   * `0` = no dithering, `1` = full dithering. Default: `0`
+   */
   ditherStrength: number;
+  /**
+   * Overall intensity of the hover / cursor interaction effect.
+   * `0` disables the effect. Default: `0`
+   */
   hoverStrength: number;
+  /**
+   * Radius of the hover interaction zone as a fraction of the canvas size.
+   * `0.1` = 10% of canvas width. Default: `0.2`
+   */
   hoverRadius: number;
+  /**
+   * Which cursor interaction style to apply when `hoverStrength > 0`.
+   * See `HoverPreset` or `HOVER_PRESETS` for ready-made configurations.
+   * Default: `'spotlight'`
+   */
   hoverEffect: HoverEffect;
+  /**
+   * Tint colour used by hover effects such as spotlight, glow, and colorShift.
+   * Any CSS colour string. Default: `'#ffffff'`
+   */
   hoverColor: string;
+  /**
+   * Art style preset applied at render time.
+   * Shorthand for a specific combination of `charset`, `renderMode`, and `colorMode`.
+   * See `ART_STYLE_PRESETS` for the full list. Default: `'classic'`
+   */
   artStyle: ArtStyle;
+  /**
+   * Custom repeating text used when `artStyle` is `'letters'` or when you set
+   * a custom charset. Leave empty to use the selected `charset`. Default: `''`
+   */
   customText: string;
 }
 

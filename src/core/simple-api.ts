@@ -12,8 +12,12 @@ export { videoToAsciiFrames, gifToAsciiFrames };
 export interface AsciifySimpleOptions {
   /** Character size in pixels. Default: 10 */
   fontSize?: number;
-  /** Art style preset. Default: 'classic' */
-  style?: ArtStyle;
+  /**
+   * Art style preset — controls charset, render mode, and color mode together.
+   * Shorthand for spreading `ART_STYLE_PRESETS[artStyle]` into options.
+   * Default: `'classic'`
+   */
+  artStyle?: ArtStyle;
   /** Extra options to merge on top of the preset */
   options?: Partial<AsciiOptions>;
 }
@@ -23,12 +27,12 @@ export interface AsciifySimpleOptions {
  *
  * @example
  * await asciify(document.querySelector('img'), canvas);
- * await asciify(img, canvas, { fontSize: 8, style: 'letters' });
+ * await asciify(img, canvas, { fontSize: 8, artStyle: 'letters' });
  */
 export async function asciify(
   source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, style = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
 ): Promise<void> {
   let el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
   if (typeof source === 'string') {
@@ -50,7 +54,7 @@ export async function asciify(
     el = source;
   }
 
-  const preset = ART_STYLE_PRESETS[style];
+  const preset = ART_STYLE_PRESETS[artStyle];
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, ...options, fontSize };
 
   const ctx = canvas.getContext('2d');
@@ -71,13 +75,13 @@ export async function asciify(
 export async function asciifyGif(
   source: string | ArrayBuffer,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, style = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
 ): Promise<() => void> {
   const buffer = typeof source === 'string'
     ? await fetch(source).then(r => r.arrayBuffer())
     : source;
 
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[style], ...options, fontSize };
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
@@ -114,22 +118,24 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, style = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
 ): Promise<() => void> {
   let video: HTMLVideoElement;
   if (typeof source === 'string') {
     video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.src = source;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadeddata = () => resolve();
-      video.onerror = () => reject(new Error(`Failed to load video: ${source}`));
-    });
+    if (video.readyState < 2) {
+      await new Promise<void>((resolve, reject) => {
+        video.onloadeddata = () => resolve();
+        video.onerror = () => reject(new Error(`Failed to load video: ${source}`));
+      });
+    }
   } else {
     video = source;
   }
 
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[style], ...options, fontSize };
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
