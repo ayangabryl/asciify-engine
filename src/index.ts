@@ -52,6 +52,7 @@ export type {
   CircuitBackgroundOptions,
   RecorderOptions,
   Recorder,
+  SnapshotOptions,
   TextBackgroundOptions,
 } from './ascii-engine';
 export {
@@ -81,5 +82,7 @@ export {
   renderTextBackground,
   createRecorder,
   recordAndDownload,
+  captureSnapshot,
+  snapshotAndDownload,
 } from './ascii-engine';
 
