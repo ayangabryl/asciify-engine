@@ -77,58 +77,41 @@ setInterval(() => {
 }, 1000 / fps);
 ```
 
-### Video — live (recommended)
+### Video
 
-`asciifyLiveVideo` streams a video as ASCII art in real time. Pass a URL and a canvas — it handles everything else.
+`asciifyVideo` streams video as live ASCII art in real time. Instant start, constant memory, unlimited duration.
 
-> ⚠️ Never set the `<video>` element to `display: none`. Browsers skip GPU frame decoding for hidden elements — you get a blank canvas. `asciifyLiveVideo` handles this automatically.
-
-```ts
-import { asciifyLiveVideo } from 'asciify-engine';
-
-const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-
-// Sizes canvas to the video's native dimensions automatically:
-const stop = await asciifyLiveVideo('/clip.mp4', canvas, { autoSize: true });
-
-// With art style:
-const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
-  autoSize: true,
-  fontSize: 6,
-  artStyle: 'matrix',
-});
-
-// With lifecycle hooks — useful for sizing the canvas, loading indicators, timers:
-const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
-  fontSize: 6,
-  onReady: (video) => {
-    // Called once when metadata is loaded and playback has started.
-    // Resize the canvas to match the video here, update your UI, etc.
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    setReady(true);
-  },
-  onFrame: () => {
-    // Called after every rendered frame.
-    setElapsed(Math.floor(performance.now() / 1000));
-  },
-});
-
-// Clean up:
-stop();
-```
-
-### Video — pre-extracted frames
-
-`asciifyVideo` seeks through the clip frame by frame and returns a frame sequence. Good for short clips where you want frame-perfect control, but requires up-front processing time.
+> ⚠️ Never set the backing `<video>` element to `display: none` — browsers skip GPU frame decoding. When given a URL string, `asciifyVideo` handles this automatically.
 
 ```ts
 import { asciifyVideo } from 'asciify-engine';
 
 const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-const stop   = await asciifyVideo('/clip.mp4', canvas, { fontSize: 8 });
+
+// Minimal
+const stop = await asciifyVideo('/clip.mp4', canvas);
+
+// Fit canvas to a container and re-size automatically on resize:
+const stop = await asciifyVideo('/clip.mp4', canvas, {
+  fitTo: '#hero',  // or an HTMLElement
+});
+
+// Lifecycle hooks — ready state, timers, etc.:
+const stop = await asciifyVideo('/clip.mp4', canvas, {
+  fitTo: '#hero',
+  fontSize: 6,
+  onReady: () => setLoading(false),
+  onFrame: () => setElapsed(t => t + 1),
+});
+
+// Pre-extract all frames before playback (frame-perfect loops, short clips):
+const stop = await asciifyVideo('/clip.mp4', canvas, { preExtract: true });
+
+// Clean up:
 stop();
 ```
+
+
 
 ---
 
@@ -274,7 +257,6 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 | Function | Signature | Returns |
 |---|---|---|
 | `asciify` | `(source, canvas, options?)` | `Promise<void>` |
-| `asciifyLiveVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
 | `asciifyVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
 | `asciifyGif` | `(source, canvas, options?)` | `Promise<() => void>` |
 | `asciifyWebcam` | `(canvas, options?)` | `Promise<() => void>` |
@@ -285,6 +267,8 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 | `videoToAsciiFrames` | `(video, options, w, h, fps?, maxSec?, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
 | `generateEmbedCode` | `(frame, options)` | `string` |
 | `generateAnimatedEmbedCode` | `(frames, options, fps)` | `string` |
+
+`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `onReady(video)`, `onFrame()`
 
 ---
 

@@ -28,7 +28,7 @@ export {
 } from './types';
 
 // Simple one-call API
-export type { AsciifySimpleOptions, AsciifyLiveVideoOptions } from './ascii-engine';
+export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions } from './ascii-engine';
 export { asciify, asciifyGif, asciifyVideo, asciifyLiveVideo, asciifyWebcam } from './ascii-engine';
 export type { WebcamOptions } from './ascii-engine';
 
