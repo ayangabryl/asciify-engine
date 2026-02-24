@@ -67,7 +67,7 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
 /** @deprecated Use {@link AsciifyVideoOptions} */
 export type AsciifyLiveVideoOptions = AsciifyVideoOptions;
 
-// ─── Internal helper ──────────────────────────────────────────────────────────
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** Get the intrinsic pixel dimensions of a media source. */
 function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): { w: number; h: number } {
@@ -77,33 +77,32 @@ function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasEleme
 }
 
 /**
- * Create a high-res offscreen canvas at source resolution (capped at 2048) for
- * internal rendering.  The result is then blitted to the user's display canvas
- * via `drawImage`, giving maximum quality regardless of the display size.
- * Returns `null` when the display canvas is already >= source resolution.
+ * Compute high-quality render dimensions from source dims.
+ * Returns render dimensions (capped at 2048 on the longer edge) that should be
+ * used as the coordinate space for both `imageToAsciiFrame` and
+ * `renderFrameToCanvas`.  This ensures characters are rendered at readable font
+ * sizes regardless of how small the CSS display canvas is — exactly matching
+ * the playground pipeline.
  */
-function makeHiResCanvas(
-  srcW: number, srcH: number, displayW: number, displayH: number,
-): { offCanvas: HTMLCanvasElement; offCtx: CanvasRenderingContext2D; offW: number; offH: number } | null {
-  if (srcW <= displayW && srcH <= displayH) return null;       // display is already large enough
+function computeRenderDims(srcW: number, srcH: number): { renderW: number; renderH: number } {
   const MAX = 2048;
   const scale = Math.min(1, MAX / Math.max(srcW, srcH));
-  const offW = Math.round(srcW * scale);
-  const offH = Math.round(srcH * scale);
-  if (offW <= displayW && offH <= displayH) return null;       // scaled source still not bigger
-  const offCanvas = document.createElement('canvas');
-  offCanvas.width = offW;
-  offCanvas.height = offH;
-  const offCtx = offCanvas.getContext('2d');
-  if (!offCtx) return null;
-  return { offCanvas, offCtx, offW, offH };
+  return { renderW: Math.round(srcW * scale), renderH: Math.round(srcH * scale) };
 }
 
 /**
  * Size the canvas to fit a container while maintaining aspect ratio.
- * The canvas **buffer** is set to the source video/image resolution (capped at
- * 2048) so that frame generation and rendering happen at high quality.
- * CSS `width`/`height` handle the visual down-scaling to the container.
+ *
+ * **Quality approach (matching the playground):**
+ * - The canvas _buffer_ is set to source dimensions × DPR so characters are
+ *   rendered at their natural font size (well above the 6 px fast-rect cutoff).
+ * - `ctx.scale(dpr)` maps the source-sized coordinate space into the DPR-scaled
+ *   buffer for crisp Retina text.
+ * - CSS `width`/`height` is the container-fitted display size — the browser's
+ *   compositor handles the high-quality visual down-scale.
+ *
+ * Returns the render dimensions and DPR factor the caller should use for
+ * all subsequent `imageToAsciiFrame` / `renderFrameToCanvas` calls.
  */
 function sizeCanvasToContainer(
   canvas: HTMLCanvasElement,
@@ -111,9 +110,9 @@ function sizeCanvasToContainer(
   aspect: number,
   srcW?: number,
   srcH?: number,
-): void {
+): { renderW: number; renderH: number; dpr: number } {
   const { width, height } = container.getBoundingClientRect();
-  if (!width || !height) return;
+  if (!width || !height) return { renderW: 0, renderH: 0, dpr: 1 };
 
   // CSS display size — fits inside the container keeping aspect ratio.
   let cssW = width, cssH = cssW / aspect;
@@ -121,25 +120,29 @@ function sizeCanvasToContainer(
   cssW = Math.round(cssW);
   cssH = Math.round(cssH);
 
-  // Buffer resolution — use source dims when available so we get maximum
-  // ASCII detail.  Cap to 2048 on the longer edge to stay GPU-friendly.
-  const MAX_BUF = 2048;
-  let bufW: number, bufH: number;
-  if (srcW && srcH && (srcW > cssW || srcH > cssH)) {
-    const scale = Math.min(1, MAX_BUF / Math.max(srcW, srcH));
-    bufW = Math.round(srcW * scale);
-    bufH = Math.round(srcH * scale);
+  // Render dimensions = source size (capped) for high-quality frame generation.
+  // Fall back to CSS size when no source dims are available.
+  let renderW: number, renderH: number;
+  if (srcW && srcH) {
+    ({ renderW, renderH } = computeRenderDims(srcW, srcH));
   } else {
-    // No source dims or source is smaller than display — use DPR-scaled CSS.
-    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-    bufW = Math.round(cssW * dpr);
-    bufH = Math.round(cssH * dpr);
+    renderW = cssW;
+    renderH = cssH;
   }
 
-  canvas.width  = bufW;
-  canvas.height = bufH;
+  // DPR for crisp Retina text, capped so the total buffer stays ≤ ~8 MP.
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+  const MAX_PX = 8_000_000;
+  const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
+    ? Math.sqrt(MAX_PX / (renderW * renderH))
+    : dpr;
+
+  canvas.width  = Math.round(renderW * cappedDpr);
+  canvas.height = Math.round(renderH * cappedDpr);
   canvas.style.width  = cssW + 'px';
   canvas.style.height = cssH + 'px';
+
+  return { renderW, renderH, dpr: cappedDpr };
 }
 
 /**
@@ -181,18 +184,30 @@ export async function asciify(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
-  // Use high-res offscreen canvas when source is larger than display canvas
+  // Use source dims for frame gen → maximum detail.
+  // Render at source dims with DPR scaling → proper font sizes.
+  // CSS handles the visual down-scale via the browser compositor.
   const { w: srcW, h: srcH } = getSourceDims(el);
-  const hires = makeHiResCanvas(srcW, srcH, canvas.width, canvas.height);
-  if (hires) {
-    const { frame } = imageToAsciiFrame(el, merged, hires.offW, hires.offH);
-    renderFrameToCanvas(hires.offCtx, frame, merged, hires.offW, hires.offH);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
-  } else {
-    const { frame } = imageToAsciiFrame(el, merged, canvas.width, canvas.height);
-    renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height);
+  const { renderW, renderH } = computeRenderDims(srcW, srcH);
+
+  // Set up DPR scaling: buffer = render × dpr, draw in render-coordinate space
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+  const MAX_PX = 8_000_000;
+  const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
+    ? Math.sqrt(MAX_PX / (renderW * renderH))
+    : dpr;
+
+  // Only resize buffer if canvas is user-managed (no fitTo container)
+  if (canvas.width < renderW || canvas.height < renderH) {
+    canvas.width  = Math.round(renderW * cappedDpr);
+    canvas.height = Math.round(renderH * cappedDpr);
   }
+
+  const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
+  ctx.save();
+  ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+  renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
+  ctx.restore();
 }
 
 /**
@@ -300,10 +315,21 @@ export async function asciifyVideo(
 
     if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight);
 
-    // High-res offscreen canvas for quality rendering
-    const hires = makeHiResCanvas(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
-    const renderW = hires ? hires.offW : canvas.width;
-    const renderH = hires ? hires.offH : canvas.height;
+    // Render dimensions = source size for maximum detail
+    const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight);
+
+    // Compute DPR for the canvas buffer
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    const MAX_PX = 8_000_000;
+    const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
+      ? Math.sqrt(MAX_PX / (renderW * renderH))
+      : dpr;
+
+    // Ensure buffer is large enough
+    if (canvas.width < Math.round(renderW * cappedDpr)) {
+      canvas.width  = Math.round(renderW * cappedDpr);
+      canvas.height = Math.round(renderH * cappedDpr);
+    }
 
     const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
     const { frames, fps } = await videoToAsciiFrames(video, merged, renderW, renderH, undefined, maxDur, undefined, trimStart);
@@ -313,13 +339,10 @@ export async function asciifyVideo(
     const tick = (now: number) => {
       if (cancelled) return;
       if (now - last >= interval) {
-        if (hires) {
-          renderFrameToCanvas(hires.offCtx, frames[i], merged, hires.offW, hires.offH);
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
-        } else {
-          renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
-        }
+        ctx.save();
+        ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+        renderFrameToCanvas(ctx, frames[i], merged, renderW, renderH);
+        ctx.restore();
         i = (i + 1) % frames.length;
         last = now;
         if (firstFrame) { firstFrame = false; onReady?.(video); }
@@ -381,17 +404,36 @@ export async function asciifyVideo(
   }
 
   let ro: ResizeObserver | null = null;
+  // Render dimensions = source size for maximum detail (same as playground)
+  const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight);
+
   if (container) {
     const aspect = video.videoWidth / video.videoHeight;
     const vw = video.videoWidth, vh = video.videoHeight;
-    sizeCanvasToContainer(canvas, container, aspect, vw, vh);
-    ro = new ResizeObserver(() => sizeCanvasToContainer(canvas, container, aspect, vw, vh));
-    ro.observe(container);
-  }
+    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh);
+    // Apply DPR scale transform once — will be refreshed on resize
+    const sCtx = canvas.getContext('2d');
+    if (sCtx) sCtx.setTransform(sizing.dpr, 0, 0, sizing.dpr, 0, 0);
 
-  // High-res offscreen canvas for quality rendering — generates and renders
-  // ASCII at source resolution, then blits to the display canvas.
-  const hires = makeHiResCanvas(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+    ro = new ResizeObserver(() => {
+      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh);
+      const rCtx = canvas.getContext('2d');
+      if (rCtx) rCtx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
+    });
+    ro.observe(container);
+  } else {
+    // No container — set up buffer at source dims for quality
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    const MAX_PX = 8_000_000;
+    const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
+      ? Math.sqrt(MAX_PX / (renderW * renderH))
+      : dpr;
+    if (canvas.width < Math.round(renderW * cappedDpr)) {
+      canvas.width  = Math.round(renderW * cappedDpr);
+      canvas.height = Math.round(renderH * cappedDpr);
+    }
+    ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+  }
 
   let cancelled = false;
   let animId: number;
@@ -404,22 +446,11 @@ export async function asciifyVideo(
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
 
-    if (hires) {
-      const { frame } = imageToAsciiFrame(video, merged, hires.offW, hires.offH);
-      if (frame.length > 0) {
-        renderFrameToCanvas(hires.offCtx, frame, merged, hires.offW, hires.offH, 0, null);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
-        if (firstFrame) { firstFrame = false; onReady?.(video); }
-        onFrame?.();
-      }
-    } else {
-      const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
-      if (frame.length > 0) {
-        renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
-        if (firstFrame) { firstFrame = false; onReady?.(video); }
-        onFrame?.();
-      }
+    const { frame } = imageToAsciiFrame(video, merged, renderW, renderH);
+    if (frame.length > 0) {
+      renderFrameToCanvas(ctx, frame, merged, renderW, renderH, 0, null);
+      if (firstFrame) { firstFrame = false; onReady?.(video); }
+      onFrame?.();
     }
   };
   animId = requestAnimationFrame(tick);
