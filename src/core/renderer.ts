@@ -22,6 +22,12 @@ import { renderWaveBackground } from '../backgrounds/wave';
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
+/** Resolve `invert: 'auto'` to a concrete boolean using the OS color scheme. */
+function resolveInvert(invert: boolean | 'auto'): boolean {
+  if (invert !== 'auto') return invert;
+  return typeof window !== 'undefined' && !window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 /**
  * Convert an image element or canvas to a single ASCII frame.
  */
@@ -73,6 +79,7 @@ export function imageToAsciiFrame(
   }
 
   const frame: AsciiFrame = [];
+  const invertVal = resolveInvert(options.invert);
 
   // ── Chroma-key pre-processing ────────────────────────────────────
   // `true`         — heuristic green: g > r*1.4 && g > b*1.4 && g > 80
@@ -126,8 +133,8 @@ export function imageToAsciiFrame(
       const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
       const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
       const char = options.customText
-        ? customTextToChar(ditheredLum, options.customText, x, y, cols, options.invert)
-        : luminanceToChar(ditheredLum, options.charset, options.invert);
+        ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
+        : luminanceToChar(ditheredLum, options.charset, invertVal);
 
       row.push({ char, r, g, b, a });
     }
@@ -354,7 +361,7 @@ export function renderFrameToCanvas(
   const hoverStrength = options.hoverStrength;
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
-  const isInverted = options.invert;
+  const isInverted = resolveInvert(options.invert);
   const colorMode = options.colorMode;
   const TWO_PI = Math.PI * 2;
   const invCols = 1 / cols;
