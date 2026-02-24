@@ -69,6 +69,36 @@ export type AsciifyLiveVideoOptions = AsciifyVideoOptions;
 
 // ─── Internal helper ──────────────────────────────────────────────────────────
 
+/** Get the intrinsic pixel dimensions of a media source. */
+function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): { w: number; h: number } {
+  if (el instanceof HTMLVideoElement) return { w: el.videoWidth, h: el.videoHeight };
+  if (el instanceof HTMLImageElement) return { w: el.naturalWidth || el.width, h: el.naturalHeight || el.height };
+  return { w: el.width, h: el.height };
+}
+
+/**
+ * Create a high-res offscreen canvas at source resolution (capped at 2048) for
+ * internal rendering.  The result is then blitted to the user's display canvas
+ * via `drawImage`, giving maximum quality regardless of the display size.
+ * Returns `null` when the display canvas is already >= source resolution.
+ */
+function makeHiResCanvas(
+  srcW: number, srcH: number, displayW: number, displayH: number,
+): { offCanvas: HTMLCanvasElement; offCtx: CanvasRenderingContext2D; offW: number; offH: number } | null {
+  if (srcW <= displayW && srcH <= displayH) return null;       // display is already large enough
+  const MAX = 2048;
+  const scale = Math.min(1, MAX / Math.max(srcW, srcH));
+  const offW = Math.round(srcW * scale);
+  const offH = Math.round(srcH * scale);
+  if (offW <= displayW && offH <= displayH) return null;       // scaled source still not bigger
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = offW;
+  offCanvas.height = offH;
+  const offCtx = offCanvas.getContext('2d');
+  if (!offCtx) return null;
+  return { offCanvas, offCtx, offW, offH };
+}
+
 /**
  * Size the canvas to fit a container while maintaining aspect ratio.
  * The canvas **buffer** is set to the source video/image resolution (capped at
@@ -122,7 +152,7 @@ function sizeCanvasToContainer(
 export async function asciify(
   source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
 ): Promise<void> {
   let el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
   if (typeof source === 'string') {
@@ -145,13 +175,24 @@ export async function asciify(
   }
 
   const preset = ART_STYLE_PRESETS[artStyle];
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, ...options, fontSize };
+  const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, ...options, fontSize: resolvedFontSize };
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
-  const { frame } = imageToAsciiFrame(el, merged, canvas.width, canvas.height);
-  renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height);
+  // Use high-res offscreen canvas when source is larger than display canvas
+  const { w: srcW, h: srcH } = getSourceDims(el);
+  const hires = makeHiResCanvas(srcW, srcH, canvas.width, canvas.height);
+  if (hires) {
+    const { frame } = imageToAsciiFrame(el, merged, hires.offW, hires.offH);
+    renderFrameToCanvas(hires.offCtx, frame, merged, hires.offW, hires.offH);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
+  } else {
+    const { frame } = imageToAsciiFrame(el, merged, canvas.width, canvas.height);
+    renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height);
+  }
 }
 
 /**
@@ -165,13 +206,14 @@ export async function asciify(
 export async function asciifyGif(
   source: string | ArrayBuffer,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
 ): Promise<() => void> {
   const buffer = typeof source === 'string'
     ? await fetch(source).then(r => r.arrayBuffer())
     : source;
 
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
+  const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
@@ -226,11 +268,12 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, onReady, onFrame }: AsciifyVideoOptions = {}
+  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, onReady, onFrame }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
+  const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
 
@@ -257,15 +300,26 @@ export async function asciifyVideo(
 
     if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight);
 
+    // High-res offscreen canvas for quality rendering
+    const hires = makeHiResCanvas(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+    const renderW = hires ? hires.offW : canvas.width;
+    const renderH = hires ? hires.offH : canvas.height;
+
     const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
-    const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height, undefined, maxDur, undefined, trimStart);
+    const { frames, fps } = await videoToAsciiFrames(video, merged, renderW, renderH, undefined, maxDur, undefined, trimStart);
     let cancelled = false, animId: number, i = 0, last = performance.now();
     let firstFrame = true;
     const interval = 1000 / fps;
     const tick = (now: number) => {
       if (cancelled) return;
       if (now - last >= interval) {
-        renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
+        if (hires) {
+          renderFrameToCanvas(hires.offCtx, frames[i], merged, hires.offW, hires.offH);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
+        } else {
+          renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
+        }
         i = (i + 1) % frames.length;
         last = now;
         if (firstFrame) { firstFrame = false; onReady?.(video); }
@@ -335,6 +389,10 @@ export async function asciifyVideo(
     ro.observe(container);
   }
 
+  // High-res offscreen canvas for quality rendering — generates and renders
+  // ASCII at source resolution, then blits to the display canvas.
+  const hires = makeHiResCanvas(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+
   let cancelled = false;
   let animId: number;
   let firstFrame = true;
@@ -345,11 +403,23 @@ export async function asciifyVideo(
     // Skip frames outside trim window (prevents flash at time 0 on loop)
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
-    const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
-    if (frame.length > 0) {
-      renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
-      if (firstFrame) { firstFrame = false; onReady?.(video); }
-      onFrame?.();
+
+    if (hires) {
+      const { frame } = imageToAsciiFrame(video, merged, hires.offW, hires.offH);
+      if (frame.length > 0) {
+        renderFrameToCanvas(hires.offCtx, frame, merged, hires.offW, hires.offH, 0, null);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(hires.offCanvas, 0, 0, canvas.width, canvas.height);
+        if (firstFrame) { firstFrame = false; onReady?.(video); }
+        onFrame?.();
+      }
+    } else {
+      const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
+      if (frame.length > 0) {
+        renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+        if (firstFrame) { firstFrame = false; onReady?.(video); }
+        onFrame?.();
+      }
     }
   };
   animId = requestAnimationFrame(tick);
