@@ -284,10 +284,14 @@ export async function asciifyVideo(
     });
   }
 
-  // Apply trim end — loop back to start when time exceeds end
+  // Enforce trim bounds — seek back to trimStart when the video loops to 0
+  // or when currentTime exceeds trimEnd.
   let timeupdateHandler: (() => void) | null = null;
-  if (trimEnd !== undefined) {
-    timeupdateHandler = () => { if (video.currentTime >= trimEnd) video.currentTime = trimStart; };
+  if (trimStart > 0 || trimEnd !== undefined) {
+    timeupdateHandler = () => {
+      if (trimEnd !== undefined && video.currentTime >= trimEnd) { video.currentTime = trimStart; }
+      else if (trimStart > 0 && video.currentTime < trimStart)  { video.currentTime = trimStart; }
+    };
     video.addEventListener('timeupdate', timeupdateHandler);
   }
 
@@ -306,6 +310,9 @@ export async function asciifyVideo(
     if (cancelled) return;
     animId = requestAnimationFrame(tick);
     if (video.readyState < 2 || canvas.width === 0 || canvas.height === 0) return;
+    // Skip frames outside trim window (prevents flash at time 0 on loop)
+    if (trimStart > 0 && video.currentTime < trimStart) return;
+    if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
     const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
     if (frame.length > 0) {
       renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
