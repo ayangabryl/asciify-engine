@@ -29,6 +29,20 @@ function resolveInvert(invert: boolean | 'auto'): boolean {
 }
 
 /**
+ * Resolve `accentColor: 'auto'` to a concrete hex string (no `#`) based on
+ * the OS color scheme: dark ink (`0d0d0d`) in light mode, light ink (`faf9f7`)
+ * in dark mode. Falls back to white when the value is missing.
+ */
+function resolveAccentHex(accentColor: string | undefined): string {
+  const v = accentColor || 'auto';
+  if (v === 'auto') {
+    const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return isDark ? 'faf9f7' : '0d0d0d';
+  }
+  return v.replace('#', '');
+}
+
+/**
  * Convert an image element or canvas to a single ASCII frame.
  */
 export function imageToAsciiFrame(
@@ -282,7 +296,7 @@ export function renderFrameToCanvas(
   // waveField short-circuit
   if (options.animationStyle === 'waveField') {
     const mouseNorm = hoverPos ? { x: hoverPos.x, y: hoverPos.y } : { x: 0.5, y: 0.5 };
-    const acHexWF = (options.accentColor || '#d4ff00').replace('#', '');
+    const acHexWF = options.accentColor ? resolveAccentHex(options.accentColor) : 'd4ff00';
     renderWaveBackground(ctx, canvasWidth, canvasHeight, time, mouseNorm, {
       accentColor: `#${acHexWF}`,
       accentThreshold: 0.52,
@@ -332,7 +346,7 @@ export function renderFrameToCanvas(
   const hcG = parseInt(hc.slice(3, 5), 16) || 255;
   const hcB = parseInt(hc.slice(5, 7), 16) || 255;
 
-  const acHex = (options.accentColor || '#ffffff').replace('#', '');
+  const acHex = resolveAccentHex(options.accentColor);
   const acR = parseInt(acHex.substring(0, 2), 16) || 255;
   const acG = parseInt(acHex.substring(2, 4), 16) || 255;
   const acB = parseInt(acHex.substring(4, 6), 16) || 255;

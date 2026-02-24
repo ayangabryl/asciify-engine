@@ -58,6 +58,11 @@ export interface AsciiOptions {
    * The accent colour used when `colorMode` is `'accent'` or `'matrix'`.
    * Any CSS colour string. Default: `'#d4ff00'`
    */
+  /**
+   * Hex color string used when `colorMode` is `'accent'`.
+   * Set to `'auto'` to let the engine pick contrasting ink automatically:
+   * dark ink (`#0d0d0d`) in light mode, light ink (`#faf9f7`) in dark mode.
+   */
   accentColor: string;
   /**
    * Invert luminance mapping (light pixels → dense chars). Default: `false`
