@@ -126,12 +126,12 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 | `charset` | `string` | Standard ramp | Characters ordered from dense to sparse, representing brightness levels. |
 | `brightness` | `number` | `0` | Brightness adjustment from `-1` (darker) to `1` (lighter). |
 | `contrast` | `number` | `1` | Contrast multiplier applied before character mapping. |
-| `invert` | `boolean` | `false` | Inverts the luminance mapping — light areas become dense, dark areas sparse. |
+| `invert` | `boolean \| 'auto'` | `false` | Inverts the luminance mapping — light areas become dense, dark areas sparse. Set to `'auto'` to auto-detect from OS color scheme (light mode → invert, dark mode → normal). |
 | `renderMode` | `'ascii' \| 'dots'` | `'ascii'` | Render as text characters or circular dot particles. |
 | `hoverEffect` | `string` | `'none'` | Interactive effect driven by cursor position. See hover effects below. |
 | `hoverStrength` | `number` | `0` | Effect intensity (0–1). `0` = hover disabled. |
 | `hoverRadius` | `number` | `0.2` | Effect radius relative to canvas size (0–1). |
-| `chromaKey` | `{r,g,b} \| string \| null` | `null` | Remove a background colour (green/blue screen). Keyed pixels become transparent spaces. Accepts `{r,g,b}`, any CSS colour string, or `null` to disable. |
+| `chromaKey` | `true \| 'blue-screen' \| {r,g,b} \| string \| null` | `null` | Remove a background colour. `true` = heuristic green screen (any shade). `'blue-screen'` = heuristic blue screen. Custom: `{r,g,b}` or any CSS hex string keyed by Euclidean distance. `null` to disable. |
 | `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
 
 ### Chroma Key (Green/Blue Screen)
@@ -148,7 +148,7 @@ asciify(img, canvas, {
 
 // Blue screen
 asciify(img, canvas, {
-  options: { ...DEFAULT_OPTIONS, chromaKey: 'blue', chromaKeyTolerance: 70 },
+  options: { ...DEFAULT_OPTIONS, chromaKey: 'blue-screen', chromaKeyTolerance: 70 },
 });
 
 // Custom RGB key
@@ -238,7 +238,7 @@ stop();
 | `fontSize` | `number` | `13` | Character size in pixels. |
 | `speed` | `number` | `1` | Global animation speed multiplier. |
 | `density` | `number` | `0.55` | Fraction of grid cells that are active (0–1). |
-| `accentColor` | `string` | varies | Highlight or leading-character color (any CSS color string). |
+| `accentColor` | `string \| 'auto'` | varies | Highlight or leading-character color (any CSS hex string). Set to `'auto'` to auto-detect: probes `--accent-color`, `--color-accent`, `--accent`, `--primary` CSS variables on `:root`, then falls back to OS color scheme (dark ink in light mode, light ink in dark mode). |
 | `color` | `string` | — | Override the body character color. |
 
 ---
@@ -304,7 +304,7 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 | `generateEmbedCode` | `(frame, options)` | `string` |
 | `generateAnimatedEmbedCode` | `(frames, options, fps)` | `string` |
 
-`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `onReady(video)`, `onFrame()`
+`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `trim: { start?: number; end?: number }` (loop a time slice in seconds, accepts floats), `onReady(video)`, `onFrame()`
 
 ---
 
