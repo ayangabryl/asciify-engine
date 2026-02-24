@@ -141,14 +141,9 @@ Remove a solid background colour from any source — images, GIFs, or video — 
 ```ts
 import { asciify, DEFAULT_OPTIONS } from 'asciify-engine';
 
-// Green screen
+// Green screen — zero config, just set true:
 asciify(img, canvas, {
-  options: {
-    ...DEFAULT_OPTIONS,
-    chromaKey: '#00ff00',       // CSS colour string — hex, rgb(), named all work
-    chromaKeyTolerance: 60,     // tune to your footage (0 = exact, ~80 = loose)
-    colorMode: 'fullcolor',
-  },
+  options: { ...DEFAULT_OPTIONS, chromaKey: true, colorMode: 'fullcolor' },
 });
 
 // Blue screen
@@ -164,7 +159,7 @@ asciify(img, canvas, {
 // Live video with green screen
 asciifyVideo('/footage.mp4', canvas, {
   fitTo: '#container',
-  options: { ...DEFAULT_OPTIONS, chromaKey: '#00b140', chromaKeyTolerance: 65, colorMode: 'fullcolor' },
+  options: { ...DEFAULT_OPTIONS, chromaKey: true, colorMode: 'fullcolor' },
 });
 ```
 
