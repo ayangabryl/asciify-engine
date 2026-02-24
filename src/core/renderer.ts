@@ -182,7 +182,7 @@ export function imageToAsciiFrame(
         ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
         : luminanceToChar(ditheredLum, options.charset, invertVal);
 
-      row.push({ char, r, g, b, a });
+      row.push({ char, r, g, b, a, lum: ditheredLum });
     }
     frame.push(row);
   }
@@ -497,9 +497,16 @@ export function renderFrameToCanvas(
     }
 
     let charWeights: Record<string, number> | null = null;
+    // ── Dynamic charset (charsetFrames) ──────────────────────────────────
+    const dynFrms = options.charsetFrames;
+    const hasDyn = !!dynFrms?.length;
+    const dynCharset = hasDyn
+      ? dynFrms![Math.floor(Math.max(0, time) * (options.charsetFps ?? 2)) % dynFrms!.length]
+      : options.charset;
+
     if (useFastRect) {
       charWeights = {};
-      const csChars = [...options.charset]; // Unicode-aware
+      const csChars = [...dynCharset]; // Unicode-aware
       const csLen = csChars.length;
       for (let i = 0; i < csLen; i++) {
         charWeights[csChars[i]] = Math.max(0.1, (i + 0.3) / csLen);
@@ -512,7 +519,11 @@ export function renderFrameToCanvas(
       const rowData = frame[y];
       for (let x = 0; x < cols; x++) {
         const cell = rowData[x];
-        if (cell.char === ' ' || cell.a < 10) continue;
+        if (cell.a < 10) continue;
+        const drawChar = hasDyn && cell.lum != null
+          ? luminanceToChar(cell.lum, dynCharset, isInverted)
+          : cell.char;
+        if (drawChar === ' ') continue;
 
         const animMul = noAnimation ? 1
           : getAnimationMultiplier(x, y, cols, rows, time, animStyle, animSpeed);
@@ -551,7 +562,7 @@ export function renderFrameToCanvas(
         }
 
         if (useFastRect) {
-          const weight = charWeights![cell.char] ?? 0.5;
+          const weight = charWeights![drawChar] ?? 0.5;
           const effAlpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow)) * weight;
           if (effAlpha < 0.02) continue;
           if (effAlpha !== lastAlpha) { ctx.globalAlpha = effAlpha; lastAlpha = effAlpha; }
@@ -566,10 +577,10 @@ export function renderFrameToCanvas(
           if (hoverScale !== 1) {
             ctx.translate(px, py);
             ctx.scale(hoverScale, hoverScale);
-            ctx.fillText(cell.char, 0, 0);
+            ctx.fillText(drawChar, 0, 0);
             ctx.setTransform(baseTransform!);
           } else {
-            ctx.fillText(cell.char, px, py);
+            ctx.fillText(drawChar, px, py);
           }
         }
       }
