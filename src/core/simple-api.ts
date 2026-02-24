@@ -22,22 +22,52 @@ export interface AsciifySimpleOptions {
   options?: Partial<AsciiOptions>;
 }
 
-export interface AsciifyLiveVideoOptions extends AsciifySimpleOptions {
+export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   /**
-   * When `true`, automatically sizes the canvas to the video's native pixel
-   * dimensions after metadata loads, before `onReady` fires.
-   * Eliminates manual canvas-sizing boilerplate for the common case.
-   * Default: `false`
+   * Fit the canvas to a container element, maintaining the video's aspect ratio.
+   * Accepts an HTMLElement or a CSS selector string. The canvas is resized on
+   * load and again whenever the container resizes (via ResizeObserver).
+   * `stop()` automatically disconnects the observer.
+   *
+   * @example
+   * // Fill the hero div, re-size on window resize automatically:
+   * asciifyVideo('/clip.mp4', canvas, { fitTo: '#hero' });
    */
-  autoSize?: boolean;
+  fitTo?: HTMLElement | string | null;
   /**
-   * Called once when the video metadata is ready and playback has started.
-   * Receives the backing video element — use this to size the canvas, trigger
-   * a loading state change, start a timer, etc.
+   * Pre-extract all video frames into memory before starting playback.
+   * Useful for short clips where you need frame-perfect control.
+   *
+   * Default: `false` — streams live directly from the playing video (instant
+   * start, constant memory, unlimited duration).
+   *
+   * ⚠️ Memory-intensive. Capped at 10 s / 300 frames.
+   */
+  preExtract?: boolean;
+  /**
+   * Called once when the video metadata is loaded and playback has started.
+   * Receives the backing video element.
    */
   onReady?: (video: HTMLVideoElement) => void;
-  /** Called after every rendered frame. Useful for frame counters or timers. */
+  /** Called after every rendered frame. */
   onFrame?: () => void;
+}
+
+/** @deprecated Use {@link AsciifyVideoOptions} */
+export type AsciifyLiveVideoOptions = AsciifyVideoOptions;
+
+// ─── Internal helper ──────────────────────────────────────────────────────────
+function sizeCanvasToContainer(
+  canvas: HTMLCanvasElement,
+  container: HTMLElement,
+  aspect: number,
+): void {
+  const { width, height } = container.getBoundingClientRect();
+  if (!width || !height) return;
+  let w = width, h = w / aspect;
+  if (h > height) { h = height; w = h * aspect; }
+  canvas.width  = Math.round(w);
+  canvas.height = Math.round(h);
 }
 
 /**
@@ -126,89 +156,87 @@ export async function asciifyGif(
 }
 
 /**
- * Convert a video element to ASCII art and start an animation loop on a canvas.
- * Returns a `stop()` function that cancels the loop.
+ * Render a video as ASCII art on a canvas. Defaults to live streaming —
+ * instant start, constant memory, unlimited duration.
+ *
+ * Pass `{ preExtract: true }` to pre-decode all frames before playback starts
+ * (useful for short clips that need frame-perfect looping).
+ *
+ * Pass `{ fitTo: '#container' }` to automatically size and re-size the canvas
+ * to fill a container element, maintaining the video's aspect ratio.
+ *
+ * Returns a `stop()` function that cancels the loop and cleans up.
+ *
+ * ⚠️ Never set the backing `<video>` to `display: none` — browsers skip GPU
+ * frame decoding for hidden elements. When given a URL string, this function
+ * handles that automatically.
  *
  * @example
- * const stop = await asciifyVideo(video, canvas);
- * // later: stop();
+ * // Minimal
+ * const stop = await asciifyVideo('/clip.mp4', canvas);
+ *
+ * // Fit to container, re-size on window resize:
+ * const stop = await asciifyVideo('/clip.mp4', canvas, { fitTo: '#hero' });
+ *
+ * // Pre-extract frames (old behavior):
+ * const stop = await asciifyVideo('/clip.mp4', canvas, { preExtract: true });
  */
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {}, fitTo, preExtract = false, onReady, onFrame }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
-  let video: HTMLVideoElement;
-  if (typeof source === 'string') {
-    video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.src = source;
-    if (video.readyState < 2) {
-      await new Promise<void>((resolve, reject) => {
-        video.onloadeddata = () => resolve();
-        video.onerror = () => reject(new Error(`Failed to load video: ${source}`));
-      });
-    }
-  } else {
-    video = source;
-  }
-
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not get 2d context from canvas');
+  if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
 
-  const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height);
+  const container: HTMLElement | null =
+    typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
+    fitTo instanceof HTMLElement ? fitTo : null;
 
-  let cancelled = false;
-  let animId: number;
-  let i = 0;
-  let last = performance.now();
-  const interval = 1000 / fps;
-
-  const tick = (now: number) => {
-    if (cancelled) return;
-    if (now - last >= interval) {
-      renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
-      i = (i + 1) % frames.length;
-      last = now;
+  // ── Pre-extract mode ─────────────────────────────────────────────────────
+  if (preExtract) {
+    let video: HTMLVideoElement;
+    if (typeof source === 'string') {
+      video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.src = source;
+      if (video.readyState < 2) {
+        await new Promise<void>((resolve, reject) => {
+          video.onloadeddata = () => resolve();
+          video.onerror = () => reject(new Error(`asciifyVideo: failed to load "${source}"`));
+        });
+      }
+    } else {
+      video = source;
     }
+
+    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight);
+    onReady?.(video);
+
+    const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height);
+    let cancelled = false, animId: number, i = 0, last = performance.now();
+    const interval = 1000 / fps;
+    const tick = (now: number) => {
+      if (cancelled) return;
+      if (now - last >= interval) {
+        renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
+        i = (i + 1) % frames.length;
+        last = now;
+        onFrame?.();
+      }
+      animId = requestAnimationFrame(tick);
+    };
     animId = requestAnimationFrame(tick);
-  };
-  animId = requestAnimationFrame(tick);
+    return () => { cancelled = true; cancelAnimationFrame(animId); };
+  }
 
-  return () => { cancelled = true; cancelAnimationFrame(animId); };
-}
-
-/**
- * Stream a video element (or URL) as live ASCII art onto a canvas — frame by
- * frame in real time, with no pre-extraction delay.
- *
- * Unlike `asciifyVideo` (which pre-processes the full clip), this renders each
- * video frame live as the video plays, making it suitable for long videos,
- * looping clips, and any case where you want instant playback.
- *
- * ⚠️ Important: never set the backing `<video>` element to `display: none` —
- * browsers skip GPU frame decoding for hidden elements, resulting in a blank
- * canvas. `asciifyLiveVideo` handles this automatically when given a URL.
- * If you supply your own video element, make sure it is visible or uses
- * `opacity: 0; position: fixed` instead.
- *
- * @returns A `stop()` function that cancels the animation loop and cleans up.
- *
- * @example
- * const stop = await asciifyLiveVideo('/clip.mp4', canvas);
- * // later: stop();
- */
-export async function asciifyLiveVideo(
-  source: HTMLVideoElement | string,
-  canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {}, autoSize = false, onReady, onFrame }: AsciifyLiveVideoOptions = {}
-): Promise<() => void> {
+  // ── Live streaming mode (default) ────────────────────────────────────────
   let video: HTMLVideoElement;
   let ownedVideo = false;
 
   if (typeof source === 'string') {
-    // Append to DOM but keep invisible — display:none breaks frame decoding
+    // Keep off-screen but not display:none — browsers skip GPU decoding for hidden elements
     video = document.createElement('video');
     video.src = source;
     video.muted = true;
@@ -222,10 +250,9 @@ export async function asciifyLiveVideo(
     });
     document.body.appendChild(video);
     ownedVideo = true;
-
     await new Promise<void>((resolve, reject) => {
       video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error(`asciifyLiveVideo: failed to load "${source}"`));
+      video.onerror = () => reject(new Error(`asciifyVideo: failed to load "${source}"`));
     });
     await video.play().catch(() => {});
   } else {
@@ -233,19 +260,17 @@ export async function asciifyLiveVideo(
     if (video.paused) await video.play().catch(() => {});
   }
 
-  if (autoSize) {
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
+  let ro: ResizeObserver | null = null;
+  if (container) {
+    const aspect = video.videoWidth / video.videoHeight;
+    sizeCanvasToContainer(canvas, container, aspect);
+    ro = new ResizeObserver(() => sizeCanvasToContainer(canvas, container, aspect));
+    ro.observe(container);
   }
   onReady?.(video);
 
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('asciifyLiveVideo: could not get 2d context from canvas.');
-
   let cancelled = false;
   let animId: number;
-
   const tick = () => {
     if (cancelled) return;
     animId = requestAnimationFrame(tick);
@@ -256,12 +281,12 @@ export async function asciifyLiveVideo(
       onFrame?.();
     }
   };
-
   animId = requestAnimationFrame(tick);
 
   return () => {
     cancelled = true;
     cancelAnimationFrame(animId);
+    ro?.disconnect();
     if (ownedVideo) {
       video.pause();
       video.src = '';
@@ -269,3 +294,16 @@ export async function asciifyLiveVideo(
     }
   };
 }
+
+/**
+ * @deprecated Use {@link asciifyVideo} instead — it now defaults to live streaming
+ * and accepts the same options including `fitTo` and `preExtract`.
+ */
+export function asciifyLiveVideo(
+  source: HTMLVideoElement | string,
+  canvas: HTMLCanvasElement,
+  opts?: AsciifyVideoOptions,
+): Promise<() => void> {
+  return asciifyVideo(source, canvas, opts);
+}
+

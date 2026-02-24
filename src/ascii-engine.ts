@@ -13,7 +13,7 @@ export { imageToAsciiFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToC
   from './core/renderer';
 
 // ── Simple one-call API ───────────────────────────────────────────────────────
-export type { AsciifySimpleOptions, AsciifyLiveVideoOptions } from './core/simple-api';
+export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions } from './core/simple-api';
 export { asciify, asciifyGif, asciifyVideo, asciifyLiveVideo }
   from './core/simple-api';
 
