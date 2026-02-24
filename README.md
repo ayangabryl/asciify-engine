@@ -77,29 +77,38 @@ setInterval(() => {
 }, 1000 / fps);
 ```
 
-### Video
+### Video — live (recommended)
 
-`videoToAsciiFrames` extracts frames from an `HTMLVideoElement` at a given frame rate and returns the full frame sequence.
+`asciifyLiveVideo` streams a video as ASCII art in real time. Pass a URL and a canvas — it handles everything else.
+
+> ⚠️ Never set the `<video>` element to `display: none`. Browsers skip GPU frame decoding for hidden elements — you get a blank canvas. `asciifyLiveVideo` handles this automatically.
 
 ```ts
-import { videoToAsciiFrames, renderFrameToCanvas, DEFAULT_OPTIONS } from 'asciify-engine';
-
-const video = document.createElement('video');
-video.src   = '/clip.mp4';
-video.muted = true;
-await new Promise(r => (video.onloadeddata = r));
+import { asciifyLiveVideo } from 'asciify-engine';
 
 const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-const opts   = { ...DEFAULT_OPTIONS, fontSize: 8 };
+const stop   = await asciifyLiveVideo('/clip.mp4', canvas);
 
-// videoToAsciiFrames(video, options, width, height, fps?, maxDurationSeconds?)
-const { frames, fps } = await videoToAsciiFrames(video, opts, canvas.width, canvas.height, 12, 10);
+// With options:
+const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
+  fontSize: 6,
+  artStyle: 'matrix',
+});
 
-let frameIndex = 0;
-setInterval(() => {
-  renderFrameToCanvas(canvas.getContext('2d')!, frames[frameIndex], opts, canvas.width, canvas.height);
-  frameIndex = (frameIndex + 1) % frames.length;
-}, 1000 / fps);
+// Clean up:
+stop();
+```
+
+### Video — pre-extracted frames
+
+`asciifyVideo` seeks through the clip frame by frame and returns a frame sequence. Good for short clips where you want frame-perfect control, but requires up-front processing time.
+
+```ts
+import { asciifyVideo } from 'asciify-engine';
+
+const canvas = document.getElementById('ascii') as HTMLCanvasElement;
+const stop   = await asciifyVideo('/clip.mp4', canvas, { fontSize: 8 });
+stop();
 ```
 
 ---
@@ -245,11 +254,16 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 
 | Function | Signature | Returns |
 |---|---|---|
+| `asciify` | `(source, canvas, options?)` | `Promise<void>` |
+| `asciifyLiveVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
+| `asciifyVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
+| `asciifyGif` | `(source, canvas, options?)` | `Promise<() => void>` |
+| `asciifyWebcam` | `(canvas, options?)` | `Promise<() => void>` |
+| `asciiBackground` | `(selector, options)` | `() => void` |
 | `imageToAsciiFrame` | `(source, options, w?, h?)` | `{ frame, cols, rows }` |
 | `renderFrameToCanvas` | `(ctx, frame, options, w, h, time?, hoverPos?)` | `void` |
 | `gifToAsciiFrames` | `(buffer, options, w, h, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
 | `videoToAsciiFrames` | `(video, options, w, h, fps?, maxSec?, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
-| `asciiBackground` | `(selector, options)` | `() => void` (cleanup) |
 | `generateEmbedCode` | `(frame, options)` | `string` |
 | `generateAnimatedEmbedCode` | `(frames, options, fps)` | `string` |
 

@@ -160,3 +160,85 @@ export async function asciifyVideo(
 
   return () => { cancelled = true; cancelAnimationFrame(animId); };
 }
+
+/**
+ * Stream a video element (or URL) as live ASCII art onto a canvas — frame by
+ * frame in real time, with no pre-extraction delay.
+ *
+ * Unlike `asciifyVideo` (which pre-processes the full clip), this renders each
+ * video frame live as the video plays, making it suitable for long videos,
+ * looping clips, and any case where you want instant playback.
+ *
+ * ⚠️ Important: never set the backing `<video>` element to `display: none` —
+ * browsers skip GPU frame decoding for hidden elements, resulting in a blank
+ * canvas. `asciifyLiveVideo` handles this automatically when given a URL.
+ * If you supply your own video element, make sure it is visible or uses
+ * `opacity: 0; position: fixed` instead.
+ *
+ * @returns A `stop()` function that cancels the animation loop and cleans up.
+ *
+ * @example
+ * const stop = await asciifyLiveVideo('/clip.mp4', canvas);
+ * // later: stop();
+ */
+export async function asciifyLiveVideo(
+  source: HTMLVideoElement | string,
+  canvas: HTMLCanvasElement,
+  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
+): Promise<() => void> {
+  let video: HTMLVideoElement;
+  let ownedVideo = false;
+
+  if (typeof source === 'string') {
+    // Append to DOM but keep invisible — display:none breaks frame decoding
+    video = document.createElement('video');
+    video.src = source;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    Object.assign(video.style, {
+      position: 'fixed', top: '0', left: '0',
+      width: '1px', height: '1px',
+      opacity: '0', pointerEvents: 'none', zIndex: '-1',
+    });
+    document.body.appendChild(video);
+    ownedVideo = true;
+
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error(`asciifyLiveVideo: failed to load "${source}"`));
+    });
+    video.play().catch(() => {});
+  } else {
+    video = source;
+    if (video.paused) video.play().catch(() => {});
+  }
+
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('asciifyLiveVideo: could not get 2d context from canvas.');
+
+  let cancelled = false;
+  let animId: number;
+
+  const tick = () => {
+    if (cancelled) return;
+    animId = requestAnimationFrame(tick);
+    if (video.readyState < 2 || canvas.width === 0 || canvas.height === 0) return;
+    const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
+    if (frame.length > 0) renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+  };
+
+  animId = requestAnimationFrame(tick);
+
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(animId);
+    if (ownedVideo) {
+      video.pause();
+      video.src = '';
+      document.body.removeChild(video);
+    }
+  };
+}
