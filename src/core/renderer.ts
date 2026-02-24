@@ -147,17 +147,18 @@ export async function videoToAsciiFrames(
   targetHeight: number,
   targetFps: number = 12,
   maxDuration: number = 10,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  startTime: number = 0,
 ): Promise<{ frames: AsciiFrame[]; cols: number; rows: number; fps: number }> {
-  const duration = Math.min(video.duration, maxDuration);
+  const duration = Math.min(video.duration - startTime, maxDuration);
   const totalFrames = Math.ceil(duration * targetFps);
   const frames: AsciiFrame[] = [];
   let cols = 0;
   let rows = 0;
 
   for (let i = 0; i < totalFrames; i++) {
-    const time = (i / targetFps);
-    if (time > duration) break;
+    const time = startTime + (i / targetFps);
+    if (time > startTime + duration) break;
 
     video.currentTime = time;
     await new Promise<void>((resolve) => {
