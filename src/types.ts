@@ -142,17 +142,22 @@ export interface AsciiOptions {
    * are keyed out: their character becomes a space and alpha is set to 0,
    * letting the canvas background show through.
    *
-   * - `true` — smart default: automatically uses standard broadcast green
-   *   (`#00b140`). No colour to declare, just turn it on.
-   * - `{ r, g, b }` or CSS colour string — custom key colour
+   * - `true` — **smart green screen**: heuristic detection (`g > r*1.4 && g > b*1.4`)
+   *   catches every shade of green screen (lime, broadcast, chroma green) with no
+   *   config. Works on virtually all studio/streaming footage.
+   * - `'blue-screen'` — **smart blue screen**: same heuristic for blue.
+   * - `{ r, g, b }` or CSS colour string — custom key colour + `chromaKeyTolerance`
    * - `null` / `false` — disabled (default)
    *
    * @example
    * // Standard green screen — zero config:
    * options: { chromaKey: true }
    *
-   * // Blue screen:
-   * options: { chromaKey: 'blue', chromaKeyTolerance: 70 }
+   * // Blue screen — zero config:
+   * options: { chromaKey: 'blue-screen' }
+   *
+   * // Custom CSS colour:
+   * options: { chromaKey: '#00b140', chromaKeyTolerance: 70 }
    */
   chromaKey: { r: number; g: number; b: number } | string | boolean | null;
   /**
