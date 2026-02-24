@@ -59,8 +59,14 @@ export interface AsciiOptions {
    * Any CSS colour string. Default: `'#d4ff00'`
    */
   accentColor: string;
-  /** Invert luminance mapping (light pixels → dense chars). Default: `false` */
-  invert: boolean;
+  /**
+   * Invert luminance mapping (light pixels → dense chars). Default: `false`
+   *
+   * Set to `'auto'` to let the engine detect the OS color scheme:
+   * - Light mode → inverts (bright pixel = dark char = visible on white background)
+   * - Dark mode  → normal  (bright pixel = bright char = visible on dark background)
+   */
+  invert: boolean | 'auto';
   /**
    * Render mode.
    * - `'ascii'` — characters drawn as text
