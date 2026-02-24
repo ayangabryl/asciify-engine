@@ -13,6 +13,7 @@ import {
   applyDither,
   getCellColorStr,
   getCellColorRGB,
+  parseChromaKeyColor,
 } from './utils';
 import { getAnimationMultiplier, computeHoverEffect } from './animation';
 import { renderWaveBackground } from '../backgrounds/wave';
@@ -73,6 +74,16 @@ export function imageToAsciiFrame(
 
   const frame: AsciiFrame = [];
 
+  // ── Chroma-key pre-processing ────────────────────────────────────
+  // Parse the key colour once, then compare squared distance per pixel
+  // (avoids sqrt on every cell).
+  let ckRGB: { r: number; g: number; b: number } | null = null;
+  let ckTolSq = 0;
+  if (options.chromaKey != null) {
+    ckRGB = parseChromaKeyColor(options.chromaKey);
+    ckTolSq = (options.chromaKeyTolerance ?? 60) ** 2;
+  }
+
   for (let y = 0; y < rows; y++) {
     const row: AsciiCell[] = [];
     for (let x = 0; x < cols; x++) {
@@ -81,6 +92,17 @@ export function imageToAsciiFrame(
       const g = pixels[i + 1];
       const b = pixels[i + 2];
       const a = pixels[i + 3];
+
+      // Chroma-key check — skip all processing for keyed pixels
+      if (ckRGB !== null) {
+        const dr = r - ckRGB.r;
+        const dg = g - ckRGB.g;
+        const db = b - ckRGB.b;
+        if (dr * dr + dg * dg + db * db <= ckTolSq) {
+          row.push({ char: ' ', r: 0, g: 0, b: 0, a: 0 });
+          continue;
+        }
+      }
 
       const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
       const lum = options.normalize

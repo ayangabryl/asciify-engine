@@ -136,6 +136,22 @@ export interface AsciiOptions {
    * a custom charset. Leave empty to use the selected `charset`. Default: `''`
    */
   customText: string;
+  /**
+   * Chroma-key colour to remove from the source (green screen / blue screen).
+   * Pixels whose RGB distance from this colour is within `chromaKeyTolerance`
+   * are keyed out: their character becomes a space and alpha is set to 0,
+   * letting the canvas background show through.
+   *
+   * Accepts `{ r, g, b }`, a CSS colour string (`'#00ff00'`, `'blue'`, …),
+   * or `null` to disable. Default: `null`
+   */
+  chromaKey: { r: number; g: number; b: number } | string | null;
+  /**
+   * Euclidean RGB tolerance radius for chroma-key detection.
+   * `0` = exact match only, `441` ≈ key out everything.
+   * Higher values remove more pixels. Default: `60`
+   */
+  chromaKeyTolerance: number;
 }
 
 export interface AsciiCell {
@@ -271,6 +287,8 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   hoverColor: '#ffffff',
   artStyle: 'classic',
   customText: '',
+  chromaKey: null,
+  chromaKeyTolerance: 60,
 };
 
 /**

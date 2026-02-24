@@ -138,3 +138,24 @@ export function getGlowSprite(radius: number, r: number, g: number, b: number): 
   _glowCache = { canvas, size, r, g, b };
   return canvas;
 }
+// ─── Chroma key ───────────────────────────────────────────────────
+
+/**
+ * Resolve a chroma-key colour spec to `{ r, g, b }`.
+ * Accepts a plain RGB object (returned unchanged) or any CSS colour string
+ * — the string is parsed via a temporary 1×1 canvas so it supports hex,
+ * `rgb()`, named colours, etc.
+ */
+export function parseChromaKeyColor(
+  color: { r: number; g: number; b: number } | string
+): { r: number; g: number; b: number } {
+  if (typeof color !== 'string') return color;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 1, 1);
+  const d = ctx.getImageData(0, 0, 1, 1).data;
+  return { r: d[0], g: d[1], b: d[2] };
+}

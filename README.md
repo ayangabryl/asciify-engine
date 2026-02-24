@@ -131,6 +131,47 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 | `hoverEffect` | `string` | `'none'` | Interactive effect driven by cursor position. See hover effects below. |
 | `hoverStrength` | `number` | `0.8` | Effect intensity (0–1). |
 | `hoverRadius` | `number` | `0.3` | Effect radius relative to canvas size (0–1). |
+| `chromaKey` | `{r,g,b} \| string \| null` | `null` | Remove a background colour (green/blue screen). Keyed pixels become transparent spaces. Accepts `{r,g,b}`, any CSS colour string, or `null` to disable. |
+| `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
+
+### Chroma Key (Green/Blue Screen)
+
+Remove a solid background colour from any source — images, GIFs, or video — so the canvas background shows through keyed pixels.
+
+```ts
+import { asciify, DEFAULT_OPTIONS } from 'asciify-engine';
+
+// Green screen
+asciify(img, canvas, {
+  options: {
+    ...DEFAULT_OPTIONS,
+    chromaKey: '#00ff00',       // CSS colour string — hex, rgb(), named all work
+    chromaKeyTolerance: 60,     // tune to your footage (0 = exact, ~80 = loose)
+    colorMode: 'fullcolor',
+  },
+});
+
+// Blue screen
+asciify(img, canvas, {
+  options: { ...DEFAULT_OPTIONS, chromaKey: 'blue', chromaKeyTolerance: 70 },
+});
+
+// Custom RGB key
+asciify(img, canvas, {
+  options: { ...DEFAULT_OPTIONS, chromaKey: { r: 0, g: 180, b: 90 }, chromaKeyTolerance: 50 },
+});
+
+// Live video with green screen
+asciifyVideo('/footage.mp4', canvas, {
+  fitTo: '#container',
+  options: { ...DEFAULT_OPTIONS, chromaKey: '#00b140', chromaKeyTolerance: 65, colorMode: 'fullcolor' },
+});
+```
+
+**Tolerance guide:**
+- `40–60` — tight key, natural green screen under good lighting
+- `60–80` — broader key, wrinkled fabric or uneven lighting
+- `80–120` — aggressive; expect some spill into the subject
 
 ### Color Modes
 
