@@ -87,10 +87,13 @@ setInterval(() => {
 import { asciifyLiveVideo } from 'asciify-engine';
 
 const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-const stop   = await asciifyLiveVideo('/clip.mp4', canvas);
 
-// With options:
+// Sizes canvas to the video's native dimensions automatically:
+const stop = await asciifyLiveVideo('/clip.mp4', canvas, { autoSize: true });
+
+// With art style:
 const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
+  autoSize: true,
   fontSize: 6,
   artStyle: 'matrix',
 });
