@@ -14,7 +14,7 @@ export { imageToAsciiFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToC
 
 // ── Simple one-call API ───────────────────────────────────────────────────────
 export type { AsciifySimpleOptions } from './core/simple-api';
-export { asciify, asciifyGif, asciifyVideo }
+export { asciify, asciifyGif, asciifyVideo, asciifyLiveVideo }
   from './core/simple-api';
 
 // ── Background renderers ──────────────────────────────────────────────────────
