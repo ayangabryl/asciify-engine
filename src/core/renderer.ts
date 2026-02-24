@@ -29,17 +29,49 @@ function resolveInvert(invert: boolean | 'auto'): boolean {
 }
 
 /**
- * Resolve `accentColor: 'auto'` to a concrete hex string (no `#`) based on
- * the OS color scheme: dark ink (`0d0d0d`) in light mode, light ink (`faf9f7`)
- * in dark mode. Falls back to white when the value is missing.
+ * Parse a CSS color value (hex or rgb()) to a 6-char hex string (no `#`).
+ * Returns null if the value isn't a recognized color format.
+ */
+function cssValueToHex(val: string): string | null {
+  const hexMatch = val.match(/^#([0-9a-fA-F]{3,6})$/);
+  if (hexMatch) {
+    let h = hexMatch[1];
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    if (h.length === 6) return h;
+  }
+  const rgbMatch = val.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (rgbMatch) {
+    return [rgbMatch[1], rgbMatch[2], rgbMatch[3]]
+      .map(n => parseInt(n).toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return null;
+}
+
+/**
+ * Resolve `accentColor: 'auto'` to a concrete hex string (no `#`).
+ * Detection order:
+ *  1. Probe common CSS custom properties on `:root` set by the user's project
+ *     (`--accent-color`, `--color-accent`, `--accent`, `--color-primary`, `--primary`, `--brand-color`)
+ *  2. Native CSS `accent-color` computed value
+ *  3. OS color-scheme fallback: `#0d0d0d` in light mode, `#faf9f7` in dark mode
  */
 function resolveAccentHex(accentColor: string | undefined): string {
   const v = accentColor || 'auto';
-  if (v === 'auto') {
-    const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return isDark ? 'faf9f7' : '0d0d0d';
+  if (v !== 'auto') return v.replace('#', '');
+
+  if (typeof document !== 'undefined') {
+    const rootStyle = getComputedStyle(document.documentElement);
+    for (const prop of ['--accent-color', '--color-accent', '--accent', '--color-primary', '--primary', '--brand-color']) {
+      const hex = cssValueToHex(rootStyle.getPropertyValue(prop).trim());
+      if (hex) return hex;
+    }
+    const native = cssValueToHex((getComputedStyle(document.body) as CSSStyleDeclaration & { accentColor?: string }).accentColor ?? '');
+    if (native) return native;
   }
-  return v.replace('#', '');
+
+  const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return isDark ? 'faf9f7' : '0d0d0d';
 }
 
 /**
