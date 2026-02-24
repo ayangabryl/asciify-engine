@@ -103,29 +103,22 @@ export function imageToAsciiFrame(
     return { frame: [], cols: 0, rows: 0 };
   }
 
-  const { ctx } = createOffscreenCanvas(cols, rows);
-  ctx.drawImage(source, 0, 0, cols, rows);
-  const imageData = ctx.getImageData(0, 0, cols, rows);
+  // ── Supersampling ──────────────────────────────────────────────────
+  // Drawing the source at cols×rows (one pixel per cell) discards most
+  // of the source detail (e.g. 1920×1080 → 100×55).  Instead we sample
+  // at a higher resolution and average multiple source pixels per cell.
+  // The supersample factor is clamped so the intermediate buffer never
+  // exceeds ~4 MP (2048×2048) to stay GPU-friendly.
+  const maxDim = 2048;
+  const ssX = Math.max(1, Math.min(Math.floor(maxDim / cols), Math.floor(srcWidth / cols)));
+  const ssY = Math.max(1, Math.min(Math.floor(maxDim / rows), Math.floor(srcHeight / rows)));
+  const sampleW = cols * ssX;
+  const sampleH = rows * ssY;
+
+  const { ctx } = createOffscreenCanvas(sampleW, sampleH);
+  ctx.drawImage(source, 0, 0, sampleW, sampleH);
+  const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
   const pixels = imageData.data;
-
-  // ── Optional normalize pre-scan ──────────────────────────────────
-  // Find the actual luminance range in the frame so we can stretch it
-  // to full [0, 255] before charset mapping — maximises perceived detail.
-  let normMin = 0;
-  let normRange = 255;
-  if (options.normalize) {
-    let lo = 255, hi = 0;
-    for (let k = 0; k < pixels.length; k += 4) {
-      const l = 0.299 * pixels[k] + 0.587 * pixels[k + 1] + 0.114 * pixels[k + 2];
-      if (l < lo) lo = l;
-      if (l > hi) hi = l;
-    }
-    normMin = lo;
-    normRange = hi > lo ? hi - lo : 255;
-  }
-
-  const frame: AsciiFrame = [];
-  const invertVal = resolveInvert(options.invert);
 
   // ── Chroma-key pre-processing ────────────────────────────────────
   // `true`         — heuristic green: g > r*1.4 && g > b*1.4 && g > 80
@@ -142,35 +135,92 @@ export function imageToAsciiFrame(
     ckTolSq = (options.chromaKeyTolerance ?? 60) ** 2;
   }
 
+  // ── Optional normalize pre-scan ──────────────────────────────────
+  // Find the actual luminance range *of non-keyed pixels* so we can
+  // stretch it to full [0, 255] — maximises perceived detail.
+  // Must run AFTER chroma-key setup so keyed pixels are excluded.
+  let normMin = 0;
+  let normRange = 255;
+  if (options.normalize) {
+    let lo = 255, hi = 0;
+    for (let k = 0; k < pixels.length; k += 4) {
+      // Skip chroma-keyed pixels — they're bg and would inflate the range
+      if (ckEnabled) {
+        const pr = pixels[k], pg = pixels[k + 1], pb = pixels[k + 2];
+        let keyed = false;
+        if (ckHeuristicGreen) {
+          keyed = pg > pr * 1.4 && pg > pb * 1.4 && pg > 80;
+        } else if (ckHeuristicBlue) {
+          keyed = pb > pr * 1.4 && pb > pg * 1.4 && pb > 80;
+        } else if (ckRGB !== null) {
+          const dr = pr - ckRGB.r, dg = pg - ckRGB.g, db = pb - ckRGB.b;
+          keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+        }
+        if (keyed) continue;
+      }
+      const l = 0.299 * pixels[k] + 0.587 * pixels[k + 1] + 0.114 * pixels[k + 2];
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+    }
+    normMin = lo;
+    normRange = hi > lo ? hi - lo : 255;
+  }
+
+  const frame: AsciiFrame = [];
+  const invertVal = resolveInvert(options.invert);
+
+  // When chroma-key is active, strip spaces from the charset.
+  // Keyed pixels are already transparent (a=0, skipped in renderer) so spaces
+  // are redundant.  Keeping them wastes charset range and makes the lightest
+  // (or darkest, depending on invert) subject pixels invisible.
+  const effectiveCharset = ckEnabled
+    ? options.charset.replace(/ /g, '') || options.charset
+    : options.charset;
+
+  const ssCount = ssX * ssY;
+
   for (let y = 0; y < rows; y++) {
     const row: AsciiCell[] = [];
     for (let x = 0; x < cols; x++) {
-      const i = (y * cols + x) * 4;
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      const a = pixels[i + 3];
+      // Average the ssX × ssY pixel block for this cell
+      let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+      let keyedCount = 0;
 
-      // Chroma-key check — skip all processing for keyed pixels
-      if (ckEnabled) {
-        let keyed = false;
-        if (ckHeuristicGreen) {
-          // Catches all varieties of green screen (lime, broadcast, chroma)
-          // without relying on a fixed reference color
-          keyed = g > r * 1.4 && g > b * 1.4 && g > 80;
-        } else if (ckHeuristicBlue) {
-          keyed = b > r * 1.4 && b > g * 1.4 && b > 80;
-        } else if (ckRGB !== null) {
-          const dr = r - ckRGB.r;
-          const dg = g - ckRGB.g;
-          const db = b - ckRGB.b;
-          keyed = dr * dr + dg * dg + db * db <= ckTolSq;
-        }
-        if (keyed) {
-          row.push({ char: ' ', r: 0, g: 0, b: 0, a: 0 });
-          continue;
+      for (let sy = 0; sy < ssY; sy++) {
+        const rowOff = (y * ssY + sy) * sampleW;
+        for (let sx = 0; sx < ssX; sx++) {
+          const i = (rowOff + x * ssX + sx) * 4;
+          const pr = pixels[i], pg = pixels[i + 1], pb = pixels[i + 2], pa = pixels[i + 3];
+
+          // Chroma-key: count keyed sub-pixels
+          if (ckEnabled) {
+            let keyed = false;
+            if (ckHeuristicGreen) {
+              keyed = pg > pr * 1.4 && pg > pb * 1.4 && pg > 80;
+            } else if (ckHeuristicBlue) {
+              keyed = pb > pr * 1.4 && pb > pg * 1.4 && pb > 80;
+            } else if (ckRGB !== null) {
+              const dr = pr - ckRGB.r, dg = pg - ckRGB.g, db = pb - ckRGB.b;
+              keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+            }
+            if (keyed) { keyedCount++; continue; }
+          }
+
+          sumR += pr; sumG += pg; sumB += pb; sumA += pa;
         }
       }
+
+      // If majority of sub-pixels are keyed, treat whole cell as keyed
+      if (ckEnabled && keyedCount > ssCount / 2) {
+        row.push({ char: ' ', r: 0, g: 0, b: 0, a: 0 });
+        continue;
+      }
+
+      const nonKeyed = ssCount - keyedCount;
+      const r = nonKeyed > 0 ? sumR / nonKeyed : 0;
+      const g = nonKeyed > 0 ? sumG / nonKeyed : 0;
+      const b = nonKeyed > 0 ? sumB / nonKeyed : 0;
+      const a = nonKeyed > 0 ? sumA / nonKeyed : 0;
 
       const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
       const lum = options.normalize
@@ -180,7 +230,7 @@ export function imageToAsciiFrame(
       const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
       const char = options.customText
         ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
-        : luminanceToChar(ditheredLum, options.charset, invertVal);
+        : luminanceToChar(ditheredLum, effectiveCharset, invertVal);
 
       row.push({ char, r, g, b, a, lum: ditheredLum });
     }
@@ -360,10 +410,12 @@ export function renderFrameToCanvas(
   }
 
   if (!hasTransparency) {
-    // Match fill to OS color scheme so non-transparent frames look correct
-    // in both light and dark mode.
-    const isInvertedBg = resolveInvert(options.invert);
-    ctx.fillStyle = isInvertedBg ? '#faf9f7' : '#0a0a0a';
+    // Fill based on the OS colour scheme so the canvas background matches
+    // the page regardless of the `invert` setting (which controls char
+    // density / accent brightness, NOT background colour).
+    const isDarkScheme = typeof window !== 'undefined'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    ctx.fillStyle = isDarkScheme ? '#0a0a0a' : '#faf9f7';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
 

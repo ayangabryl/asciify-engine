@@ -80,8 +80,12 @@ export function getCellColorStr(
     case 'matrix':
       return GREEN_LUT[(0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0];
     case 'accent': {
-      const ab = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) / 255;
-      return `rgb(${(acR * ab) | 0},${(acG * ab) | 0},${(acB * ab) | 0})`;
+      // Accent mode: constant colour — the character density (chosen by
+      // luminanceToChar) already encodes brightness.  Scaling the colour
+      // by luminance too creates a double-emphasis that makes dark source
+      // areas invisible on dark backgrounds and bright areas invisible on
+      // light backgrounds.
+      return `rgb(${acR},${acG},${acB})`;
     }
     default: {
       // Grayscale: always use the source luminance as-is.
@@ -109,8 +113,8 @@ export function getCellColorRGB(
       break;
     }
     case 'accent': {
-      const ab = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) / 255;
-      _colorRGB[0] = (acR * ab) | 0; _colorRGB[1] = (acG * ab) | 0; _colorRGB[2] = (acB * ab) | 0;
+      // Constant accent colour — density encodes brightness (see getCellColorStr).
+      _colorRGB[0] = acR; _colorRGB[1] = acG; _colorRGB[2] = acB;
       break;
     }
     default: {
