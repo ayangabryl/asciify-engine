@@ -24,9 +24,16 @@ export interface AsciifySimpleOptions {
 
 export interface AsciifyLiveVideoOptions extends AsciifySimpleOptions {
   /**
+   * When `true`, automatically sizes the canvas to the video's native pixel
+   * dimensions after metadata loads, before `onReady` fires.
+   * Eliminates manual canvas-sizing boilerplate for the common case.
+   * Default: `false`
+   */
+  autoSize?: boolean;
+  /**
    * Called once when the video metadata is ready and playback has started.
-   * Receive the backing video element — useful for sizing the canvas or
-   * triggering a ready state in your UI.
+   * Receives the backing video element — use this to size the canvas, trigger
+   * a loading state change, start a timer, etc.
    */
   onReady?: (video: HTMLVideoElement) => void;
   /** Called after every rendered frame. Useful for frame counters or timers. */
@@ -195,7 +202,7 @@ export async function asciifyVideo(
 export async function asciifyLiveVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {}, onReady, onFrame }: AsciifyLiveVideoOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {}, autoSize = false, onReady, onFrame }: AsciifyLiveVideoOptions = {}
 ): Promise<() => void> {
   let video: HTMLVideoElement;
   let ownedVideo = false;
@@ -221,12 +228,16 @@ export async function asciifyLiveVideo(
       video.onerror = () => reject(new Error(`asciifyLiveVideo: failed to load "${source}"`));
     });
     await video.play().catch(() => {});
-    onReady?.(video);
   } else {
     video = source;
     if (video.paused) await video.play().catch(() => {});
-    onReady?.(video);
   }
+
+  if (autoSize) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+  onReady?.(video);
 
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
   const ctx = canvas.getContext('2d');
