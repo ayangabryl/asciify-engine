@@ -142,10 +142,19 @@ export interface AsciiOptions {
    * are keyed out: their character becomes a space and alpha is set to 0,
    * letting the canvas background show through.
    *
-   * Accepts `{ r, g, b }`, a CSS colour string (`'#00ff00'`, `'blue'`, …),
-   * or `null` to disable. Default: `null`
+   * - `true` — smart default: automatically uses standard broadcast green
+   *   (`#00b140`). No colour to declare, just turn it on.
+   * - `{ r, g, b }` or CSS colour string — custom key colour
+   * - `null` / `false` — disabled (default)
+   *
+   * @example
+   * // Standard green screen — zero config:
+   * options: { chromaKey: true }
+   *
+   * // Blue screen:
+   * options: { chromaKey: 'blue', chromaKeyTolerance: 70 }
    */
-  chromaKey: { r: number; g: number; b: number } | string | null;
+  chromaKey: { r: number; g: number; b: number } | string | boolean | null;
   /**
    * Euclidean RGB tolerance radius for chroma-key detection.
    * `0` = exact match only, `441` ≈ key out everything.

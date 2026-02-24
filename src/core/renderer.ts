@@ -77,10 +77,14 @@ export function imageToAsciiFrame(
   // ── Chroma-key pre-processing ────────────────────────────────────
   // Parse the key colour once, then compare squared distance per pixel
   // (avoids sqrt on every cell).
+  // `true` = smart default: standard broadcast green (#00b140).
   let ckRGB: { r: number; g: number; b: number } | null = null;
   let ckTolSq = 0;
-  if (options.chromaKey != null) {
-    ckRGB = parseChromaKeyColor(options.chromaKey);
+  const ck = options.chromaKey;
+  if (ck != null && ck !== false) {
+    ckRGB = ck === true
+      ? { r: 0, g: 177, b: 64 }   // broadcast green / chroma-key green
+      : parseChromaKeyColor(ck as string | { r: number; g: number; b: number });
     ckTolSq = (options.chromaKeyTolerance ?? 60) ** 2;
   }
 
