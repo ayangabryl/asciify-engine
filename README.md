@@ -129,8 +129,8 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 | `invert` | `boolean` | `false` | Inverts the luminance mapping — light areas become dense, dark areas sparse. |
 | `renderMode` | `'ascii' \| 'dots'` | `'ascii'` | Render as text characters or circular dot particles. |
 | `hoverEffect` | `string` | `'none'` | Interactive effect driven by cursor position. See hover effects below. |
-| `hoverStrength` | `number` | `0.8` | Effect intensity (0–1). |
-| `hoverRadius` | `number` | `0.3` | Effect radius relative to canvas size (0–1). |
+| `hoverStrength` | `number` | `0` | Effect intensity (0–1). `0` = hover disabled. |
+| `hoverRadius` | `number` | `0.2` | Effect radius relative to canvas size (0–1). |
 | `chromaKey` | `{r,g,b} \| string \| null` | `null` | Remove a background colour (green/blue screen). Keyed pixels become transparent spaces. Accepts `{r,g,b}`, any CSS colour string, or `null` to disable. |
 | `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
 
