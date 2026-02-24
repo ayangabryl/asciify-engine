@@ -95,6 +95,22 @@ const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
   artStyle: 'matrix',
 });
 
+// With lifecycle hooks — useful for sizing the canvas, loading indicators, timers:
+const stop = await asciifyLiveVideo('/clip.mp4', canvas, {
+  fontSize: 6,
+  onReady: (video) => {
+    // Called once when metadata is loaded and playback has started.
+    // Resize the canvas to match the video here, update your UI, etc.
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    setReady(true);
+  },
+  onFrame: () => {
+    // Called after every rendered frame.
+    setElapsed(Math.floor(performance.now() / 1000));
+  },
+});
+
 // Clean up:
 stop();
 ```
