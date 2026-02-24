@@ -89,6 +89,10 @@ function sizeCanvasToContainer(
   canvas.height = Math.round(cssH * dpr);
   canvas.style.width  = cssW + 'px';
   canvas.style.height = cssH + 'px';
+  // Store CSS dims so the render loop can pass them to renderFrameToCanvas
+  // without re-querying getBoundingClientRect every frame.
+  (canvas as any).__cssW = cssW;
+  (canvas as any).__cssH = cssH;
 }
 
 /**
@@ -236,15 +240,23 @@ export async function asciifyVideo(
 
     if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight);
 
+    // Use source native resolution for frame generation (detail),
+    // CSS dimensions for rendering (display) — mirrors the playground.
+    const srcW = video.videoWidth;
+    const srcH = video.videoHeight;
     const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
-    const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height, undefined, maxDur, undefined, trimStart);
+    const { frames, fps } = await videoToAsciiFrames(video, merged, srcW, srcH, undefined, maxDur, undefined, trimStart);
     let cancelled = false, animId: number, i = 0, last = performance.now();
     let firstFrame = true;
     const interval = 1000 / fps;
     const tick = (now: number) => {
       if (cancelled) return;
+      const cssW: number = (canvas as any).__cssW || canvas.width;
+      const cssH: number = (canvas as any).__cssH || canvas.height;
       if (now - last >= interval) {
-        renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
+        const dpr = window.devicePixelRatio || 1;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderFrameToCanvas(ctx, frames[i], merged, cssW, cssH);
         i = (i + 1) % frames.length;
         last = now;
         if (firstFrame) { firstFrame = false; onReady?.(video); }
@@ -323,9 +335,17 @@ export async function asciifyVideo(
     // Skip frames outside trim window (prevents flash at time 0 on loop)
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
-    const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
+    // Use source native resolution for frame generation (detail level),
+    // CSS dimensions for rendering (display) — same approach as the playground.
+    const srcW = video.videoWidth;
+    const srcH = video.videoHeight;
+    const { frame } = imageToAsciiFrame(video, merged, srcW, srcH);
     if (frame.length > 0) {
-      renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+      const cssW: number = (canvas as any).__cssW || canvas.width;
+      const cssH: number = (canvas as any).__cssH || canvas.height;
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      renderFrameToCanvas(ctx, frame, merged, cssW, cssH, 0, null);
       if (firstFrame) { firstFrame = false; onReady?.(video); }
       onFrame?.();
     }
