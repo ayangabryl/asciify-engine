@@ -72,7 +72,7 @@ for (let _i = 0; _i < 256; _i++) {
 
 export function getCellColorStr(
   cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number,
-  isInverted = false
+  _isInverted = false
 ): string {
   switch (colorMode) {
     case 'fullcolor':
@@ -84,8 +84,12 @@ export function getCellColorStr(
       return `rgb(${(acR * ab) | 0},${(acG * ab) | 0},${(acB * ab) | 0})`;
     }
     default: {
+      // Grayscale: always use the source luminance as-is.
+      // `invert` controls character DENSITY (sparse ↔ dense) but NOT color.
+      // Inverting color would cancel out the density swap (dense + bright
+      // on white = invisible), defeating the purpose of light-mode invert.
       const gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
-      return GRAY_LUT[isInverted ? 255 - gray : gray];
+      return GRAY_LUT[gray];
     }
   }
 }
@@ -93,7 +97,7 @@ export function getCellColorStr(
 const _colorRGB = [0, 0, 0];
 export function getCellColorRGB(
   cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number,
-  isInverted = false
+  _isInverted = false
 ): number[] {
   switch (colorMode) {
     case 'fullcolor':
@@ -110,8 +114,8 @@ export function getCellColorRGB(
       break;
     }
     default: {
-      let gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
-      if (isInverted) gray = 255 - gray;
+      // Grayscale: no color inversion — see getCellColorStr comment.
+      const gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
       _colorRGB[0] = gray; _colorRGB[1] = gray; _colorRGB[2] = gray;
       break;
     }

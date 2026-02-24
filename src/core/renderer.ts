@@ -360,7 +360,10 @@ export function renderFrameToCanvas(
   }
 
   if (!hasTransparency) {
-    ctx.fillStyle = '#0a0a0a';
+    // Match fill to OS color scheme so non-transparent frames look correct
+    // in both light and dark mode.
+    const isInvertedBg = resolveInvert(options.invert);
+    ctx.fillStyle = isInvertedBg ? '#faf9f7' : '#0a0a0a';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
 
