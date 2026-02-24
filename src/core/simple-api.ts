@@ -216,6 +216,7 @@ export async function asciifyVideo(
 
     const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height);
     let cancelled = false, animId: number, i = 0, last = performance.now();
+    let firstFrame = true;
     const interval = 1000 / fps;
     const tick = (now: number) => {
       if (cancelled) return;
@@ -223,6 +224,7 @@ export async function asciifyVideo(
         renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
         i = (i + 1) % frames.length;
         last = now;
+        if (firstFrame) { firstFrame = false; onReady?.(video); }
         onFrame?.();
       }
       animId = requestAnimationFrame(tick);
@@ -267,10 +269,10 @@ export async function asciifyVideo(
     ro = new ResizeObserver(() => sizeCanvasToContainer(canvas, container, aspect));
     ro.observe(container);
   }
-  onReady?.(video);
 
   let cancelled = false;
   let animId: number;
+  let firstFrame = true;
   const tick = () => {
     if (cancelled) return;
     animId = requestAnimationFrame(tick);
@@ -278,6 +280,7 @@ export async function asciifyVideo(
     const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
     if (frame.length > 0) {
       renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+      if (firstFrame) { firstFrame = false; onReady?.(video); }
       onFrame?.();
     }
   };
