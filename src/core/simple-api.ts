@@ -77,8 +77,18 @@ function sizeCanvasToContainer(
   if (!width || !height) return;
   let w = width, h = w / aspect;
   if (h > height) { h = height; w = h * aspect; }
-  canvas.width  = Math.round(w);
-  canvas.height = Math.round(h);
+
+  // Use devicePixelRatio so the canvas buffer has enough pixels for
+  // Retina / HiDPI screens.  This gives more cols/rows (more detail)
+  // and crisper text rendering at the cost of slightly smaller apparent
+  // character size (fontSize is in buffer pixels, not CSS pixels).
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+  const cssW = Math.round(w);
+  const cssH = Math.round(h);
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
 }
 
 /**
