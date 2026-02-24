@@ -22,6 +22,17 @@ export interface AsciifySimpleOptions {
   options?: Partial<AsciiOptions>;
 }
 
+export interface AsciifyLiveVideoOptions extends AsciifySimpleOptions {
+  /**
+   * Called once when the video metadata is ready and playback has started.
+   * Receive the backing video element — useful for sizing the canvas or
+   * triggering a ready state in your UI.
+   */
+  onReady?: (video: HTMLVideoElement) => void;
+  /** Called after every rendered frame. Useful for frame counters or timers. */
+  onFrame?: () => void;
+}
+
 /**
  * Convert an image/video/canvas element to ASCII art and render it onto a canvas.
  *
@@ -184,7 +195,7 @@ export async function asciifyVideo(
 export async function asciifyLiveVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {}, onReady, onFrame }: AsciifyLiveVideoOptions = {}
 ): Promise<() => void> {
   let video: HTMLVideoElement;
   let ownedVideo = false;
@@ -209,10 +220,12 @@ export async function asciifyLiveVideo(
       video.onloadedmetadata = () => resolve();
       video.onerror = () => reject(new Error(`asciifyLiveVideo: failed to load "${source}"`));
     });
-    video.play().catch(() => {});
+    await video.play().catch(() => {});
+    onReady?.(video);
   } else {
     video = source;
-    if (video.paused) video.play().catch(() => {});
+    if (video.paused) await video.play().catch(() => {});
+    onReady?.(video);
   }
 
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
@@ -227,7 +240,10 @@ export async function asciifyLiveVideo(
     animId = requestAnimationFrame(tick);
     if (video.readyState < 2 || canvas.width === 0 || canvas.height === 0) return;
     const { frame } = imageToAsciiFrame(video, merged, canvas.width, canvas.height);
-    if (frame.length > 0) renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+    if (frame.length > 0) {
+      renderFrameToCanvas(ctx, frame, merged, canvas.width, canvas.height, 0, null);
+      onFrame?.();
+    }
   };
 
   animId = requestAnimationFrame(tick);
