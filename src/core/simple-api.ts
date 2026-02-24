@@ -45,6 +45,17 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    */
   preExtract?: boolean;
   /**
+   * Trim the video to a specific time range (in seconds).
+   * - `start` — seek to this time before playback begins. Default: `0`
+   * - `end` — loop back to `start` when this time is reached.
+   *   In `preExtract` mode, only frames up to `end` are extracted.
+   *
+   * @example
+   * // Play only seconds 2–8, looping:
+   * asciifyVideo('/clip.mp4', canvas, { trim: { start: 2, end: 8 } });
+   */
+  trim?: { start?: number; end?: number };
+  /**
    * Called once when the video metadata is loaded and playback has started.
    * Receives the backing video element.
    */
@@ -184,8 +195,10 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize = 10, artStyle = 'classic', options = {}, fitTo, preExtract = false, onReady, onFrame }: AsciifyVideoOptions = {}
+  { fontSize = 10, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, onReady, onFrame }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
+  const trimStart = trim?.start ?? 0;
+  const trimEnd   = trim?.end;
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
@@ -212,9 +225,9 @@ export async function asciifyVideo(
     }
 
     if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight);
-    onReady?.(video);
 
-    const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height);
+    const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
+    const { frames, fps } = await videoToAsciiFrames(video, merged, canvas.width, canvas.height, undefined, maxDur, undefined, trimStart);
     let cancelled = false, animId: number, i = 0, last = performance.now();
     let firstFrame = true;
     const interval = 1000 / fps;
@@ -262,6 +275,22 @@ export async function asciifyVideo(
     if (video.paused) await video.play().catch(() => {});
   }
 
+  // Apply trim start
+  if (trimStart > 0) {
+    video.currentTime = trimStart;
+    await new Promise<void>(resolve => {
+      const h = () => { video.removeEventListener('seeked', h); resolve(); };
+      video.addEventListener('seeked', h);
+    });
+  }
+
+  // Apply trim end — loop back to start when time exceeds end
+  let timeupdateHandler: (() => void) | null = null;
+  if (trimEnd !== undefined) {
+    timeupdateHandler = () => { if (video.currentTime >= trimEnd) video.currentTime = trimStart; };
+    video.addEventListener('timeupdate', timeupdateHandler);
+  }
+
   let ro: ResizeObserver | null = null;
   if (container) {
     const aspect = video.videoWidth / video.videoHeight;
@@ -290,6 +319,7 @@ export async function asciifyVideo(
     cancelled = true;
     cancelAnimationFrame(animId);
     ro?.disconnect();
+    if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);
     if (ownedVideo) {
       video.pause();
       video.src = '';
