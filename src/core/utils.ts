@@ -71,7 +71,8 @@ for (let _i = 0; _i < 256; _i++) {
 // ─── Cell color resolution ────────────────────────────────────────
 
 export function getCellColorStr(
-  cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number
+  cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number,
+  isInverted = false
 ): string {
   switch (colorMode) {
     case 'fullcolor':
@@ -82,14 +83,17 @@ export function getCellColorStr(
       const ab = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) / 255;
       return `rgb(${(acR * ab) | 0},${(acG * ab) | 0},${(acB * ab) | 0})`;
     }
-    default:
-      return GRAY_LUT[(0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0];
+    default: {
+      const gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
+      return GRAY_LUT[isInverted ? 255 - gray : gray];
+    }
   }
 }
 
 const _colorRGB = [0, 0, 0];
 export function getCellColorRGB(
-  cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number
+  cell: AsciiCell, colorMode: string, acR: number, acG: number, acB: number,
+  isInverted = false
 ): number[] {
   switch (colorMode) {
     case 'fullcolor':
@@ -106,7 +110,8 @@ export function getCellColorRGB(
       break;
     }
     default: {
-      const gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
+      let gray = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) | 0;
+      if (isInverted) gray = 255 - gray;
       _colorRGB[0] = gray; _colorRGB[1] = gray; _colorRGB[2] = gray;
       break;
     }

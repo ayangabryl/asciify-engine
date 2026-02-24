@@ -412,13 +412,13 @@ export function renderFrameToCanvas(
 
         let color: string;
         if (hoverBlend > 0) {
-          const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB);
+          const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
           const cr = Math.min(255, (rgb[0] + (hcR - rgb[0]) * hoverBlend) | 0);
           const cg = Math.min(255, (rgb[1] + (hcG - rgb[1]) * hoverBlend) | 0);
           const cb = Math.min(255, (rgb[2] + (hcB - rgb[2]) * hoverBlend) | 0);
           color = `rgb(${cr},${cg},${cb})`;
         } else {
-          color = getCellColorStr(cell, colorMode, acR, acG, acB);
+          color = getCellColorStr(cell, colorMode, acR, acG, acB, isInverted);
         }
 
         const alpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow));
@@ -495,13 +495,13 @@ export function renderFrameToCanvas(
 
         let color: string;
         if (hoverBlend > 0) {
-          const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB);
+          const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
           const cr = Math.min(255, (rgb[0] + (hcR - rgb[0]) * hoverBlend) | 0);
           const cg = Math.min(255, (rgb[1] + (hcG - rgb[1]) * hoverBlend) | 0);
           const cb = Math.min(255, (rgb[2] + (hcB - rgb[2]) * hoverBlend) | 0);
           color = `rgb(${cr},${cg},${cb})`;
         } else {
-          color = getCellColorStr(cell, colorMode, acR, acG, acB);
+          color = getCellColorStr(cell, colorMode, acR, acG, acB, isInverted);
         }
 
         if (useFastRect) {
