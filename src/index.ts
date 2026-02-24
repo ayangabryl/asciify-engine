@@ -16,11 +16,13 @@ export type {
   AsciiFrame,
   AsciiResult,
   CharsetKey,
+  CharsetSequenceKey,
 } from './types';
 
 // Constants & presets
 export {
   CHARSETS,
+  CHARSET_SEQUENCES,
   ART_STYLE_PRESETS,
   DEFAULT_OPTIONS,
   HOVER_PRESETS,
