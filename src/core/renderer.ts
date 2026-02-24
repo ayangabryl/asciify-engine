@@ -75,16 +75,17 @@ export function imageToAsciiFrame(
   const frame: AsciiFrame = [];
 
   // ── Chroma-key pre-processing ────────────────────────────────────
-  // Parse the key colour once, then compare squared distance per pixel
-  // (avoids sqrt on every cell).
-  // `true` = smart default: standard broadcast green (#00b140).
+  // `true`         — heuristic green: g > r*1.4 && g > b*1.4 && g > 80
+  // `'blue-screen'` — heuristic blue:  b > r*1.4 && b > g*1.4 && b > 80
+  // string / {r,g,b} — Euclidean distance with chromaKeyTolerance
+  const ck = options.chromaKey;
+  const ckEnabled = ck != null && ck !== false;
+  const ckHeuristicGreen = ck === true;
+  const ckHeuristicBlue  = ck === 'blue-screen';
   let ckRGB: { r: number; g: number; b: number } | null = null;
   let ckTolSq = 0;
-  const ck = options.chromaKey;
-  if (ck != null && ck !== false) {
-    ckRGB = ck === true
-      ? { r: 0, g: 177, b: 64 }   // broadcast green / chroma-key green
-      : parseChromaKeyColor(ck as string | { r: number; g: number; b: number });
+  if (ckEnabled && !ckHeuristicGreen && !ckHeuristicBlue) {
+    ckRGB = parseChromaKeyColor(ck as string | { r: number; g: number; b: number });
     ckTolSq = (options.chromaKeyTolerance ?? 60) ** 2;
   }
 
@@ -98,11 +99,21 @@ export function imageToAsciiFrame(
       const a = pixels[i + 3];
 
       // Chroma-key check — skip all processing for keyed pixels
-      if (ckRGB !== null) {
-        const dr = r - ckRGB.r;
-        const dg = g - ckRGB.g;
-        const db = b - ckRGB.b;
-        if (dr * dr + dg * dg + db * db <= ckTolSq) {
+      if (ckEnabled) {
+        let keyed = false;
+        if (ckHeuristicGreen) {
+          // Catches all varieties of green screen (lime, broadcast, chroma)
+          // without relying on a fixed reference color
+          keyed = g > r * 1.4 && g > b * 1.4 && g > 80;
+        } else if (ckHeuristicBlue) {
+          keyed = b > r * 1.4 && b > g * 1.4 && b > 80;
+        } else if (ckRGB !== null) {
+          const dr = r - ckRGB.r;
+          const dg = g - ckRGB.g;
+          const db = b - ckRGB.b;
+          keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+        }
+        if (keyed) {
           row.push({ char: ' ', r: 0, g: 0, b: 0, a: 0 });
           continue;
         }
