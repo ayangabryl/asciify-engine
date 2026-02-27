@@ -39,6 +39,7 @@
   ],
   "author": "ayangabryl",
   "license": "MIT",
+  "sideEffects": false,
   "homepage": "https://asciify.org",
   "repository": {
     "type": "git",
@@ -48,6 +49,7 @@
     "gifuct-js": "^2.1.2"
   },
   "devDependencies": {
+    "terser": "^5.46.0",
     "tsup": "^8.4.0",
     "typescript": "~5.8.3"
   }
