@@ -10,7 +10,7 @@ export default defineConfig([
     clean: true,
     splitting: false,
     treeshake: true,
-    minify: false,
+    minify: 'terser',
     external: [],
   },
 ]);
