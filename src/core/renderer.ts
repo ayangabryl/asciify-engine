@@ -462,6 +462,7 @@ export function renderFrameToCanvas(
   const hoverStrength = options.hoverStrength;
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
+  const hoverShape = options.hoverShape || 'circle';
   const isInverted = resolveInvert(options.invert);
   const colorMode = options.colorMode;
   const TWO_PI = Math.PI * 2;
@@ -496,7 +497,7 @@ export function renderFrameToCanvas(
         if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
             x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
-            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor
+            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
           );
           hoverMul = fx.scale;
           hoverOffX = fx.offsetX;
@@ -619,7 +620,7 @@ export function renderFrameToCanvas(
         if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
             x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
-            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor
+            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
           );
           hoverScale = fx.scale;
           hoverOffX = fx.offsetX;

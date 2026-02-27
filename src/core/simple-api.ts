@@ -148,15 +148,26 @@ function sizeCanvasToContainer(
 /**
  * Convert an image/video/canvas element to ASCII art and render it onto a canvas.
  *
+ * When hover options are active (`hoverStrength > 0` in `options`), the engine
+ * automatically sets up mouse tracking and a `requestAnimationFrame` loop so
+ * the hover effect works out of the box. In that case, a `stop()` function is
+ * returned to tear down the loop and listeners.
+ *
  * @example
- * await asciify(document.querySelector('img'), canvas);
- * await asciify(img, canvas, { fontSize: 8, artStyle: 'letters' });
+ * // Static (no hover):
+ * await asciify('/photo.jpg', canvas);
+ *
+ * // With hover — returns a cleanup handle:
+ * const stop = await asciify('/photo.jpg', canvas, {
+ *   options: { hoverEffect: 'glitchText', hoverStrength: 0.8, hoverText: 'HI' }
+ * });
+ * // later: stop?.();
  */
 export async function asciify(
   source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string,
   canvas: HTMLCanvasElement,
   { fontSize, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
-): Promise<void> {
+): Promise<(() => void) | void> {
   let el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
   if (typeof source === 'string') {
     const img = new Image();
@@ -185,25 +196,61 @@ export async function asciify(
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
   // Use source dims for frame gen → maximum detail.
-  // Render at source dims with DPR scaling → proper font sizes.
-  // CSS handles the visual down-scale via the browser compositor.
   const { w: srcW, h: srcH } = getSourceDims(el);
   const { renderW, renderH } = computeRenderDims(srcW, srcH);
 
-  // Set up DPR scaling: buffer = render × dpr, draw in render-coordinate space
+  // DPR scaling for crisp Retina text
   const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
   const MAX_PX = 8_000_000;
   const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
     ? Math.sqrt(MAX_PX / (renderW * renderH))
     : dpr;
 
-  // Only resize buffer if canvas is user-managed (no fitTo container)
   if (canvas.width < renderW || canvas.height < renderH) {
     canvas.width  = Math.round(renderW * cappedDpr);
     canvas.height = Math.round(renderH * cappedDpr);
   }
 
   const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
+
+  // ── Hover-interactive mode ──────────────────────────────────────────
+  // When hoverStrength > 0, set up mouse tracking + RAF loop automatically.
+  if (merged.hoverStrength > 0) {
+    let hoverPos: { x: number; y: number } | null = null;
+    let cancelled = false;
+    let rafId = 0;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      hoverPos = {
+        x: (e.clientX - rect.left) / rect.width,
+        y: (e.clientY - rect.top) / rect.height,
+      };
+    };
+    const onMouseLeave = () => { hoverPos = null; };
+
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+
+    const tick = (t: number) => {
+      if (cancelled) return;
+      ctx.save();
+      ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+      renderFrameToCanvas(ctx, frame, merged, renderW, renderH, t / 1000, hoverPos);
+      ctx.restore();
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseleave', onMouseLeave);
+    };
+  }
+
+  // ── Static mode (no hover) ─────────────────────────────────────────
   ctx.save();
   ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
   renderFrameToCanvas(ctx, frame, merged, renderW, renderH);

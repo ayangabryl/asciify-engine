@@ -9,6 +9,7 @@ export type {
   ArtStyle,
   HoverEffect,
   HoverPreset,
+  HoverShape,
   PaletteTheme,
   SourceType,
   AsciiOptions,

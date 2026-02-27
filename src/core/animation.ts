@@ -3,7 +3,7 @@
  */
 
 import type { AnimationStyle } from '../types';
-import type { HoverEffect } from '../types';
+import type { HoverEffect, HoverShape } from '../types';
 
 export function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
@@ -163,15 +163,30 @@ export function computeHoverEffect(
   cellW: number,
   cellH: number,
   effect: HoverEffect = 'spotlight',
-  radiusFactor: number = 0.5
+  radiusFactor: number = 0.5,
+  shape: HoverShape = 'circle'
 ): typeof _hoverResult {
   const dx = nx - hoverX;
   const dy = ny - hoverY;
-  const distSq = dx * dx + dy * dy;
 
   const radius = (0.08 + radiusFactor * 0.35) + strength * 0.04;
 
-  if (distSq >= radius * radius) {
+  // Compute distance based on shape
+  let dist: number;
+  let maxDist: number;
+  if (shape === 'box') {
+    // Chebyshev distance — creates a rectangular zone
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    dist = Math.max(absDx, absDy);
+    maxDist = radius;
+  } else {
+    // Euclidean distance — circular zone (default)
+    dist = Math.sqrt(dx * dx + dy * dy);
+    maxDist = radius;
+  }
+
+  if (dist >= maxDist) {
     _hoverResult.scale = 1;
     _hoverResult.offsetX = 0;
     _hoverResult.offsetY = 0;
@@ -181,8 +196,7 @@ export function computeHoverEffect(
     return _hoverResult;
   }
 
-  const dist = Math.sqrt(distSq);
-  const t = 1 - dist / radius;
+  const t = 1 - dist / maxDist;
   const eased = smoothstep(t) * hoverIntensity;
 
   let scale = 1;
