@@ -570,12 +570,37 @@ export function renderFrameToCanvas(
 
     const baseTransform = !useFastRect ? ctx.getTransform() : null;
 
+    // ── glitchText pre-computation ───────────────────────────────────────
+    // Resolve the text string(s) and cursor grid position once before the loop.
+    const isGlitchText = hoverEffect === 'glitchText' && hoverActive;
+    const GLITCH_CHARS = '!@#$%^&*<>{}[]|/\\~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const glitchLen = GLITCH_CHARS.length;
+    let gtText = '';
+    let gtLines: string[] = [];
+    let gtCursorCol = 0;
+    let gtCursorRow = 0;
+    if (isGlitchText) {
+      const rawText = options.hoverText ?? 'ASCIIFY';
+      gtCursorCol = Math.round(hoverPosX * cols);
+      gtCursorRow = Math.round(hoverPosY * rows);
+      if (Array.isArray(rawText)) {
+        // Pick from pool via spatial hash based on cursor grid region
+        const regionX = Math.floor(gtCursorCol / Math.max(1, Math.ceil(cols / 5)));
+        const regionY = Math.floor(gtCursorRow / Math.max(1, Math.ceil(rows / 3)));
+        const hash = ((regionX * 7 + regionY * 13) % rawText.length + rawText.length) % rawText.length;
+        gtText = rawText[hash] || rawText[0] || 'ASCIIFY';
+      } else {
+        gtText = rawText || 'ASCIIFY';
+      }
+      gtLines = gtText.split('\n');
+    }
+
     for (let y = 0; y < rows; y++) {
       const rowData = frame[y];
       for (let x = 0; x < cols; x++) {
         const cell = rowData[x];
         if (cell.a < 10) continue;
-        const drawChar = hasDyn && cell.lum != null
+        let drawChar = hasDyn && cell.lum != null
           ? luminanceToChar(cell.lum, dynCharset, isInverted)
           : cell.char;
         if (drawChar === ' ') continue;
@@ -589,6 +614,7 @@ export function renderFrameToCanvas(
         let hoverOffY = 0;
         let hoverGlow = 0;
         let hoverBlend = 0;
+        let hoverProximity = 0;
 
         if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
@@ -600,6 +626,54 @@ export function renderFrameToCanvas(
           hoverOffY = fx.offsetY;
           hoverGlow = fx.glow;
           hoverBlend = fx.colorBlend;
+          hoverProximity = fx.proximity;
+        }
+
+        // ── glitchText character replacement ───────────────────────────
+        // Cells near the cursor scramble into random chars then resolve
+        // into characters from hoverText, centered on the cursor position.
+        if (isGlitchText && hoverProximity > 0) {
+          // Determine which line (relative to cursor row) and column
+          const halfH = Math.floor(gtLines.length / 2);
+          const lineIdx = y - (gtCursorRow - halfH);
+          const line = gtLines[lineIdx];
+
+          if (line != null) {
+            const halfW = Math.floor(line.length / 2);
+            const charIdx = x - (gtCursorCol - halfW);
+
+            if (charIdx >= 0 && charIdx < line.length && line[charIdx] !== ' ') {
+              // This cell maps to a text character — resolve based on proximity.
+              // proximity 0→1 (edge→center). Higher = more resolved.
+              const resolve = Math.max(0, (hoverProximity - 0.15) / 0.55);
+              // Use a per-cell hash seeded with time so the scramble animates
+              const h = Math.sin(x * 127.1 + y * 311.7 + Math.floor(time * 10) * 43758.5453) * 43758.5453;
+              const rng = h - Math.floor(h);
+              if (rng < resolve) {
+                drawChar = line[charIdx];
+              } else {
+                // Scrambled — pick a random glitch character
+                drawChar = GLITCH_CHARS[Math.abs(Math.floor(h * 97)) % glitchLen];
+              }
+              // Boost glow/color on text cells for visibility
+              hoverGlow = Math.max(hoverGlow, hoverProximity * 0.9);
+              hoverBlend = Math.max(hoverBlend, hoverProximity * 0.85);
+            } else {
+              // Not part of the text but within radius — occasional glitch chars
+              const h2 = Math.sin(x * 43.7 + y * 29.3 + Math.floor(time * 6) * 17.89) * 43758.5453;
+              const rng2 = h2 - Math.floor(h2);
+              if (rng2 < hoverProximity * 0.35) {
+                drawChar = GLITCH_CHARS[Math.abs(Math.floor(h2 * 71)) % glitchLen];
+              }
+            }
+          } else {
+            // Row outside text lines — scattered glitch chars
+            const h3 = Math.sin(x * 43.7 + y * 29.3 + Math.floor(time * 6) * 17.89) * 43758.5453;
+            const rng3 = h3 - Math.floor(h3);
+            if (rng3 < hoverProximity * 0.25) {
+              drawChar = GLITCH_CHARS[Math.abs(Math.floor(h3 * 53)) % glitchLen];
+            }
+          }
         }
 
         const px = x * cellW + cellW * 0.5 + hoverOffX;

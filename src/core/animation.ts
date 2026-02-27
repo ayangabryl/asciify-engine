@@ -251,6 +251,14 @@ export function computeHoverEffect(
       scale = 1 + eased * strength * 0.15;
       break;
     }
+    case 'glitchText': {
+      // Chars near cursor scramble then resolve into hoverText.
+      // Visual: slight scale bump, strong glow + color at center.
+      scale = 1 + eased * strength * 0.25;
+      glow = eased * strength * 0.7;
+      colorBlend = eased * strength * 0.65;
+      break;
+    }
   }
 
   _hoverResult.scale = scale;
