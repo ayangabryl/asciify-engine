@@ -5,6 +5,7 @@ export type RenderMode = 'ascii' | 'dots';
 export type AnimationStyle = 'none' | 'wave' | 'pulse' | 'rain' | 'breathe' | 'sparkle' | 'glitch' | 'spiral' | 'typewriter' | 'scatter' | 'waveField' | 'ripple' | 'melt' | 'orbit' | 'cellular';
 export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'musical' | 'emoji' | 'circles' | 'shadows' | 'starfield' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
+export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
 
 /**
@@ -136,6 +137,13 @@ export interface AsciiOptions {
    * Any CSS colour string. Default: `'#ffffff'`
    */
   hoverColor: string;
+  /**
+   * Shape of the hover interaction zone.
+   * - `'circle'` — radial falloff (default)
+   * - `'box'` — rectangular zone, text fills a block around the cursor
+   * Default: `'circle'`
+   */
+  hoverShape: HoverShape;
   /**
    * Text string revealed by the `'glitchText'` hover effect.
    * Characters around the cursor scramble and resolve into this text.
@@ -419,6 +427,7 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   hoverRadius: 0.2,
   hoverEffect: 'spotlight',
   hoverColor: '#ffffff',
+  hoverShape: 'circle',
   hoverText: 'ASCIIFY',
   artStyle: 'classic',
   customText: '',
