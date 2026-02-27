@@ -4,8 +4,8 @@ export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
 export type AnimationStyle = 'none' | 'wave' | 'pulse' | 'rain' | 'breathe' | 'sparkle' | 'glitch' | 'spiral' | 'typewriter' | 'scatter' | 'waveField' | 'ripple' | 'melt' | 'orbit' | 'cellular';
 export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'musical' | 'emoji' | 'circles' | 'shadows' | 'starfield' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke';
-export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail';
-export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost';
+export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
+export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
 
 /**
  * Named colour palette presets — pass as `colorMode` for themed rendering.
@@ -136,6 +136,25 @@ export interface AsciiOptions {
    * Any CSS colour string. Default: `'#ffffff'`
    */
   hoverColor: string;
+  /**
+   * Text string revealed by the `'glitchText'` hover effect.
+   * Characters around the cursor scramble and resolve into this text.
+   * Supports `\n` for multi-line reveals.
+   *
+   * Pass an **array** of strings to cycle through different words based on
+   * the cursor's grid region — the engine picks one via a spatial hash so
+   * each area of the canvas shows a different word.
+   *
+   * Default: `'ASCIIFY'`
+   *
+   * @example
+   * // Single word:
+   * options: { hoverEffect: 'glitchText', hoverText: 'HELLO' }
+   *
+   * // Word pool — different text at different cursor positions:
+   * options: { hoverEffect: 'glitchText', hoverText: ['DEPLOY', 'SCALE', 'SHIP', 'BUILD'] }
+   */
+  hoverText: string | string[];
   /**
    * Art style preset applied at render time.
    * Shorthand for a specific combination of `charset`, `renderMode`, and `colorMode`.
@@ -400,6 +419,7 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   hoverRadius: 0.2,
   hoverEffect: 'spotlight',
   hoverColor: '#ffffff',
+  hoverText: 'ASCIIFY',
   artStyle: 'classic',
   customText: '',
   chromaKey: null,
@@ -453,5 +473,9 @@ export const HOVER_PRESETS: Record<HoverPreset, { label: string; options: Partia
   ghost: {
     label: 'Ghost',
     options: { hoverStrength: 0.55, hoverEffect: 'trail', hoverRadius: 0.2, hoverColor: '#b39ddb' },
+  },
+  glitchReveal: {
+    label: 'Glitch Reveal',
+    options: { hoverStrength: 0.8, hoverEffect: 'glitchText', hoverRadius: 0.18, hoverColor: '#a3e635' },
   },
 };
