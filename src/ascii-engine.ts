@@ -78,3 +78,7 @@ export { captureSnapshot, snapshotAndDownload } from './core/record';
 // ── Webcam API ────────────────────────────────────────────────────────────────
 export type { WebcamOptions } from './core/webcam';
 export { asciifyWebcam } from './core/webcam';
+
+// ── Big-text / Figlet-style ────────────────────────────────────────────────
+export type { BigTextOptions } from './core/big-text';
+export { asciifyText, renderTextToCanvas } from './core/big-text';

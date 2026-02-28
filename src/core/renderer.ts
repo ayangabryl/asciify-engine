@@ -633,7 +633,6 @@ export function renderFrameToCanvas(
         let hoverOffY = 0;
         let hoverGlow = 0;
         let hoverBlend = 0;
-        let hoverProximity = 0;
 
         if (hoverActive && !isGlitchText && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
@@ -645,7 +644,6 @@ export function renderFrameToCanvas(
           hoverOffY = fx.offsetY;
           hoverGlow = fx.glow;
           hoverBlend = fx.colorBlend;
-          hoverProximity = fx.proximity;
         }
 
         // ── glitchText character replacement ───────────────────────────

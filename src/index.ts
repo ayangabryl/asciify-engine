@@ -85,5 +85,9 @@ export {
   renderTextBackground,
   captureSnapshot,
   snapshotAndDownload,
+  // Big-text
+  asciifyText,
+  renderTextToCanvas,
 } from './ascii-engine';
+export type { BigTextOptions } from './ascii-engine';
 
