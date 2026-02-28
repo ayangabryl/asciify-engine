@@ -572,28 +572,46 @@ export function renderFrameToCanvas(
     const baseTransform = !useFastRect ? ctx.getTransform() : null;
 
     // ── glitchText pre-computation ───────────────────────────────────────
-    // Resolve the text string(s) and cursor grid position once before the loop.
+    // Stacks the hover-text word on multiple consecutive rows centred on the
+    // cursor.  Each character scrambles (glitch) then resolves to the real
+    // letter based on proximity to the cursor.  No box, no fill — only the
+    // word characters themselves replace the underlying ASCII.
     const isGlitchText = hoverEffect === 'glitchText' && hoverActive;
-    const GLITCH_CHARS = '!@#$%^&*<>{}[]|/\\~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const GLITCH_CHARS = '!@#$%^&*<>{}[]|/\\~`0123456789';
     const glitchLen = GLITCH_CHARS.length;
-    let gtText = '';
-    let gtLines: string[] = [];
+    let gtWord = '';
+    let gtWordLen = 0;
     let gtCursorCol = 0;
     let gtCursorRow = 0;
+    let gtRepeatRows = 0;   // total rows of repeated words
+    let gtStartRow = 0;     // first row of the text block
+    let gtStartCol = 0;     // first col of each line (left-aligned to center)
     if (isGlitchText) {
       const rawText = options.hoverText ?? 'ASCIIFY';
       gtCursorCol = Math.round(hoverPosX * cols);
       gtCursorRow = Math.round(hoverPosY * rows);
+
+      // Pick one word (cycle through array based on cursor region)
       if (Array.isArray(rawText)) {
-        // Pick from pool via spatial hash based on cursor grid region
+        const words = rawText.filter(w => w.length > 0);
+        if (words.length === 0) words.push('ASCIIFY');
         const regionX = Math.floor(gtCursorCol / Math.max(1, Math.ceil(cols / 5)));
         const regionY = Math.floor(gtCursorRow / Math.max(1, Math.ceil(rows / 3)));
-        const hash = ((regionX * 7 + regionY * 13) % rawText.length + rawText.length) % rawText.length;
-        gtText = rawText[hash] || rawText[0] || 'ASCIIFY';
+        const idx = ((regionX * 7 + regionY * 13) % words.length + words.length) % words.length;
+        gtWord = words[idx];
       } else {
-        gtText = rawText || 'ASCIIFY';
+        gtWord = rawText || 'ASCIIFY';
       }
-      gtLines = gtText.split('\n');
+      gtWordLen = gtWord.length;
+
+      // Number of repeated rows — roughly proportional to hoverRadius
+      gtRepeatRows = Math.max(3, Math.min(12, Math.round(rows * effectiveHoverRadius * 0.6)));
+      const halfRows = Math.floor(gtRepeatRows / 2);
+      gtStartRow = Math.max(0, gtCursorRow - halfRows);
+      if (gtStartRow + gtRepeatRows > rows) gtStartRow = Math.max(0, rows - gtRepeatRows);
+
+      // Center the word horizontally on the cursor
+      gtStartCol = gtCursorCol - Math.floor(gtWordLen / 2);
     }
 
     for (let y = 0; y < rows; y++) {
@@ -617,7 +635,7 @@ export function renderFrameToCanvas(
         let hoverBlend = 0;
         let hoverProximity = 0;
 
-        if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
+        if (hoverActive && !isGlitchText && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
             x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
             hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
@@ -631,49 +649,33 @@ export function renderFrameToCanvas(
         }
 
         // ── glitchText character replacement ───────────────────────────
-        // Cells near the cursor scramble into random chars then resolve
-        // into characters from hoverText, centered on the cursor position.
-        if (isGlitchText && hoverProximity > 0) {
-          // Determine which line (relative to cursor row) and column
-          const halfH = Math.floor(gtLines.length / 2);
-          const lineIdx = y - (gtCursorRow - halfH);
-          const line = gtLines[lineIdx];
+        // Only affects cells that fall on a word-character position.
+        // The word is stacked on multiple rows, centered on cursor.
+        // Near cursor → resolved letter.  Far → scrambled glyph.
+        if (isGlitchText && y >= gtStartRow && y < gtStartRow + gtRepeatRows) {
+          const charIdx = x - gtStartCol;
+          if (charIdx >= 0 && charIdx < gtWordLen) {
+            const targetChar = gtWord[charIdx];
 
-          if (line != null) {
-            const halfW = Math.floor(line.length / 2);
-            const charIdx = x - (gtCursorCol - halfW);
+            // Distance from cursor row (normalised 0..1)
+            const rowDist = Math.abs(y - gtCursorRow) / Math.max(1, gtRepeatRows * 0.5);
+            const colDist = Math.abs(x - gtCursorCol) / Math.max(1, gtWordLen);
+            const dist = Math.max(rowDist, colDist);
+            const resolveRate = Math.max(0, Math.min(1, 1 - dist * 0.9));
 
-            if (charIdx >= 0 && charIdx < line.length && line[charIdx] !== ' ') {
-              // This cell maps to a text character — resolve based on proximity.
-              // proximity 0→1 (edge→center). Higher = more resolved.
-              const resolve = Math.max(0, (hoverProximity - 0.15) / 0.55);
-              // Use a per-cell hash seeded with time so the scramble animates
-              const h = Math.sin(x * 127.1 + y * 311.7 + Math.floor(time * 10) * 43758.5453) * 43758.5453;
-              const rng = h - Math.floor(h);
-              if (rng < resolve) {
-                drawChar = line[charIdx];
-              } else {
-                // Scrambled — pick a random glitch character
-                drawChar = GLITCH_CHARS[Math.abs(Math.floor(h * 97)) % glitchLen];
-              }
-              // Boost glow/color on text cells for visibility
-              hoverGlow = Math.max(hoverGlow, hoverProximity * 0.9);
-              hoverBlend = Math.max(hoverBlend, hoverProximity * 0.85);
+            // Per-cell animated hash for scramble flickering
+            const h = Math.sin(x * 127.1 + y * 311.7 + Math.floor(time * 12) * 43758.5453) * 43758.5453;
+            const rng = Math.abs(h - Math.floor(h));
+
+            if (rng < resolveRate) {
+              // Resolved — show the real character
+              drawChar = targetChar;
             } else {
-              // Not part of the text but within radius — occasional glitch chars
-              const h2 = Math.sin(x * 43.7 + y * 29.3 + Math.floor(time * 6) * 17.89) * 43758.5453;
-              const rng2 = h2 - Math.floor(h2);
-              if (rng2 < hoverProximity * 0.35) {
-                drawChar = GLITCH_CHARS[Math.abs(Math.floor(h2 * 71)) % glitchLen];
-              }
+              // Scrambled — random glyph
+              drawChar = GLITCH_CHARS[Math.abs(Math.floor(h * 97)) % glitchLen];
             }
-          } else {
-            // Row outside text lines — scattered glitch chars
-            const h3 = Math.sin(x * 43.7 + y * 29.3 + Math.floor(time * 6) * 17.89) * 43758.5453;
-            const rng3 = h3 - Math.floor(h3);
-            if (rng3 < hoverProximity * 0.25) {
-              drawChar = GLITCH_CHARS[Math.abs(Math.floor(h3 * 53)) % glitchLen];
-            }
+            hoverGlow = 0.3 + resolveRate * 0.7;
+            hoverBlend = 0.3 + resolveRate * 0.65;
           }
         }
 

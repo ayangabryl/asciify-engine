@@ -266,11 +266,11 @@ export function computeHoverEffect(
       break;
     }
     case 'glitchText': {
-      // Chars near cursor scramble then resolve into hoverText.
-      // Visual: slight scale bump, strong glow + color at center.
-      scale = 1 + eased * strength * 0.25;
-      glow = eased * strength * 0.7;
-      colorBlend = eased * strength * 0.65;
+      // Clean text reveal — minimal displacement, just glow + color tint.
+      // The heavy lifting (char replacement) is in renderer.ts.
+      scale = 1;
+      glow = eased * strength * 0.5;
+      colorBlend = eased * strength * 0.6;
       break;
     }
   }
