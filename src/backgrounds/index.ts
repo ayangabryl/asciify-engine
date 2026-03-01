@@ -223,11 +223,21 @@ export function asciiBackground(
   const smoothMouse = { x: 0.5, y: 0.5 };
 
   // ── Color scheme ──
-  const mq = window.matchMedia('(prefers-color-scheme: light)');
+  // Check data-theme / .dark class first, then OS preference
+  const _detectLight = (): boolean => {
+    if (typeof document !== 'undefined') {
+      const el = document.documentElement;
+      const dt = (el.getAttribute('data-theme') || '').toLowerCase();
+      if (dt === 'dark') return false;
+      if (dt === 'light') return true;
+      if (el.classList.contains('dark')) return false;
+    }
+    return window.matchMedia('(prefers-color-scheme: light)').matches;
+  };
   const isLight = (): boolean => {
     if (colorScheme === 'light') return true;
     if (colorScheme === 'dark')  return false;
-    return mq.matches;
+    return _detectLight();
   };
 
   const parsedColor = color ? _parseColor(color) : null;
@@ -329,8 +339,19 @@ export function asciiBackground(
   };
   rebuildOpts();
 
+  // Listen for colour-scheme changes — OS media query + data-theme mutations
+  const mq = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = () => { rebuildOpts(); };
-  if (colorScheme === 'auto') mq.addEventListener('change', onSchemeChange);
+  let themeObserver: MutationObserver | null = null;
+  if (colorScheme === 'auto') {
+    mq.addEventListener('change', onSchemeChange);
+    // Also watch for data-theme / class changes on <html>
+    themeObserver = new MutationObserver(onSchemeChange);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'],
+    });
+  }
 
   const resize = () => {
     const r = container.getBoundingClientRect();
@@ -395,7 +416,10 @@ export function asciiBackground(
     destroy: () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      if (colorScheme === 'auto') mq.removeEventListener('change', onSchemeChange);
+      if (colorScheme === 'auto') {
+        mq.removeEventListener('change', onSchemeChange);
+        themeObserver?.disconnect();
+      }
       window.removeEventListener('mousemove', onMouseMove);
       canvas.remove();
       container.style.position = prevPosition;
