@@ -162,18 +162,70 @@ export function getGlowSprite(radius: number, r: number, g: number, b: number): 
 // ─── Dark mode detection ──────────────────────────────────────────
 
 /**
- * Detect whether the current environment is in dark mode.
- * Checks document-level theme indicators first (`data-theme`, `class="dark"`),
- * then falls back to the OS colour-scheme media query.
+ * Parse an rgba/rgb CSS colour string to numeric components.
+ * Returns null if the format isn't recognized.
  */
-export function isDarkMode(): boolean {
+function parseRGBA(s: string): { r: number; g: number; b: number; a: number } | null {
+  const m = s.match(/rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)(?:\s*[,/]\s*([\d.]+))?\s*\)/);
+  if (!m) return null;
+  return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 };
+}
+
+/**
+ * Walk up from `el` and return the first non-transparent computed
+ * background colour, or null if everything is transparent.
+ */
+function probeAncestorBg(el: Element | null): { r: number; g: number; b: number } | null {
+  let current = el;
+  while (current && current !== document.documentElement.parentElement) {
+    const bg = getComputedStyle(current).backgroundColor;
+    if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+      const c = parseRGBA(bg);
+      if (c && c.a > 0.1) return c;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Detect whether the current environment is in dark mode.
+ *
+ * Detection order:
+ *  1. Probe the computed background colour of `el` and its ancestor elements
+ *     — the most reliable signal because it works regardless of theme framework.
+ *  2. `data-theme` / Tailwind `.dark` class on `<html>`.
+ *  3. OS `prefers-color-scheme` media query (final fallback).
+ *
+ * @param el  Optional DOM element (e.g. the canvas) whose ancestor chain is probed.
+ */
+export function isDarkMode(el?: Element | null): boolean {
+  // 1. Probe ancestor background colours
+  if (el) {
+    const bg = probeAncestorBg(el);
+    if (bg) {
+      // Relative luminance: dark < 0.4, light >= 0.4
+      const lum = (0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b) / 255;
+      return lum < 0.4;
+    }
+  }
+  // 2. Document-level theme attributes
   if (typeof document !== 'undefined') {
-    const el = document.documentElement;
-    const dt = (el.getAttribute('data-theme') || '').toLowerCase();
+    const html = document.documentElement;
+    const dt = (html.getAttribute('data-theme') || '').toLowerCase();
     if (dt === 'dark') return true;
     if (dt === 'light') return false;
-    if (el.classList.contains('dark')) return true;
+    if (html.classList.contains('dark')) return true;
+    // Also probe body background as a last DOM check
+    if (document.body) {
+      const bodyBg = probeAncestorBg(document.body);
+      if (bodyBg) {
+        const lum = (0.299 * bodyBg.r + 0.587 * bodyBg.g + 0.114 * bodyBg.b) / 255;
+        return lum < 0.4;
+      }
+    }
   }
+  // 3. OS colour-scheme
   return typeof window !== 'undefined'
     && window.matchMedia('(prefers-color-scheme: dark)').matches;
 }

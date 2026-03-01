@@ -223,15 +223,29 @@ export function asciiBackground(
   const smoothMouse = { x: 0.5, y: 0.5 };
 
   // ── Color scheme ──
-  // Check data-theme / .dark class first, then OS preference
+  // Probe the container's actual computed background colour, then fall
+  // back to data-theme / .dark class / OS preference.
   const _detectLight = (): boolean => {
-    if (typeof document !== 'undefined') {
-      const el = document.documentElement;
-      const dt = (el.getAttribute('data-theme') || '').toLowerCase();
-      if (dt === 'dark') return false;
-      if (dt === 'light') return true;
-      if (el.classList.contains('dark')) return false;
+    // 1. Probe ancestor backgrounds of the container
+    let current: Element | null = container;
+    while (current && current !== document.documentElement.parentElement) {
+      const bg = getComputedStyle(current).backgroundColor;
+      if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+        const m = bg.match(/rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)/);
+        if (m) {
+          const lum = (0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3]) / 255;
+          return lum >= 0.4; // light background
+        }
+      }
+      current = current.parentElement;
     }
+    // 2. Document-level theme attributes
+    const html = document.documentElement;
+    const dt = (html.getAttribute('data-theme') || '').toLowerCase();
+    if (dt === 'dark') return false;
+    if (dt === 'light') return true;
+    if (html.classList.contains('dark')) return false;
+    // 3. OS preference
     return window.matchMedia('(prefers-color-scheme: light)').matches;
   };
   const isLight = (): boolean => {

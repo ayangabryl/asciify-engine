@@ -24,9 +24,9 @@ export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
 /** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
-function resolveInvert(invert: boolean | 'auto'): boolean {
+function resolveInvert(invert: boolean | 'auto', el?: Element | null): boolean {
   if (invert !== 'auto') return invert;
-  return !isDarkMode();
+  return !isDarkMode(el);
 }
 
 /**
@@ -71,7 +71,7 @@ function resolveAccentHex(accentColor: string | undefined): string {
     if (native) return native;
   }
 
-  return isDarkMode() ? 'faf9f7' : '0d0d0d';
+  return isDarkMode(typeof document !== 'undefined' ? document.body : null) ? 'faf9f7' : '0d0d0d';
 }
 
 /**
@@ -409,11 +409,13 @@ export function renderFrameToCanvas(
     }
   }
 
+  const canvasEl = ctx.canvas as HTMLCanvasElement | null;
+  const dark = isDarkMode(canvasEl);
+
   if (!hasTransparency) {
-    // Fill based on the active colour scheme so the canvas background matches
-    // the page regardless of the `invert` setting (which controls char
-    // density / accent brightness, NOT background colour).
-    ctx.fillStyle = isDarkMode() ? '#0a0a0a' : '#faf9f7';
+    // Fill based on the detected colour scheme (probes ancestor backgrounds,
+    // data-theme, .dark class, then OS preference).
+    ctx.fillStyle = dark ? '#0a0a0a' : '#faf9f7';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
 
@@ -461,7 +463,7 @@ export function renderFrameToCanvas(
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
   const hoverShape = options.hoverShape || 'circle';
-  const isInverted = resolveInvert(options.invert);
+  const isInverted = resolveInvert(options.invert, canvasEl);
   const colorMode = options.colorMode;
   const TWO_PI = Math.PI * 2;
   const invCols = 1 / cols;
