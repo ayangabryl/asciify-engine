@@ -14,6 +14,7 @@ import {
   getCellColorStr,
   getCellColorRGB,
   parseChromaKeyColor,
+  isDarkMode,
 } from './utils';
 import { getAnimationMultiplier, computeHoverEffect } from './animation';
 import { renderWaveBackground } from '../backgrounds/wave';
@@ -21,23 +22,6 @@ import { renderWaveBackground } from '../backgrounds/wave';
 // Re-export AsciiFrame for downstream consumers that import from this module
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
-
-/**
- * Detect whether the current environment is in dark mode.
- * Checks document-level theme indicators first (`data-theme`, `class="dark"`),
- * then falls back to the OS colour-scheme media query.
- */
-function isDarkMode(): boolean {
-  if (typeof document !== 'undefined') {
-    const el = document.documentElement;
-    const dt = (el.getAttribute('data-theme') || '').toLowerCase();
-    if (dt === 'dark') return true;
-    if (dt === 'light') return false;
-    if (el.classList.contains('dark')) return true;
-  }
-  return typeof window !== 'undefined'
-    && window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
 
 /** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
 function resolveInvert(invert: boolean | 'auto'): boolean {

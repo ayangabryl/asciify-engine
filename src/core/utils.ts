@@ -159,6 +159,27 @@ export function getGlowSprite(radius: number, r: number, g: number, b: number): 
  * — the string is parsed via a temporary 1×1 canvas so it supports hex,
  * `rgb()`, named colours, etc.
  */
+// ─── Dark mode detection ──────────────────────────────────────────
+
+/**
+ * Detect whether the current environment is in dark mode.
+ * Checks document-level theme indicators first (`data-theme`, `class="dark"`),
+ * then falls back to the OS colour-scheme media query.
+ */
+export function isDarkMode(): boolean {
+  if (typeof document !== 'undefined') {
+    const el = document.documentElement;
+    const dt = (el.getAttribute('data-theme') || '').toLowerCase();
+    if (dt === 'dark') return true;
+    if (dt === 'light') return false;
+    if (el.classList.contains('dark')) return true;
+  }
+  return typeof window !== 'undefined'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+// ─── Chroma key ───────────────────────────────────────────────────
+
 export function parseChromaKeyColor(
   color: { r: number; g: number; b: number } | string
 ): { r: number; g: number; b: number } {
