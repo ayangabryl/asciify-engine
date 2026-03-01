@@ -22,10 +22,27 @@ import { renderWaveBackground } from '../backgrounds/wave';
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
-/** Resolve `invert: 'auto'` to a concrete boolean using the OS color scheme. */
+/**
+ * Detect whether the current environment is in dark mode.
+ * Checks document-level theme indicators first (`data-theme`, `class="dark"`),
+ * then falls back to the OS colour-scheme media query.
+ */
+function isDarkMode(): boolean {
+  if (typeof document !== 'undefined') {
+    const el = document.documentElement;
+    const dt = (el.getAttribute('data-theme') || '').toLowerCase();
+    if (dt === 'dark') return true;
+    if (dt === 'light') return false;
+    if (el.classList.contains('dark')) return true;
+  }
+  return typeof window !== 'undefined'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+/** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
 function resolveInvert(invert: boolean | 'auto'): boolean {
   if (invert !== 'auto') return invert;
-  return typeof window !== 'undefined' && !window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return !isDarkMode();
 }
 
 /**
@@ -70,8 +87,7 @@ function resolveAccentHex(accentColor: string | undefined): string {
     if (native) return native;
   }
 
-  const isDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  return isDark ? 'faf9f7' : '0d0d0d';
+  return isDarkMode() ? 'faf9f7' : '0d0d0d';
 }
 
 /**
@@ -410,12 +426,10 @@ export function renderFrameToCanvas(
   }
 
   if (!hasTransparency) {
-    // Fill based on the OS colour scheme so the canvas background matches
+    // Fill based on the active colour scheme so the canvas background matches
     // the page regardless of the `invert` setting (which controls char
     // density / accent brightness, NOT background colour).
-    const isDarkScheme = typeof window !== 'undefined'
-      && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    ctx.fillStyle = isDarkScheme ? '#0a0a0a' : '#faf9f7';
+    ctx.fillStyle = isDarkMode() ? '#0a0a0a' : '#faf9f7';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
 
