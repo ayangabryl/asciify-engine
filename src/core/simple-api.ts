@@ -162,7 +162,6 @@ function resolveElement(target?: HTMLElement | string | null): HTMLElement | nul
 
 function canUseFastTextFrame(options: AsciiOptions): boolean {
   return options.renderMode === 'ascii'
-    && options.colorMode !== 'fullcolor'
     && options.animationStyle === 'none'
     && options.hoverStrength <= 0
     && !options.charsetFrames?.length;
@@ -894,7 +893,6 @@ export async function asciifyVideo(
   const canUseTextFrameCache =
     enableScrollScrub &&
     merged.renderMode === 'ascii' &&
-    (merged.colorMode === 'accent' || merged.colorMode === 'matrix') &&
     merged.animationStyle === 'none' &&
     merged.hoverStrength <= 0 &&
     !merged.charsetFrames?.length;
