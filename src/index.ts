@@ -18,6 +18,7 @@ export type {
   AsciiResult,
   CharsetKey,
   CharsetSequenceKey,
+  LivingStylePresetKey,
 } from './types';
 
 // Constants & presets
@@ -25,6 +26,7 @@ export {
   CHARSETS,
   CHARSET_SEQUENCES,
   ART_STYLE_PRESETS,
+  LIVING_STYLE_PRESETS,
   DEFAULT_OPTIONS,
   HOVER_PRESETS,
   PALETTE_THEMES,
@@ -90,4 +92,3 @@ export {
   renderTextToCanvas,
 } from './ascii-engine';
 export type { BigTextOptions } from './ascii-engine';
-
