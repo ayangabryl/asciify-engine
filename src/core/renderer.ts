@@ -62,15 +62,40 @@ function getRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: n
   return { canvas, ctx: rasterCtx };
 }
 
+function getTextRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: number): {
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+} {
+  let canvas = textRasterCanvasCache.get(ctx);
+  if (!canvas) {
+    canvas = createOffscreenCanvas(width, height).canvas;
+    textRasterCanvasCache.set(ctx, canvas);
+  }
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+
+  const rasterCtx = canvas.getContext('2d', { willReadFrequently: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!rasterCtx) throw new Error('renderTextFrameToCanvas: could not create raster context.');
+  return { canvas, ctx: rasterCtx };
+}
+
 export interface AsciiTextFrame {
   rows: string[];
   cols: number;
   rowCount: number;
+  colors?: Uint8ClampedArray;
 }
 
 const charsetCharsCache = new Map<string, string[]>();
 const charLutCache = new Map<string, string[]>();
 const charWeightCache = new Map<string, Map<string, number>>();
+const textRasterCanvasCache = new WeakMap<CanvasRenderingContext2D, HTMLCanvasElement | OffscreenCanvas>();
+const textRasterImageDataCache = new WeakMap<CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, {
+  width: number;
+  height: number;
+  imageData: ImageData;
+}>();
 
 function getCharsetChars(charset: string): string[] {
   let chars = charsetCharsCache.get(charset);
@@ -436,15 +461,19 @@ export function imageToAsciiTextFrame(
     ? null
     : getLuminanceCharLut(effectiveCharset, invertVal, options.brightness, options.contrast);
   const customTextChars = options.customText ? getCharsetChars(options.customText) : null;
+  const captureColors = options.colorMode === 'fullcolor';
+  const colors = captureColors ? new Uint8ClampedArray(cols * rowCount * 4) : undefined;
   const rows: string[] = [];
 
   for (let y = 0; y < rowCount; y++) {
     let line = '';
     for (let x = 0; x < cols; x++) {
       const i = (y * sampleW + x) * 4;
+      const colorIndex = i;
       const r = pixels[i];
       const g = pixels[i + 1];
       const b = pixels[i + 2];
+      const a = pixels[i + 3];
 
       if (ckEnabled) {
         let keyed = false;
@@ -456,8 +485,21 @@ export function imageToAsciiTextFrame(
         }
         if (keyed) {
           line += ' ';
+          if (colors) {
+            colors[colorIndex] = 0;
+            colors[colorIndex + 1] = 0;
+            colors[colorIndex + 2] = 0;
+            colors[colorIndex + 3] = 0;
+          }
           continue;
         }
+      }
+
+      if (colors) {
+        colors[colorIndex] = r;
+        colors[colorIndex + 1] = g;
+        colors[colorIndex + 2] = b;
+        colors[colorIndex + 3] = a;
       }
 
       const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -482,7 +524,7 @@ export function imageToAsciiTextFrame(
     rows.push(line);
   }
 
-  return { rows, cols, rowCount };
+  return { rows, cols, rowCount, colors };
 }
 
 export function renderTextFrameToCanvas(
@@ -509,6 +551,85 @@ export function renderTextFrameToCanvas(
   const cellH = canvasHeight / textFrame.rowCount;
   const charAspect = 0.55;
   const fontSize = Math.min(cellW / charAspect, cellH) * 0.9;
+  const colors = textFrame.colors;
+
+  if (options.colorMode === 'fullcolor' && colors) {
+    if (fontSize < 6) {
+      const { canvas: rasterCanvas, ctx: rasterCtx } = getTextRasterCanvas(ctx, textFrame.cols, textFrame.rowCount);
+      let cached = textRasterImageDataCache.get(rasterCtx);
+      if (!cached || cached.width !== textFrame.cols || cached.height !== textFrame.rowCount) {
+        cached = { width: textFrame.cols, height: textFrame.rowCount, imageData: rasterCtx.createImageData(textFrame.cols, textFrame.rowCount) };
+        textRasterImageDataCache.set(rasterCtx, cached);
+      }
+
+      const imageData = cached.imageData;
+      const out = imageData.data;
+      out.fill(0);
+      const weights = getCharsetWeightMap(options.charset);
+
+      for (let y = 0; y < textFrame.rowCount; y++) {
+        const line = textFrame.rows[y];
+        for (let x = 0; x < textFrame.cols; x++) {
+          const ch = line[x];
+          if (ch === ' ') continue;
+          const index = (y * textFrame.cols + x) * 4;
+          const alpha = colors[index + 3];
+          if (alpha < 10) continue;
+          const weight = weights.get(ch) ?? 0.5;
+          out[index] = colors[index];
+          out[index + 1] = colors[index + 1];
+          out[index + 2] = colors[index + 2];
+          out[index + 3] = Math.min(255, alpha * weight) | 0;
+        }
+      }
+
+      rasterCtx.putImageData(imageData, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(rasterCanvas, 0, 0, canvasWidth, canvasHeight);
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1;
+
+    let lastFillStyle = '';
+    for (let y = 0; y < textFrame.rows.length; y++) {
+      const line = textFrame.rows[y];
+      let x = 0;
+      while (x < textFrame.cols) {
+        while (x < textFrame.cols && line[x] === ' ') x++;
+        if (x >= textFrame.cols) break;
+
+        const start = x;
+        const colorIndex = (y * textFrame.cols + x) * 4;
+        const qr = colors[colorIndex] & 0xf0;
+        const qg = colors[colorIndex + 1] & 0xf0;
+        const qb = colors[colorIndex + 2] & 0xf0;
+
+        x++;
+        while (x < textFrame.cols && line[x] !== ' ') {
+          const nextIndex = (y * textFrame.cols + x) * 4;
+          if ((colors[nextIndex] & 0xf0) !== qr || (colors[nextIndex + 1] & 0xf0) !== qg || (colors[nextIndex + 2] & 0xf0) !== qb) {
+            break;
+          }
+          x++;
+        }
+
+        const fillStyle = `rgb(${qr},${qg},${qb})`;
+        if (fillStyle !== lastFillStyle) {
+          ctx.fillStyle = fillStyle;
+          lastFillStyle = fillStyle;
+        }
+        ctx.fillText(line.slice(start, x), start * cellW + cellW * 0.5, y * cellH + cellH * 0.5);
+      }
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
 
   ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
   ctx.textAlign = 'left';
