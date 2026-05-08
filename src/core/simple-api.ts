@@ -5,10 +5,10 @@
 
 import type { AsciiOptions, ArtStyle } from '../types';
 import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
-import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToCanvas, renderTextFrameToCanvas } from './renderer';
+import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas } from './renderer';
 import type { AsciiTextFrame } from './renderer';
 
-export { videoToAsciiFrames, gifToAsciiFrames };
+export { videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames };
 
 export interface AsciifySimpleOptions {
   /** Character size in pixels. Default: 10 */
@@ -158,6 +158,14 @@ function clamp01(value: number): number {
 function resolveElement(target?: HTMLElement | string | null): HTMLElement | null {
   if (typeof target === 'string') return document.querySelector<HTMLElement>(target);
   return target instanceof HTMLElement ? target : null;
+}
+
+function canUseFastTextFrame(options: AsciiOptions): boolean {
+  return options.renderMode === 'ascii'
+    && options.colorMode !== 'fullcolor'
+    && options.animationStyle === 'none'
+    && options.hoverStrength <= 0
+    && !options.charsetFrames?.length;
 }
 
 function syncVideoToProgress(video: HTMLVideoElement, progress: number, opts: VideoScrollScrubOptions = {}): void {
@@ -481,11 +489,10 @@ export async function asciify(
     canvas.height = Math.round(renderH * cappedDpr);
   }
 
-  const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
-
   // ── Hover-interactive mode ──────────────────────────────────────────
   // When hoverStrength > 0, set up mouse tracking + RAF loop automatically.
   if (merged.hoverStrength > 0) {
+    const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
     let hoverPos: { x: number; y: number } | null = null;
     let cancelled = false;
     let rafId = 0;
@@ -523,7 +530,13 @@ export async function asciify(
   // ── Static mode (no hover) ─────────────────────────────────────────
   ctx.save();
   ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
-  renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
+  if (canUseFastTextFrame(merged)) {
+    const frame = imageToAsciiTextFrame(el, merged, renderW, renderH);
+    renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
+  } else {
+    const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
+    renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
+  }
   ctx.restore();
 }
 
@@ -548,6 +561,28 @@ export async function asciifyGif(
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
+
+  if (canUseFastTextFrame(merged)) {
+    const { frames, fps } = await gifToAsciiTextFrames(buffer, merged, canvas.width, canvas.height);
+    let cancelled = false;
+    let animId: number;
+    let i = 0;
+    let last = performance.now();
+    const interval = 1000 / fps;
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      if (now - last >= interval) {
+        renderTextFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
+        i = (i + 1) % frames.length;
+        last = now;
+      }
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+
+    return () => { cancelled = true; cancelAnimationFrame(animId); };
+  }
 
   const { frames, fps } = await gifToAsciiFrames(buffer, merged, canvas.width, canvas.height);
 
@@ -649,6 +684,56 @@ export async function asciifyVideo(
 
     const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
     const extractFps = fps ?? (scroll ? 18 : undefined);
+
+    if (canUseFastTextFrame(merged)) {
+      const { frames, fps: extractedFps } = await videoToAsciiTextFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
+      const renderFrame = (index: number) => {
+        const frame = frames[index];
+        if (!frame) return;
+        ctx.save();
+        ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+        renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
+        ctx.restore();
+        onFrame?.();
+      };
+
+      if (scroll) {
+        let ready = false;
+        let lastIndex = -1;
+        const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
+        const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
+        const cleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
+          const eased = clamp01(scrollOpts.ease ? scrollOpts.ease(clamp01(progress)) : progress);
+          const index = Math.max(0, Math.min(frames.length - 1, Math.round(eased * (frames.length - 1))));
+          if (index === lastIndex) return;
+          lastIndex = index;
+          renderFrame(index);
+          if (!ready) { ready = true; onReady?.(video); }
+          scrollOpts.onUpdate?.(eased, video);
+        });
+        renderFrame(0);
+        ready = true;
+        onReady?.(video);
+        return cleanup;
+      }
+
+      let cancelled = false, animId: number, i = 0, last = performance.now();
+      let firstFrame = true;
+      const interval = 1000 / extractedFps;
+      const tick = (now: number) => {
+        if (cancelled) return;
+        if (now - last >= interval) {
+          renderFrame(i);
+          i = (i + 1) % frames.length;
+          last = now;
+          if (firstFrame) { firstFrame = false; onReady?.(video); }
+        }
+        animId = requestAnimationFrame(tick);
+      };
+      animId = requestAnimationFrame(tick);
+      return () => { cancelled = true; cancelAnimationFrame(animId); };
+    }
+
     const { frames, fps: extractedFps } = await videoToAsciiFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
     const renderFrame = (index: number) => {
       const frame = frames[index];
@@ -804,13 +889,7 @@ export async function asciifyVideo(
   let lastRenderAt = 0;
   let lastRenderedVideoTime = -1;
 
-  const canUseFastLiveTextFrames =
-    !enableScrollScrub &&
-    merged.renderMode === 'ascii' &&
-    merged.colorMode !== 'fullcolor' &&
-    merged.animationStyle === 'none' &&
-    merged.hoverStrength <= 0 &&
-    !merged.charsetFrames?.length;
+  const canUseFastLiveTextFrames = !enableScrollScrub && canUseFastTextFrame(merged);
 
   const canUseTextFrameCache =
     enableScrollScrub &&

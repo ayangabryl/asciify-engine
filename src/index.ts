@@ -33,7 +33,7 @@ export {
 } from './types';
 
 // Simple one-call API
-export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions, VideoScrollScrubOptions } from './ascii-engine';
+export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions, VideoScrollScrubOptions, AsciiTextFrame } from './ascii-engine';
 export { asciify, asciifyGif, asciifyVideo, asciifyLiveVideo, asciifyWebcam, createVideoScrollScrub } from './ascii-engine';
 export type { WebcamOptions } from './ascii-engine';
 
@@ -61,9 +61,14 @@ export type {
 } from './ascii-engine';
 export {
   imageToAsciiFrame,
+  imageToAsciiTextFrame,
   videoToAsciiFrames,
+  videoToAsciiTextFrames,
   gifToAsciiFrames,
+  gifToAsciiTextFrames,
   renderFrameToCanvas,
+  renderTextFrameToCanvas,
+  clearAsciifyCaches,
   renderWaveBackground,
   renderRainBackground,
   renderStarsBackground,
