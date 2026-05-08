@@ -22,6 +22,51 @@ export interface AsciifySimpleOptions {
   options?: Partial<AsciiOptions>;
 }
 
+type ScrollTriggerInstance = { kill?: () => void };
+
+type ScrollTriggerLike = {
+  create: (vars: Record<string, unknown>) => ScrollTriggerInstance;
+};
+
+type GsapLike = {
+  registerPlugin?: (...plugins: unknown[]) => void;
+  ScrollTrigger?: ScrollTriggerLike;
+};
+
+export interface VideoScrollScrubOptions {
+  /**
+   * Element that controls scroll progress. Accepts an HTMLElement or selector.
+   * When used through `asciifyVideo`, defaults to `fitTo` or the canvas.
+   */
+  trigger?: HTMLElement | string | null;
+  /**
+   * GSAP instance. Pass this with ScrollTrigger for native GSAP scrub support.
+   *
+   * @example
+   * asciifyVideo('/hero.mp4', canvas, {
+   *   fitTo: '#hero',
+   *   scroll: { gsap, ScrollTrigger }
+   * });
+   */
+  gsap?: GsapLike;
+  /** GSAP ScrollTrigger plugin. Optional when available as `gsap.ScrollTrigger`. */
+  ScrollTrigger?: ScrollTriggerLike;
+  /** GSAP start value. Native fallback ignores this and uses viewport progress. */
+  start?: string;
+  /** GSAP end value. Native fallback ignores this and uses viewport progress. */
+  end?: string;
+  /** GSAP scrub value. Default: `true`. Native fallback always scrubs. */
+  scrub?: boolean | number;
+  /** Video time to map from. Defaults to trim start or `0`. */
+  from?: number;
+  /** Video time to map to. Defaults to trim end or video duration. */
+  to?: number;
+  /** Optional progress transform before mapping to video time. */
+  ease?: (progress: number) => number;
+  /** Called whenever scroll progress updates. */
+  onUpdate?: (progress: number, video: HTMLVideoElement) => void;
+}
+
 export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   /**
    * Fit the canvas to a container element, maintaining the video's aspect ratio.
@@ -56,6 +101,25 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    */
   trim?: { start?: number; end?: number };
   /**
+   * Sync video time to scroll progress.
+   *
+   * - `true` uses native scroll scrubbing with `fitTo`/canvas as the trigger.
+   * - Passing `gsap` + `ScrollTrigger` uses GSAP ScrollTrigger.
+   *
+   * @example
+   * await asciifyVideo('/hero.mp4', canvas, {
+   *   fitTo: '#hero',
+   *   scroll: true
+   * });
+   *
+   * @example
+   * await asciifyVideo('/hero.mp4', canvas, {
+   *   fitTo: '#hero',
+   *   scroll: { gsap, ScrollTrigger, start: 'top bottom', end: 'bottom top', scrub: 1 }
+   * });
+   */
+  scroll?: boolean | VideoScrollScrubOptions;
+  /**
    * Called once when the video metadata is loaded and playback has started.
    * Receives the backing video element.
    */
@@ -68,6 +132,90 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
 export type AsciifyLiveVideoOptions = AsciifyVideoOptions;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function resolveElement(target?: HTMLElement | string | null): HTMLElement | null {
+  if (typeof target === 'string') return document.querySelector<HTMLElement>(target);
+  return target instanceof HTMLElement ? target : null;
+}
+
+function syncVideoToProgress(video: HTMLVideoElement, progress: number, opts: VideoScrollScrubOptions = {}): void {
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+
+  const from = opts.from ?? 0;
+  const to = opts.to ?? video.duration;
+  const end = Math.max(from, Math.min(to, video.duration));
+  const eased = clamp01(opts.ease ? opts.ease(clamp01(progress)) : progress);
+  const targetTime = from + (end - from) * eased;
+  video.currentTime = Math.min(Math.max(from, targetTime), Math.max(from, end - 0.04));
+  opts.onUpdate?.(eased, video);
+}
+
+function createNativeVideoScrollScrub(
+  video: HTMLVideoElement,
+  trigger: HTMLElement,
+  opts: VideoScrollScrubOptions,
+): () => void {
+  let raf = 0;
+
+  const update = () => {
+    raf = 0;
+    const rect = trigger.getBoundingClientRect();
+    const viewport = window.innerHeight || document.documentElement.clientHeight;
+    const total = rect.height + viewport;
+    const progress = total > 0 ? clamp01((viewport - rect.top) / total) : 0;
+    syncVideoToProgress(video, progress, opts);
+  };
+
+  const requestUpdate = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(update);
+  };
+
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate);
+  requestUpdate();
+
+  return () => {
+    window.removeEventListener('scroll', requestUpdate);
+    window.removeEventListener('resize', requestUpdate);
+    if (raf) cancelAnimationFrame(raf);
+  };
+}
+
+/**
+ * Sync an HTMLVideoElement's currentTime to scroll progress.
+ *
+ * If `gsap` and `ScrollTrigger` are supplied, the helper uses GSAP. Otherwise
+ * it falls back to a tiny native scroll listener. Returns a cleanup function.
+ */
+export function createVideoScrollScrub(
+  video: HTMLVideoElement,
+  opts: VideoScrollScrubOptions = {},
+): () => void {
+  const trigger = resolveElement(opts.trigger) ?? video;
+  video.pause();
+
+  const gsap = opts.gsap;
+  const ScrollTrigger = opts.ScrollTrigger ?? gsap?.ScrollTrigger;
+  if (gsap && ScrollTrigger?.create) {
+    gsap.registerPlugin?.(ScrollTrigger);
+    const instance = ScrollTrigger.create({
+      trigger,
+      start: opts.start ?? 'top bottom',
+      end: opts.end ?? 'bottom top',
+      scrub: opts.scrub ?? true,
+      onUpdate: (self: { progress: number }) => syncVideoToProgress(video, self.progress, opts),
+    });
+
+    return () => instance.kill?.();
+  }
+
+  return createNativeVideoScrollScrub(video, trigger, opts);
+}
 
 /** Get the intrinsic pixel dimensions of a media source. */
 function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): { w: number; h: number } {
@@ -330,7 +478,7 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, onReady, onFrame }: AsciifyVideoOptions = {}
+  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, scroll, onReady, onFrame }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
@@ -338,6 +486,9 @@ export async function asciifyVideo(
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
+  if (preExtract && scroll) {
+    console.warn('asciifyVideo: `scroll` is only supported in live streaming mode. Set `preExtract: false` to scrub video time by scroll.');
+  }
 
   const container: HTMLElement | null =
     typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
@@ -485,6 +636,19 @@ export async function asciifyVideo(
   let cancelled = false;
   let animId: number;
   let firstFrame = true;
+  let scrollCleanup: (() => void) | null = null;
+  const enableScrollScrub = scroll && !preExtract;
+
+  if (enableScrollScrub) {
+    const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
+    scrollCleanup = createVideoScrollScrub(video, {
+      ...scrollOpts,
+      trigger: scrollOpts.trigger ?? container ?? canvas,
+      from: scrollOpts.from ?? trimStart,
+      to: scrollOpts.to ?? trimEnd,
+    });
+  }
+
   const tick = () => {
     if (cancelled) return;
     animId = requestAnimationFrame(tick);
@@ -505,6 +669,7 @@ export async function asciifyVideo(
   return () => {
     cancelled = true;
     cancelAnimationFrame(animId);
+    scrollCleanup?.();
     ro?.disconnect();
     if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);
     if (ownedVideo) {
@@ -526,4 +691,3 @@ export function asciifyLiveVideo(
 ): Promise<() => void> {
   return asciifyVideo(source, canvas, opts);
 }
-
