@@ -5,7 +5,8 @@
 
 import type { AsciiOptions, ArtStyle } from '../types';
 import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
-import { imageToAsciiFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToCanvas } from './renderer';
+import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToCanvas, renderTextFrameToCanvas } from './renderer';
+import type { AsciiTextFrame } from './renderer';
 
 export { videoToAsciiFrames, gifToAsciiFrames };
 
@@ -90,9 +91,14 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    */
   preExtract?: boolean;
   /**
-   * Target FPS for pre-extracted video frames. Lower values use less memory and
-   * make scroll scrubbing cheaper. Defaults to `18` for pre-extracted scroll
-   * scrub and the engine default for normal pre-extracted playback.
+   * Target render FPS.
+   * - In pre-extracted mode, this controls how many frames are decoded into memory.
+   * - In live mode, this throttles expensive ASCII frame rendering while the
+   *   backing video continues decoding normally.
+   *
+   * Lower values use less CPU/memory and make scroll scrubbing cheaper.
+   * Defaults to `18` for pre-extracted scroll scrub and unthrottled rendering
+   * for normal live playback.
    */
   fps?: number;
   /**
@@ -164,6 +170,45 @@ function syncVideoToProgress(video: HTMLVideoElement, progress: number, opts: Vi
   const targetTime = from + (end - from) * eased;
   video.currentTime = Math.min(Math.max(from, targetTime), Math.max(from, end - 0.04));
   opts.onUpdate?.(eased, video);
+}
+
+function progressToVideoTime(video: HTMLVideoElement, progress: number, opts: VideoScrollScrubOptions = {}): { progress: number; time: number } | null {
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return null;
+
+  const from = opts.from ?? 0;
+  const to = opts.to ?? video.duration;
+  const end = Math.max(from, Math.min(to, video.duration));
+  const eased = clamp01(opts.ease ? opts.ease(clamp01(progress)) : progress);
+  const targetTime = from + (end - from) * eased;
+  const time = Math.min(Math.max(from, targetTime), Math.max(from, end - 0.04));
+  return { progress: eased, time };
+}
+
+function waitForSeek(video: HTMLVideoElement, time: number): Promise<void> {
+  if (Math.abs(video.currentTime - time) < 1 / 240) {
+    return waitForDecodedVideoFrame(video);
+  }
+
+  return new Promise(resolve => {
+    const done = () => {
+      video.removeEventListener('seeked', done);
+      resolve();
+    };
+    video.addEventListener('seeked', done, { once: true });
+    video.currentTime = time;
+  });
+}
+
+function waitForDecodedVideoFrame(video: HTMLVideoElement): Promise<void> {
+  const requestVideoFrameCallback = (video as HTMLVideoElement & {
+    requestVideoFrameCallback?: (callback: () => void) => number;
+  }).requestVideoFrameCallback;
+
+  if (requestVideoFrameCallback) {
+    return new Promise(resolve => requestVideoFrameCallback.call(video, () => resolve()));
+  }
+
+  return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
 function createNativeVideoScrollScrub(
@@ -669,6 +714,22 @@ export async function asciifyVideo(
     await video.play().catch(() => {});
   } else {
     video = source;
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+        };
+        const onLoaded = () => { cleanup(); resolve(); };
+        const onError = () => {
+          cleanup();
+          reject(new Error('asciifyVideo: provided video element failed to load metadata.'));
+        };
+        video.addEventListener('loadedmetadata', onLoaded);
+        video.addEventListener('error', onError);
+        video.load();
+      });
+    }
     if (video.paused) await video.play().catch(() => {});
   }
 
@@ -729,6 +790,145 @@ export async function asciifyVideo(
   let firstFrame = true;
   let scrollCleanup: (() => void) | null = null;
   const enableScrollScrub = scroll && !preExtract;
+  const renderInterval = fps && fps > 0 ? 1000 / fps : 0;
+  let lastRenderAt = 0;
+  let lastRenderedVideoTime = -1;
+
+  const canUseTextFrameCache =
+    enableScrollScrub &&
+    merged.renderMode === 'ascii' &&
+    (merged.colorMode === 'accent' || merged.colorMode === 'matrix') &&
+    merged.animationStyle === 'none' &&
+    merged.hoverStrength <= 0 &&
+    !merged.charsetFrames?.length;
+
+  if (canUseTextFrameCache) {
+    const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
+    const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
+    const from = scrollOpts.from ?? trimStart;
+    const to = scrollOpts.to ?? trimEnd ?? video.duration;
+    const end = Math.max(from, Math.min(to, video.duration));
+    const duration = Math.max(0.001, end - from);
+    const cacheFps = Math.min(60, Math.max(12, fps ?? 30));
+    const totalFrames = Math.max(2, Math.ceil(duration * cacheFps) + 1);
+    const frames: Array<AsciiTextFrame | undefined> = new Array(totalFrames);
+
+    let desiredIndex = 0;
+    let desiredProgress = 0;
+    let lastPaintedIndex = -1;
+    let raf = 0;
+    let cancelledCache = false;
+    let extracting = false;
+    let ready = false;
+    const queued = new Set<number>();
+
+    video.pause();
+
+    const frameTime = (index: number) => from + (duration * index) / Math.max(1, totalFrames - 1);
+    const indexForProgress = (progress: number) => Math.max(0, Math.min(totalFrames - 1, Math.round(progress * (totalFrames - 1))));
+
+    const initial = imageToAsciiTextFrame(video, merged, renderW, renderH);
+    if (initial.rows.length > 0) {
+      frames[0] = initial;
+      renderTextFrameToCanvas(ctx, initial, merged, renderW, renderH);
+      ready = true;
+      onReady?.(video);
+      onFrame?.();
+    }
+
+    const nearestCachedIndex = (index: number): number => {
+      if (frames[index]) return index;
+      for (let radius = 1; radius < totalFrames; radius++) {
+        const left = index - radius;
+        const right = index + radius;
+        if (left >= 0 && frames[left]) return left;
+        if (right < totalFrames && frames[right]) return right;
+      }
+      return -1;
+    };
+
+    const pickNextIndex = (): number => {
+      if (!frames[desiredIndex]) return desiredIndex;
+      for (const index of queued) {
+        if (!frames[index]) return index;
+      }
+      for (let radius = 1; radius < totalFrames; radius++) {
+        const left = desiredIndex - radius;
+        const right = desiredIndex + radius;
+        if (left >= 0 && !frames[left]) return left;
+        if (right < totalFrames && !frames[right]) return right;
+      }
+      return -1;
+    };
+
+    const requestIndex = (index: number) => {
+      if (index < 0 || index >= totalFrames || frames[index]) return;
+      queued.add(index);
+      void pump();
+    };
+
+    const pump = async () => {
+      if (cancelledCache || extracting) return;
+      const index = pickNextIndex();
+      if (index < 0) return;
+      queued.delete(index);
+      extracting = true;
+      try {
+        await waitForSeek(video, frameTime(index));
+        await waitForDecodedVideoFrame(video);
+        if (!cancelledCache) {
+          const frame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+          if (frame.rows.length > 0) frames[index] = frame;
+        }
+      } finally {
+        extracting = false;
+        if (!cancelledCache) requestAnimationFrame(() => void pump());
+      }
+    };
+
+    const paint = () => {
+      if (cancelledCache) return;
+      const index = nearestCachedIndex(desiredIndex);
+      if (index >= 0 && index !== lastPaintedIndex) {
+        const frame = frames[index];
+        if (frame) {
+          renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
+          lastPaintedIndex = index;
+          if (!ready) { ready = true; onReady?.(video); }
+          onFrame?.();
+        }
+      }
+      requestIndex(desiredIndex);
+      raf = requestAnimationFrame(paint);
+    };
+
+    scrollCleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
+      const mapped = progressToVideoTime(video, progress, { ...scrollOpts, from, to: end });
+      desiredProgress = mapped?.progress ?? clamp01(progress);
+      desiredIndex = indexForProgress(desiredProgress);
+      requestIndex(desiredIndex);
+      requestIndex(desiredIndex - 1);
+      requestIndex(desiredIndex + 1);
+      scrollOpts.onUpdate?.(desiredProgress, video);
+    });
+
+    requestIndex(0);
+    requestIndex(1);
+    raf = requestAnimationFrame(paint);
+
+    return () => {
+      cancelledCache = true;
+      cancelAnimationFrame(raf);
+      scrollCleanup?.();
+      ro?.disconnect();
+      if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);
+      if (ownedVideo) {
+        video.pause();
+        video.src = '';
+        document.body.removeChild(video);
+      }
+    };
+  }
 
   if (enableScrollScrub) {
     const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
@@ -740,17 +940,21 @@ export async function asciifyVideo(
     });
   }
 
-  const tick = () => {
+  const tick = (now: number) => {
     if (cancelled) return;
     animId = requestAnimationFrame(tick);
     if (video.readyState < 2 || canvas.width === 0 || canvas.height === 0) return;
+    if (renderInterval > 0 && now - lastRenderAt < renderInterval) return;
     // Skip frames outside trim window (prevents flash at time 0 on loop)
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
+    if (enableScrollScrub && Math.abs(video.currentTime - lastRenderedVideoTime) < 1 / 240) return;
 
     const { frame } = imageToAsciiFrame(video, merged, renderW, renderH);
     if (frame.length > 0) {
       renderFrameToCanvas(ctx, frame, merged, renderW, renderH, 0, null);
+      lastRenderAt = now;
+      lastRenderedVideoTime = video.currentTime;
       if (firstFrame) { firstFrame = false; onReady?.(video); }
       onFrame?.();
     }

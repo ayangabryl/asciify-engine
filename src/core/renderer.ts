@@ -23,6 +23,12 @@ import { renderWaveBackground } from '../backgrounds/wave';
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
+export interface AsciiTextFrame {
+  rows: string[];
+  cols: number;
+  rowCount: number;
+}
+
 /** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
 function resolveInvert(invert: boolean | 'auto', el?: Element | null): boolean {
   if (invert !== 'auto') return invert;
@@ -238,6 +244,182 @@ export function imageToAsciiFrame(
   }
 
   return { frame, cols, rows };
+}
+
+/**
+ * Convert a source into pre-shaped text rows for fast monochrome/accent ASCII.
+ *
+ * This is the high-performance path for dense video scrubbers. It keeps the
+ * expensive pixel sampling work, but avoids allocating one object per cell and
+ * lets the renderer draw one string per row instead of one `fillText` per cell.
+ */
+export function imageToAsciiTextFrame(
+  source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
+  options: AsciiOptions,
+  targetWidth?: number,
+  targetHeight?: number
+): AsciiTextFrame {
+  const srcWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+  const srcHeight = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
+
+  if (srcWidth === 0 || srcHeight === 0) {
+    return { rows: [], cols: 0, rowCount: 0 };
+  }
+
+  const charAspect = options.charAspect;
+  const cellW = options.fontSize * options.charSpacing;
+  const cellH = options.fontSize / charAspect * options.charSpacing;
+
+  const renderW = targetWidth || srcWidth;
+  const renderH = targetHeight || srcHeight;
+  const cols = Math.floor(renderW / cellW);
+  const rowCount = Math.floor(renderH / cellH);
+
+  if (cols <= 0 || rowCount <= 0) {
+    return { rows: [], cols: 0, rowCount: 0 };
+  }
+
+  const maxDim = 2048;
+  const ssX = Math.max(1, Math.min(Math.floor(maxDim / cols), Math.floor(srcWidth / cols)));
+  const ssY = Math.max(1, Math.min(Math.floor(maxDim / rowCount), Math.floor(srcHeight / rowCount)));
+  const sampleW = cols * ssX;
+  const sampleH = rowCount * ssY;
+
+  const { ctx } = createOffscreenCanvas(sampleW, sampleH);
+  ctx.drawImage(source, 0, 0, sampleW, sampleH);
+  const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
+  const ck = options.chromaKey;
+  const ckEnabled = ck != null && ck !== false;
+  const ckHeuristicGreen = ck === true;
+  const ckHeuristicBlue  = ck === 'blue-screen';
+  let ckRGB: { r: number; g: number; b: number } | null = null;
+  let ckTolSq = 0;
+  if (ckEnabled && !ckHeuristicGreen && !ckHeuristicBlue) {
+    ckRGB = parseChromaKeyColor(ck as string | { r: number; g: number; b: number });
+    ckTolSq = (options.chromaKeyTolerance ?? 60) ** 2;
+  }
+
+  let normMin = 0;
+  let normRange = 255;
+  if (options.normalize) {
+    let lo = 255, hi = 0;
+    for (let k = 0; k < pixels.length; k += 4) {
+      if (ckEnabled) {
+        const pr = pixels[k], pg = pixels[k + 1], pb = pixels[k + 2];
+        let keyed = false;
+        if (ckHeuristicGreen) keyed = pg > pr * 1.4 && pg > pb * 1.4 && pg > 80;
+        else if (ckHeuristicBlue) keyed = pb > pr * 1.4 && pb > pg * 1.4 && pb > 80;
+        else if (ckRGB !== null) {
+          const dr = pr - ckRGB.r, dg = pg - ckRGB.g, db = pb - ckRGB.b;
+          keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+        }
+        if (keyed) continue;
+      }
+      const l = 0.299 * pixels[k] + 0.587 * pixels[k + 1] + 0.114 * pixels[k + 2];
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+    }
+    normMin = lo;
+    normRange = hi > lo ? hi - lo : 255;
+  }
+
+  const invertVal = resolveInvert(options.invert);
+  const effectiveCharset = ckEnabled
+    ? options.charset.replace(/ /g, '') || options.charset
+    : options.charset;
+  const ssCount = ssX * ssY;
+  const rows: string[] = [];
+
+  for (let y = 0; y < rowCount; y++) {
+    let line = '';
+    for (let x = 0; x < cols; x++) {
+      let sumR = 0, sumG = 0, sumB = 0;
+      let keyedCount = 0;
+
+      for (let sy = 0; sy < ssY; sy++) {
+        const rowOff = (y * ssY + sy) * sampleW;
+        for (let sx = 0; sx < ssX; sx++) {
+          const i = (rowOff + x * ssX + sx) * 4;
+          const pr = pixels[i], pg = pixels[i + 1], pb = pixels[i + 2];
+
+          if (ckEnabled) {
+            let keyed = false;
+            if (ckHeuristicGreen) keyed = pg > pr * 1.4 && pg > pb * 1.4 && pg > 80;
+            else if (ckHeuristicBlue) keyed = pb > pr * 1.4 && pb > pg * 1.4 && pb > 80;
+            else if (ckRGB !== null) {
+              const dr = pr - ckRGB.r, dg = pg - ckRGB.g, db = pb - ckRGB.b;
+              keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+            }
+            if (keyed) { keyedCount++; continue; }
+          }
+
+          sumR += pr; sumG += pg; sumB += pb;
+        }
+      }
+
+      if (ckEnabled && keyedCount > ssCount / 2) {
+        line += ' ';
+        continue;
+      }
+
+      const nonKeyed = ssCount - keyedCount;
+      const r = nonKeyed > 0 ? sumR / nonKeyed : 0;
+      const g = nonKeyed > 0 ? sumG / nonKeyed : 0;
+      const b = nonKeyed > 0 ? sumB / nonKeyed : 0;
+      const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const lum = options.normalize
+        ? ((rawLum - normMin) / normRange) * 255
+        : rawLum;
+      const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
+      const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
+      line += options.customText
+        ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
+        : luminanceToChar(ditheredLum, effectiveCharset, invertVal);
+    }
+    rows.push(line);
+  }
+
+  return { rows, cols, rowCount };
+}
+
+export function renderTextFrameToCanvas(
+  ctx: CanvasRenderingContext2D,
+  textFrame: AsciiTextFrame,
+  options: AsciiOptions,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  if (textFrame.rows.length === 0) return;
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  const canvasEl = ctx.canvas as HTMLCanvasElement | null;
+  if (!options.chromaKey && !textFrame.rows.some(row => row.includes(' '))) {
+    ctx.fillStyle = isDarkMode(canvasEl) ? '#0a0a0a' : '#faf9f7';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  }
+
+  const acHex = resolveAccentHex(options.accentColor);
+  const acR = parseInt(acHex.substring(0, 2), 16) || 255;
+  const acG = parseInt(acHex.substring(2, 4), 16) || 255;
+  const acB = parseInt(acHex.substring(4, 6), 16) || 255;
+  const cellW = canvasWidth / textFrame.cols;
+  const cellH = canvasHeight / textFrame.rowCount;
+  const charAspect = 0.55;
+  const fontSize = Math.min(cellW / charAspect, cellH) * 0.9;
+
+  ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = options.colorMode === 'matrix' ? 'rgb(0,255,0)' : `rgb(${acR},${acG},${acB})`;
+  ctx.globalAlpha = 1;
+
+  for (let y = 0; y < textFrame.rows.length; y++) {
+    const line = textFrame.rows[y];
+    if (line.trim().length === 0) continue;
+    ctx.fillText(line, cellW * 0.5, y * cellH + cellH * 0.5);
+  }
+  ctx.globalAlpha = 1;
 }
 
 /**
@@ -570,6 +752,31 @@ export function renderFrameToCanvas(
     }
 
     const baseTransform = !useFastRect ? ctx.getTransform() : null;
+
+    const canBatchTextRows =
+      !useFastRect &&
+      !hoverActive &&
+      noAnimation &&
+      !hasDyn &&
+      colorMode === 'accent';
+
+    if (canBatchTextRows) {
+      ctx.fillStyle = `rgb(${acR},${acG},${acB})`;
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+      for (let y = 0; y < rows; y++) {
+        const rowData = frame[y];
+        let line = '';
+        for (let x = 0; x < cols; x++) {
+          const cell = rowData[x];
+          line += cell.a < 10 ? ' ' : cell.char;
+        }
+        if (line.trim().length === 0) continue;
+        ctx.fillText(line, cellW * 0.5, y * cellH + cellH * 0.5);
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
 
     // ── glitchText pre-computation ───────────────────────────────────────
     // Stacks the hover-text word on multiple consecutive rows centred on the
