@@ -3,7 +3,7 @@
 export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
 export type AnimationStyle = 'none' | 'wave' | 'pulse' | 'rain' | 'breathe' | 'sparkle' | 'glitch' | 'spiral' | 'typewriter' | 'scatter' | 'waveField' | 'ripple' | 'melt' | 'orbit' | 'cellular';
-export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'musical' | 'emoji' | 'circles' | 'shadows' | 'starfield' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke';
+export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'musical' | 'emoji' | 'circles' | 'shadows' | 'starfield' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke' | 'ascii' | 'interface' | 'prompt' | 'data' | 'humanist' | 'mesh';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
 export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
@@ -262,6 +262,18 @@ export const CHARSETS = {
   waves:      ' ˜∼≈〰≋∿∾∭∫',
   shards:     ' ╱╲╳◤◥◣◢△▲◆◼█',
   smoke:      ' ·˙⁚⁖∶∷⋮⋰⋱∴∵',
+  /** All printable ASCII characters ordered from airy punctuation to dense symbols. */
+  ascii:      ' .\'`^",:;~-_+<>i!lI?/\\|()[]{}1tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
+  /** Clean product UI glyphs inspired by command palettes, panes, controls, and focus rings. */
+  interface:  ' ·•-–—+=:;<>[]{}()⌘⌥⇧⌃↵↗↘◇◆◈□■',
+  /** Prompt, shell, and assistant transcript glyphs for modern AI/dev surfaces. */
+  prompt:     ' .:;>_`/\\|{}[]()=+*#@$',
+  /** Analytical/data-viz glyphs: sparse dots into nodes, diamonds, and dense blocks. */
+  data:       ' ·∙•◦○●◇◆◈▱▰▣█',
+  /** Warm editorial/math symbols for quieter Claude-like and research-oriented pages. */
+  humanist:   ' ·˙,:;∴∵∷∶⁚⋮⋯∼≈≋∞',
+  /** Dense network/mesh characters for agent maps, model graphs, and infrastructure visuals. */
+  mesh:       ' ·╶╴╷╵─│┌┐└┘├┤┬┴┼╬░▒▓█',
 } as const;
 
 /**
@@ -289,6 +301,12 @@ export const CHARSET_SEQUENCES = {
   dream:    [CHARSETS.braille, CHARSETS.shadows, CHARSETS.smoke] as string[],
   /** Geometric shapes → shards → starfield — sci-fi angular */
   angular:  [CHARSETS.geometric, CHARSETS.shards, CHARSETS.starfield] as string[],
+  /** Interface controls → prompts → data nodes — clean assistant/product motion */
+  assistant: [CHARSETS.interface, CHARSETS.prompt, CHARSETS.data] as string[],
+  /** Mesh → data → ASCII — alive network signal with readable texture */
+  signal:    [CHARSETS.mesh, CHARSETS.data, CHARSETS.ascii] as string[],
+  /** Humanist symbols → waves → smoke — soft research/editorial motion */
+  editorial: [CHARSETS.humanist, CHARSETS.waves, CHARSETS.smoke] as string[],
 } as const;
 
 export type CharsetSequenceKey = keyof typeof CHARSET_SEQUENCES;
@@ -405,7 +423,116 @@ export const ART_STYLE_PRESETS: Record<ArtStyle, Partial<AsciiOptions>> = {
     colorMode: 'accent',
     accentColor: '#c850ff',
   },
+  ascii: {
+    renderMode: 'ascii',
+    charset: CHARSETS.ascii,
+    colorMode: 'grayscale',
+  },
+  interface: {
+    renderMode: 'ascii',
+    charset: CHARSETS.interface,
+    colorMode: 'accent',
+    accentColor: '#f4f1ea',
+  },
+  prompt: {
+    renderMode: 'ascii',
+    charset: CHARSETS.prompt,
+    colorMode: 'matrix',
+  },
+  data: {
+    renderMode: 'ascii',
+    charset: CHARSETS.data,
+    colorMode: 'fullcolor',
+  },
+  humanist: {
+    renderMode: 'ascii',
+    charset: CHARSETS.humanist,
+    colorMode: 'accent',
+    accentColor: '#d6ccc2',
+  },
+  mesh: {
+    renderMode: 'ascii',
+    charset: CHARSETS.mesh,
+    colorMode: 'accent',
+    accentColor: '#8fd3ff',
+  },
 };
+
+/**
+ * Higher-level living presets for output that should feel active immediately.
+ * They intentionally compose existing primitives so renderers and integrations
+ * can consume them as a normal `Partial<AsciiOptions>`.
+ */
+export const LIVING_STYLE_PRESETS = {
+  agentField: {
+    ...ART_STYLE_PRESETS.interface,
+    charsetFrames: CHARSET_SEQUENCES.assistant,
+    charsetFps: 1.6,
+    animationStyle: 'breathe',
+    animationSpeed: 0.75,
+    ditherStrength: 0.12,
+    hoverEffect: 'glow',
+    hoverStrength: 0.42,
+    hoverRadius: 0.18,
+    hoverColor: '#f4f1ea',
+    normalize: true,
+  },
+  liquidSignal: {
+    ...ART_STYLE_PRESETS.data,
+    charsetFrames: CHARSET_SEQUENCES.signal,
+    charsetFps: 2.4,
+    animationStyle: 'melt',
+    animationSpeed: 0.65,
+    ditherStrength: 0.45,
+    hoverEffect: 'repel',
+    hoverStrength: 0.55,
+    hoverRadius: 0.22,
+    hoverColor: '#8fd3ff',
+    normalize: true,
+  },
+  cursorGravity: {
+    ...ART_STYLE_PRESETS.mesh,
+    charsetFrames: CHARSET_SEQUENCES.angular,
+    charsetFps: 1.2,
+    animationStyle: 'orbit',
+    animationSpeed: 0.9,
+    ditherStrength: 0.2,
+    hoverEffect: 'attract',
+    hoverStrength: 0.82,
+    hoverRadius: 0.24,
+    hoverColor: '#ffffff',
+    normalize: true,
+  },
+  editorialPulse: {
+    ...ART_STYLE_PRESETS.humanist,
+    charsetFrames: CHARSET_SEQUENCES.editorial,
+    charsetFps: 0.9,
+    animationStyle: 'ripple',
+    animationSpeed: 0.55,
+    ditherStrength: 0.18,
+    hoverEffect: 'spotlight',
+    hoverStrength: 0.35,
+    hoverRadius: 0.2,
+    hoverColor: '#fff8ea',
+    normalize: true,
+  },
+  terminalFlow: {
+    ...ART_STYLE_PRESETS.prompt,
+    charsetFrames: CHARSET_SEQUENCES.terminal,
+    charsetFps: 3,
+    animationStyle: 'rain',
+    animationSpeed: 1.1,
+    ditherStrength: 0.22,
+    hoverEffect: 'glitchText',
+    hoverStrength: 0.65,
+    hoverRadius: 0.16,
+    hoverColor: '#d4ff00',
+    hoverText: ['BUILD', 'SHIP', 'RUN', 'ASK', 'MODEL'],
+    normalize: true,
+  },
+} as const satisfies Record<string, Partial<AsciiOptions>>;
+
+export type LivingStylePresetKey = keyof typeof LIVING_STYLE_PRESETS;
 
 export const DEFAULT_OPTIONS: AsciiOptions = {
   fontSize: 10,

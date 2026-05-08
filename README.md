@@ -7,7 +7,7 @@
   <a href="https://www.buymeacoffee.com/asciify"><img src="https://img.shields.io/badge/buy_me_a_coffee-%E2%98%95-d4ff00?labelColor=0a0a0a&style=flat-square" alt="Buy Me A Coffee" /></a>
 </p>
 
-A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, animated backgrounds, interactive hover effects, and embed generation. Zero runtime dependencies.
+A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, animated backgrounds, interactive hover effects, living charset motion presets, and embed generation.
 
 **[&#9654; Live Playground](https://asciify.org) &middot; [npm](https://www.npmjs.com/package/asciify-engine)**
 
