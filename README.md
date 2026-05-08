@@ -107,6 +107,24 @@ const stop = await asciifyVideo('/clip.mp4', canvas, {
 // Pre-extract all frames before playback (frame-perfect loops, short clips):
 const stop = await asciifyVideo('/clip.mp4', canvas, { preExtract: true });
 
+// Scroll-scrub video time using native browser scroll:
+const stop = await asciifyVideo('/hero.mp4', canvas, {
+  fitTo: '#hero',
+  scroll: true,
+});
+
+// Use GSAP ScrollTrigger when it is already in your app:
+const stop = await asciifyVideo('/hero.mp4', canvas, {
+  fitTo: '#hero',
+  scroll: {
+    gsap,
+    ScrollTrigger,
+    start: 'top bottom',
+    end: 'bottom top',
+    scrub: 1,
+  },
+});
+
 // Clean up:
 stop();
 ```
@@ -304,7 +322,9 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 | `generateEmbedCode` | `(frame, options)` | `string` |
 | `generateAnimatedEmbedCode` | `(frames, options, fps)` | `string` |
 
-`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `trim: { start?: number; end?: number }` (loop a time slice in seconds, accepts floats), `onReady(video)`, `onFrame()`
+`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `trim: { start?: number; end?: number }` (loop a time slice in seconds, accepts floats), `scroll` (`true` for native scroll scrub, or `{ gsap, ScrollTrigger, trigger, start, end, scrub }` for GSAP), `onReady(video)`, `onFrame()`
+
+Scroll scrubbing works in live video mode. Leave `preExtract` off when using `scroll`.
 
 ---
 
