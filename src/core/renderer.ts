@@ -24,6 +24,25 @@ export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
 const rasterCanvasCache = new WeakMap<CanvasRenderingContext2D, HTMLCanvasElement | OffscreenCanvas>();
+const rasterImageDataCache = new WeakMap<CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, {
+  width: number;
+  height: number;
+  imageData: ImageData;
+}>();
+let sharedSampleCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
+let sharedSampleCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
+
+function getSharedSampleContext(width: number, height: number): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  if (!sharedSampleCanvas || !sharedSampleCtx) {
+    const created = createOffscreenCanvas(width, height);
+    sharedSampleCanvas = created.canvas;
+    sharedSampleCtx = created.ctx;
+  }
+
+  if (sharedSampleCanvas.width !== width) sharedSampleCanvas.width = width;
+  if (sharedSampleCanvas.height !== height) sharedSampleCanvas.height = height;
+  return sharedSampleCtx;
+}
 
 function getRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: number): {
   canvas: HTMLCanvasElement | OffscreenCanvas;
@@ -50,6 +69,8 @@ export interface AsciiTextFrame {
 }
 
 const charsetCharsCache = new Map<string, string[]>();
+const charLutCache = new Map<string, string[]>();
+const charWeightCache = new Map<string, Map<string, number>>();
 
 function getCharsetChars(charset: string): string[] {
   let chars = charsetCharsCache.get(charset);
@@ -64,6 +85,43 @@ function luminanceToCharFast(lum: number, chars: string[], invert: boolean): str
   const normalized = invert ? 1 - lum / 255 : lum / 255;
   const index = Math.floor(normalized * (chars.length - 1));
   return chars[Math.max(0, Math.min(chars.length - 1, index))] ?? ' ';
+}
+
+function getLuminanceCharLut(charset: string, invert: boolean, brightness: number, contrast: number): string[] {
+  const key = `${charset}\u0000${invert ? 1 : 0}\u0000${brightness}\u0000${contrast}`;
+  let lut = charLutCache.get(key);
+  if (!lut) {
+    const chars = getCharsetChars(charset);
+    lut = new Array(256);
+    for (let i = 0; i < 256; i++) {
+      lut[i] = luminanceToCharFast(adjustLuminance(i, brightness, contrast), chars, invert);
+    }
+    charLutCache.set(key, lut);
+  }
+  return lut;
+}
+
+function getCharsetWeightMap(charset: string): Map<string, number> {
+  let weights = charWeightCache.get(charset);
+  if (!weights) {
+    const chars = getCharsetChars(charset);
+    const len = Math.max(1, chars.length);
+    weights = new Map();
+    for (let i = 0; i < chars.length; i++) {
+      if (!weights.has(chars[i])) weights.set(chars[i], Math.max(0.08, (i + 0.5) / len));
+    }
+    charWeightCache.set(charset, weights);
+  }
+  return weights;
+}
+
+/** Clear shared renderer caches. Useful for long-lived editors that cycle many fonts/charsets. */
+export function clearAsciifyCaches(): void {
+  charsetCharsCache.clear();
+  charLutCache.clear();
+  charWeightCache.clear();
+  sharedSampleCanvas = null;
+  sharedSampleCtx = null;
 }
 
 /** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
@@ -158,7 +216,7 @@ export function imageToAsciiFrame(
   const sampleW = cols * ssX;
   const sampleH = rows * ssY;
 
-  const { ctx } = createOffscreenCanvas(sampleW, sampleH);
+  const ctx = getSharedSampleContext(sampleW, sampleH);
   ctx.drawImage(source, 0, 0, sampleW, sampleH);
   const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
   const pixels = imageData.data;
@@ -219,6 +277,10 @@ export function imageToAsciiFrame(
   const effectiveCharset = ckEnabled
     ? options.charset.replace(/ /g, '') || options.charset
     : options.charset;
+  const charsetChars = getCharsetChars(effectiveCharset);
+  const charLut = options.customText
+    ? null
+    : getLuminanceCharLut(effectiveCharset, invertVal, options.brightness, options.contrast);
 
   const ssCount = ssX * ssY;
 
@@ -270,10 +332,14 @@ export function imageToAsciiFrame(
         ? ((rawLum - normMin) / normRange) * 255
         : rawLum;
       const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
-      const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
+      const ditheredLum = options.ditherStrength > 0
+        ? applyDither(adjustedLum, x, y, options.ditherStrength)
+        : adjustedLum;
       const char = options.customText
         ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
-        : luminanceToChar(ditheredLum, effectiveCharset, invertVal);
+        : options.ditherStrength > 0
+          ? luminanceToCharFast(ditheredLum, charsetChars, invertVal)
+          : charLut![Math.max(0, Math.min(255, lum | 0))]!;
 
       row.push({ char, r, g, b, a, lum: ditheredLum });
     }
@@ -322,7 +388,7 @@ export function imageToAsciiTextFrame(
   const sampleW = cols;
   const sampleH = rowCount;
 
-  const { ctx } = createOffscreenCanvas(sampleW, sampleH);
+  const ctx = getSharedSampleContext(sampleW, sampleH);
   ctx.drawImage(source, 0, 0, sampleW, sampleH);
   const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
 
@@ -366,6 +432,9 @@ export function imageToAsciiTextFrame(
     ? options.charset.replace(/ /g, '') || options.charset
     : options.charset;
   const charsetChars = getCharsetChars(effectiveCharset);
+  const charLut = options.customText
+    ? null
+    : getLuminanceCharLut(effectiveCharset, invertVal, options.brightness, options.contrast);
   const customTextChars = options.customText ? getCharsetChars(options.customText) : null;
   const rows: string[] = [];
 
@@ -395,11 +464,17 @@ export function imageToAsciiTextFrame(
       const lum = options.normalize
         ? ((rawLum - normMin) / normRange) * 255
         : rawLum;
-      const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
-      const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
+      const adjustedLum = options.ditherStrength > 0 || customTextChars
+        ? adjustLuminance(lum, options.brightness, options.contrast)
+        : lum;
+      const ditheredLum = options.ditherStrength > 0
+        ? applyDither(adjustedLum, x, y, options.ditherStrength)
+        : adjustedLum;
       if (customTextChars) {
         const normalized = invertVal ? 1 - ditheredLum / 255 : ditheredLum / 255;
         line += normalized < 0.12 ? ' ' : customTextChars[(y * cols + x) % customTextChars.length];
+      } else if (options.ditherStrength <= 0) {
+        line += charLut![Math.max(0, Math.min(255, lum | 0))]!;
       } else {
         line += luminanceToCharFast(ditheredLum, charsetChars, invertVal);
       }
@@ -496,6 +571,50 @@ export async function videoToAsciiFrames(
 }
 
 /**
+ * Extract video frames into compact text rows for high-density monochrome/accent
+ * animations. This mirrors videoToAsciiFrames but avoids object-per-cell frames.
+ */
+export async function videoToAsciiTextFrames(
+  video: HTMLVideoElement,
+  options: AsciiOptions,
+  targetWidth: number,
+  targetHeight: number,
+  targetFps: number = 12,
+  maxDuration: number = 10,
+  onProgress?: (progress: number) => void,
+  startTime: number = 0,
+): Promise<{ frames: AsciiTextFrame[]; cols: number; rows: number; fps: number }> {
+  const duration = Math.min(video.duration - startTime, maxDuration);
+  const totalFrames = Math.ceil(duration * targetFps);
+  const frames: AsciiTextFrame[] = [];
+  let cols = 0;
+  let rows = 0;
+
+  for (let i = 0; i < totalFrames; i++) {
+    const time = startTime + (i / targetFps);
+    if (time > startTime + duration) break;
+
+    video.currentTime = time;
+    await new Promise<void>((resolve) => {
+      const handler = () => {
+        video.removeEventListener('seeked', handler);
+        resolve();
+      };
+      video.addEventListener('seeked', handler);
+    });
+
+    const frame = imageToAsciiTextFrame(video, options, targetWidth, targetHeight);
+    frames.push(frame);
+    cols = frame.cols;
+    rows = frame.rowCount;
+
+    onProgress?.((i + 1) / totalFrames);
+  }
+
+  return { frames, cols, rows, fps: targetFps };
+}
+
+/**
  * Extract frames from an animated GIF file buffer.
  */
 export async function gifToAsciiFrames(
@@ -527,6 +646,9 @@ export async function gifToAsciiFrames(
   prevCanvas.height = logicalH;
   const prevCtx = prevCanvas.getContext('2d')!;
 
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d')!;
+
   const frames: AsciiFrame[] = [];
   let cols = 0;
   let rows = 0;
@@ -547,11 +669,9 @@ export async function gifToAsciiFrames(
       prevCtx.drawImage(compCanvas, 0, 0);
     }
 
+    if (tempCanvas.width !== dims.width) tempCanvas.width = dims.width;
+    if (tempCanvas.height !== dims.height) tempCanvas.height = dims.height;
     const frameImageData = new ImageData(new Uint8ClampedArray(patch.buffer), dims.width, dims.height);
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = dims.width;
-    tempCanvas.height = dims.height;
-    const tempCtx = tempCanvas.getContext('2d')!;
     tempCtx.putImageData(frameImageData, 0, 0);
 
     compCtx.drawImage(tempCanvas, dims.left || 0, dims.top || 0);
@@ -560,6 +680,87 @@ export async function gifToAsciiFrames(
     frames.push(result.frame);
     cols = result.cols;
     rows = result.rows;
+
+    if (disposalType === 2) {
+      compCtx.clearRect(dims.left || 0, dims.top || 0, dims.width, dims.height);
+    } else if (disposalType === 3) {
+      compCtx.clearRect(0, 0, logicalW, logicalH);
+      compCtx.drawImage(prevCanvas, 0, 0);
+    }
+
+    onProgress?.((i + 1) / maxFrames);
+  }
+
+  return { frames, cols, rows, fps };
+}
+
+/**
+ * Extract animated GIF frames into compact text rows for high-density
+ * monochrome/accent playback. Keeps the legacy object-frame extractor intact
+ * for full-color and interactive modes.
+ */
+export async function gifToAsciiTextFrames(
+  buffer: ArrayBuffer,
+  options: AsciiOptions,
+  targetWidth: number,
+  targetHeight: number,
+  onProgress?: (progress: number) => void
+): Promise<{ frames: AsciiTextFrame[]; cols: number; rows: number; fps: number }> {
+  const gif = parseGIF(buffer);
+  const rawFrames = decompressFrames(gif, true);
+
+  if (rawFrames.length === 0) {
+    return { frames: [], cols: 0, rows: 0, fps: 10 };
+  }
+
+  const gifW = rawFrames[0].dims.width;
+  const gifH = rawFrames[0].dims.height;
+  const logicalW = gif.lsd?.width || gifW;
+  const logicalH = gif.lsd?.height || gifH;
+
+  const compCanvas = document.createElement('canvas');
+  compCanvas.width = logicalW;
+  compCanvas.height = logicalH;
+  const compCtx = compCanvas.getContext('2d')!;
+
+  const prevCanvas = document.createElement('canvas');
+  prevCanvas.width = logicalW;
+  prevCanvas.height = logicalH;
+  const prevCtx = prevCanvas.getContext('2d')!;
+
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d')!;
+
+  const frames: AsciiTextFrame[] = [];
+  let cols = 0;
+  let rows = 0;
+
+  let totalDelay = 0;
+  for (const f of rawFrames) totalDelay += (f.delay || 100);
+  const avgDelay = totalDelay / rawFrames.length;
+  const fps = Math.round(Math.min(30, Math.max(5, 1000 / avgDelay)));
+  const maxFrames = Math.min(rawFrames.length, 300);
+
+  for (let i = 0; i < maxFrames; i++) {
+    const f = rawFrames[i];
+    const { dims, patch, disposalType } = f;
+
+    if (disposalType === 3) {
+      prevCtx.clearRect(0, 0, logicalW, logicalH);
+      prevCtx.drawImage(compCanvas, 0, 0);
+    }
+
+    if (tempCanvas.width !== dims.width) tempCanvas.width = dims.width;
+    if (tempCanvas.height !== dims.height) tempCanvas.height = dims.height;
+    const frameImageData = new ImageData(new Uint8ClampedArray(patch.buffer), dims.width, dims.height);
+    tempCtx.putImageData(frameImageData, 0, 0);
+
+    compCtx.drawImage(tempCanvas, dims.left || 0, dims.top || 0);
+
+    const frame = imageToAsciiTextFrame(compCanvas, options, targetWidth, targetHeight);
+    frames.push(frame);
+    cols = frame.cols;
+    rows = frame.rowCount;
 
     if (disposalType === 2) {
       compCtx.clearRect(dims.left || 0, dims.top || 0, dims.width, dims.height);
@@ -764,7 +965,6 @@ export function renderFrameToCanvas(
       ctx.textBaseline = 'middle';
     }
 
-    let charWeights: Record<string, number> | null = null;
     // ── Dynamic charset (charsetFrames) ──────────────────────────────────
     const dynFrms = options.charsetFrames;
     const hasDyn = !!dynFrms?.length;
@@ -774,10 +974,15 @@ export function renderFrameToCanvas(
 
     if (useFastRect) {
       const { canvas: rasterCanvas, ctx: rasterCtx } = getRasterCanvas(ctx, cols, rows);
-      const imageData = rasterCtx.createImageData(cols, rows);
+      let cached = rasterImageDataCache.get(rasterCtx);
+      if (!cached || cached.width !== cols || cached.height !== rows) {
+        cached = { width: cols, height: rows, imageData: rasterCtx.createImageData(cols, rows) };
+        rasterImageDataCache.set(rasterCtx, cached);
+      }
+      const imageData = cached.imageData;
       const out = imageData.data;
-      const csChars = [...dynCharset];
-      const csLen = Math.max(1, csChars.length);
+      out.fill(0);
+      const charWeights = getCharsetWeightMap(dynCharset);
 
       for (let y = 0; y < rows; y++) {
         const rowData = frame[y];
@@ -791,8 +996,7 @@ export function renderFrameToCanvas(
             : cell.char;
           if (drawChar === ' ') continue;
 
-          const charIndex = Math.max(0, csChars.indexOf(drawChar));
-          let intensity = Math.max(0.08, (charIndex + 0.5) / csLen);
+          let intensity = charWeights.get(drawChar) ?? 0.5;
           let hoverGlow = 0;
           let hoverBlend = 0;
 
@@ -982,27 +1186,16 @@ export function renderFrameToCanvas(
           color = getCellColorStr(cell, colorMode, acR, acG, acB, isInverted);
         }
 
-        if (useFastRect) {
-          const weight = charWeights![drawChar] ?? 0.5;
-          const effAlpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow)) * weight;
-          if (effAlpha < 0.02) continue;
-          if (effAlpha !== lastAlpha) { ctx.globalAlpha = effAlpha; lastAlpha = effAlpha; }
-          if (color !== lastFillStyle) { ctx.fillStyle = color; lastFillStyle = color; }
-          const rw = cellW * hoverScale;
-          const rh = cellH * hoverScale;
-          ctx.fillRect(px - rw * 0.5, py - rh * 0.5, rw, rh);
+        const alpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow));
+        if (alpha !== lastAlpha) { ctx.globalAlpha = alpha; lastAlpha = alpha; }
+        if (color !== lastFillStyle) { ctx.fillStyle = color; lastFillStyle = color; }
+        if (hoverScale !== 1) {
+          ctx.translate(px, py);
+          ctx.scale(hoverScale, hoverScale);
+          ctx.fillText(drawChar, 0, 0);
+          ctx.setTransform(baseTransform!);
         } else {
-          const alpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow));
-          if (alpha !== lastAlpha) { ctx.globalAlpha = alpha; lastAlpha = alpha; }
-          if (color !== lastFillStyle) { ctx.fillStyle = color; lastFillStyle = color; }
-          if (hoverScale !== 1) {
-            ctx.translate(px, py);
-            ctx.scale(hoverScale, hoverScale);
-            ctx.fillText(drawChar, 0, 0);
-            ctx.setTransform(baseTransform!);
-          } else {
-            ctx.fillText(drawChar, px, py);
-          }
+          ctx.fillText(drawChar, px, py);
         }
       }
     }

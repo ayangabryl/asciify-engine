@@ -9,7 +9,8 @@
  */
 
 // ── Core rendering ────────────────────────────────────────────────────────────
-export { imageToAsciiFrame, videoToAsciiFrames, gifToAsciiFrames, renderFrameToCanvas }
+export type { AsciiTextFrame } from './core/renderer';
+export { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas, clearAsciifyCaches }
   from './core/renderer';
 
 // ── Simple one-call API ───────────────────────────────────────────────────────
