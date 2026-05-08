@@ -49,6 +49,23 @@ export interface AsciiTextFrame {
   rowCount: number;
 }
 
+const charsetCharsCache = new Map<string, string[]>();
+
+function getCharsetChars(charset: string): string[] {
+  let chars = charsetCharsCache.get(charset);
+  if (!chars) {
+    chars = [...charset];
+    charsetCharsCache.set(charset, chars);
+  }
+  return chars;
+}
+
+function luminanceToCharFast(lum: number, chars: string[], invert: boolean): string {
+  const normalized = invert ? 1 - lum / 255 : lum / 255;
+  const index = Math.floor(normalized * (chars.length - 1));
+  return chars[Math.max(0, Math.min(chars.length - 1, index))] ?? ' ';
+}
+
 /** Resolve `invert: 'auto'` to a concrete boolean using the active colour scheme. */
 function resolveInvert(invert: boolean | 'auto', el?: Element | null): boolean {
   if (invert !== 'auto') return invert;
@@ -299,11 +316,11 @@ export function imageToAsciiTextFrame(
     return { rows: [], cols: 0, rowCount: 0 };
   }
 
-  const maxDim = 2048;
-  const ssX = Math.max(1, Math.min(Math.floor(maxDim / cols), Math.floor(srcWidth / cols)));
-  const ssY = Math.max(1, Math.min(Math.floor(maxDim / rowCount), Math.floor(srcHeight / rowCount)));
-  const sampleW = cols * ssX;
-  const sampleH = rowCount * ssY;
+  // Fast text frames intentionally sample at one pixel per ASCII cell.
+  // Browser/GPU downscaling does the expensive image filtering in native code,
+  // then JS only maps the compact cols x rows buffer to characters.
+  const sampleW = cols;
+  const sampleH = rowCount;
 
   const { ctx } = createOffscreenCanvas(sampleW, sampleH);
   ctx.drawImage(source, 0, 0, sampleW, sampleH);
@@ -348,54 +365,44 @@ export function imageToAsciiTextFrame(
   const effectiveCharset = ckEnabled
     ? options.charset.replace(/ /g, '') || options.charset
     : options.charset;
-  const ssCount = ssX * ssY;
+  const charsetChars = getCharsetChars(effectiveCharset);
+  const customTextChars = options.customText ? getCharsetChars(options.customText) : null;
   const rows: string[] = [];
 
   for (let y = 0; y < rowCount; y++) {
     let line = '';
     for (let x = 0; x < cols; x++) {
-      let sumR = 0, sumG = 0, sumB = 0;
-      let keyedCount = 0;
+      const i = (y * sampleW + x) * 4;
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
 
-      for (let sy = 0; sy < ssY; sy++) {
-        const rowOff = (y * ssY + sy) * sampleW;
-        for (let sx = 0; sx < ssX; sx++) {
-          const i = (rowOff + x * ssX + sx) * 4;
-          const pr = pixels[i], pg = pixels[i + 1], pb = pixels[i + 2];
-
-          if (ckEnabled) {
-            let keyed = false;
-            if (ckHeuristicGreen) keyed = pg > pr * 1.4 && pg > pb * 1.4 && pg > 80;
-            else if (ckHeuristicBlue) keyed = pb > pr * 1.4 && pb > pg * 1.4 && pb > 80;
-            else if (ckRGB !== null) {
-              const dr = pr - ckRGB.r, dg = pg - ckRGB.g, db = pb - ckRGB.b;
-              keyed = dr * dr + dg * dg + db * db <= ckTolSq;
-            }
-            if (keyed) { keyedCount++; continue; }
-          }
-
-          sumR += pr; sumG += pg; sumB += pb;
+      if (ckEnabled) {
+        let keyed = false;
+        if (ckHeuristicGreen) keyed = g > r * 1.4 && g > b * 1.4 && g > 80;
+        else if (ckHeuristicBlue) keyed = b > r * 1.4 && b > g * 1.4 && b > 80;
+        else if (ckRGB !== null) {
+          const dr = r - ckRGB.r, dg = g - ckRGB.g, db = b - ckRGB.b;
+          keyed = dr * dr + dg * dg + db * db <= ckTolSq;
+        }
+        if (keyed) {
+          line += ' ';
+          continue;
         }
       }
 
-      if (ckEnabled && keyedCount > ssCount / 2) {
-        line += ' ';
-        continue;
-      }
-
-      const nonKeyed = ssCount - keyedCount;
-      const r = nonKeyed > 0 ? sumR / nonKeyed : 0;
-      const g = nonKeyed > 0 ? sumG / nonKeyed : 0;
-      const b = nonKeyed > 0 ? sumB / nonKeyed : 0;
       const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
       const lum = options.normalize
         ? ((rawLum - normMin) / normRange) * 255
         : rawLum;
       const adjustedLum = adjustLuminance(lum, options.brightness, options.contrast);
       const ditheredLum = applyDither(adjustedLum, x, y, options.ditherStrength);
-      line += options.customText
-        ? customTextToChar(ditheredLum, options.customText, x, y, cols, invertVal)
-        : luminanceToChar(ditheredLum, effectiveCharset, invertVal);
+      if (customTextChars) {
+        const normalized = invertVal ? 1 - ditheredLum / 255 : ditheredLum / 255;
+        line += normalized < 0.12 ? ' ' : customTextChars[(y * cols + x) % customTextChars.length];
+      } else {
+        line += luminanceToCharFast(ditheredLum, charsetChars, invertVal);
+      }
     }
     rows.push(line);
   }
@@ -431,7 +438,10 @@ export function renderTextFrameToCanvas(
   ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = options.colorMode === 'matrix' ? 'rgb(0,255,0)' : `rgb(${acR},${acG},${acB})`;
+  ctx.fillStyle =
+    options.colorMode === 'matrix' ? 'rgb(0,255,0)' :
+    options.colorMode === 'grayscale' ? (isDarkMode(canvasEl) ? 'rgb(230,230,230)' : 'rgb(24,24,24)') :
+    `rgb(${acR},${acG},${acB})`;
   ctx.globalAlpha = 1;
 
   for (let y = 0; y < textFrame.rows.length; y++) {
