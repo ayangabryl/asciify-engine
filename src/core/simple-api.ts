@@ -90,6 +90,18 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    */
   preExtract?: boolean;
   /**
+   * Target FPS for pre-extracted video frames. Lower values use less memory and
+   * make scroll scrubbing cheaper. Defaults to `18` for pre-extracted scroll
+   * scrub and the engine default for normal pre-extracted playback.
+   */
+  fps?: number;
+  /**
+   * Maximum long-edge render dimension for video frame extraction.
+   * Lower this for large full-width heroes where the canvas is CSS-scaled.
+   * Default: `2048`.
+   */
+  maxRenderDimension?: number;
+  /**
    * Trim the video to a specific time range (in seconds).
    * - `start` — seek to this time before playback begins. Default: `0`
    * - `end` — loop back to `start` when this time is reached.
@@ -186,6 +198,37 @@ function createNativeVideoScrollScrub(
   };
 }
 
+function createNativeProgressScrollScrub(
+  trigger: HTMLElement,
+  onProgress: (progress: number) => void,
+): () => void {
+  let raf = 0;
+
+  const update = () => {
+    raf = 0;
+    const rect = trigger.getBoundingClientRect();
+    const viewport = window.innerHeight || document.documentElement.clientHeight;
+    const total = rect.height + viewport;
+    const progress = total > 0 ? clamp01((viewport - rect.top) / total) : 0;
+    onProgress(progress);
+  };
+
+  const requestUpdate = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(update);
+  };
+
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate);
+  requestUpdate();
+
+  return () => {
+    window.removeEventListener('scroll', requestUpdate);
+    window.removeEventListener('resize', requestUpdate);
+    if (raf) cancelAnimationFrame(raf);
+  };
+}
+
 /**
  * Sync an HTMLVideoElement's currentTime to scroll progress.
  *
@@ -217,6 +260,30 @@ export function createVideoScrollScrub(
   return createNativeVideoScrollScrub(video, trigger, opts);
 }
 
+function createProgressScrollScrub(
+  trigger: HTMLElement,
+  opts: VideoScrollScrubOptions,
+  onProgress: (progress: number) => void,
+): () => void {
+  const gsap = opts.gsap;
+  const ScrollTrigger = opts.ScrollTrigger ?? gsap?.ScrollTrigger;
+
+  if (gsap && ScrollTrigger?.create) {
+    gsap.registerPlugin?.(ScrollTrigger);
+    const instance = ScrollTrigger.create({
+      trigger,
+      start: opts.start ?? 'top bottom',
+      end: opts.end ?? 'bottom top',
+      scrub: opts.scrub ?? true,
+      onUpdate: (self: { progress: number }) => onProgress(self.progress),
+    });
+
+    return () => instance.kill?.();
+  }
+
+  return createNativeProgressScrollScrub(trigger, onProgress);
+}
+
 /** Get the intrinsic pixel dimensions of a media source. */
 function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): { w: number; h: number } {
   if (el instanceof HTMLVideoElement) return { w: el.videoWidth, h: el.videoHeight };
@@ -232,8 +299,8 @@ function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasEleme
  * sizes regardless of how small the CSS display canvas is — exactly matching
  * the playground pipeline.
  */
-function computeRenderDims(srcW: number, srcH: number): { renderW: number; renderH: number } {
-  const MAX = 2048;
+function computeRenderDims(srcW: number, srcH: number, maxRenderDimension: number = 2048): { renderW: number; renderH: number } {
+  const MAX = maxRenderDimension;
   const scale = Math.min(1, MAX / Math.max(srcW, srcH));
   return { renderW: Math.round(srcW * scale), renderH: Math.round(srcH * scale) };
 }
@@ -258,6 +325,7 @@ function sizeCanvasToContainer(
   aspect: number,
   srcW?: number,
   srcH?: number,
+  maxRenderDimension: number = 2048,
 ): { renderW: number; renderH: number; dpr: number } {
   const { width, height } = container.getBoundingClientRect();
   if (!width || !height) return { renderW: 0, renderH: 0, dpr: 1 };
@@ -272,7 +340,7 @@ function sizeCanvasToContainer(
   // Fall back to CSS size when no source dims are available.
   let renderW: number, renderH: number;
   if (srcW && srcH) {
-    ({ renderW, renderH } = computeRenderDims(srcW, srcH));
+    ({ renderW, renderH } = computeRenderDims(srcW, srcH, maxRenderDimension));
   } else {
     renderW = cssW;
     renderH = cssH;
@@ -478,7 +546,7 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, trim, scroll, onReady, onFrame }: AsciifyVideoOptions = {}
+  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, fps, maxRenderDimension = 2048, trim, scroll, onReady, onFrame }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
@@ -486,10 +554,6 @@ export async function asciifyVideo(
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
-  if (preExtract && scroll) {
-    console.warn('asciifyVideo: `scroll` is only supported in live streaming mode. Set `preExtract: false` to scrub video time by scroll.');
-  }
-
   const container: HTMLElement | null =
     typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
     fitTo instanceof HTMLElement ? fitTo : null;
@@ -511,10 +575,10 @@ export async function asciifyVideo(
       video = source;
     }
 
-    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight);
+    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension);
 
     // Render dimensions = source size for maximum detail
-    const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight);
+    const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
 
     // Compute DPR for the canvas buffer
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
@@ -530,21 +594,48 @@ export async function asciifyVideo(
     }
 
     const maxDur = trimEnd !== undefined ? trimEnd - trimStart : 10;
-    const { frames, fps } = await videoToAsciiFrames(video, merged, renderW, renderH, undefined, maxDur, undefined, trimStart);
+    const extractFps = fps ?? (scroll ? 18 : undefined);
+    const { frames, fps: extractedFps } = await videoToAsciiFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
+    const renderFrame = (index: number) => {
+      const frame = frames[index];
+      if (!frame) return;
+      ctx.save();
+      ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+      renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
+      ctx.restore();
+      onFrame?.();
+    };
+
+    if (scroll) {
+      let ready = false;
+      let lastIndex = -1;
+      const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
+      const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
+      const cleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
+        const eased = clamp01(scrollOpts.ease ? scrollOpts.ease(clamp01(progress)) : progress);
+        const index = Math.max(0, Math.min(frames.length - 1, Math.round(eased * (frames.length - 1))));
+        if (index === lastIndex) return;
+        lastIndex = index;
+        renderFrame(index);
+        if (!ready) { ready = true; onReady?.(video); }
+        scrollOpts.onUpdate?.(eased, video);
+      });
+      renderFrame(0);
+      ready = true;
+      onReady?.(video);
+      return cleanup;
+    }
+
     let cancelled = false, animId: number, i = 0, last = performance.now();
     let firstFrame = true;
-    const interval = 1000 / fps;
+    const interval = 1000 / extractedFps;
     const tick = (now: number) => {
       if (cancelled) return;
       if (now - last >= interval) {
-        ctx.save();
-        ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
-        renderFrameToCanvas(ctx, frames[i], merged, renderW, renderH);
-        ctx.restore();
+        renderFrame(i);
         i = (i + 1) % frames.length;
         last = now;
         if (firstFrame) { firstFrame = false; onReady?.(video); }
-        onFrame?.();
       }
       animId = requestAnimationFrame(tick);
     };
@@ -603,18 +694,18 @@ export async function asciifyVideo(
 
   let ro: ResizeObserver | null = null;
   // Render dimensions = source size for maximum detail (same as playground)
-  const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight);
+  const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
 
   if (container) {
     const aspect = video.videoWidth / video.videoHeight;
     const vw = video.videoWidth, vh = video.videoHeight;
-    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh);
+    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension);
     // Apply DPR scale transform once — will be refreshed on resize
     const sCtx = canvas.getContext('2d');
     if (sCtx) sCtx.setTransform(sizing.dpr, 0, 0, sizing.dpr, 0, 0);
 
     ro = new ResizeObserver(() => {
-      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh);
+      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension);
       const rCtx = canvas.getContext('2d');
       if (rCtx) rCtx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     });
