@@ -205,7 +205,16 @@ function waitForDecodedVideoFrame(video: HTMLVideoElement): Promise<void> {
   }).requestVideoFrameCallback;
 
   if (requestVideoFrameCallback) {
-    return new Promise(resolve => requestVideoFrameCallback.call(video, () => resolve()));
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      requestVideoFrameCallback.call(video, finish);
+      window.setTimeout(finish, 80);
+    });
   }
 
   return new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -740,6 +749,7 @@ export async function asciifyVideo(
       const h = () => { video.removeEventListener('seeked', h); resolve(); };
       video.addEventListener('seeked', h);
     });
+    await waitForDecodedVideoFrame(video);
   }
 
   // Enforce trim bounds — seek back to trimStart when the video loops to 0
@@ -822,7 +832,36 @@ export async function asciifyVideo(
     let ready = false;
     const queued = new Set<number>();
 
-    video.pause();
+    const cacheVideo = document.createElement('video');
+    cacheVideo.muted = true;
+    cacheVideo.playsInline = true;
+    cacheVideo.preload = 'auto';
+    cacheVideo.crossOrigin = video.crossOrigin || 'anonymous';
+    cacheVideo.src = video.currentSrc || video.src;
+    Object.assign(cacheVideo.style, {
+      position: 'fixed', top: '0', left: '0',
+      width: '1px', height: '1px',
+      opacity: '0', pointerEvents: 'none', zIndex: '-1',
+    });
+    document.body.appendChild(cacheVideo);
+    if (cacheVideo.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          cacheVideo.removeEventListener('loadedmetadata', onLoaded);
+          cacheVideo.removeEventListener('error', onError);
+        };
+        const onLoaded = () => { cleanup(); resolve(); };
+        const onError = () => {
+          cleanup();
+          reject(new Error('asciifyVideo: cache video failed to load metadata.'));
+        };
+        cacheVideo.addEventListener('loadedmetadata', onLoaded);
+        cacheVideo.addEventListener('error', onError);
+        cacheVideo.load();
+      });
+    }
+    cacheVideo.pause();
+    if (video.paused) await video.play().catch(() => {});
 
     const frameTime = (index: number) => from + (duration * index) / Math.max(1, totalFrames - 1);
     const indexForProgress = (progress: number) => Math.max(0, Math.min(totalFrames - 1, Math.round(progress * (totalFrames - 1))));
@@ -874,10 +913,10 @@ export async function asciifyVideo(
       queued.delete(index);
       extracting = true;
       try {
-        await waitForSeek(video, frameTime(index));
-        await waitForDecodedVideoFrame(video);
+        await waitForSeek(cacheVideo, frameTime(index));
+        await waitForDecodedVideoFrame(cacheVideo);
         if (!cancelledCache) {
-          const frame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+          const frame = imageToAsciiTextFrame(cacheVideo, merged, renderW, renderH);
           if (frame.rows.length > 0) frames[index] = frame;
         }
       } finally {
@@ -896,6 +935,17 @@ export async function asciifyVideo(
           lastPaintedIndex = index;
           if (!ready) { ready = true; onReady?.(video); }
           onFrame?.();
+        }
+      } else if (index < 0 || lastPaintedIndex < 0) {
+        const now = performance.now();
+        if (renderInterval <= 0 || now - lastRenderAt >= renderInterval) {
+          const liveFrame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+          if (liveFrame.rows.length > 0) {
+            renderTextFrameToCanvas(ctx, liveFrame, merged, renderW, renderH);
+            lastRenderAt = now;
+            if (!ready) { ready = true; onReady?.(video); }
+            onFrame?.();
+          }
         }
       }
       requestIndex(desiredIndex);
@@ -921,6 +971,9 @@ export async function asciifyVideo(
       cancelAnimationFrame(raf);
       scrollCleanup?.();
       ro?.disconnect();
+      cacheVideo.pause();
+      cacheVideo.src = '';
+      document.body.removeChild(cacheVideo);
       if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);
       if (ownedVideo) {
         video.pause();

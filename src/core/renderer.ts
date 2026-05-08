@@ -23,6 +23,26 @@ import { renderWaveBackground } from '../backgrounds/wave';
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
+const rasterCanvasCache = new WeakMap<CanvasRenderingContext2D, HTMLCanvasElement | OffscreenCanvas>();
+
+function getRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: number): {
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+} {
+  let canvas = rasterCanvasCache.get(ctx);
+  if (!canvas) {
+    canvas = createOffscreenCanvas(width, height).canvas;
+    rasterCanvasCache.set(ctx, canvas);
+  }
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+
+  const rasterCtx = canvas.getContext('2d', { willReadFrequently: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!rasterCtx) throw new Error('renderFrameToCanvas: could not create raster context.');
+  return { canvas, ctx: rasterCtx };
+}
+
 export interface AsciiTextFrame {
   rows: string[];
   cols: number;
@@ -743,12 +763,66 @@ export function renderFrameToCanvas(
       : options.charset;
 
     if (useFastRect) {
-      charWeights = {};
-      const csChars = [...dynCharset]; // Unicode-aware
-      const csLen = csChars.length;
-      for (let i = 0; i < csLen; i++) {
-        charWeights[csChars[i]] = Math.max(0.1, (i + 0.3) / csLen);
+      const { canvas: rasterCanvas, ctx: rasterCtx } = getRasterCanvas(ctx, cols, rows);
+      const imageData = rasterCtx.createImageData(cols, rows);
+      const out = imageData.data;
+      const csChars = [...dynCharset];
+      const csLen = Math.max(1, csChars.length);
+
+      for (let y = 0; y < rows; y++) {
+        const rowData = frame[y];
+        for (let x = 0; x < cols; x++) {
+          const cell = rowData[x];
+          const outIndex = (y * cols + x) * 4;
+          if (cell.a < 10) continue;
+
+          const drawChar = hasDyn && cell.lum != null
+            ? luminanceToChar(cell.lum, dynCharset, isInverted)
+            : cell.char;
+          if (drawChar === ' ') continue;
+
+          const charIndex = Math.max(0, csChars.indexOf(drawChar));
+          let intensity = Math.max(0.08, (charIndex + 0.5) / csLen);
+          let hoverGlow = 0;
+          let hoverBlend = 0;
+
+          if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
+            const fx = computeHoverEffect(
+              x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
+              hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
+            );
+            intensity *= fx.scale;
+            hoverGlow = fx.glow;
+            hoverBlend = fx.colorBlend;
+          }
+
+          let rr: number;
+          let gg: number;
+          let bb: number;
+          if (hoverBlend > 0) {
+            const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
+            rr = Math.min(255, (rgb[0] + (hcR - rgb[0]) * hoverBlend) | 0);
+            gg = Math.min(255, (rgb[1] + (hcG - rgb[1]) * hoverBlend) | 0);
+            bb = Math.min(255, (rgb[2] + (hcB - rgb[2]) * hoverBlend) | 0);
+          } else {
+            const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
+            rr = rgb[0]; gg = rgb[1]; bb = rgb[2];
+          }
+
+          const alpha = Math.min(255, Math.max(0, cell.a * intensity * (1 + hoverGlow)));
+          out[outIndex] = rr;
+          out[outIndex + 1] = gg;
+          out[outIndex + 2] = bb;
+          out[outIndex + 3] = alpha;
+        }
       }
+
+      rasterCtx.putImageData(imageData, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(rasterCanvas, 0, 0, canvasWidth, canvasHeight);
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 1;
+      return;
     }
 
     const baseTransform = !useFastRect ? ctx.getTransform() : null;
