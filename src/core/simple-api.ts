@@ -804,6 +804,14 @@ export async function asciifyVideo(
   let lastRenderAt = 0;
   let lastRenderedVideoTime = -1;
 
+  const canUseFastLiveTextFrames =
+    !enableScrollScrub &&
+    merged.renderMode === 'ascii' &&
+    merged.colorMode !== 'fullcolor' &&
+    merged.animationStyle === 'none' &&
+    merged.hoverStrength <= 0 &&
+    !merged.charsetFrames?.length;
+
   const canUseTextFrameCache =
     enableScrollScrub &&
     merged.renderMode === 'ascii' &&
@@ -1002,6 +1010,18 @@ export async function asciifyVideo(
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
     if (enableScrollScrub && Math.abs(video.currentTime - lastRenderedVideoTime) < 1 / 240) return;
+
+    if (canUseFastLiveTextFrames) {
+      const frame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+      if (frame.rows.length > 0) {
+        renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
+        lastRenderAt = now;
+        lastRenderedVideoTime = video.currentTime;
+        if (firstFrame) { firstFrame = false; onReady?.(video); }
+        onFrame?.();
+      }
+      return;
+    }
 
     const { frame } = imageToAsciiFrame(video, merged, renderW, renderH);
     if (frame.length > 0) {
