@@ -58,6 +58,12 @@ export interface VideoScrollScrubOptions {
   end?: string;
   /** GSAP scrub value. Default: `true`. Native fallback always scrubs. */
   scrub?: boolean | number;
+  /**
+   * Multiply scroll progress before mapping it to video time.
+   * `2` reaches the end of the clip in half the scroll distance, `0.5` makes it
+   * take twice as much scroll. Default: `1`.
+   */
+  speed?: number;
   /** Video time to map from. Defaults to trim start or `0`. */
   from?: number;
   /** Video time to map to. Defaults to trim end or video duration. */
@@ -199,13 +205,20 @@ function canUseFastTextFrame(options: AsciiOptions): boolean {
     && !options.charsetFrames?.length;
 }
 
+function mapScrollProgress(progress: number, opts: VideoScrollScrubOptions = {}): number {
+  const raw = clamp01(progress);
+  const speed = opts.speed === undefined ? 1 : Math.max(0.001, opts.speed);
+  const accelerated = clamp01(raw * speed);
+  return clamp01(opts.ease ? opts.ease(accelerated) : accelerated);
+}
+
 function syncVideoToProgress(video: HTMLVideoElement, progress: number, opts: VideoScrollScrubOptions = {}): void {
   if (!Number.isFinite(video.duration) || video.duration <= 0) return;
 
   const from = opts.from ?? 0;
   const to = opts.to ?? video.duration;
   const end = Math.max(from, Math.min(to, video.duration));
-  const eased = clamp01(opts.ease ? opts.ease(clamp01(progress)) : progress);
+  const eased = mapScrollProgress(progress, opts);
   const targetTime = from + (end - from) * eased;
   video.currentTime = Math.min(Math.max(from, targetTime), Math.max(from, end - 0.04));
   opts.onUpdate?.(eased, video);
@@ -217,7 +230,7 @@ function progressToVideoTime(video: HTMLVideoElement, progress: number, opts: Vi
   const from = opts.from ?? 0;
   const to = opts.to ?? video.duration;
   const end = Math.max(from, Math.min(to, video.duration));
-  const eased = clamp01(opts.ease ? opts.ease(clamp01(progress)) : progress);
+  const eased = mapScrollProgress(progress, opts);
   const targetTime = from + (end - from) * eased;
   const time = Math.min(Math.max(from, targetTime), Math.max(from, end - 0.04));
   return { progress: eased, time };
@@ -864,7 +877,7 @@ export async function asciifyVideo(
         const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
         const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
         const cleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
-          const eased = clamp01(scrollOpts.ease ? scrollOpts.ease(clamp01(progress)) : progress);
+          const eased = mapScrollProgress(progress, scrollOpts);
           const index = Math.max(0, Math.min(frames.length - 1, Math.round(eased * (frames.length - 1))));
           if (index === lastIndex) return;
           lastIndex = index;
@@ -912,7 +925,7 @@ export async function asciifyVideo(
       const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
       const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
       const cleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
-        const eased = clamp01(scrollOpts.ease ? scrollOpts.ease(clamp01(progress)) : progress);
+        const eased = mapScrollProgress(progress, scrollOpts);
         const index = Math.max(0, Math.min(frames.length - 1, Math.round(eased * (frames.length - 1))));
         if (index === lastIndex) return;
         lastIndex = index;
