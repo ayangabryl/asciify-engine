@@ -407,6 +407,26 @@ function toCssLength(value: number | string | undefined): string | undefined {
   return typeof value === 'number' ? `${value}px` : value;
 }
 
+function resolveLayoutLength(value: number | string | undefined, containerLength: number, viewportLength: number): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+
+  const trimmed = value.trim();
+  if (trimmed.endsWith('%')) {
+    const ratio = Number.parseFloat(trimmed) / 100;
+    return Number.isFinite(ratio) ? containerLength * ratio : undefined;
+  }
+  if (trimmed.endsWith('px')) {
+    const px = Number.parseFloat(trimmed);
+    return Number.isFinite(px) ? px : undefined;
+  }
+  if (trimmed.endsWith('vw')) {
+    const ratio = Number.parseFloat(trimmed) / 100;
+    return Number.isFinite(ratio) ? viewportLength * ratio : undefined;
+  }
+  return undefined;
+}
+
 function hasLayoutOptions(opts: CanvasLayoutOptions): boolean {
   return opts.objectFit !== undefined
     || opts.objectPosition !== undefined
@@ -428,11 +448,6 @@ function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions)
     transformOrigin: canvas.style.transformOrigin,
     scale: canvas.style.getPropertyValue('scale'),
   };
-
-  const width = toCssLength(opts.width);
-  const height = toCssLength(opts.height);
-  if (width !== undefined) canvas.style.width = width;
-  if (height !== undefined) canvas.style.height = height;
 
   if (opts.objectFit) canvas.style.objectFit = opts.objectFit;
   if (opts.objectPosition) {
@@ -509,11 +524,15 @@ function sizeCanvasToContainer(
   maxRenderDimension: number = 2048,
   layoutOptions: CanvasLayoutOptions = {},
 ): { renderW: number; renderH: number; dpr: number } {
-  const { width, height } = container.getBoundingClientRect();
-  if (!width || !height) return { renderW: 0, renderH: 0, dpr: 1 };
+  const { width: containerW, height: containerH } = container.getBoundingClientRect();
+  if (!containerW || !containerH) return { renderW: 0, renderH: 0, dpr: 1 };
 
   // CSS display size — computed in the engine so crop/layout never stretches.
-  const { cssW, cssH } = computeFitSize(width, height, aspect, layoutOptions.objectFit ?? 'contain');
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : containerW;
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : containerH;
+  const boxW = resolveLayoutLength(layoutOptions.width, containerW, viewportW) ?? containerW;
+  const boxH = resolveLayoutLength(layoutOptions.height, containerH, viewportH) ?? containerH;
+  const { cssW, cssH } = computeFitSize(boxW, boxH, aspect, layoutOptions.objectFit ?? 'contain');
 
   // Render dimensions = source size (capped) for high-quality frame generation.
   // Fall back to CSS size when no source dims are available.
@@ -534,8 +553,8 @@ function sizeCanvasToContainer(
 
   canvas.width  = Math.round(renderW * cappedDpr);
   canvas.height = Math.round(renderH * cappedDpr);
-  canvas.style.width = toCssLength(layoutOptions.width) ?? `${cssW}px`;
-  canvas.style.height = toCssLength(layoutOptions.height) ?? `${cssH}px`;
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
 
   return { renderW, renderH, dpr: cappedDpr };
 }
