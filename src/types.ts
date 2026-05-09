@@ -7,6 +7,20 @@ export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
 export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
+export type SourceCropUnit = 'percent' | 'pixel';
+
+export interface SourceCrop {
+  /** Crop origin on the source media. Percent values use 0–1. Default: `0` */
+  x?: number;
+  /** Crop origin on the source media. Percent values use 0–1. Default: `0` */
+  y?: number;
+  /** Crop width on the source media. Percent values use 0–1. Default: remaining width */
+  width?: number;
+  /** Crop height on the source media. Percent values use 0–1. Default: remaining height */
+  height?: number;
+  /** Interpret values as normalized percentages or source pixels. Default: `'percent'` */
+  unit?: SourceCropUnit;
+}
 
 /**
  * Named colour palette presets — pass as `colorMode` for themed rendering.
@@ -204,6 +218,17 @@ export interface AsciiOptions {
    * Higher values remove more pixels. Default: `60`
    */
   chromaKeyTolerance: number;
+  /**
+   * Optional source crop applied before ASCII sampling.
+   *
+   * Use this when the media has empty edges or a subject that should be framed
+   * tighter without changing the destination canvas size.
+   *
+   * @example
+   * // Use the top 68% of a green-screen video and scale it into the same canvas:
+   * options: { sourceCrop: { y: 0, height: 0.68 } }
+   */
+  sourceCrop?: SourceCrop | null;
   /**
    * Array of charset strings to cycle through over time.
    * The engine picks `charsetFrames[Math.floor(time * charsetFps) % length]` on each
