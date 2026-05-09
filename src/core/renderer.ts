@@ -220,15 +220,27 @@ function resolveSourceCrop(
   if (!crop) return { x: 0, y: 0, width: srcWidth, height: srcHeight };
 
   const unit = crop.unit ?? 'percent';
-  const toPxX = (value: number | undefined, fallback: number) =>
-    value === undefined ? fallback : unit === 'percent' ? value * srcWidth : value;
-  const toPxY = (value: number | undefined, fallback: number) =>
-    value === undefined ? fallback : unit === 'percent' ? value * srcHeight : value;
+  const toPxX = (value: number | undefined) =>
+    value === undefined ? undefined : unit === 'percent' ? value * srcWidth : value;
+  const toPxY = (value: number | undefined) =>
+    value === undefined ? undefined : unit === 'percent' ? value * srcHeight : value;
 
-  const x = clamp(toPxX(crop.x, 0), 0, Math.max(0, srcWidth - 1));
-  const y = clamp(toPxY(crop.y, 0), 0, Math.max(0, srcHeight - 1));
-  const width = clamp(toPxX(crop.width, srcWidth - x), 1, srcWidth - x);
-  const height = clamp(toPxY(crop.height, srcHeight - y), 1, srcHeight - y);
+  const requestedWidth = toPxX(crop.width);
+  const requestedHeight = toPxY(crop.height);
+  const scaleFromHeight = requestedHeight === undefined ? undefined : requestedHeight / srcHeight;
+  const scaleFromWidth = requestedWidth === undefined ? undefined : requestedWidth / srcWidth;
+
+  const rawWidth = requestedWidth ?? (scaleFromHeight === undefined ? srcWidth : srcWidth * scaleFromHeight);
+  const rawHeight = requestedHeight ?? (scaleFromWidth === undefined ? srcHeight : srcHeight * scaleFromWidth);
+  const width = clamp(rawWidth, 1, srcWidth);
+  const height = clamp(rawHeight, 1, srcHeight);
+
+  const defaultX = (srcWidth - width) / 2;
+  const defaultY = (srcHeight - height) / 2;
+  const requestedX = toPxX(crop.x);
+  const requestedY = toPxY(crop.y);
+  const x = clamp(requestedX ?? defaultX, 0, Math.max(0, srcWidth - width));
+  const y = clamp(requestedY ?? defaultY, 0, Math.max(0, srcHeight - height));
 
   return { x, y, width, height };
 }

@@ -32,6 +32,16 @@ npm install asciify-engine
 
 Works with any modern bundler (Vite, webpack, esbuild, Rollup) and any framework — React, Vue, Svelte, Angular, Next.js, or vanilla JS.
 
+## Agent Skill
+
+This repository ships a standards-friendly Agent Skill at `skills/asciify-engine`. Install it with the current skills CLI:
+
+```bash
+npx skills add https://github.com/ayangabryl/asciify-engine --skill asciify-engine
+```
+
+Use the skill when building ASCII images, videos, GIFs, webcam effects, scroll-scrubbed heroes, hover interactions, or performance-sensitive ASCII media.
+
 ---
 
 ## Converting Media to ASCII
