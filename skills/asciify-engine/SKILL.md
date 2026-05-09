@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.101`  
+**Current version:** `1.0.102`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.101
+npm install asciify-engine@1.0.102
 ```
 
 ## Mental Model
@@ -418,6 +418,7 @@ const stop = await asciifyVideo('/hero.mp4', canvas, {
     start: 'top 88%',
     end: 'bottom 18%',
     scrub: 0.45,
+    speed: 1.35,
     from: 2.2,
     to: 6.65,
   },
@@ -450,6 +451,7 @@ const stop = await asciifyVideo('/hero.mp4', canvas, {
 
 - Use `scroll` for time-to-scroll mapping, not custom `video.currentTime` loops.
 - Pass the same `from`/`to` as `trim.start`/`trim.end` when scrubbing a clipped range.
+- Use `scroll.speed` for faster or slower scrub pacing. `speed: 2` reaches the end in half the scroll distance; `speed: 0.5` takes twice the distance.
 - Use `fps: 30-60`; choose `60` for smooth short hero clips, `24-30` for heavy fullcolor.
 - Use `maxRenderDimension: 960-1280` for large full-width hero videos. Use `2048` only when truly needed.
 - Use `fontSize: 4-6` for detailed hero ASCII; below `4px` is expensive and should use compact text-frame paths only.
