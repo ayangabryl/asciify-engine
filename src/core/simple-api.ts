@@ -432,9 +432,7 @@ function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions)
   const width = toCssLength(opts.width);
   const height = toCssLength(opts.height);
   if (width !== undefined) canvas.style.width = width;
-  else if (opts.objectFit || opts.objectPosition || opts.scale !== undefined) canvas.style.width ||= '100%';
   if (height !== undefined) canvas.style.height = height;
-  else if (opts.objectFit || opts.objectPosition || opts.scale !== undefined) canvas.style.height ||= '100%';
 
   if (opts.objectFit) canvas.style.objectFit = opts.objectFit;
   if (opts.objectPosition) {
@@ -462,6 +460,32 @@ function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions)
   };
 }
 
+function computeFitSize(
+  boxW: number,
+  boxH: number,
+  aspect: number,
+  objectFit: CanvasObjectFit = 'contain',
+): { cssW: number; cssH: number } {
+  if (objectFit === 'fill') return { cssW: boxW, cssH: boxH };
+
+  let cssW = boxW;
+  let cssH = cssW / aspect;
+  const shouldCover = objectFit === 'cover';
+  const overflowsY = cssH > boxH;
+
+  if ((shouldCover && !overflowsY) || (!shouldCover && overflowsY)) {
+    cssH = boxH;
+    cssW = cssH * aspect;
+  }
+
+  if (objectFit === 'scale-down') {
+    cssW = Math.min(cssW, boxW);
+    cssH = Math.min(cssH, boxH);
+  }
+
+  return { cssW: Math.round(cssW), cssH: Math.round(cssH) };
+}
+
 /**
  * Size the canvas to fit a container while maintaining aspect ratio.
  *
@@ -483,16 +507,13 @@ function sizeCanvasToContainer(
   srcW?: number,
   srcH?: number,
   maxRenderDimension: number = 2048,
-  preserveCanvasCssSize: boolean = false,
+  layoutOptions: CanvasLayoutOptions = {},
 ): { renderW: number; renderH: number; dpr: number } {
   const { width, height } = container.getBoundingClientRect();
   if (!width || !height) return { renderW: 0, renderH: 0, dpr: 1 };
 
-  // CSS display size — fits inside the container keeping aspect ratio.
-  let cssW = width, cssH = cssW / aspect;
-  if (cssH > height) { cssH = height; cssW = cssH * aspect; }
-  cssW = Math.round(cssW);
-  cssH = Math.round(cssH);
+  // CSS display size — computed in the engine so crop/layout never stretches.
+  const { cssW, cssH } = computeFitSize(width, height, aspect, layoutOptions.objectFit ?? 'contain');
 
   // Render dimensions = source size (capped) for high-quality frame generation.
   // Fall back to CSS size when no source dims are available.
@@ -513,10 +534,8 @@ function sizeCanvasToContainer(
 
   canvas.width  = Math.round(renderW * cappedDpr);
   canvas.height = Math.round(renderH * cappedDpr);
-  if (!preserveCanvasCssSize) {
-    canvas.style.width  = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-  }
+  canvas.style.width = toCssLength(layoutOptions.width) ?? `${cssW}px`;
+  canvas.style.height = toCssLength(layoutOptions.height) ?? `${cssH}px`;
 
   return { renderW, renderH, dpr: cappedDpr };
 }
@@ -762,7 +781,6 @@ export async function asciifyVideo(
     typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
     fitTo instanceof HTMLElement ? fitTo : null;
   const layoutOptions: CanvasLayoutOptions = { objectFit, objectPosition, scale, width, height };
-  const hasManagedLayout = hasLayoutOptions(layoutOptions);
   const restoreCanvasLayout = applyCanvasLayout(canvas, layoutOptions);
   const withCanvasLayoutCleanup = (cleanup: () => void): (() => void) => {
     return () => {
@@ -788,7 +806,7 @@ export async function asciifyVideo(
       video = source;
     }
 
-    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension, hasManagedLayout);
+    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension, layoutOptions);
 
     // Render dimensions = source size for maximum detail
     const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
@@ -979,13 +997,13 @@ export async function asciifyVideo(
   if (container) {
     const aspect = video.videoWidth / video.videoHeight;
     const vw = video.videoWidth, vh = video.videoHeight;
-    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, hasManagedLayout);
+    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, layoutOptions);
     // Apply DPR scale transform once — will be refreshed on resize
     const sCtx = canvas.getContext('2d');
     if (sCtx) sCtx.setTransform(sizing.dpr, 0, 0, sizing.dpr, 0, 0);
 
     ro = new ResizeObserver(() => {
-      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, hasManagedLayout);
+      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, layoutOptions);
       const rCtx = canvas.getContext('2d');
       if (rCtx) rCtx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     });
