@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.97`  
+**Current version:** `1.0.98`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.97
+npm install asciify-engine@1.0.98
 ```
 
 ## Mental Model
@@ -69,6 +69,22 @@ Use `options.sourceCrop` when the source media has empty edges or needs tighter 
 ```ts
 options: {
   sourceCrop: { top: 0.08, bottom: 0.22 },
+}
+```
+
+Crop from the sides the same way:
+
+```ts
+options: {
+  sourceCrop: { left: 0.1, right: 0.1 },
+}
+```
+
+Use any side together:
+
+```ts
+options: {
+  sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 },
 }
 ```
 
@@ -228,8 +244,9 @@ await asciifyVideo(video, canvas, {
 
 - `sourceCrop` happens before ASCII sampling, so the subject is reframed without changing the canvas box.
 - Default unit is `'percent'`; use values from `0` to `1`.
+- Use `top`, `right`, `bottom`, and `left` for CSS-like side crops.
 - Use `{ unit: 'pixel', x, y, width, height }` for exact media-pixel crops.
-- Keep the crop aspect ratio close to the output aspect ratio when you want zero perceived stretching.
+- Keep `preserveAspect` enabled unless you intentionally want an exact source window that can stretch.
 - For hero videos, crop the source first, then use small layout overlap only if the next section needs to tuck closer.
 
 ### Scroll-Scrub Performance Model
