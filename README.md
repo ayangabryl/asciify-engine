@@ -162,6 +162,21 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 | `chromaKey` | `true \| 'blue-screen' \| {r,g,b} \| string \| null` | `null` | Remove a background colour. `true` = heuristic green screen (any shade). `'blue-screen'` = heuristic blue screen. Custom: `{r,g,b}` or any CSS hex string keyed by Euclidean distance. `null` to disable. |
 | `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
 
+
+### Source Crop
+
+Use `sourceCrop` to remove empty source edges before ASCII sampling without changing the destination canvas size. The recommended API is CSS-like insets; proportions are preserved by default, so the result will not stretch:
+
+```ts
+await asciifyVideo('/hero.mp4', canvas, {
+  options: {
+    sourceCrop: { top: 0.08, bottom: 0.22 },
+  },
+});
+```
+
+`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. Use `preserveAspect: false` only for exact manual source windows.
+
 ### Chroma Key (Green/Blue Screen)
 
 Remove a solid background colour from any source — images, GIFs, or video — so the canvas background shows through keyed pixels.

@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.96`  
+**Current version:** `1.0.97`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.96
+npm install asciify-engine@1.0.97
 ```
 
 ## Mental Model
@@ -64,15 +64,15 @@ Use legacy object frames only when you need per-cell mutation, dots mode, heavy 
 - `gifToAsciiFrames()`
 - `renderFrameToCanvas()`
 
-Use `options.sourceCrop` when the source media has empty edges or needs tighter framing without changing the destination canvas size. Percent values are normalized `0–1` by default. Passing only `height` or only `width` preserves source proportions and centers the crop:
+Use `options.sourceCrop` when the source media has empty edges or needs tighter framing without changing the destination canvas size. Percent values are normalized `0–1` by default. Prefer CSS-like insets for readable framing; the engine preserves source proportions by default and auto-crops the opposite axis:
 
 ```ts
 options: {
-  sourceCrop: { height: 0.7 },
+  sourceCrop: { top: 0.08, bottom: 0.22 },
 }
 ```
 
-Set `x`, `y`, `width`, and `height` together only when manual framing is needed. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
+For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and crops equally from top/bottom plus left/right as needed. Set `preserveAspect: false` only when an exact source window is more important than avoiding stretch. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
 
 ## Visual Target
 
@@ -221,7 +221,7 @@ await asciifyVideo(video, canvas, {
   fitTo: hero,
   options: {
     chromaKey: true,
-    sourceCrop: { height: 0.7 },
+    sourceCrop: { top: 0.08, bottom: 0.22 },
   },
 });
 ```

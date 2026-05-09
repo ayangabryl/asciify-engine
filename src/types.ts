@@ -8,16 +8,29 @@ export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShi
 export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
 export type SourceCropUnit = 'percent' | 'pixel';
+export type SourceCropAnchor = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 export interface SourceCrop {
-  /** Crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
+  /** Legacy crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
   x?: number;
-  /** Crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
+  /** Legacy crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
   y?: number;
-  /** Crop width on the source media. Percent values use 0–1. Default: mirrors `height` to preserve proportions */
+  /** Legacy crop width on the source media. Percent values use 0–1. Default: mirrors `height` to preserve proportions */
   width?: number;
-  /** Crop height on the source media. Percent values use 0–1. Default: mirrors `width` to preserve proportions */
+  /** Legacy crop height on the source media. Percent values use 0–1. Default: mirrors `width` to preserve proportions */
   height?: number;
+  /** CSS-like crop inset from the top edge. Percent values use 0–1. */
+  top?: number;
+  /** CSS-like crop inset from the right edge. Percent values use 0–1. */
+  right?: number;
+  /** CSS-like crop inset from the bottom edge. Percent values use 0–1. */
+  bottom?: number;
+  /** CSS-like crop inset from the left edge. Percent values use 0–1. */
+  left?: number;
+  /** Keep the source aspect ratio when deriving a crop from insets or a single dimension. Default: `true` */
+  preserveAspect?: boolean;
+  /** Bias auto-centered crops toward an edge or corner. Default: `'center'` */
+  anchor?: SourceCropAnchor;
   /** Interpret values as normalized percentages or source pixels. Default: `'percent'` */
   unit?: SourceCropUnit;
 }
@@ -225,12 +238,16 @@ export interface AsciiOptions {
    * tighter without changing the destination canvas size.
    *
    * @example
-   * // Crop to 70% of the source, preserve proportions, and center it:
+   * // Remove 15% from the top and 15% from the bottom, preserving proportions:
+   * options: { sourceCrop: { top: 0.15, bottom: 0.15 } }
+   *
+   * @example
+   * // Keep 70% of the source, preserve proportions, and center it:
    * options: { sourceCrop: { height: 0.7 } }
    *
    * @example
-   * // Use an explicit source window when you want manual framing:
-   * options: { sourceCrop: { x: 0.05, y: 0.08, width: 0.9, height: 0.9 } }
+   * // Use an exact source window when manual framing should override proportions:
+   * options: { sourceCrop: { x: 0.05, y: 0.08, width: 0.9, height: 0.9, preserveAspect: false } }
    */
   sourceCrop?: SourceCrop | null;
   /**
