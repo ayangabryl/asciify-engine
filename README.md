@@ -175,7 +175,23 @@ await asciifyVideo('/hero.mp4', canvas, {
 });
 ```
 
-`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. Use `preserveAspect: false` only for exact manual source windows.
+Crop from the sides the same way:
+
+```ts
+await asciifyVideo('/hero.mp4', canvas, {
+  options: {
+    sourceCrop: { left: 0.1, right: 0.1 },
+  },
+});
+```
+
+Use any side together:
+
+```ts
+sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 }
+```
+
+`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. Because `preserveAspect` defaults to `true`, the engine may also crop the opposite axis automatically to avoid stretching. Use `preserveAspect: false` only for exact manual source windows.
 
 ### Chroma Key (Green/Blue Screen)
 
