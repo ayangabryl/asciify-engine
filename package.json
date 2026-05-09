@@ -1,6 +1,6 @@
 {
   "name": "asciify-engine",
-  "version": "1.0.93",
+  "version": "1.0.96",
   "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -20,6 +20,7 @@
   },
   "files": [
     "dist",
+    "skills/asciify-engine",
     "README.md",
     "LICENSE"
   ],
@@ -100,7 +101,7 @@
   "homepage": "https://asciify.org",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayangabryl/asciify-engine"
+    "url": "git+https://github.com/ayangabryl/asciify-engine.git"
   },
   "dependencies": {
     "gifuct-js": "^2.1.2"

@@ -10,13 +10,13 @@ export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forc
 export type SourceCropUnit = 'percent' | 'pixel';
 
 export interface SourceCrop {
-  /** Crop origin on the source media. Percent values use 0–1. Default: `0` */
+  /** Crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
   x?: number;
-  /** Crop origin on the source media. Percent values use 0–1. Default: `0` */
+  /** Crop origin on the source media. Percent values use 0–1. Default: centered when cropped */
   y?: number;
-  /** Crop width on the source media. Percent values use 0–1. Default: remaining width */
+  /** Crop width on the source media. Percent values use 0–1. Default: mirrors `height` to preserve proportions */
   width?: number;
-  /** Crop height on the source media. Percent values use 0–1. Default: remaining height */
+  /** Crop height on the source media. Percent values use 0–1. Default: mirrors `width` to preserve proportions */
   height?: number;
   /** Interpret values as normalized percentages or source pixels. Default: `'percent'` */
   unit?: SourceCropUnit;
@@ -225,8 +225,12 @@ export interface AsciiOptions {
    * tighter without changing the destination canvas size.
    *
    * @example
-   * // Use the top 68% of a green-screen video and scale it into the same canvas:
-   * options: { sourceCrop: { y: 0, height: 0.68 } }
+   * // Crop to 70% of the source, preserve proportions, and center it:
+   * options: { sourceCrop: { height: 0.7 } }
+   *
+   * @example
+   * // Use an explicit source window when you want manual framing:
+   * options: { sourceCrop: { x: 0.05, y: 0.08, width: 0.9, height: 0.9 } }
    */
   sourceCrop?: SourceCrop | null;
   /**

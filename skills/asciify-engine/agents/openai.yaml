@@ -1,0 +1,8 @@
+interface:
+  display_name: "Asciify Engine"
+  short_description: "Build fast ASCII media effects"
+  brand_color: "#D4FF00"
+  default_prompt: "Use $asciify-engine to build a smooth ASCII video hero with good performance settings."
+
+policy:
+  allow_implicit_invocation: true
