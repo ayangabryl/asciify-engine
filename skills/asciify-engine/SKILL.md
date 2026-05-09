@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.98`  
+**Current version:** `1.0.99`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.98
+npm install asciify-engine@1.0.99
 ```
 
 ## Mental Model
@@ -90,6 +90,30 @@ options: {
 
 For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and crops equally from top/bottom plus left/right as needed. Set `preserveAspect: false` only when an exact source window is more important than avoiding stretch. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
 
+Use top-level `asciifyVideo` layout options when the destination needs full-bleed framing. These affect the visible canvas only, not the sampled media:
+
+```ts
+await asciifyVideo('/hero.mp4', canvas, {
+  fitTo: hero,
+  objectFit: 'cover',
+  objectPosition: 'center 62%',
+  scale: 1.06,
+  width: '100%',
+  height: '100%',
+  options: {
+    sourceCrop: { top: 0.08, bottom: 0.14 },
+  },
+});
+```
+
+Mental split:
+
+- `sourceCrop` chooses the source window before ASCII conversion.
+- `objectFit`, `objectPosition`, `scale`, `width`, and `height` place the rendered canvas in the page.
+- Use `objectFit: 'cover'` for full-width/full-bleed heroes.
+- Use `objectFit: 'contain'` for previews where the whole source should remain visible.
+- Use `scale` for gentle overfill instead of CSS width hacks like `110vw`.
+
 ## Visual Target
 
 Good ASCII media should feel intentional, not like a broken video filter.
@@ -139,6 +163,10 @@ Recommended starting point:
 ```ts
 {
   fitTo: hero,
+  objectFit: 'cover',
+  objectPosition: 'center bottom',
+  width: '100%',
+  height: '100%',
   fontSize: 5,
   fps: 60,
   maxRenderDimension: 1280,

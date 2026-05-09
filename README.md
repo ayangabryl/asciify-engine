@@ -106,6 +106,16 @@ const stop = await asciifyVideo('/clip.mp4', canvas, {
   fitTo: '#hero',  // or an HTMLElement
 });
 
+// Full-bleed hero framing without custom CSS width hacks:
+const stop = await asciifyVideo('/hero.mp4', canvas, {
+  fitTo: '#hero',
+  objectFit: 'cover',
+  objectPosition: 'center bottom',
+  scale: 1.08,
+  width: '100%',
+  height: '100%',
+});
+
 // Lifecycle hooks — ready state, timers, etc.:
 const stop = await asciifyVideo('/clip.mp4', canvas, {
   fitTo: '#hero',
@@ -192,6 +202,31 @@ sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 }
 ```
 
 `sourceCrop: { height: 0.7 }` keeps 70% of the source centered. Because `preserveAspect` defaults to `true`, the engine may also crop the opposite axis automatically to avoid stretching. Use `preserveAspect: false` only for exact manual source windows.
+
+### Canvas Layout
+
+Use layout options on `asciifyVideo` when the ASCII canvas needs to fill a hero, preview frame, or fixed viewport. These affect only the displayed canvas box; they do not change source sampling or ASCII detail.
+
+```ts
+await asciifyVideo('/hero.mp4', canvas, {
+  fitTo: '#hero',
+  objectFit: 'cover',
+  objectPosition: 'center 62%',
+  scale: 1.06,
+  width: '100%',
+  height: '100%',
+  options: {
+    sourceCrop: { top: 0.08, bottom: 0.14 },
+  },
+});
+```
+
+- `objectFit`: `'contain' | 'cover' | 'fill' | 'none' | 'scale-down'`
+- `objectPosition`: any CSS object-position value, such as `'center bottom'`
+- `scale`: visual overfill using CSS `scale`, preserving existing transforms
+- `width` / `height`: CSS lengths or pixel numbers for the visible canvas
+
+Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, and `scale` to place the rendered canvas in the layout.
 
 ### Chroma Key (Green/Blue Screen)
 

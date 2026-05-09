@@ -68,6 +68,8 @@ export interface VideoScrollScrubOptions {
   onUpdate?: (progress: number, video: HTMLVideoElement) => void;
 }
 
+export type CanvasObjectFit = 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+
 export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   /**
    * Fit the canvas to a container element, maintaining the video's aspect ratio.
@@ -80,6 +82,36 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    * asciifyVideo('/clip.mp4', canvas, { fitTo: '#hero' });
    */
   fitTo?: HTMLElement | string | null;
+  /**
+   * CSS object-fit behavior for the visible canvas when `fitTo` or explicit
+   * `width`/`height` is used. This controls visual framing only; ASCII sampling
+   * resolution and `sourceCrop` remain unchanged.
+   *
+   * Use `'cover'` for full-bleed heroes and `'contain'` for previews.
+   * Default: `'contain'`.
+   */
+  objectFit?: CanvasObjectFit;
+  /**
+   * CSS object-position for the visible canvas, e.g. `'center bottom'` or
+   * `'50% 62%'`. Useful with `objectFit: 'cover'`.
+   */
+  objectPosition?: string;
+  /**
+   * Visual scale applied with the CSS individual `scale` property. This is a
+   * layout-safe way to overfill a container without changing source proportions
+   * or overriding an app's `transform` styles.
+   */
+  scale?: number;
+  /**
+   * Visible CSS width for the canvas. Numbers are pixels; strings are used as
+   * provided (`'100%'`, `'100vw'`, `min(100vw, 1200px)`, etc.).
+   */
+  width?: number | string;
+  /**
+   * Visible CSS height for the canvas. Numbers are pixels; strings are used as
+   * provided.
+   */
+  height?: number | string;
   /**
    * Pre-extract all video frames into memory before starting playback.
    * Useful for short clips where you need frame-perfect control.
@@ -368,6 +400,68 @@ function computeRenderDims(srcW: number, srcH: number, maxRenderDimension: numbe
   return { renderW: Math.round(srcW * scale), renderH: Math.round(srcH * scale) };
 }
 
+type CanvasLayoutOptions = Pick<AsciifyVideoOptions, 'objectFit' | 'objectPosition' | 'scale' | 'width' | 'height'>;
+
+function toCssLength(value: number | string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return typeof value === 'number' ? `${value}px` : value;
+}
+
+function hasLayoutOptions(opts: CanvasLayoutOptions): boolean {
+  return opts.objectFit !== undefined
+    || opts.objectPosition !== undefined
+    || opts.scale !== undefined
+    || opts.width !== undefined
+    || opts.height !== undefined;
+}
+
+function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions): () => void {
+  if (!hasLayoutOptions(opts)) return () => {};
+
+  const previous = {
+    width: canvas.style.width,
+    height: canvas.style.height,
+    objectFit: canvas.style.objectFit,
+    objectPosition: canvas.style.objectPosition,
+    maxWidth: canvas.style.maxWidth,
+    maxHeight: canvas.style.maxHeight,
+    transformOrigin: canvas.style.transformOrigin,
+    scale: canvas.style.getPropertyValue('scale'),
+  };
+
+  const width = toCssLength(opts.width);
+  const height = toCssLength(opts.height);
+  if (width !== undefined) canvas.style.width = width;
+  else if (opts.objectFit || opts.objectPosition || opts.scale !== undefined) canvas.style.width ||= '100%';
+  if (height !== undefined) canvas.style.height = height;
+  else if (opts.objectFit || opts.objectPosition || opts.scale !== undefined) canvas.style.height ||= '100%';
+
+  if (opts.objectFit) canvas.style.objectFit = opts.objectFit;
+  if (opts.objectPosition) {
+    canvas.style.objectPosition = opts.objectPosition;
+    canvas.style.transformOrigin = opts.objectPosition;
+  }
+  if (opts.scale !== undefined) {
+    const scale = Number.isFinite(opts.scale) && opts.scale > 0 ? opts.scale : 1;
+    canvas.style.setProperty('scale', String(scale));
+    canvas.style.maxWidth = 'none';
+    canvas.style.maxHeight = 'none';
+    canvas.style.transformOrigin ||= opts.objectPosition ?? 'center center';
+  }
+
+  return () => {
+    canvas.style.width = previous.width;
+    canvas.style.height = previous.height;
+    canvas.style.objectFit = previous.objectFit;
+    canvas.style.objectPosition = previous.objectPosition;
+    canvas.style.maxWidth = previous.maxWidth;
+    canvas.style.maxHeight = previous.maxHeight;
+    canvas.style.transformOrigin = previous.transformOrigin;
+    if (previous.scale) canvas.style.setProperty('scale', previous.scale);
+    else canvas.style.removeProperty('scale');
+  };
+}
+
 /**
  * Size the canvas to fit a container while maintaining aspect ratio.
  *
@@ -389,6 +483,7 @@ function sizeCanvasToContainer(
   srcW?: number,
   srcH?: number,
   maxRenderDimension: number = 2048,
+  preserveCanvasCssSize: boolean = false,
 ): { renderW: number; renderH: number; dpr: number } {
   const { width, height } = container.getBoundingClientRect();
   if (!width || !height) return { renderW: 0, renderH: 0, dpr: 1 };
@@ -418,8 +513,10 @@ function sizeCanvasToContainer(
 
   canvas.width  = Math.round(renderW * cappedDpr);
   canvas.height = Math.round(renderH * cappedDpr);
-  canvas.style.width  = cssW + 'px';
-  canvas.style.height = cssH + 'px';
+  if (!preserveCanvasCssSize) {
+    canvas.style.width  = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+  }
 
   return { renderW, renderH, dpr: cappedDpr };
 }
@@ -636,7 +733,24 @@ export async function asciifyGif(
 export async function asciifyVideo(
   source: HTMLVideoElement | string,
   canvas: HTMLCanvasElement,
-  { fontSize, artStyle = 'classic', options = {}, fitTo, preExtract = false, fps, maxRenderDimension = 2048, trim, scroll, onReady, onFrame }: AsciifyVideoOptions = {}
+  {
+    fontSize,
+    artStyle = 'classic',
+    options = {},
+    fitTo,
+    objectFit,
+    objectPosition,
+    scale,
+    width,
+    height,
+    preExtract = false,
+    fps,
+    maxRenderDimension = 2048,
+    trim,
+    scroll,
+    onReady,
+    onFrame,
+  }: AsciifyVideoOptions = {}
 ): Promise<() => void> {
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
@@ -647,6 +761,15 @@ export async function asciifyVideo(
   const container: HTMLElement | null =
     typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
     fitTo instanceof HTMLElement ? fitTo : null;
+  const layoutOptions: CanvasLayoutOptions = { objectFit, objectPosition, scale, width, height };
+  const hasManagedLayout = hasLayoutOptions(layoutOptions);
+  const restoreCanvasLayout = applyCanvasLayout(canvas, layoutOptions);
+  const withCanvasLayoutCleanup = (cleanup: () => void): (() => void) => {
+    return () => {
+      cleanup();
+      restoreCanvasLayout();
+    };
+  };
 
   // ── Pre-extract mode ─────────────────────────────────────────────────────
   if (preExtract) {
@@ -665,7 +788,7 @@ export async function asciifyVideo(
       video = source;
     }
 
-    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension);
+    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension, hasManagedLayout);
 
     // Render dimensions = source size for maximum detail
     const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
@@ -715,7 +838,7 @@ export async function asciifyVideo(
         renderFrame(0);
         ready = true;
         onReady?.(video);
-        return cleanup;
+        return withCanvasLayoutCleanup(cleanup);
       }
 
       let cancelled = false, animId: number, i = 0, last = performance.now();
@@ -732,7 +855,7 @@ export async function asciifyVideo(
         animId = requestAnimationFrame(tick);
       };
       animId = requestAnimationFrame(tick);
-      return () => { cancelled = true; cancelAnimationFrame(animId); };
+      return withCanvasLayoutCleanup(() => { cancelled = true; cancelAnimationFrame(animId); });
     }
 
     const { frames, fps: extractedFps } = await videoToAsciiFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
@@ -763,7 +886,7 @@ export async function asciifyVideo(
       renderFrame(0);
       ready = true;
       onReady?.(video);
-      return cleanup;
+      return withCanvasLayoutCleanup(cleanup);
     }
 
     let cancelled = false, animId: number, i = 0, last = performance.now();
@@ -780,7 +903,7 @@ export async function asciifyVideo(
       animId = requestAnimationFrame(tick);
     };
     animId = requestAnimationFrame(tick);
-    return () => { cancelled = true; cancelAnimationFrame(animId); };
+    return withCanvasLayoutCleanup(() => { cancelled = true; cancelAnimationFrame(animId); });
   }
 
   // ── Live streaming mode (default) ────────────────────────────────────────
@@ -856,13 +979,13 @@ export async function asciifyVideo(
   if (container) {
     const aspect = video.videoWidth / video.videoHeight;
     const vw = video.videoWidth, vh = video.videoHeight;
-    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension);
+    const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, hasManagedLayout);
     // Apply DPR scale transform once — will be refreshed on resize
     const sCtx = canvas.getContext('2d');
     if (sCtx) sCtx.setTransform(sizing.dpr, 0, 0, sizing.dpr, 0, 0);
 
     ro = new ResizeObserver(() => {
-      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension);
+      const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, hasManagedLayout);
       const rCtx = canvas.getContext('2d');
       if (rCtx) rCtx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     });
@@ -1056,7 +1179,7 @@ export async function asciifyVideo(
     requestIndex(1);
     raf = requestAnimationFrame(paint);
 
-    return () => {
+    return withCanvasLayoutCleanup(() => {
       cancelledCache = true;
       cancelAnimationFrame(raf);
       scrollCleanup?.();
@@ -1070,7 +1193,7 @@ export async function asciifyVideo(
         video.src = '';
         document.body.removeChild(video);
       }
-    };
+    });
   }
 
   if (enableScrollScrub) {
@@ -1116,7 +1239,7 @@ export async function asciifyVideo(
   };
   animId = requestAnimationFrame(tick);
 
-  return () => {
+  return withCanvasLayoutCleanup(() => {
     cancelled = true;
     cancelAnimationFrame(animId);
     scrollCleanup?.();
@@ -1127,7 +1250,7 @@ export async function asciifyVideo(
       video.src = '';
       document.body.removeChild(video);
     }
-  };
+  });
 }
 
 /**
