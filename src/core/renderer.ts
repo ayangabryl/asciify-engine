@@ -220,27 +220,60 @@ function resolveSourceCrop(
   if (!crop) return { x: 0, y: 0, width: srcWidth, height: srcHeight };
 
   const unit = crop.unit ?? 'percent';
+  const preserveAspect = crop.preserveAspect !== false;
   const toPxX = (value: number | undefined) =>
     value === undefined ? undefined : unit === 'percent' ? value * srcWidth : value;
   const toPxY = (value: number | undefined) =>
     value === undefined ? undefined : unit === 'percent' ? value * srcHeight : value;
 
-  const requestedWidth = toPxX(crop.width);
-  const requestedHeight = toPxY(crop.height);
-  const scaleFromHeight = requestedHeight === undefined ? undefined : requestedHeight / srcHeight;
-  const scaleFromWidth = requestedWidth === undefined ? undefined : requestedWidth / srcWidth;
+  const left = clamp(toPxX(crop.left) ?? 0, 0, srcWidth - 1);
+  const right = clamp(toPxX(crop.right) ?? 0, 0, srcWidth - left - 1);
+  const top = clamp(toPxY(crop.top) ?? 0, 0, srcHeight - 1);
+  const bottom = clamp(toPxY(crop.bottom) ?? 0, 0, srcHeight - top - 1);
+  const hasInsets =
+    crop.left !== undefined || crop.right !== undefined ||
+    crop.top !== undefined || crop.bottom !== undefined;
 
-  const rawWidth = requestedWidth ?? (scaleFromHeight === undefined ? srcWidth : srcWidth * scaleFromHeight);
-  const rawHeight = requestedHeight ?? (scaleFromWidth === undefined ? srcHeight : srcHeight * scaleFromWidth);
-  const width = clamp(rawWidth, 1, srcWidth);
-  const height = clamp(rawHeight, 1, srcHeight);
+  const insetWidth = Math.max(1, srcWidth - left - right);
+  const insetHeight = Math.max(1, srcHeight - top - bottom);
+  const requestedWidth = hasInsets ? insetWidth : toPxX(crop.width);
+  const requestedHeight = hasInsets ? insetHeight : toPxY(crop.height);
 
-  const defaultX = (srcWidth - width) / 2;
-  const defaultY = (srcHeight - height) / 2;
-  const requestedX = toPxX(crop.x);
-  const requestedY = toPxY(crop.y);
-  const x = clamp(requestedX ?? defaultX, 0, Math.max(0, srcWidth - width));
-  const y = clamp(requestedY ?? defaultY, 0, Math.max(0, srcHeight - height));
+  let width = requestedWidth ?? srcWidth;
+  let height = requestedHeight ?? srcHeight;
+
+  if (preserveAspect) {
+    const widthScale = width / srcWidth;
+    const heightScale = height / srcHeight;
+    const scale = Math.min(widthScale, heightScale);
+    const singleDimensionScale = requestedWidth === undefined
+      ? heightScale
+      : requestedHeight === undefined
+        ? widthScale
+        : scale;
+    width = srcWidth * singleDimensionScale;
+    height = srcHeight * singleDimensionScale;
+  }
+
+  width = clamp(width, 1, hasInsets ? insetWidth : srcWidth);
+  height = clamp(height, 1, hasInsets ? insetHeight : srcHeight);
+
+  const anchor = crop.anchor ?? 'center';
+  const explicitX = toPxX(crop.x);
+  const explicitY = toPxY(crop.y);
+  const baseX = hasInsets ? left : 0;
+  const baseY = hasInsets ? top : 0;
+  const availableW = hasInsets ? insetWidth : srcWidth;
+  const availableH = hasInsets ? insetHeight : srcHeight;
+  const alignX = anchor.endsWith('left') || anchor === 'left' ? 0
+    : anchor.endsWith('right') || anchor === 'right' ? availableW - width
+      : (availableW - width) / 2;
+  const alignY = anchor.startsWith('top') || anchor === 'top' ? 0
+    : anchor.startsWith('bottom') || anchor === 'bottom' ? availableH - height
+      : (availableH - height) / 2;
+
+  const x = clamp(explicitX ?? baseX + alignX, 0, Math.max(0, srcWidth - width));
+  const y = clamp(explicitY ?? baseY + alignY, 0, Math.max(0, srcHeight - height));
 
   return { x, y, width, height };
 }
