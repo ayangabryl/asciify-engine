@@ -2,7 +2,7 @@
  * Core frame-to-canvas renderer and source-to-frame converters.
  */
 
-import type { AsciiOptions, AsciiCell, AsciiFrame } from '../types';
+import type { AsciiOptions, AsciiCell, AsciiFrame, SourceCrop } from '../types';
 import { DEFAULT_OPTIONS } from '../types';
 import { parseGIF, decompressFrames } from 'gifuct-js';
 import {
@@ -95,6 +95,14 @@ const textRasterImageDataCache = new WeakMap<CanvasRenderingContext2D | Offscree
   width: number;
   height: number;
   imageData: ImageData;
+}>();
+const textFrameRenderStateCache = new WeakMap<CanvasRenderingContext2D, {
+  rows: string[];
+  cols: number;
+  rowCount: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  fillStyle: string;
 }>();
 
 function getCharsetChars(charset: string): string[] {
@@ -200,6 +208,31 @@ function resolveAccentHex(accentColor: string | undefined): string {
   return isDarkMode(typeof document !== 'undefined' ? document.body : null) ? 'faf9f7' : '0d0d0d';
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function resolveSourceCrop(
+  crop: SourceCrop | null | undefined,
+  srcWidth: number,
+  srcHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  if (!crop) return { x: 0, y: 0, width: srcWidth, height: srcHeight };
+
+  const unit = crop.unit ?? 'percent';
+  const toPxX = (value: number | undefined, fallback: number) =>
+    value === undefined ? fallback : unit === 'percent' ? value * srcWidth : value;
+  const toPxY = (value: number | undefined, fallback: number) =>
+    value === undefined ? fallback : unit === 'percent' ? value * srcHeight : value;
+
+  const x = clamp(toPxX(crop.x, 0), 0, Math.max(0, srcWidth - 1));
+  const y = clamp(toPxY(crop.y, 0), 0, Math.max(0, srcHeight - 1));
+  const width = clamp(toPxX(crop.width, srcWidth - x), 1, srcWidth - x);
+  const height = clamp(toPxY(crop.height, srcHeight - y), 1, srcHeight - y);
+
+  return { x, y, width, height };
+}
+
 /**
  * Convert an image element or canvas to a single ASCII frame.
  */
@@ -235,14 +268,15 @@ export function imageToAsciiFrame(
   // at a higher resolution and average multiple source pixels per cell.
   // The supersample factor is clamped so the intermediate buffer never
   // exceeds ~4 MP (2048×2048) to stay GPU-friendly.
+  const sourceCrop = resolveSourceCrop(options.sourceCrop, srcWidth, srcHeight);
   const maxDim = 2048;
-  const ssX = Math.max(1, Math.min(Math.floor(maxDim / cols), Math.floor(srcWidth / cols)));
-  const ssY = Math.max(1, Math.min(Math.floor(maxDim / rows), Math.floor(srcHeight / rows)));
+  const ssX = Math.max(1, Math.min(Math.floor(maxDim / cols), Math.floor(sourceCrop.width / cols)));
+  const ssY = Math.max(1, Math.min(Math.floor(maxDim / rows), Math.floor(sourceCrop.height / rows)));
   const sampleW = cols * ssX;
   const sampleH = rows * ssY;
 
   const ctx = getSharedSampleContext(sampleW, sampleH);
-  ctx.drawImage(source, 0, 0, sampleW, sampleH);
+  ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH);
   const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
   const pixels = imageData.data;
 
@@ -414,7 +448,8 @@ export function imageToAsciiTextFrame(
   const sampleH = rowCount;
 
   const ctx = getSharedSampleContext(sampleW, sampleH);
-  ctx.drawImage(source, 0, 0, sampleW, sampleH);
+  const sourceCrop = resolveSourceCrop(options.sourceCrop, srcWidth, srcHeight);
+  ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH);
   const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
 
   const ck = options.chromaKey;
@@ -535,10 +570,12 @@ export function renderTextFrameToCanvas(
   canvasHeight: number
 ): void {
   if (textFrame.rows.length === 0) return;
-  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   const canvasEl = ctx.canvas as HTMLCanvasElement | null;
-  if (!options.chromaKey && !textFrame.rows.some(row => row.includes(' '))) {
+  const hasTransparentCells = Boolean(options.chromaKey) || textFrame.rows.some(row => row.includes(' '));
+  if (!hasTransparentCells) {
+    textFrameRenderStateCache.delete(ctx);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     ctx.fillStyle = isDarkMode(canvasEl) ? '#0a0a0a' : '#faf9f7';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
@@ -554,6 +591,8 @@ export function renderTextFrameToCanvas(
   const colors = textFrame.colors;
 
   if (options.colorMode === 'fullcolor' && colors) {
+    textFrameRenderStateCache.delete(ctx);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     if (fontSize < 6) {
       const { canvas: rasterCanvas, ctx: rasterCtx } = getTextRasterCanvas(ctx, textFrame.cols, textFrame.rowCount);
       let cached = textRasterImageDataCache.get(rasterCtx);
@@ -634,17 +673,43 @@ export function renderTextFrameToCanvas(
   ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle =
+  const fillStyle =
     options.colorMode === 'matrix' ? 'rgb(0,255,0)' :
     options.colorMode === 'grayscale' ? (isDarkMode(canvasEl) ? 'rgb(230,230,230)' : 'rgb(24,24,24)') :
     `rgb(${acR},${acG},${acB})`;
+  ctx.fillStyle = fillStyle;
   ctx.globalAlpha = 1;
+
+  const previous = textFrameRenderStateCache.get(ctx);
+  const canReuseRows = hasTransparentCells &&
+    previous &&
+    previous.cols === textFrame.cols &&
+    previous.rowCount === textFrame.rowCount &&
+    previous.canvasWidth === canvasWidth &&
+    previous.canvasHeight === canvasHeight &&
+    previous.fillStyle === fillStyle;
+
+  if (!canReuseRows) {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  }
 
   for (let y = 0; y < textFrame.rows.length; y++) {
     const line = textFrame.rows[y];
+    if (canReuseRows && previous.rows[y] === line) continue;
+    if (canReuseRows) {
+      ctx.clearRect(0, y * cellH, canvasWidth, cellH + 1);
+    }
     if (line.trim().length === 0) continue;
     ctx.fillText(line, cellW * 0.5, y * cellH + cellH * 0.5);
   }
+  textFrameRenderStateCache.set(ctx, {
+    rows: textFrame.rows.slice(),
+    cols: textFrame.cols,
+    rowCount: textFrame.rowCount,
+    canvasWidth,
+    canvasHeight,
+    fillStyle,
+  });
   ctx.globalAlpha = 1;
 }
 

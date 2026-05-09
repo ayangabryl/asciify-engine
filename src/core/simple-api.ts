@@ -202,7 +202,9 @@ function waitForSeek(video: HTMLVideoElement, time: number): Promise<void> {
       resolve();
     };
     video.addEventListener('seeked', done, { once: true });
-    video.currentTime = time;
+    const fastSeek = (video as HTMLVideoElement & { fastSeek?: (time: number) => void }).fastSeek;
+    if (fastSeek) fastSeek.call(video, time);
+    else video.currentTime = time;
   });
 }
 
@@ -220,7 +222,7 @@ function waitForDecodedVideoFrame(video: HTMLVideoElement): Promise<void> {
         resolve();
       };
       requestVideoFrameCallback.call(video, finish);
-      window.setTimeout(finish, 80);
+      window.setTimeout(finish, 32);
     });
   }
 
@@ -999,7 +1001,6 @@ export async function asciifyVideo(
       extracting = true;
       try {
         await waitForSeek(cacheVideo, frameTime(index));
-        await waitForDecodedVideoFrame(cacheVideo);
         if (!cancelledCache) {
           const frame = imageToAsciiTextFrame(cacheVideo, merged, renderW, renderH);
           if (frame.rows.length > 0) frames[index] = frame;
@@ -1044,6 +1045,10 @@ export async function asciifyVideo(
       requestIndex(desiredIndex);
       requestIndex(desiredIndex - 1);
       requestIndex(desiredIndex + 1);
+      requestIndex(desiredIndex - 2);
+      requestIndex(desiredIndex + 2);
+      requestIndex(desiredIndex - 3);
+      requestIndex(desiredIndex + 3);
       scrollOpts.onUpdate?.(desiredProgress, video);
     });
 
