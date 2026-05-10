@@ -212,7 +212,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function resolveSourceCrop(
+export function resolveSourceCrop(
   crop: SourceCrop | null | undefined,
   srcWidth: number,
   srcHeight: number,
@@ -242,7 +242,11 @@ function resolveSourceCrop(
   let width = requestedWidth ?? srcWidth;
   let height = requestedHeight ?? srcHeight;
 
-  if (preserveAspect) {
+  // CSS-like insets already describe an exact source view box. Do not
+  // auto-crop the opposite axis here; doing so makes top/bottom crops behave
+  // like a centered island instead of a wide hero band. Aspect safety is handled
+  // by sizing the output from this resolved crop rectangle.
+  if (preserveAspect && !hasInsets) {
     const widthScale = width / srcWidth;
     const heightScale = height / srcHeight;
     const scale = Math.min(widthScale, heightScale);
