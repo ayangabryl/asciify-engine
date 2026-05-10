@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.102`  
+**Current version:** `1.0.105`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.102
+npm install asciify-engine@1.0.105
 ```
 
 ## Mental Model
@@ -64,7 +64,7 @@ Use legacy object frames only when you need per-cell mutation, dots mode, heavy 
 - `gifToAsciiFrames()`
 - `renderFrameToCanvas()`
 
-Use `options.sourceCrop` when the source media has empty edges or needs tighter framing without changing the destination canvas size. Percent values are normalized `0–1` by default. Prefer CSS-like insets for readable framing; the engine preserves source proportions by default and auto-crops the opposite axis:
+Use `options.sourceCrop` when the source media has empty edges or needs tighter framing. Percent values are normalized `0–1` by default. Prefer CSS-like insets for readable framing; side insets define the crop window directly, and `asciifyVideo` sizes from that crop aspect so it does not stretch:
 
 ```ts
 options: {
@@ -88,7 +88,7 @@ options: {
 }
 ```
 
-For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and crops equally from top/bottom plus left/right as needed. Set `preserveAspect: false` only when an exact source window is more important than avoiding stretch. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
+For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and preserves the original source aspect. `preserveAspect` is only for single-dimension `width`/`height` crops; do not use it to force hero bands. For wide heroes, crop with `top`/`bottom` and let the engine derive the cropped aspect. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
 
 Use top-level `asciifyVideo` layout options when the destination needs full-bleed framing. These affect the visible canvas only, not the sampled media:
 
@@ -109,6 +109,7 @@ await asciifyVideo('/hero.mp4', canvas, {
 Mental split:
 
 - `sourceCrop` chooses the source window before ASCII conversion.
+- CSS-like insets change the crop aspect naturally; the engine keeps ASCII proportions intact.
 - `objectFit`, `objectPosition`, `scale`, `width`, and `height` place the rendered canvas in the page.
 - Use `objectFit: 'cover'` for full-width/full-bleed heroes.
 - Use `objectFit: 'contain'` for previews where the whole source should remain visible.
@@ -163,19 +164,21 @@ Recommended starting point:
 ```ts
 {
   fitTo: hero,
-  objectFit: 'cover',
+  objectFit: 'contain',
   objectPosition: 'center bottom',
   width: '100%',
   height: '100%',
   fontSize: 5,
   fps: 60,
   maxRenderDimension: 1280,
+  maxCachedFrames: 96,
   artStyle: 'classic',
   options: {
     charset: CHARSETS.dense,
     colorMode: 'accent',
     accentColor: '#e8d7b7',
     normalize: true,
+    sourceCrop: { top: 0.08, bottom: 0.16 },
     animationStyle: 'none',
     hoverStrength: 0,
   }
@@ -206,6 +209,7 @@ Start with:
     charset: CHARSETS.dense,
     colorMode: 'fullcolor',
     normalize: true,
+    sourceCrop: { top: 0.08, bottom: 0.16 },
     animationStyle: 'none',
     hoverStrength: 0,
   }

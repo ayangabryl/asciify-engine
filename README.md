@@ -176,7 +176,7 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 
 ### Source Crop
 
-Use `sourceCrop` to remove empty source edges before ASCII sampling without changing the destination canvas size. The recommended API is CSS-like insets; proportions are preserved by default, so the result will not stretch:
+Use `sourceCrop` to remove empty source edges before ASCII sampling. The recommended API is CSS-like insets; the engine sizes `asciifyVideo` from the resolved crop aspect so the output does not stretch:
 
 ```ts
 await asciifyVideo('/hero.mp4', canvas, {
@@ -202,7 +202,7 @@ Use any side together:
 sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 }
 ```
 
-`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. Because `preserveAspect` defaults to `true`, the engine may also crop the opposite axis automatically to avoid stretching. Use `preserveAspect: false` only for exact manual source windows.
+`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. `preserveAspect` only applies to single-dimension `width`/`height` crops. Side insets (`top`, `right`, `bottom`, `left`) define the crop window directly, then `asciifyVideo` uses that crop aspect for layout and render dimensions so a top/bottom crop can become a wide hero band without stretching.
 
 ### Canvas Layout
 
@@ -211,13 +211,12 @@ Use layout options on `asciifyVideo` when the ASCII canvas needs to fill a hero,
 ```ts
 await asciifyVideo('/hero.mp4', canvas, {
   fitTo: '#hero',
-  objectFit: 'cover',
-  objectPosition: 'center 62%',
-  scale: 1.06,
+  objectFit: 'contain',
+  objectPosition: 'center bottom',
   width: '100%',
   height: '100%',
   options: {
-    sourceCrop: { top: 0.08, bottom: 0.14 },
+    sourceCrop: { top: 0.1, bottom: 0.18 },
   },
 });
 ```
@@ -227,7 +226,7 @@ await asciifyVideo('/hero.mp4', canvas, {
 - `scale`: visual overfill using CSS `scale`, preserving existing transforms
 - `width` / `height`: CSS lengths or pixel numbers for the visible canvas
 
-Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, and `scale` to place the rendered canvas in the layout.
+Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, and `scale` to place the rendered canvas in the layout. For high-detail scroll scrubbers, keep `preExtract` off and set `maxCachedFrames` to bound memory while the engine caches nearby text frames.
 
 ### Chroma Key (Green/Blue Screen)
 

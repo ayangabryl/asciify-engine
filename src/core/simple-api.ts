@@ -5,10 +5,11 @@
 
 import type { AsciiOptions, ArtStyle } from '../types';
 import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
-import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas } from './renderer';
+import { createOffscreenCanvas, parseChromaKeyColor } from './utils';
+import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas, resolveSourceCrop } from './renderer';
 import type { AsciiTextFrame } from './renderer';
 
-export { videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames };
+export { videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, resolveSourceCrop };
 
 export interface AsciifySimpleOptions {
   /** Character size in pixels. Default: 10 */
@@ -91,7 +92,8 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   /**
    * CSS object-fit behavior for the visible canvas when `fitTo` or explicit
    * `width`/`height` is used. This controls visual framing only; ASCII sampling
-   * resolution and `sourceCrop` remain unchanged.
+   * resolution remains independent. When `options.sourceCrop` is present, the
+   * engine sizes from the resolved crop aspect to avoid stretch.
    *
    * Use `'cover'` for full-bleed heroes and `'contain'` for previews.
    * Default: `'contain'`.
@@ -180,6 +182,13 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    * Receives the backing video element.
    */
   onReady?: (video: HTMLVideoElement) => void;
+  /**
+   * Maximum number of decoded text frames kept in memory for live scroll scrub.
+   * The cache is nearest-frame and bounded; lower values reduce memory for long
+   * clips while preserving smooth scrubbing around the current scroll position.
+   * Default: `90`.
+   */
+  maxCachedFrames?: number;
   /** Called after every rendered frame. */
   onFrame?: () => void;
 }
@@ -397,6 +406,90 @@ function getSourceDims(el: HTMLImageElement | HTMLVideoElement | HTMLCanvasEleme
   if (el instanceof HTMLVideoElement) return { w: el.videoWidth, h: el.videoHeight };
   if (el instanceof HTMLImageElement) return { w: el.naturalWidth || el.width, h: el.naturalHeight || el.height };
   return { w: el.width, h: el.height };
+}
+
+function getEffectiveSourceDims(srcW: number, srcH: number, options: AsciiOptions): { w: number; h: number } {
+  if (!srcW || !srcH || !options.sourceCrop) return { w: srcW, h: srcH };
+  const crop = resolveSourceCrop(options.sourceCrop, srcW, srcH);
+  return {
+    w: Math.max(1, Math.round(crop.width)),
+    h: Math.max(1, Math.round(crop.height)),
+  };
+}
+
+function isChromaKeyPixel(r: number, g: number, b: number, options: AsciiOptions): boolean {
+  const ck = options.chromaKey;
+  if (ck == null || ck === false) return false;
+  if (ck === true) return g > r * 1.4 && g > b * 1.4 && g > 80;
+  if (ck === 'blue-screen') return b > r * 1.4 && b > g * 1.4 && b > 80;
+
+  const key = parseChromaKeyColor(ck as string | { r: number; g: number; b: number });
+  const tolSq = (options.chromaKeyTolerance ?? 60) ** 2;
+  const dr = r - key.r;
+  const dg = g - key.g;
+  const db = b - key.b;
+  return dr * dr + dg * dg + db * db <= tolSq;
+}
+
+function resolveChromaContentCrop(
+  source: HTMLVideoElement | HTMLCanvasElement,
+  options: AsciiOptions,
+): AsciiOptions {
+  if (!options.chromaKey || !options.sourceCrop) return options;
+
+  const srcW = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+  const srcH = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
+  if (!srcW || !srcH) return options;
+
+  const crop = resolveSourceCrop(options.sourceCrop, srcW, srcH);
+  const sampleW = Math.min(360, Math.max(1, Math.round(crop.width)));
+  const sampleH = Math.max(1, Math.round(sampleW * (crop.height / crop.width)));
+  const { ctx } = createOffscreenCanvas(sampleW, sampleH);
+  ctx.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, sampleW, sampleH);
+
+  const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
+  let minX = sampleW;
+  let minY = sampleH;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      const i = (y * sampleW + x) * 4;
+      const a = pixels[i + 3];
+      if (a <= 8 || isChromaKeyPixel(pixels[i], pixels[i + 1], pixels[i + 2], options)) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return options;
+
+  const padX = Math.max(1, Math.round(sampleW * 0.01));
+  const padY = Math.max(1, Math.round(sampleH * 0.01));
+  minX = Math.max(0, minX - padX);
+  minY = Math.max(0, minY - padY);
+  maxX = Math.min(sampleW - 1, maxX + padX);
+  maxY = Math.min(sampleH - 1, maxY + padY);
+
+  const left = crop.x + (minX / sampleW) * crop.width;
+  const top = crop.y + (minY / sampleH) * crop.height;
+  const right = srcW - (crop.x + ((maxX + 1) / sampleW) * crop.width);
+  const bottom = srcH - (crop.y + ((maxY + 1) / sampleH) * crop.height);
+
+  return {
+    ...options,
+    sourceCrop: {
+      unit: 'pixel',
+      left,
+      top,
+      right,
+      bottom,
+      preserveAspect: true,
+    },
+  };
 }
 
 /**
@@ -707,7 +800,7 @@ export async function asciifyGif(
     : source;
 
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
@@ -799,6 +892,7 @@ export async function asciifyVideo(
     maxRenderDimension = 2048,
     trim,
     scroll,
+    maxCachedFrames = 90,
     onReady,
     onFrame,
   }: AsciifyVideoOptions = {}
@@ -806,7 +900,7 @@ export async function asciifyVideo(
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
   const container: HTMLElement | null =
@@ -838,10 +932,12 @@ export async function asciifyVideo(
       video = source;
     }
 
-    if (container) sizeCanvasToContainer(canvas, container, video.videoWidth / video.videoHeight, video.videoWidth, video.videoHeight, maxRenderDimension, layoutOptions);
+    merged = resolveChromaContentCrop(video, merged);
+    const effectivePreExtractSource = getEffectiveSourceDims(video.videoWidth, video.videoHeight, merged);
+    if (container) sizeCanvasToContainer(canvas, container, effectivePreExtractSource.w / effectivePreExtractSource.h, effectivePreExtractSource.w, effectivePreExtractSource.h, maxRenderDimension, layoutOptions);
 
-    // Render dimensions = source size for maximum detail
-    const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
+    // Render dimensions = effective cropped source size for maximum detail without stretching
+    const { renderW, renderH } = computeRenderDims(effectivePreExtractSource.w, effectivePreExtractSource.h, maxRenderDimension);
 
     // Compute DPR for the canvas buffer
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
@@ -1022,13 +1118,16 @@ export async function asciifyVideo(
     video.addEventListener('timeupdate', timeupdateHandler);
   }
 
+  merged = resolveChromaContentCrop(video, merged);
+
   let ro: ResizeObserver | null = null;
-  // Render dimensions = source size for maximum detail (same as playground)
-  const { renderW, renderH } = computeRenderDims(video.videoWidth, video.videoHeight, maxRenderDimension);
+  // Render dimensions = effective cropped source size for maximum detail without stretching.
+  const effectiveLiveSource = getEffectiveSourceDims(video.videoWidth, video.videoHeight, merged);
+  const { renderW, renderH } = computeRenderDims(effectiveLiveSource.w, effectiveLiveSource.h, maxRenderDimension);
 
   if (container) {
-    const aspect = video.videoWidth / video.videoHeight;
-    const vw = video.videoWidth, vh = video.videoHeight;
+    const aspect = effectiveLiveSource.w / effectiveLiveSource.h;
+    const vw = effectiveLiveSource.w, vh = effectiveLiveSource.h;
     const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, layoutOptions);
     // Apply DPR scale transform once — will be refreshed on resize
     const sCtx = canvas.getContext('2d');
@@ -1082,6 +1181,19 @@ export async function asciifyVideo(
     const cacheFps = Math.min(60, Math.max(12, fps ?? 30));
     const totalFrames = Math.max(2, Math.ceil(duration * cacheFps) + 1);
     const frames: Array<AsciiTextFrame | undefined> = new Array(totalFrames);
+    const cachedIndices: number[] = [];
+    const cacheLimit = Math.max(2, Math.min(totalFrames, Math.floor(maxCachedFrames)));
+    const markCached = (index: number) => {
+      const existing = cachedIndices.indexOf(index);
+      if (existing >= 0) cachedIndices.splice(existing, 1);
+      cachedIndices.push(index);
+      while (cachedIndices.length > cacheLimit) {
+        const stale = cachedIndices.shift();
+        if (stale !== undefined && stale !== desiredIndex && Math.abs(stale - desiredIndex) > 2) {
+          frames[stale] = undefined;
+        }
+      }
+    };
 
     let desiredIndex = 0;
     let desiredProgress = 0;
@@ -1129,6 +1241,7 @@ export async function asciifyVideo(
     const initial = imageToAsciiTextFrame(video, merged, renderW, renderH);
     if (initial.rows.length > 0) {
       frames[0] = initial;
+      markCached(0);
       renderTextFrameToCanvas(ctx, initial, merged, renderW, renderH);
       ready = true;
       onReady?.(video);
@@ -1176,7 +1289,10 @@ export async function asciifyVideo(
         await waitForSeek(cacheVideo, frameTime(index));
         if (!cancelledCache) {
           const frame = imageToAsciiTextFrame(cacheVideo, merged, renderW, renderH);
-          if (frame.rows.length > 0) frames[index] = frame;
+          if (frame.rows.length > 0) {
+            frames[index] = frame;
+            markCached(index);
+          }
         }
       } finally {
         extracting = false;

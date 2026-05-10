@@ -27,7 +27,12 @@ export interface SourceCrop {
   bottom?: number;
   /** CSS-like crop inset from the left edge. Percent values use 0–1. */
   left?: number;
-  /** Keep the source aspect ratio when deriving a crop from insets or a single dimension. Default: `true` */
+  /**
+   * Keep the source aspect ratio when deriving a crop from a single `width` or
+   * `height`. CSS-like side insets (`top`, `right`, `bottom`, `left`) already
+   * define an exact source view box, and `asciifyVideo` sizes from that crop
+   * aspect so the output does not stretch. Default: `true`.
+   */
   preserveAspect?: boolean;
   /** Bias auto-centered crops toward an edge or corner. Default: `'center'` */
   anchor?: SourceCropAnchor;

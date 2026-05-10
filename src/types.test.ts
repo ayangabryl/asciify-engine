@@ -5,6 +5,7 @@ import {
   CHARSETS,
   LIVING_STYLE_PRESETS,
 } from './types';
+import { resolveSourceCrop } from './core/renderer';
 
 describe('charset catalog', () => {
   it('includes modern product glyph ramps for clean AI-era interfaces', () => {
@@ -39,5 +40,26 @@ describe('style presets', () => {
     expect(LIVING_STYLE_PRESETS.liquidSignal.animationStyle).toBe('melt');
     expect(LIVING_STYLE_PRESETS.cursorGravity.hoverStrength).toBeGreaterThan(0);
     expect(LIVING_STYLE_PRESETS.agentField.normalize).toBe(true);
+  });
+});
+
+
+describe('source crop', () => {
+  it('treats CSS-like insets as the exact source view box', () => {
+    expect(resolveSourceCrop({ top: 0.2, bottom: 0.24 }, 1920, 1080)).toEqual({
+      x: 0,
+      y: 216,
+      width: 1920,
+      height: 604.8,
+    });
+  });
+
+  it('still preserves source aspect for single-dimension legacy crops', () => {
+    expect(resolveSourceCrop({ height: 0.7 }, 1000, 500)).toEqual({
+      x: 150,
+      y: 75,
+      width: 700,
+      height: 350,
+    });
   });
 });
