@@ -27,6 +27,10 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major",
+    "release:push": "git push origin main --follow-tags",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
