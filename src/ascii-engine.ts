@@ -14,7 +14,7 @@ export { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAs
   from './core/renderer';
 
 // ── Simple one-call API ───────────────────────────────────────────────────────
-export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions, VideoScrollScrubOptions } from './core/simple-api';
+export type { AsciifySimpleOptions, AsciifyVideoOptions, AsciifyLiveVideoOptions, VideoScrollScrubOptions, CanvasObjectFit, CanvasBleed } from './core/simple-api';
 export { asciify, asciifyGif, asciifyVideo, asciifyLiveVideo, createVideoScrollScrub }
   from './core/simple-api';
 

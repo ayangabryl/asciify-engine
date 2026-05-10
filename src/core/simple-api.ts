@@ -76,6 +76,7 @@ export interface VideoScrollScrubOptions {
 }
 
 export type CanvasObjectFit = 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+export type CanvasBleed = number | string | { x?: number | string; y?: number | string };
 
 export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   /**
@@ -120,6 +121,16 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
    * provided.
    */
   height?: number | string;
+  /**
+   * Extra visible overfill added around the fitted canvas box before
+   * object-fit sizing. Useful for full-bleed ASCII heroes where glyph side
+   * bearings or character-cell quantization can leave a small edge gap even
+   * when the source media and canvas are full width.
+   *
+   * Numbers are pixels. Strings support `%`, `px`, `vw`, and `vh`. Pass an
+   * object to control axes independently, e.g. `{ x: '2vw', y: 0 }`.
+   */
+  bleed?: CanvasBleed;
   /**
    * Pre-extract all video frames into memory before starting playback.
    * Useful for short clips where you need frame-perfect control.
@@ -434,8 +445,9 @@ function isChromaKeyPixel(r: number, g: number, b: number, options: AsciiOptions
 function resolveChromaContentCrop(
   source: HTMLVideoElement | HTMLCanvasElement,
   options: AsciiOptions,
+  targetAspect?: number,
 ): AsciiOptions {
-  if (!options.chromaKey || !options.sourceCrop) return options;
+  if (!options.chromaKey || !options.sourceCrop || options.chromaKeyTrimMode === 'off') return options;
 
   const srcW = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
   const srcH = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
@@ -448,6 +460,7 @@ function resolveChromaContentCrop(
   ctx.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, sampleW, sampleH);
 
   const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
+  const minLuma = Math.max(0, Math.min(255, options.chromaKeyTrimLuminanceThreshold ?? 0));
   let minX = sampleW;
   let minY = sampleH;
   let maxX = -1;
@@ -457,7 +470,11 @@ function resolveChromaContentCrop(
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
       const a = pixels[i + 3];
-      if (a <= 8 || isChromaKeyPixel(pixels[i], pixels[i + 1], pixels[i + 2], options)) continue;
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (a <= 8 || luma <= minLuma || isChromaKeyPixel(r, g, b, options)) continue;
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       if (x > maxX) maxX = x;
@@ -467,8 +484,9 @@ function resolveChromaContentCrop(
 
   if (maxX < minX || maxY < minY) return options;
 
-  const padX = Math.max(1, Math.round(sampleW * 0.01));
-  const padY = Math.max(1, Math.round(sampleH * 0.01));
+  const padding = Math.max(0, Math.min(0.25, options.chromaKeyTrimPadding ?? 0.002));
+  const padX = Math.round(sampleW * padding);
+  const padY = Math.round(sampleH * padding);
   minX = Math.max(0, minX - padX);
   minY = Math.max(0, minY - padY);
   maxX = Math.min(sampleW - 1, maxX + padX);
@@ -478,15 +496,139 @@ function resolveChromaContentCrop(
   const top = crop.y + (minY / sampleH) * crop.height;
   const right = srcW - (crop.x + ((maxX + 1) / sampleW) * crop.width);
   const bottom = srcH - (crop.y + ((maxY + 1) / sampleH) * crop.height);
+  const fitted = fitPixelInsetCropToAspect(
+    { left, top, right, bottom },
+    { x: crop.x, y: crop.y, width: crop.width, height: crop.height },
+    srcW,
+    srcH,
+    targetAspect,
+  );
 
   return {
     ...options,
     sourceCrop: {
       unit: 'pixel',
-      left,
-      top,
-      right,
-      bottom,
+      ...fitted,
+      preserveAspect: false,
+    },
+  };
+}
+
+function fitPixelInsetCropToAspect(
+  inset: Required<Pick<NonNullable<AsciiOptions['sourceCrop']>, 'left' | 'top' | 'right' | 'bottom'>>,
+  bounds: { x: number; y: number; width: number; height: number },
+  srcW: number,
+  srcH: number,
+  targetAspect?: number,
+): Required<Pick<NonNullable<AsciiOptions['sourceCrop']>, 'left' | 'top' | 'right' | 'bottom'>> {
+  const aspect = targetAspect && Number.isFinite(targetAspect) && targetAspect > 0 ? targetAspect : null;
+  if (!aspect) return inset;
+
+  const minX = bounds.x;
+  const minY = bounds.y;
+  const maxX = bounds.x + bounds.width;
+  const maxY = bounds.y + bounds.height;
+  const boxLeft = Math.max(minX, inset.left);
+  const boxTop = Math.max(minY, inset.top);
+  const boxRight = Math.min(maxX, srcW - inset.right);
+  const boxBottom = Math.min(maxY, srcH - inset.bottom);
+  const boxW = Math.max(1, boxRight - boxLeft);
+  const boxH = Math.max(1, boxBottom - boxTop);
+  const centerX = boxLeft + boxW / 2;
+  const centerY = boxTop + boxH / 2;
+  let nextW = boxW;
+  let nextH = boxH;
+
+  if (nextW / nextH < aspect) {
+    nextW = nextH * aspect;
+  } else {
+    nextH = nextW / aspect;
+  }
+
+  if (nextW > bounds.width) {
+    nextW = bounds.width;
+    nextH = Math.max(boxH, Math.min(bounds.height, nextW / aspect));
+  }
+  if (nextH > bounds.height) {
+    nextH = bounds.height;
+    nextW = Math.max(boxW, Math.min(bounds.width, nextH * aspect));
+  }
+
+  let x = centerX - nextW / 2;
+  let y = centerY - nextH / 2;
+  x = Math.max(minX, Math.min(maxX - nextW, x));
+  y = Math.max(minY, Math.min(maxY - nextH, y));
+
+  return {
+    left: x,
+    top: y,
+    right: srcW - (x + nextW),
+    bottom: srcH - (y + nextH),
+  };
+}
+
+function getPixelInsetCrop(options: AsciiOptions): Required<Pick<NonNullable<AsciiOptions['sourceCrop']>, 'left' | 'top' | 'right' | 'bottom'>> | null {
+  const crop = options.sourceCrop;
+  if (!crop || crop.unit !== 'pixel') return null;
+  if (crop.left === undefined || crop.top === undefined || crop.right === undefined || crop.bottom === undefined) return null;
+  return { left: crop.left, top: crop.top, right: crop.right, bottom: crop.bottom };
+}
+
+function getVideoChromaSampleTimes(
+  video: HTMLVideoElement,
+  trimStart: number,
+  trimEnd: number | undefined,
+  scroll: AsciifyVideoOptions['scroll'],
+): number[] {
+  const scrollOpts = scroll === true ? {} : scroll || {};
+  const start = Math.max(0, scrollOpts.from ?? trimStart);
+  const rawEnd = scrollOpts.to ?? trimEnd ?? (Number.isFinite(video.duration) ? video.duration : start);
+  const end = Math.max(start, rawEnd - 0.04);
+  const duration = Math.max(0, end - start);
+  const samples = duration > 0.1
+    ? [start, start + duration * 0.25, start + duration * 0.5, start + duration * 0.75, end]
+    : [start];
+
+  return Array.from(new Set(samples.map(time => Math.max(0, Number(time.toFixed(3))))));
+}
+
+async function resolveVideoChromaContentCrop(
+  video: HTMLVideoElement,
+  options: AsciiOptions,
+  trimStart: number,
+  trimEnd: number | undefined,
+  scroll: AsciifyVideoOptions['scroll'],
+): Promise<AsciiOptions> {
+  if (!options.chromaKey || !options.sourceCrop || options.chromaKeyTrimMode !== 'range') return options;
+
+  const originalTime = video.currentTime;
+  const sampleTimes = getVideoChromaSampleTimes(video, trimStart, trimEnd, scroll);
+  let union: Required<Pick<NonNullable<AsciiOptions['sourceCrop']>, 'left' | 'top' | 'right' | 'bottom'>> | null = null;
+
+  for (const time of sampleTimes) {
+    await waitForSeek(video, time);
+    await waitForDecodedVideoFrame(video);
+    const measured = getPixelInsetCrop(resolveChromaContentCrop(video, options));
+    if (!measured) continue;
+    union = union
+      ? {
+        left: Math.min(union.left, measured.left),
+        top: Math.min(union.top, measured.top),
+        right: Math.min(union.right, measured.right),
+        bottom: Math.min(union.bottom, measured.bottom),
+      }
+      : measured;
+  }
+
+  await waitForSeek(video, originalTime);
+  await waitForDecodedVideoFrame(video);
+
+  if (!union) return options;
+  return {
+    ...options,
+    sourceCrop: {
+      unit: 'pixel',
+      ...union,
       preserveAspect: true,
     },
   };
@@ -506,14 +648,19 @@ function computeRenderDims(srcW: number, srcH: number, maxRenderDimension: numbe
   return { renderW: Math.round(srcW * scale), renderH: Math.round(srcH * scale) };
 }
 
-type CanvasLayoutOptions = Pick<AsciifyVideoOptions, 'objectFit' | 'objectPosition' | 'scale' | 'width' | 'height'>;
+type CanvasLayoutOptions = Pick<AsciifyVideoOptions, 'objectFit' | 'objectPosition' | 'scale' | 'width' | 'height' | 'bleed'>;
 
 function toCssLength(value: number | string | undefined): string | undefined {
   if (value === undefined) return undefined;
   return typeof value === 'number' ? `${value}px` : value;
 }
 
-function resolveLayoutLength(value: number | string | undefined, containerLength: number, viewportLength: number): number | undefined {
+function resolveLayoutLength(
+  value: number | string | undefined,
+  containerLength: number,
+  viewportW: number,
+  viewportH: number,
+): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'number') return value;
 
@@ -528,9 +675,40 @@ function resolveLayoutLength(value: number | string | undefined, containerLength
   }
   if (trimmed.endsWith('vw')) {
     const ratio = Number.parseFloat(trimmed) / 100;
-    return Number.isFinite(ratio) ? viewportLength * ratio : undefined;
+    return Number.isFinite(ratio) ? viewportW * ratio : undefined;
+  }
+  if (trimmed.endsWith('vh')) {
+    const ratio = Number.parseFloat(trimmed) / 100;
+    return Number.isFinite(ratio) ? viewportH * ratio : undefined;
   }
   return undefined;
+}
+
+function resolveCanvasBleed(
+  bleed: CanvasBleed | undefined,
+  containerW: number,
+  containerH: number,
+  viewportW: number,
+  viewportH: number,
+): { x: number; y: number } {
+  const resolveX = (value: number | string | undefined): number => {
+    const resolved = resolveLayoutLength(value, containerW, viewportW, viewportH);
+    return resolved && resolved > 0 ? resolved : 0;
+  };
+  const resolveY = (value: number | string | undefined): number => {
+    const resolved = resolveLayoutLength(value, containerH, viewportW, viewportH);
+    return resolved && resolved > 0 ? resolved : 0;
+  };
+
+  if (bleed === undefined) return { x: 0, y: 0 };
+  if (typeof bleed === 'number' || typeof bleed === 'string') {
+    return { x: resolveX(bleed), y: resolveY(bleed) };
+  }
+
+  return {
+    x: resolveX(bleed.x),
+    y: resolveY(bleed.y),
+  };
 }
 
 function hasLayoutOptions(opts: CanvasLayoutOptions): boolean {
@@ -538,7 +716,8 @@ function hasLayoutOptions(opts: CanvasLayoutOptions): boolean {
     || opts.objectPosition !== undefined
     || opts.scale !== undefined
     || opts.width !== undefined
-    || opts.height !== undefined;
+    || opts.height !== undefined
+    || opts.bleed !== undefined;
 }
 
 function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions): () => void {
@@ -560,11 +739,13 @@ function applyCanvasLayout(canvas: HTMLCanvasElement, opts: CanvasLayoutOptions)
     canvas.style.objectPosition = opts.objectPosition;
     canvas.style.transformOrigin = opts.objectPosition;
   }
+  if (opts.scale !== undefined || opts.bleed !== undefined) {
+    canvas.style.maxWidth = 'none';
+    canvas.style.maxHeight = 'none';
+  }
   if (opts.scale !== undefined) {
     const scale = Number.isFinite(opts.scale) && opts.scale > 0 ? opts.scale : 1;
     canvas.style.setProperty('scale', String(scale));
-    canvas.style.maxWidth = 'none';
-    canvas.style.maxHeight = 'none';
     canvas.style.transformOrigin ||= opts.objectPosition ?? 'center center';
   }
 
@@ -636,8 +817,11 @@ function sizeCanvasToContainer(
   // CSS display size — computed in the engine so crop/layout never stretches.
   const viewportW = typeof window !== 'undefined' ? window.innerWidth : containerW;
   const viewportH = typeof window !== 'undefined' ? window.innerHeight : containerH;
-  const boxW = resolveLayoutLength(layoutOptions.width, containerW, viewportW) ?? containerW;
-  const boxH = resolveLayoutLength(layoutOptions.height, containerH, viewportH) ?? containerH;
+  const baseBoxW = resolveLayoutLength(layoutOptions.width, containerW, viewportW, viewportH) ?? containerW;
+  const baseBoxH = resolveLayoutLength(layoutOptions.height, containerH, viewportW, viewportH) ?? containerH;
+  const bleed = resolveCanvasBleed(layoutOptions.bleed, containerW, containerH, viewportW, viewportH);
+  const boxW = baseBoxW + bleed.x * 2;
+  const boxH = baseBoxH + bleed.y * 2;
   const { cssW, cssH } = computeFitSize(boxW, boxH, aspect, layoutOptions.objectFit ?? 'contain');
 
   // Render dimensions = source size (capped) for high-quality frame generation.
@@ -887,6 +1071,7 @@ export async function asciifyVideo(
     scale,
     width,
     height,
+    bleed,
     preExtract = false,
     fps,
     maxRenderDimension = 2048,
@@ -906,7 +1091,7 @@ export async function asciifyVideo(
   const container: HTMLElement | null =
     typeof fitTo === 'string' ? document.querySelector<HTMLElement>(fitTo) :
     fitTo instanceof HTMLElement ? fitTo : null;
-  const layoutOptions: CanvasLayoutOptions = { objectFit, objectPosition, scale, width, height };
+  const layoutOptions: CanvasLayoutOptions = { objectFit, objectPosition, scale, width, height, bleed };
   const restoreCanvasLayout = applyCanvasLayout(canvas, layoutOptions);
   const withCanvasLayoutCleanup = (cleanup: () => void): (() => void) => {
     return () => {
@@ -932,7 +1117,7 @@ export async function asciifyVideo(
       video = source;
     }
 
-    merged = resolveChromaContentCrop(video, merged);
+    merged = await resolveVideoChromaContentCrop(video, merged, trimStart, trimEnd, scroll);
     const effectivePreExtractSource = getEffectiveSourceDims(video.videoWidth, video.videoHeight, merged);
     if (container) sizeCanvasToContainer(canvas, container, effectivePreExtractSource.w / effectivePreExtractSource.h, effectivePreExtractSource.w, effectivePreExtractSource.h, maxRenderDimension, layoutOptions);
 
@@ -1118,12 +1303,16 @@ export async function asciifyVideo(
     video.addEventListener('timeupdate', timeupdateHandler);
   }
 
-  merged = resolveChromaContentCrop(video, merged);
+  merged = await resolveVideoChromaContentCrop(video, merged, trimStart, trimEnd, scroll);
 
   let ro: ResizeObserver | null = null;
   // Render dimensions = effective cropped source size for maximum detail without stretching.
   const effectiveLiveSource = getEffectiveSourceDims(video.videoWidth, video.videoHeight, merged);
   const { renderW, renderH } = computeRenderDims(effectiveLiveSource.w, effectiveLiveSource.h, maxRenderDimension);
+  const trimFrameToRenderAspect = (sourceFrame: HTMLVideoElement): AsciiOptions =>
+    merged.chromaKeyTrimMode === 'frame'
+      ? resolveChromaContentCrop(sourceFrame, merged, renderW / renderH)
+      : merged;
 
   if (container) {
     const aspect = effectiveLiveSource.w / effectiveLiveSource.h;
@@ -1183,16 +1372,20 @@ export async function asciifyVideo(
     const frames: Array<AsciiTextFrame | undefined> = new Array(totalFrames);
     const cachedIndices: number[] = [];
     const cacheLimit = Math.max(2, Math.min(totalFrames, Math.floor(maxCachedFrames)));
+    const evictStaleFrames = () => {
+      while (cachedIndices.length > cacheLimit) {
+        const staleIndex = cachedIndices.findIndex(index => index !== desiredIndex && Math.abs(index - desiredIndex) > 2);
+        const removeAt = staleIndex >= 0 ? staleIndex : 0;
+        const stale = cachedIndices.splice(removeAt, 1)[0];
+        if (stale !== undefined) frames[stale] = undefined;
+      }
+    };
+
     const markCached = (index: number) => {
       const existing = cachedIndices.indexOf(index);
       if (existing >= 0) cachedIndices.splice(existing, 1);
       cachedIndices.push(index);
-      while (cachedIndices.length > cacheLimit) {
-        const stale = cachedIndices.shift();
-        if (stale !== undefined && stale !== desiredIndex && Math.abs(stale - desiredIndex) > 2) {
-          frames[stale] = undefined;
-        }
-      }
+      evictStaleFrames();
     };
 
     let desiredIndex = 0;
@@ -1238,11 +1431,12 @@ export async function asciifyVideo(
     const frameTime = (index: number) => from + (duration * index) / Math.max(1, totalFrames - 1);
     const indexForProgress = (progress: number) => Math.max(0, Math.min(totalFrames - 1, Math.round(progress * (totalFrames - 1))));
 
-    const initial = imageToAsciiTextFrame(video, merged, renderW, renderH);
+    const initialOptions = trimFrameToRenderAspect(video);
+    const initial = imageToAsciiTextFrame(video, initialOptions, renderW, renderH);
     if (initial.rows.length > 0) {
       frames[0] = initial;
       markCached(0);
-      renderTextFrameToCanvas(ctx, initial, merged, renderW, renderH);
+      renderTextFrameToCanvas(ctx, initial, initialOptions, renderW, renderH);
       ready = true;
       onReady?.(video);
       onFrame?.();
@@ -1288,7 +1482,8 @@ export async function asciifyVideo(
       try {
         await waitForSeek(cacheVideo, frameTime(index));
         if (!cancelledCache) {
-          const frame = imageToAsciiTextFrame(cacheVideo, merged, renderW, renderH);
+          const frameOptions = trimFrameToRenderAspect(cacheVideo);
+          const frame = imageToAsciiTextFrame(cacheVideo, frameOptions, renderW, renderH);
           if (frame.rows.length > 0) {
             frames[index] = frame;
             markCached(index);
@@ -1314,9 +1509,10 @@ export async function asciifyVideo(
       } else if (index < 0 || lastPaintedIndex < 0) {
         const now = performance.now();
         if (renderInterval <= 0 || now - lastRenderAt >= renderInterval) {
-          const liveFrame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+          const liveOptions = trimFrameToRenderAspect(video);
+          const liveFrame = imageToAsciiTextFrame(video, liveOptions, renderW, renderH);
           if (liveFrame.rows.length > 0) {
-            renderTextFrameToCanvas(ctx, liveFrame, merged, renderW, renderH);
+            renderTextFrameToCanvas(ctx, liveFrame, liveOptions, renderW, renderH);
             lastRenderAt = now;
             if (!ready) { ready = true; onReady?.(video); }
             onFrame?.();
@@ -1350,14 +1546,21 @@ export async function asciifyVideo(
       cancelAnimationFrame(raf);
       scrollCleanup?.();
       ro?.disconnect();
+      queued.clear();
+      cachedIndices.length = 0;
+      frames.fill(undefined);
       cacheVideo.pause();
       cacheVideo.src = '';
-      document.body.removeChild(cacheVideo);
+      cacheVideo.removeAttribute('src');
+      cacheVideo.load();
+      if (cacheVideo.isConnected) cacheVideo.remove();
       if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);
       if (ownedVideo) {
         video.pause();
         video.src = '';
-        document.body.removeChild(video);
+        video.removeAttribute('src');
+        video.load();
+        if (video.isConnected) video.remove();
       }
     });
   }
@@ -1383,9 +1586,10 @@ export async function asciifyVideo(
     if (enableScrollScrub && Math.abs(video.currentTime - lastRenderedVideoTime) < 1 / 240) return;
 
     if (canUseFastLiveTextFrames) {
-      const frame = imageToAsciiTextFrame(video, merged, renderW, renderH);
+      const frameOptions = trimFrameToRenderAspect(video);
+      const frame = imageToAsciiTextFrame(video, frameOptions, renderW, renderH);
       if (frame.rows.length > 0) {
-        renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
+        renderTextFrameToCanvas(ctx, frame, frameOptions, renderW, renderH);
         lastRenderAt = now;
         lastRenderedVideoTime = video.currentTime;
         if (firstFrame) { firstFrame = false; onReady?.(video); }
@@ -1394,7 +1598,8 @@ export async function asciifyVideo(
       return;
     }
 
-    const { frame } = imageToAsciiFrame(video, merged, renderW, renderH);
+    const frameOptions = trimFrameToRenderAspect(video);
+    const { frame } = imageToAsciiFrame(video, frameOptions, renderW, renderH);
     if (frame.length > 0) {
       renderFrameToCanvas(ctx, frame, merged, renderW, renderH, 0, null);
       lastRenderAt = now;
@@ -1414,7 +1619,9 @@ export async function asciifyVideo(
     if (ownedVideo) {
       video.pause();
       video.src = '';
-      document.body.removeChild(video);
+      video.removeAttribute('src');
+      video.load();
+      if (video.isConnected) video.remove();
     }
   });
 }

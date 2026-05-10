@@ -8,7 +8,7 @@ description: Convert images, videos, GIFs, webcam streams, text, and animated ba
 Use this skill for the `asciify-engine` npm package.
 
 **Package:** `asciify-engine`  
-**Current version:** `1.0.105`  
+**Current version:** `1.0.115`  
 **Playground:** https://asciify.org  
 **GitHub:** https://github.com/ayangabryl/asciify-engine
 
@@ -36,7 +36,7 @@ npm install asciify-engine
 For existing apps, install the latest tested version:
 
 ```bash
-npm install asciify-engine@1.0.105
+npm install asciify-engine@1.0.115
 ```
 
 ## Mental Model
@@ -90,16 +90,34 @@ options: {
 
 For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and preserves the original source aspect. `preserveAspect` is only for single-dimension `width`/`height` crops; do not use it to force hero bands. For wide heroes, crop with `top`/`bottom` and let the engine derive the cropped aspect. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
 
+When `sourceCrop` and `chromaKey` are both enabled for video, `asciifyVideo` does a one-time foreground trim inside the crop window. For scrubbed or trimmed video it samples the playback range and uses the union of the keyed foreground bounds. This removes keyed empty margins before layout sizing, which is the right fix when the canvas is full width but the visible ASCII subject still appears short on one side.
+
+Use `chromaKeyTrimPadding: 0` for edge-tight marketing heroes. Leave the default `0.002` when preserving a tiny safety margin matters more than touching the exact viewport edge.
+If the canvas is full width but the visible keyed subject still feels short, raise `chromaKeyTrimLuminanceThreshold` slightly, usually `6–16`, so invisible edge noise is not counted as foreground.
+
+For scroll-scrubbed hero footage where the foreground moves and a single range crop still leaves one frame short on the edge, use per-frame trim:
+
+```ts
+options: {
+  chromaKey: true,
+  sourceCrop: { top: 0.08, bottom: 0.16 },
+  chromaKeyTrimMode: 'frame',
+  chromaKeyTrimPadding: 0,
+}
+```
+
+`chromaKeyTrimMode: 'frame'` remeasures the visible keyed foreground on each rendered frame and expands that crop back to the render aspect, so it avoids stretching while keeping moving subjects visually edge-tight. Use it for dense scrubbed marketing hero media; keep the default `'range'` for normal video when stable framing matters more.
+
 Use top-level `asciifyVideo` layout options when the destination needs full-bleed framing. These affect the visible canvas only, not the sampled media:
 
 ```ts
 await asciifyVideo('/hero.mp4', canvas, {
   fitTo: hero,
-  objectFit: 'cover',
-  objectPosition: 'center 62%',
-  scale: 1.06,
-  width: '100%',
+  objectFit: 'contain',
+  objectPosition: 'center bottom',
+  width: '100vw',
   height: '100%',
+  bleed: { x: '2vw' },
   options: {
     sourceCrop: { top: 0.08, bottom: 0.14 },
   },
@@ -110,10 +128,11 @@ Mental split:
 
 - `sourceCrop` chooses the source window before ASCII conversion.
 - CSS-like insets change the crop aspect naturally; the engine keeps ASCII proportions intact.
-- `objectFit`, `objectPosition`, `scale`, `width`, and `height` place the rendered canvas in the page.
-- Use `objectFit: 'cover'` for full-width/full-bleed heroes.
+- `objectFit`, `objectPosition`, `scale`, `width`, `height`, and `bleed` place the rendered canvas in the page.
+- Use `objectFit: 'cover'` for full-width/full-bleed heroes and backgrounds.
 - Use `objectFit: 'contain'` for previews where the whole source should remain visible.
-- Use `scale` for gentle overfill instead of CSS width hacks like `110vw`.
+- Use `bleed: { x: '2vw' }` for edge-tight ASCII heroes where the source is correct but glyph side bearings or cell quantization leave a thin visual edge gap. This is preferable to app CSS hacks like `width: 104vw`.
+- Use `scale` only when you intentionally want the whole ASCII canvas visually larger.
 
 ## Visual Target
 
@@ -166,8 +185,9 @@ Recommended starting point:
   fitTo: hero,
   objectFit: 'contain',
   objectPosition: 'center bottom',
-  width: '100%',
+  width: '100vw',
   height: '100%',
+  bleed: { x: '2vw' },
   fontSize: 5,
   fps: 60,
   maxRenderDimension: 1280,

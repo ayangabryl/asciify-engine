@@ -109,11 +109,11 @@ const stop = await asciifyVideo('/clip.mp4', canvas, {
 // Full-bleed hero framing without custom CSS width hacks:
 const stop = await asciifyVideo('/hero.mp4', canvas, {
   fitTo: '#hero',
-  objectFit: 'cover',
+  objectFit: 'contain',
   objectPosition: 'center bottom',
-  scale: 1.08,
-  width: '100%',
+  width: '100vw',
   height: '100%',
+  bleed: { x: '2vw' },
 });
 
 // Lifecycle hooks — ready state, timers, etc.:
@@ -172,6 +172,9 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 | `hoverRadius` | `number` | `0.2` | Effect radius relative to canvas size (0–1). |
 | `chromaKey` | `true \| 'blue-screen' \| {r,g,b} \| string \| null` | `null` | Remove a background colour. `true` = heuristic green screen (any shade). `'blue-screen'` = heuristic blue screen. Custom: `{r,g,b}` or any CSS hex string keyed by Euclidean distance. `null` to disable. |
 | `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
+| `chromaKeyTrimPadding` | `number` | `0.002` | Normalized safety padding around auto-trimmed keyed video foregrounds. Use `0` for edge-tight marketing heroes. |
+| `chromaKeyTrimLuminanceThreshold` | `number` | `0` | Minimum source luminance counted as auto-trim foreground. Raise slightly when invisible edge noise prevents keyed subjects from filling a preserved-ratio layout. |
+| `chromaKeyTrimMode` | `'range' \| 'frame' \| 'off'` | `'range'` | `'range'` keeps one stable crop for the playback range. `'frame'` remeasures each rendered frame and expands back to the render aspect for moving scrubbed heroes. `'off'` disables keyed auto-trim. |
 
 
 ### Source Crop
@@ -204,6 +207,10 @@ sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 }
 
 `sourceCrop: { height: 0.7 }` keeps 70% of the source centered. `preserveAspect` only applies to single-dimension `width`/`height` crops. Side insets (`top`, `right`, `bottom`, `left`) define the crop window directly, then `asciifyVideo` uses that crop aspect for layout and render dimensions so a top/bottom crop can become a wide hero band without stretching.
 
+When `sourceCrop` and `chromaKey` are both enabled for video, `asciifyVideo` performs a one-time foreground trim inside the crop window. For scrubbed or trimmed video it samples the playback range and uses the union of the keyed foreground bounds. Keyed empty margins are removed before layout sizing, so green-screen or transparent-looking subjects can fill wide hero canvases without custom CSS hacks or per-frame zoom.
+
+Use `chromaKeyTrimMode: 'frame'` when the subject moves across a scroll-scrubbed hero and a single range crop still leaves an edge visually short. The engine remeasures the visible foreground per rendered frame and expands the crop to the render aspect, so the result stays proportionate while following the actual subject.
+
 ### Canvas Layout
 
 Use layout options on `asciifyVideo` when the ASCII canvas needs to fill a hero, preview frame, or fixed viewport. These affect only the displayed canvas box; they do not change source sampling or ASCII detail.
@@ -213,8 +220,9 @@ await asciifyVideo('/hero.mp4', canvas, {
   fitTo: '#hero',
   objectFit: 'contain',
   objectPosition: 'center bottom',
-  width: '100%',
+  width: '100vw',
   height: '100%',
+  bleed: { x: '2vw' },
   options: {
     sourceCrop: { top: 0.1, bottom: 0.18 },
   },
@@ -225,8 +233,9 @@ await asciifyVideo('/hero.mp4', canvas, {
 - `objectPosition`: any CSS object-position value, such as `'center bottom'`
 - `scale`: visual overfill using CSS `scale`, preserving existing transforms
 - `width` / `height`: CSS lengths or pixel numbers for the visible canvas
+- `bleed`: extra layout overfill around the fitted canvas. Use `{ x: '2vw' }` for full-bleed ASCII heroes where glyph side bearings or character-cell quantization leave a thin visual edge gap.
 
-Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, and `scale` to place the rendered canvas in the layout. For high-detail scroll scrubbers, keep `preExtract` off and set `maxCachedFrames` to bound memory while the engine caches nearby text frames.
+Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, `scale`, and `bleed` to place the rendered canvas in the layout. For high-detail scroll scrubbers, keep `preExtract` off and set `maxCachedFrames` to bound memory while the engine caches nearby text frames.
 
 ### Chroma Key (Green/Blue Screen)
 

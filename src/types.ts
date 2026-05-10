@@ -237,6 +237,34 @@ export interface AsciiOptions {
    */
   chromaKeyTolerance: number;
   /**
+   * Extra normalized padding kept around the detected chroma-key foreground when
+   * `asciifyVideo` auto-trims keyed video content inside `sourceCrop`.
+   * `0` hugs the visible foreground. `0.01` keeps 1% safety padding.
+   * Default: `0.002`
+   */
+  chromaKeyTrimPadding: number;
+  /**
+   * Minimum source-pixel luminance for chroma-key foreground auto-trim.
+   * Raise this when faint edge noise is counted as content and prevents a
+   * keyed subject from filling a preserved-ratio layout. Range `0–255`.
+   * Default: `0`
+   */
+  chromaKeyTrimLuminanceThreshold: number;
+  /**
+   * How keyed video foreground trimming is applied when `chromaKey` and
+   * `sourceCrop` are enabled.
+   *
+   * - `'range'` samples the video/scroll range once and keeps a stable union
+   *   crop. Best default for consistent framing.
+   * - `'frame'` remeasures each rendered frame and expands the crop to the
+   *   render aspect. Best for scroll-scrubbed hero footage where foreground
+   *   position changes and pure contain leaves empty edges.
+   * - `'off'` disables automatic keyed foreground trimming.
+   *
+   * Default: `'range'`
+   */
+  chromaKeyTrimMode: 'range' | 'frame' | 'off';
+  /**
    * Optional source crop applied before ASCII sampling.
    *
    * Use this when the media has empty edges or a subject that should be framed
@@ -611,6 +639,9 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   customText: '',
   chromaKey: null,
   chromaKeyTolerance: 60,
+  chromaKeyTrimPadding: 0.002,
+  chromaKeyTrimLuminanceThreshold: 0,
+  chromaKeyTrimMode: 'range',
 };
 
 /**
