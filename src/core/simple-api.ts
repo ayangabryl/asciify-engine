@@ -154,7 +154,7 @@ export interface AsciifyVideoOptions extends AsciifySimpleOptions {
   fps?: number;
   /**
    * Maximum long-edge render dimension for video frame extraction.
-   * Lower this for large full-width heroes where the canvas is CSS-scaled.
+   * Raise this for full-width or 4K heroes so the canvas is not upscaled by CSS.
    * Default: `2048`.
    */
   maxRenderDimension?: number;
@@ -636,16 +636,55 @@ async function resolveVideoChromaContentCrop(
 
 /**
  * Compute high-quality render dimensions from source dims.
- * Returns render dimensions (capped at 2048 on the longer edge) that should be
+ * Returns render dimensions (capped at 2048 by default on the longer edge) that should be
  * used as the coordinate space for both `imageToAsciiFrame` and
- * `renderFrameToCanvas`.  This ensures characters are rendered at readable font
- * sizes regardless of how small the CSS display canvas is — exactly matching
- * the playground pipeline.
+ * `renderFrameToCanvas`.
  */
 function computeRenderDims(srcW: number, srcH: number, maxRenderDimension: number = 2048): { renderW: number; renderH: number } {
-  const MAX = maxRenderDimension;
-  const scale = Math.min(1, MAX / Math.max(srcW, srcH));
-  return { renderW: Math.round(srcW * scale), renderH: Math.round(srcH * scale) };
+  return computeCanvasRenderSize({
+    sourceWidth: srcW,
+    sourceHeight: srcH,
+    maxRenderDimension,
+  });
+}
+
+export interface CanvasRenderSizeInput {
+  sourceWidth: number;
+  sourceHeight: number;
+  cssWidth?: number;
+  cssHeight?: number;
+  /** Accepted for callers that pass complete display context; DPR is applied separately by the canvas backing buffer. */
+  dpr?: number;
+  maxRenderDimension?: number;
+}
+
+export function computeCanvasRenderSize({
+  sourceWidth,
+  sourceHeight,
+  cssWidth = 0,
+  cssHeight = 0,
+  maxRenderDimension = 2048,
+}: CanvasRenderSizeInput): { renderW: number; renderH: number } {
+  const srcW = Math.max(1, sourceWidth);
+  const srcH = Math.max(1, sourceHeight);
+  const aspect = srcW / srcH;
+  const maxLongEdge = Math.max(1, maxRenderDimension);
+  const sourceScale = Math.min(1, maxLongEdge / Math.max(srcW, srcH));
+  const sourceLongEdge = Math.max(srcW, srcH) * sourceScale;
+  const displayLongEdge = Math.max(0, cssWidth, cssHeight);
+  const targetLongEdge = Math.min(maxLongEdge, Math.max(sourceLongEdge, displayLongEdge));
+
+  if (aspect >= 1) {
+    return {
+      renderW: Math.round(targetLongEdge),
+      renderH: Math.round(targetLongEdge / aspect),
+    };
+  }
+
+  return {
+    renderW: Math.round(targetLongEdge * aspect),
+    renderH: Math.round(targetLongEdge),
+  };
 }
 
 type CanvasLayoutOptions = Pick<AsciifyVideoOptions, 'objectFit' | 'objectPosition' | 'scale' | 'width' | 'height' | 'bleed'>;
@@ -824,22 +863,30 @@ function sizeCanvasToContainer(
   const boxH = baseBoxH + bleed.y * 2;
   const { cssW, cssH } = computeFitSize(boxW, boxH, aspect, layoutOptions.objectFit ?? 'contain');
 
-  // Render dimensions = source size (capped) for high-quality frame generation.
+  const rawDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+
+  // Render dimensions = source/canvas display size (capped) for high-quality frame generation.
   // Fall back to CSS size when no source dims are available.
   let renderW: number, renderH: number;
   if (srcW && srcH) {
-    ({ renderW, renderH } = computeRenderDims(srcW, srcH, maxRenderDimension));
+    ({ renderW, renderH } = computeCanvasRenderSize({
+      sourceWidth: srcW,
+      sourceHeight: srcH,
+      cssWidth: cssW,
+      cssHeight: cssH,
+      dpr: rawDpr,
+      maxRenderDimension,
+    }));
   } else {
     renderW = cssW;
     renderH = cssH;
   }
 
   // DPR for crisp Retina text, capped so the total buffer stays ≤ ~8 MP.
-  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
   const MAX_PX = 8_000_000;
-  const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
+  const cappedDpr = (renderW * rawDpr * renderH * rawDpr > MAX_PX)
     ? Math.sqrt(MAX_PX / (renderW * renderH))
-    : dpr;
+    : rawDpr;
 
   canvas.width  = Math.round(renderW * cappedDpr);
   canvas.height = Math.round(renderH * cappedDpr);

@@ -6,6 +6,7 @@ import {
   LIVING_STYLE_PRESETS,
 } from './types';
 import { resolveSourceCrop } from './core/renderer';
+import { computeCanvasRenderSize } from './core/simple-api';
 
 describe('charset catalog', () => {
   it('includes modern product glyph ramps for clean AI-era interfaces', () => {
@@ -60,6 +61,36 @@ describe('source crop', () => {
       y: 75,
       width: 700,
       height: 350,
+    });
+  });
+});
+
+describe('canvas render sizing', () => {
+  it('keeps fitted canvas render dimensions at least as large as the CSS display box', () => {
+    expect(computeCanvasRenderSize({
+      sourceWidth: 1920,
+      sourceHeight: 415,
+      cssWidth: 2121,
+      cssHeight: 458,
+      dpr: 1,
+      maxRenderDimension: 4096,
+    })).toEqual({
+      renderW: 2121,
+      renderH: 458,
+    });
+  });
+
+  it('leaves retina scaling to the canvas DPR buffer instead of double-counting it', () => {
+    expect(computeCanvasRenderSize({
+      sourceWidth: 1920,
+      sourceHeight: 415,
+      cssWidth: 2048,
+      cssHeight: 443,
+      dpr: 2,
+      maxRenderDimension: 4096,
+    })).toEqual({
+      renderW: 2048,
+      renderH: 443,
     });
   });
 });
