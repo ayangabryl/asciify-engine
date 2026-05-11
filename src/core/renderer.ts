@@ -105,13 +105,32 @@ const textFrameRenderStateCache = new WeakMap<CanvasRenderingContext2D, {
   fillStyle: string;
 }>();
 
+function splitGraphemes(value: string): string[] {
+  const Segmenter = (Intl as unknown as {
+    Segmenter?: new (
+      locale?: string,
+      options?: { granularity: 'grapheme' },
+    ) => { segment(input: string): Iterable<{ segment: string }> };
+  }).Segmenter;
+
+  if (Segmenter) {
+    return Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(value), ({ segment }) => segment);
+  }
+
+  return [...value];
+}
+
 function getCharsetChars(charset: string): string[] {
   let chars = charsetCharsCache.get(charset);
   if (!chars) {
-    chars = [...charset];
+    chars = splitGraphemes(charset);
     charsetCharsCache.set(charset, chars);
   }
   return chars;
+}
+
+function getRowChars(row: string): string[] {
+  return splitGraphemes(row);
 }
 
 function luminanceToCharFast(lum: number, chars: string[], invert: boolean): string {
@@ -657,8 +676,9 @@ export function renderTextFrameToCanvas(
 
       for (let y = 0; y < textFrame.rowCount; y++) {
         const line = textFrame.rows[y];
+        const lineChars = getRowChars(line);
         for (let x = 0; x < textFrame.cols; x++) {
-          const ch = line[x];
+          const ch = lineChars[x];
           if (ch === ' ') continue;
           const index = (y * textFrame.cols + x) * 4;
           const alpha = colors[index + 3];
@@ -687,9 +707,10 @@ export function renderTextFrameToCanvas(
     let lastFillStyle = '';
     for (let y = 0; y < textFrame.rows.length; y++) {
       const line = textFrame.rows[y];
+      const lineChars = getRowChars(line);
       let x = 0;
       while (x < textFrame.cols) {
-        while (x < textFrame.cols && line[x] === ' ') x++;
+        while (x < textFrame.cols && lineChars[x] === ' ') x++;
         if (x >= textFrame.cols) break;
 
         const start = x;
@@ -699,7 +720,7 @@ export function renderTextFrameToCanvas(
         const qb = colors[colorIndex + 2] & 0xf0;
 
         x++;
-        while (x < textFrame.cols && line[x] !== ' ') {
+        while (x < textFrame.cols && lineChars[x] !== ' ') {
           const nextIndex = (y * textFrame.cols + x) * 4;
           if ((colors[nextIndex] & 0xf0) !== qr || (colors[nextIndex + 1] & 0xf0) !== qg || (colors[nextIndex + 2] & 0xf0) !== qb) {
             break;
@@ -712,7 +733,7 @@ export function renderTextFrameToCanvas(
           ctx.fillStyle = fillStyle;
           lastFillStyle = fillStyle;
         }
-        ctx.fillText(line.slice(start, x), start * cellW + cellW * 0.5, y * cellH + cellH * 0.5);
+        ctx.fillText(lineChars.slice(start, x).join(''), start * cellW + cellW * 0.5, y * cellH + cellH * 0.5);
       }
     }
     ctx.globalAlpha = 1;
