@@ -1,5 +1,20 @@
 {
   "name": "asciify-engine",
-  "install": "npm ci",
-  "repositoryDependencies": ["https://github.com/ayangabryl/asciify"]
+  "install": "./.cursor/scripts/cloud-agent-install.sh",
+  "repositoryDependencies": [
+    "github.com/ayangabryl/asciify"
+  ],
+  "ports": [
+    {
+      "name": "asciify-playground",
+      "port": 5173
+    }
+  ],
+  "terminals": [
+    {
+      "name": "asciify-playground",
+      "command": "cd \"$HOME/ayangabryl-projects/asciify\" && npm run dev -- --host 0.0.0.0 --port 5173",
+      "description": "Vite dev server for the asciify.org playground (React frontend linked to local asciify-engine source)."
+    }
+  ]
 }
