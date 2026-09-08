@@ -133,6 +133,8 @@ export function buildTextFrame(
   );
 }
 
+const textFrames = new WeakMap<CanvasRenderingContext2D, { key: string; frame: AsciiFrame }>();
+
 // ─── renderTextBackground ─────────────────────────────────────────────────
 
 /**
@@ -173,7 +175,13 @@ export function renderTextBackground(
   const cols = Math.max(1, Math.floor(width  / fontSize));
   const rows = Math.max(1, Math.floor(height / (fontSize * lineHeight)));
 
-  const frame = buildTextFrame(text, cols, rows, color, opacity);
+  const key = JSON.stringify([text, cols, rows, color, opacity]);
+  let cached = textFrames.get(ctx);
+  if (!cached || cached.key !== key) {
+    cached = { key, frame: buildTextFrame(text, cols, rows, color, opacity) };
+    textFrames.set(ctx, cached);
+  }
+  const frame = cached.frame;
 
   const renderOpts: AsciiOptions = {
     ...DEFAULT_OPTIONS,

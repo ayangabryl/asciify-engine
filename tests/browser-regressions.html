@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Asciify browser regressions</title>
+<style>body{background:#0a0a0a;color:#ddd;font:14px monospace}#stage{position:fixed;inset:0 auto auto 0;width:640px;height:360px}canvas{width:100%;height:100%}pre{margin-top:380px;white-space:pre-wrap}</style></head><body><div id="stage"><canvas></canvas></div><pre>Running…</pre><script type="module">
+import * as E from '/all.mjs';
+const stage=document.querySelector('#stage'),c=stage.querySelector('canvas'),ctx=c.getContext('2d',{willReadFrequently:true});
+const result={checks:[],benchmarks:[],environment:{ua:navigator.userAgent,dpr:devicePixelRatio,readbackOptimized:true}};
+const check=(name,pass,details)=>{result.checks.push({name,pass,details});};
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const hash=()=>{const d=ctx.getImageData(0,0,c.width,c.height).data;let h=2166136261;for(let i=0;i<d.length;i++)h=Math.imul(h^d[i],16777619);return h>>>0};
+const src=document.createElement('canvas');src.width=640;src.height=360;const x=src.getContext('2d');const g=x.createLinearGradient(0,0,640,360);g.addColorStop(0,'#111');g.addColorStop(.5,'#ddd');g.addColorStop(1,'#444');x.fillStyle=g;x.fillRect(0,0,640,360);
+try {
+for(const compact of [false,true]){
+ E.clearAsciifyCaches();const input=document.createElement('canvas');input.width=64;input.height=64;const inputCtx=input.getContext('2d');inputCtx.fillStyle='#f0a040';inputCtx.fillRect(0,0,64,64);
+ const opts={...E.DEFAULT_OPTIONS,fontSize:7,colorMode:'fullcolor'};
+ const convert=()=>compact?E.imageToAsciiTextFrame(input,opts,64,64):E.imageToAsciiFrame(input,opts,64,64).frame;
+ convert();inputCtx.clearRect(0,0,64,64);const blank=convert();
+ check(`transparent source replaces old ${compact?'compact':'object'} sample`,compact?[...blank.colors].every((v,i)=>i%4!==3||v===0):blank.every(row=>row.every(cell=>cell.a===0)));
+}
+for(const [name,opts] of [['animation without hover',{animationStyle:'wave'}],['charset cycling without hover',{charsetFrames:[' .@',' ░█'],charsetFps:4}]]){
+ const stop=await E.asciify(src,c,{options:opts});const hashes=[];for(let i=0;i<5;i++){await wait(140);hashes.push(hash())}check(name,new Set(hashes).size>1,{hashes,cleanup:typeof stop});stop();
+}
+c.width=1280;c.height=720;ctx.setTransform(1,0,0,1,0,0);
+for(const fontSize of [20,10,6,4]){E.clearAsciifyCaches();const o={...E.DEFAULT_OPTIONS,fontSize,animationStyle:'wave',hoverStrength:.8,hoverEffect:'trail'};const {frame}=E.imageToAsciiFrame(src,o,1280,720);E.renderFrameToCanvas(ctx,frame,o,1280,720,1);const before=hash();await wait(20);E.renderFrameToCanvas(ctx,frame,o,1280,720,1,{x:.5,y:.5});check(`animated hover at ${fontSize}px`,before!==hash(),{cells:frame.length*frame[0].length});}
+for(const color of ['#ff0000','#00ff00','#000000']){const o={...E.DEFAULT_OPTIONS,accentColor:color,colorMode:'accent'};const {frame}=E.imageToAsciiFrame(src,o,1280,720);E.renderFrameToCanvas(ctx,frame,o,1280,720);check(`color ${color}`,ctx.fillStyle===color,ctx.fillStyle)}
+let paints=0;const oldFill=ctx.fillText;ctx.fillText=function(...args){paints++;return oldFill.apply(this,args)};
+const stop=await E.asciify(src,c,{options:{hoverEffect:'trail',hoverStrength:.65}});await wait(100);const base=hash(),basePixels=ctx.getImageData(0,0,c.width,c.height).data;let initial=paints;await wait(180);check('still image sleeps',paints===initial);
+const r=c.getBoundingClientRect();stage.dispatchEvent(new PointerEvent('pointermove',{clientX:r.left+r.width*.3,clientY:r.top+r.height*.5,pointerType:'mouse'}));await wait(200);const active=hash();check('pointer wakes still image',active!==base);
+stage.dispatchEvent(new PointerEvent('pointerleave',{pointerType:'mouse'}));await wait(1700);const restPixels=ctx.getImageData(0,0,c.width,c.height).data;let maxChannelDelta=0;for(let i=0;i<restPixels.length;i++)maxChannelDelta=Math.max(maxChannelDelta,Math.abs(restPixels[i]-basePixels[i]));check('hover settles to base (2/255 raster tolerance)',maxChannelDelta<=2,{base,after:hash(),maxChannelDelta});initial=paints;await wait(180);check('hover sleeps after settling',paints===initial);stop();initial=paints;stage.dispatchEvent(new PointerEvent('pointermove',{clientX:200,clientY:100,pointerType:'mouse'}));await wait(150);check('cleanup removes pointer rendering',paints===initial);
+const stop2=await E.asciify(src,c,{options:{animationStyle:'wave'}});await wait(100);stage.style.top='-2000px';await wait(100);initial=paints;await wait(180);check('offscreen animation sleeps',paints===initial);stop2();stage.style.top='0';ctx.fillText=oldFill;
+c.width=1280;c.height=720;ctx.setTransform(1,0,0,1,0,0);
+for(const fontSize of [10,6])for(const hover of [false,true]){E.clearAsciifyCaches();const o={...E.DEFAULT_OPTIONS,fontSize,colorMode:'accent',hoverStrength:hover?.65:0,hoverEffect:'trail'};const {frame}=E.imageToAsciiFrame(src,o,1280,720);const times=[];for(let i=0;i<30;i++){const now=performance.now();E.renderFrameToCanvas(ctx,frame,o,1280,720,i/60,hover?{x:.5,y:.5}:null);times.push(performance.now()-now);await wait(16)}const a=times.slice(5).sort((a,b)=>a-b);result.benchmarks.push({fontSize,hover,cells:frame.length*frame[0].length,medianSubmissionMs:a[Math.floor(a.length/2)],p95SubmissionMs:a[Math.ceil(a.length*.95)-1]})}
+} catch(error){check('uncaught error',false,String(error.stack||error))}
+window.regressionResults=result;document.querySelector('pre').textContent=JSON.stringify(result,null,2);
+</script></body></html>

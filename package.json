@@ -1,6 +1,6 @@
 {
   "name": "asciify-engine",
-  "version": "1.0.118",
+  "version": "1.1.0",
   "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -16,13 +16,35 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./core": {
+      "import": {
+        "types": "./dist/core.d.ts",
+        "default": "./dist/core.js"
+      },
+      "require": {
+        "types": "./dist/core.d.cts",
+        "default": "./dist/core.cjs"
+      }
+    },
+    "./backgrounds": {
+      "import": {
+        "types": "./dist/backgrounds.d.ts",
+        "default": "./dist/backgrounds.js"
+      },
+      "require": {
+        "types": "./dist/backgrounds.d.cts",
+        "default": "./dist/backgrounds.cjs"
+      }
     }
   },
   "files": [
     "dist",
+    "!dist/*.map",
     "skills/asciify-engine",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "examples/media-background.ts"
   ],
   "scripts": {
     "build": "tsup",
@@ -31,7 +53,8 @@
     "release:minor": "npm version minor",
     "release:major": "npm version major",
     "release:push": "git push origin main --follow-tags",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test:browser": "node tests/serve-browser.mjs"
   },
   "keywords": [
     "ascii",

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layered ASCII hero</title>
+  <link rel="stylesheet" href="./layered-hero.css">
+</head>
+<body>
+  <!-- Replace these two URLs with your own optimized media. -->
+  <section class="ascii-hero" data-video="/hero.mp4" data-poster="/hero-poster.jpg" data-render-limit="720" aria-labelledby="hero-title">
+    <h1 id="hero-title" class="hero-title">More than<br>characters.</h1>
+    <canvas class="hero-art" aria-hidden="true"></canvas>
+    <div class="hero-entry">
+      <p>Turn your images and motion into living characters.</p>
+      <a href="#start">Start creating</a>
+    </div>
+    <div class="hero-controls">
+      <button type="button" data-motion disabled>Loading artwork…</button>
+      <span data-status role="status"></span>
+    </div>
+  </section>
+  <main id="start" tabindex="-1"><h2>Your next section</h2></main>
+  <script type="module">
+    import { mountLayeredHero } from './layered-hero.js';
+    const destroy = mountLayeredHero(document.querySelector('.ascii-hero'));
+    // In an SPA, call destroy() when this view unmounts.
+    if (import.meta.hot) import.meta.hot.dispose(destroy);
+  </script>
+</body>
+</html>

@@ -57,7 +57,7 @@ export const PALETTE_THEMES: Record<PaletteTheme, { name: string; accent: string
 export type SourceType = 'image' | 'video' | 'gif' | null;
 
 export interface AsciiOptions {
-  /** Character cell size in pixels. Smaller = more detail, more cells. Default: `10` */
+  /** Character cell width in pixels. Smaller = more detail, more cells. Default: `7` */
   fontSize: number;
   /** Extra horizontal spacing between characters (pixels). Default: `1` */
   charSpacing: number;
@@ -126,7 +126,7 @@ export interface AsciiOptions {
    */
   dotSizeRatio: number;
   /**
-   * Floyd-Steinberg dither strength applied to the luminance map.
+   * Ordered Bayer (4×4) dither strength applied to the luminance map.
    * `0` = no dithering, `1` = full dithering. Default: `0`
    */
   ditherStrength: number;
@@ -614,7 +614,7 @@ export const LIVING_STYLE_PRESETS = {
 export type LivingStylePresetKey = keyof typeof LIVING_STYLE_PRESETS;
 
 export const DEFAULT_OPTIONS: AsciiOptions = {
-  fontSize: 10,
+  fontSize: 7,
   charSpacing: 1,
   brightness: 0,
   contrast: 0,
@@ -689,7 +689,7 @@ export const HOVER_PRESETS: Record<HoverPreset, { label: string; options: Partia
     options: { hoverStrength: 0.8, hoverEffect: 'shatter', hoverRadius: 0.14, hoverColor: '#ff6090' },
   },
   ghost: {
-    label: 'Ghost',
+    label: 'Fluid trail',
     options: { hoverStrength: 0.55, hoverEffect: 'trail', hoverRadius: 0.2, hoverColor: '#b39ddb' },
   },
   glitchReveal: {

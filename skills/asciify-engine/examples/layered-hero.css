@@ -1,0 +1,30 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #080808; color: #e0e0e0; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.ascii-hero {
+  position: relative; isolation: isolate; overflow: hidden;
+  min-height: 44rem; height: 100svh; background: #080808;
+  display: grid; grid-template-columns: 1.6fr 1fr; align-items: end;
+  gap: 8%; padding: 6rem 5% 5rem;
+}
+/* These are siblings: no shared content wrapper traps the CTA under the canvas. */
+.hero-title { position: relative; z-index: 0; margin: 0; font-size: clamp(4rem, 9vw, 9rem); line-height: .95; letter-spacing: -.055em; color: #e8b900; }
+.hero-art { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: transparent; opacity: .65; }
+.hero-entry { position: relative; z-index: 2; max-width: 24rem; line-height: 1.7; }
+.hero-entry p { text-shadow: 0 1px 4px #000, 0 0 10px #000, 0 0 24px #000; }
+.hero-entry a, .hero-controls button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .8rem 1.2rem; border: 1px solid #e8b900; border-radius: .75rem; font: inherit; text-decoration: none; cursor: pointer; }
+.hero-entry a { background: #e8b900; color: #111; }
+.hero-controls { position: absolute; z-index: 3; top: 1.5rem; right: 5%; display: flex; gap: .75rem; align-items: center; font-size: .8rem; }
+.hero-controls button { background: #101010; color: #e0e0e0; border-color: #555; }
+.hero-controls button:disabled { cursor: default; opacity: .7; }
+.hero-controls [data-status] { max-width: 15rem; background: #080808; }
+:is(a, button):focus-visible { outline: 3px solid #fff; outline-offset: 5px; }
+/* Optional conventional hierarchy: all text above the artwork. */
+.ascii-hero.text-in-front .hero-title { z-index: 2; }
+#start { min-height: 40vh; padding: 3rem 5%; }
+@media (max-width: 650px) {
+  .ascii-hero { grid-template-columns: 1fr; align-content: end; height: auto; min-height: 100svh; padding: 20rem 6% 3rem; gap: 2rem; }
+  .hero-title { font-size: clamp(3.5rem, 15vw, 6rem); }
+  .hero-entry { max-width: 26rem; }
+  .hero-controls { right: 6%; left: 6%; flex-wrap: wrap; }
+}
