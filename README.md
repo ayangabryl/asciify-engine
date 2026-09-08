@@ -9,6 +9,38 @@
 
 A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, animated backgrounds, interactive hover effects, living charset motion presets, and embed generation.
 
+### Media first, optional backgrounds
+
+Use `asciify-engine/core` for image, video, GIF, webcam, text, and interactive rendering. It excludes the procedural background generators. Existing root imports remain supported; generated scenes are also available from `asciify-engine/backgrounds`.
+
+```ts
+import { asciifyVideo } from 'asciify-engine/core';
+
+const stop = await asciifyVideo('/film.mp4', canvas, {
+  fitTo: canvas.parentElement,
+  objectFit: 'cover',
+  maxRenderDimension: 960,
+  fontSize: 10,
+  fps: 30,
+  options: {
+    colorMode: 'accent', accentColor: '#a9b39a',
+    hoverEffect: 'trail', hoverStrength: 0.65,
+    hoverRadius: 0.18, hoverColor: '#d4ff00',
+  },
+});
+// On unmount / when replacing the source:
+stop();
+```
+
+The trail follows elapsed time, fades after the pointer leaves, and changes character density through a bounded cursor wake. Image hover redraws a cached region; live video samples decoded frames while pointer motion can render between source frames. The standard image/GIF/live-video loops pause rendering outside the viewport and honor reduced motion. Small fonts keep real glyphs, and dense grids no longer silently disable hover.
+
+Use your own CSS and source media for atmosphere; see [the copyable media background example](examples/media-background.ts). A background generator is optional. GIF decoding loads only when a GIF conversion API is called. Source maps remain available in local builds and are excluded from the npm archive.
+
+`waveField` now animates the supplied media rather than replacing it with a generated scene. For the previous procedural scene, import `renderWaveBackground` from `asciify-engine/backgrounds`.
+
+Prepared `AsciiFrame` objects are treated as immutable for drawing caches. Replace the frame object after editing cells, or call `clearAsciifyCaches()`. Always call the returned cleanup function, including when an async mount resolves after a component has unmounted.
+
+
 **[&#9654; Live Playground](https://asciify.org) &middot; [npm](https://www.npmjs.com/package/asciify-engine)**
 
 ---
@@ -41,6 +73,8 @@ npx skills add https://github.com/ayangabryl/asciify-engine --skill asciify-engi
 ```
 
 Use the skill when building ASCII images, videos, GIFs, webcam effects, scroll-scrubbed heroes, hover interactions, or performance-sensitive ASCII media.
+
+The current hosted skill is available at [asciify.org/skill](https://asciify.org/skill), including a [layered HTML/ASCII hero example](https://asciify.org/skill/references/layered-hero.md). The hosted copy can receive documentation updates between npm releases.
 
 ---
 
@@ -160,7 +194,7 @@ All conversion and render functions accept an `AsciiOptions` object. Spread `DEF
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `fontSize` | `number` | `10` | Character cell size in pixels. Smaller values increase density and detail. |
+| `fontSize` | `number` | `7` (low-level); `10` (one-call) | Character cell size in pixels. Smaller values increase density and detail. |
 | `colorMode` | `'grayscale' \| 'fullcolor' \| 'matrix' \| 'accent'` | `'grayscale'` | Determines how pixel color is mapped to character color. |
 | `charset` | `string` | Standard ramp | Characters ordered from dense to sparse, representing brightness levels. |
 | `brightness` | `number` | `0` | Brightness adjustment from `-1` (darker) to `1` (lighter). |

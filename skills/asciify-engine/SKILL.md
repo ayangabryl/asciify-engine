@@ -1,801 +1,128 @@
 ---
 name: asciify-engine
-description: Convert images, videos, GIFs, webcam streams, text, and animated backgrounds into high-performance ASCII art with the asciify-engine npm package. Use when creating ASCII media, integrating asciifyVideo/asciify/asciifyGif, building scroll-synced ASCII video, tuning FPS/detail/performance, using compact text-frame APIs, hover effects, chroma key, recording/export, or updating an app that depends on asciify-engine.
+description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
+metadata:
+  tested-engine: "1.1.0"
+  updated: "2026-09-08"
 ---
 
-# asciify-engine
+# Asciify Engine
 
-Use this skill for the `asciify-engine` npm package.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.1.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
-**Package:** `asciify-engine`  
-**Current version:** `1.0.115`  
-**Playground:** https://asciify.org  
-**GitHub:** https://github.com/ayangabryl/asciify-engine
+- Agent entry: https://asciify.org/skill (redirects to this Markdown document).
+- Playground: https://asciify.org/editor
+- API documentation: https://asciify.org/docs/api
+- Repository: https://github.com/ayangabryl/asciify-engine
 
-The engine is zero-dependency except GIF decoding. It renders ASCII art on canvas from images, videos, GIFs, webcam streams, generated backgrounds, and text.
-
-## When To Use
-
-Use this skill when the user wants to:
-
-- Convert images, videos, GIFs, webcam, or text into ASCII art.
-- Add ASCII video/backgrounds to React, Next.js, Vue, Svelte, or vanilla JS.
-- Build scroll-synced ASCII video with GSAP ScrollTrigger or native scroll.
-- Improve ASCII media performance, FPS, detail, resolution, or hover behavior.
-- Use chroma key, fullcolor, accent, matrix, grayscale, dense/braille charsets, or hover effects.
-- Use low-level prepared/compact frame APIs.
-- Record/export ASCII canvas output.
-- Update docs, package usage, or skill instructions for `asciify-engine`.
-
-## Installation
-
-```bash
-npm install asciify-engine
+```sh
+npm install asciify-engine@1.1.0
 ```
 
-For existing apps, install the latest tested version:
+Version 1.1.0 exports `asciify-engine`, `asciify-engine/core` for media without procedural generators, and `asciify-engine/backgrounds` for optional backgrounds. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Site-internal studio modules are separate.
 
-```bash
-npm install asciify-engine@1.0.115
+## Install the agent skill
+
+```sh
+npx skills add ayangabryl/asciify-engine --skill asciify-engine
 ```
 
-## Mental Model
+This uses the Vercel Skills CLI to install the repository skill and its linked resources. Updating the npm dependency alone does not update an already installed skill. Use `npx skills update asciify-engine` to refresh it.
 
-Prefer the simple APIs first:
+## Choose the integration
 
-- `asciify()` for static images/canvas/video elements.
-- `asciifyVideo()` for live or scroll-synced video.
-- `asciifyGif()` for animated GIF files.
-- `asciiBackground()` for procedural ASCII backgrounds.
+- Static image: `asciify(source, canvas, config)` returns `Promise<() => void>`. Call the cleanup on unmount, including for a still image.
+- Video: `asciifyVideo(source, canvas, config)` returns `Promise<() => void>`. Call that function on unmount. Use `fitTo` and `objectFit: 'cover'` for full-bleed heroes; `contain` for a whole-subject preview.
+- GIF: `asciifyGif(source, canvas, config)` returns a cleanup function asynchronously.
+- Procedural background: `asciiBackground(host, config)` returns an object with **`destroy()`**, not a stop function. Media conversion does not require adding a procedural background.
+- Dense custom rendering: use `imageToAsciiTextFrame` and `renderTextFrameToCanvas`; keep the same options when converting and rendering. Use object frames when per-cell mutation is required.
 
-For high-performance media, the engine uses compact text-frame paths when possible:
+For a hero with HTML layered through the ASCII, read [references/layered-hero.md](references/layered-hero.md) and use the accompanying [HTML](examples/layered-hero.html), [CSS](examples/layered-hero.css), and [JavaScript](examples/layered-hero.js). These are ordinary Vite/bundler inputs, not another npm dependency. Supply your own media.
 
-- `imageToAsciiTextFrame()`
-- `videoToAsciiTextFrames()`
-- `gifToAsciiTextFrames()`
-- `renderTextFrameToCanvas()`
+For crop, scroll, React lifecycle, and low-level API details, read [references/media-api.md](references/media-api.md).
 
-These avoid object-per-cell frames and are the preferred low-level APIs for dense media, including fullcolor in `1.0.91+`.
+## Start with a readable source
 
-Use legacy object frames only when you need per-cell mutation, dots mode, heavy hover/animation transforms, or compatibility with existing `AsciiFrame` consumers:
+Use ordinary images or footage, then convert them with Asciify. Do not ask an image/video generator to pre-render ASCII. A dark subject with thin highlights tends to become an outline; changing to full color cannot recover missing midtones. Prefer recognizable subjects, broad illuminated surfaces, controlled highlights, and stable framing.
 
-- `imageToAsciiFrame()`
-- `videoToAsciiFrames()`
-- `gifToAsciiFrames()`
-- `renderFrameToCanvas()`
+Choose color intentionally:
 
-Use `options.sourceCrop` when the source media has empty edges or needs tighter framing. Percent values are normalized `0–1` by default. Prefer CSS-like insets for readable framing; side insets define the crop window directly, and `asciifyVideo` sizes from that crop aspect so it does not stretch:
+- `fullcolor`: preserve source colors; do not grayscale source pixels first.
+- `grayscale`: gray characters.
+- `accent`: a single brand color via `accentColor`.
+- `matrix`: green treatment.
 
-```ts
-options: {
-  sourceCrop: { top: 0.08, bottom: 0.22 },
-}
-```
+Start around `fontSize: 7`, `fps: 24` or `30`, and `maxRenderDimension: 960`. These are a starting budget, not an FPS guarantee. Increase detail only after checking the actual viewport and target hardware. Use `normalize: true` for flat sources when helpful; compare it against `false` on already graded video because frame-by-frame normalization may change the look.
 
-Crop from the sides the same way:
-
-```ts
-options: {
-  sourceCrop: { left: 0.1, right: 0.1 },
-}
-```
-
-Use any side together:
-
-```ts
-options: {
-  sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 },
-}
-```
-
-For centered crops, `sourceCrop: { height: 0.7 }` keeps 70% of the source and preserves the original source aspect. `preserveAspect` is only for single-dimension `width`/`height` crops; do not use it to force hero bands. For wide heroes, crop with `top`/`bottom` and let the engine derive the cropped aspect. `sourceCrop` is opt-in; when omitted, the engine samples the full source exactly as older versions did.
-
-When `sourceCrop` and `chromaKey` are both enabled for video, `asciifyVideo` does a one-time foreground trim inside the crop window. For scrubbed or trimmed video it samples the playback range and uses the union of the keyed foreground bounds. This removes keyed empty margins before layout sizing, which is the right fix when the canvas is full width but the visible ASCII subject still appears short on one side.
-
-Use `chromaKeyTrimPadding: 0` for edge-tight marketing heroes. Leave the default `0.002` when preserving a tiny safety margin matters more than touching the exact viewport edge.
-If the canvas is full width but the visible keyed subject still feels short, raise `chromaKeyTrimLuminanceThreshold` slightly, usually `6–16`, so invisible edge noise is not counted as foreground.
-
-For scroll-scrubbed hero footage where the foreground moves and a single range crop still leaves one frame short on the edge, use per-frame trim:
-
-```ts
-options: {
-  chromaKey: true,
-  sourceCrop: { top: 0.08, bottom: 0.16 },
-  chromaKeyTrimMode: 'frame',
-  chromaKeyTrimPadding: 0,
-}
-```
-
-`chromaKeyTrimMode: 'frame'` remeasures the visible keyed foreground on each rendered frame and expands that crop back to the render aspect, so it avoids stretching while keeping moving subjects visually edge-tight. Use it for dense scrubbed marketing hero media; keep the default `'range'` for normal video when stable framing matters more.
-
-Use top-level `asciifyVideo` layout options when the destination needs full-bleed framing. These affect the visible canvas only, not the sampled media:
-
-```ts
-await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: hero,
-  objectFit: 'contain',
-  objectPosition: 'center bottom',
-  width: '100vw',
-  height: '100%',
-  bleed: { x: '2vw' },
-  options: {
-    sourceCrop: { top: 0.08, bottom: 0.14 },
-  },
-});
-```
-
-Mental split:
-
-- `sourceCrop` chooses the source window before ASCII conversion.
-- CSS-like insets change the crop aspect naturally; the engine keeps ASCII proportions intact.
-- `objectFit`, `objectPosition`, `scale`, `width`, `height`, and `bleed` place the rendered canvas in the page.
-- Use `objectFit: 'cover'` for full-width/full-bleed heroes and backgrounds.
-- Use `objectFit: 'contain'` for previews where the whole source should remain visible.
-- Use `bleed: { x: '2vw' }` for edge-tight ASCII heroes where the source is correct but glyph side bearings or cell quantization leave a thin visual edge gap. This is preferable to app CSS hacks like `width: 104vw`.
-- Use `scale` only when you intentionally want the whole ASCII canvas visually larger.
-
-## Visual Target
-
-Good ASCII media should feel intentional, not like a broken video filter.
-
-- The subject silhouette is readable at first glance.
-- Character density reveals form, light, and motion without turning into noise.
-- The canvas respects the media aspect ratio and fills the intended container.
-- Accent/fullcolor choices support the page design instead of shouting over it.
-- Text is crisp, not browser-blurred, stretched, or visibly low resolution.
-- Motion updates feel continuous; if FPS drops, reduce work before adding effects.
-
-## Decision Playbooks
-
-### User Wants More Detail
-
-Do not only reduce `fontSize`. Use this ladder:
-
-1. Confirm the canvas/container is actually large enough and not CSS-stretched from a tiny backing buffer.
-2. Use `fitTo` for videos so the engine owns canvas sizing.
-3. Use `CHARSETS.dense` for normal ASCII detail.
-4. Enable `normalize: true` for muted or low-contrast sources.
-5. Raise `maxRenderDimension` one step: `960 -> 1280 -> 1600 -> 2048`.
-6. Then lower `fontSize`: `8 -> 6 -> 5 -> 4`.
-7. Try `colorMode: 'accent'` before `fullcolor` if the design can be monochrome.
-8. Use `CHARSETS.braille` only when ultra-detail matters and the style can handle the texture.
-
-Stop when the subject reads clearly. More cells after that often make the image noisier, not better.
-
-### User Wants Smoother FPS
-
-Reduce hot-path work in this order:
-
-1. Keep `animationStyle: 'none'` and `hoverStrength: 0`.
-2. Use compact text-frame-compatible settings: `renderMode: 'ascii'`, no `charsetFrames`.
-3. Prefer `accent`, `matrix`, or `grayscale`; keep `fullcolor` only when color matters.
-4. Lower `maxRenderDimension`: `2048 -> 1600 -> 1280 -> 960`.
-5. Raise `fontSize`: `4 -> 5 -> 6 -> 8`.
-6. Lower `fps`: `60 -> 30 -> 24`.
-7. Avoid `dots`, per-cell hover, and animated charsets on dense video.
-
-If FPS is still poor, inspect whether the app is resizing the canvas every frame or remounting the component.
-
-### User Wants A Premium Hero
-
-Recommended starting point:
-
-```ts
-{
-  fitTo: hero,
-  objectFit: 'contain',
-  objectPosition: 'center bottom',
-  width: '100vw',
-  height: '100%',
-  bleed: { x: '2vw' },
-  fontSize: 5,
-  fps: 60,
-  maxRenderDimension: 1280,
-  maxCachedFrames: 96,
-  artStyle: 'classic',
-  options: {
-    charset: CHARSETS.dense,
-    colorMode: 'accent',
-    accentColor: '#e8d7b7',
-    normalize: true,
-    sourceCrop: { top: 0.08, bottom: 0.16 },
-    animationStyle: 'none',
-    hoverStrength: 0,
-  }
-}
-```
-
-Design rules:
-
-- Use one restrained accent color pulled from the brand/page palette.
-- Put ASCII behind or below the core CTA, not directly under tiny text.
-- Use masks or fades at edges when the ASCII meets page content.
-- Keep the hero background quiet enough that the headline wins.
-- Use scroll scrub only when it tells a story; do not scrub decorative noise.
-
-### User Wants Fullcolor
-
-Use fullcolor when color carries product meaning, artwork, identity, or footage mood.
-
-Start with:
-
-```ts
-{
-  fontSize: 6,
-  fps: 30,
-  maxRenderDimension: 1280,
-  artStyle: 'art',
-  options: {
-    charset: CHARSETS.dense,
-    colorMode: 'fullcolor',
-    normalize: true,
-    sourceCrop: { top: 0.08, bottom: 0.16 },
-    animationStyle: 'none',
-    hoverStrength: 0,
-  }
-}
-```
-
-If it is slow, first lower `maxRenderDimension` or raise `fontSize`. Do not jump straight to `fontSize: 3`.
-
-### User Wants Hover Interaction
-
-Hover is per-cell work. Keep it deliberate:
-
-- Use `fontSize >= 8` for large canvases.
-- Use smaller framed demos rather than full-screen 4px ASCII.
-- Start with `HOVER_PRESETS.subtle` or `hoverStrength: 0.2`.
-- Avoid hover on scroll-synced video unless the canvas is small.
-- Prefer hover for static images, generated text backgrounds, or product demos.
-
-### User Says It Is Blurry
-
-Check in this order:
-
-1. Is the canvas CSS size different from its backing `width`/`height`?
-2. For video, is `fitTo` provided?
-3. Is the source itself low resolution?
-4. Is `maxRenderDimension` too low for the displayed size?
-5. Is CSS applying `filter`, `transform: scale`, or opacity compositing that softens text?
-6. For tiny font ASCII, verify the design accepts raster-like pixel detail.
-
-### User Says It Is Blank
-
-Check:
-
-1. Source loaded and video has metadata.
-2. Canvas has nonzero width/height.
-3. Video is not `display: none`.
-4. `chromaKey` is not removing the subject.
-5. `invert` and page background are not making characters invisible.
-6. For async React use, cleanup did not run before `asciifyVideo()` resolved.
-
-### User Says It Is Too Large Or Overflows
-
-Use layout fixes before quality fixes:
-
-- Wrap canvas in a positioned container.
-- Set canvas CSS to `position:absolute; inset:0; width:100%; height:100%`.
-- Use `fitTo: container`.
-- Keep the parent aspect ratio or explicit height stable.
-- Avoid manually setting `canvas.width = window.innerWidth` in React render.
-
-### User Wants To Remove Empty Space In The Media
-
-Prefer source cropping over layout hacks when the video/image itself has dead space:
-
-```ts
-await asciifyVideo(video, canvas, {
-  fitTo: hero,
-  options: {
-    chromaKey: true,
-    sourceCrop: { top: 0.08, bottom: 0.22 },
-  },
-});
-```
-
-- `sourceCrop` happens before ASCII sampling, so the subject is reframed without changing the canvas box.
-- Default unit is `'percent'`; use values from `0` to `1`.
-- Use `top`, `right`, `bottom`, and `left` for CSS-like side crops.
-- Use `{ unit: 'pixel', x, y, width, height }` for exact media-pixel crops.
-- Keep `preserveAspect` enabled unless you intentionally want an exact source window that can stretch.
-- For hero videos, crop the source first, then use small layout overlap only if the next section needs to tuck closer.
-
-### Scroll-Scrub Performance Model
-
-In `1.0.93+`, the fast text-frame scrub path uses a Pretext-inspired split:
-
-- Prepare/cache frames lazily around the current scroll target.
-- Render compact row strings instead of object-per-cell frames.
-- Diff transparent rows and only redraw rows whose text changed.
-- Prefer `fastSeek()` when the browser supports it.
-- Prefetch nearby frames around the current target so scrolling back and forth has fewer misses.
-
-For smooth scrub, keep options compatible with this fast path:
-
-```ts
-{
-  renderMode: 'ascii',
-  animationStyle: 'none',
-  hoverStrength: 0,
-  colorMode: 'accent', // or grayscale/matrix
-}
-```
-
-## Design Playbooks
-
-### Dark Premium Landing Page
-
-- Use `#121212` or near-black page background.
-- Prefer `accent` over `fullcolor` unless the footage itself is beautiful.
-- Use warm off-white or brand accent, not neon by default.
-- Pair ASCII with framed layout, thin borders, or quiet masks.
-- Keep copy short; ASCII should carry some of the storytelling.
-
-### Technical / Infrastructure Aesthetic
-
-- Use `matrix`, `grayscale`, or a cool `accentColor`.
-- Use `CHARSETS.dense`, `lines`, `box`, or `geometric`.
-- Compose with visible grid lines, clipped containers, and measured spacing.
-- Avoid playful emoji/katakana unless the brand asks for it.
-
-### Editorial / Portfolio Aesthetic
-
-- Use `accent` with a soft paper/warm ink palette.
-- Use slower video, stills, or subtle scroll reveal.
-- Keep `fontSize: 5-8`; avoid over-dense unreadable texture.
-- Use ASCII as proof/atmosphere around work, not as a gimmick.
-
-### Playground / Demo Aesthetic
-
-- Show controls that map to real engine tradeoffs: detail, FPS, color, charset, hover.
-- Surface live `cols x rows`, FPS, and current source dimensions.
-- Include presets: `Smooth`, `Detailed`, `Fullcolor`, `Interactive`.
-- When changing presets, explain the performance tradeoff in the UI.
-
-## Quality Checks
-
-- Subject is recognizable in a screenshot.
-- FPS is stable for 5-10 seconds, not just on first load.
-- The canvas does not resize every frame.
-- Text/CTA remains readable over or near the ASCII.
-- Mobile uses a less expensive preset than desktop when needed.
-- Reduced-motion users still get a static or slower frame.
-- Cleanup runs on unmount and cancels video/background loops.
-
-## Simple APIs
-
-### Static Image
-
-```ts
-import { asciify, CHARSETS } from 'asciify-engine';
-
-await asciify('/photo.jpg', canvas, {
-  fontSize: 6,
-  artStyle: 'art',
-  options: {
-    charset: CHARSETS.dense,
-    colorMode: 'fullcolor',
-    normalize: true,
-  },
-});
-```
-
-### Live Video
-
-```ts
-import { asciifyVideo, CHARSETS } from 'asciify-engine';
-
-const stop = await asciifyVideo('/clip.mp4', canvas, {
-  fitTo: container,
-  fontSize: 6,
-  fps: 60,
-  maxRenderDimension: 1280,
-  artStyle: 'classic',
-  options: {
-    charset: CHARSETS.dense,
-    colorMode: 'accent',
-    accentColor: '#e8d7b7',
-    normalize: true,
-  },
-});
-
-// cleanup
-stop();
-```
-
-### GIF
-
-```ts
-import { asciifyGif } from 'asciify-engine';
-
-const stop = await asciifyGif('/loop.gif', canvas, {
-  fontSize: 8,
-  artStyle: 'letters',
-  options: { colorMode: 'fullcolor' },
-});
-
-stop();
-```
-
-## Scroll-Synced Video
-
-`asciifyVideo()` supports scroll scrubbing. Use this for landing-page hero reveals, editorial sections, and pinned/scrollytelling moments.
-
-### GSAP ScrollTrigger
-
-```ts
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { asciifyVideo, CHARSETS } from 'asciify-engine';
-
+```js
+import { asciifyVideo } from 'asciify-engine';
 const stop = await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: wrapper,
-  fontSize: 4,
-  fps: 60,
-  maxRenderDimension: 1280,
-  trim: { start: 2.2, end: 6.65 },
-  scroll: {
-    gsap,
-    ScrollTrigger,
-    trigger: wrapper,
-    start: 'top 88%',
-    end: 'bottom 18%',
-    scrub: 0.45,
-    speed: 1.35,
-    from: 2.2,
-    to: 6.65,
-  },
+  fitTo: hero,
+  objectFit: 'cover',
+  objectPosition: 'center',
+  fontSize: 7,
+  fps: 24,
+  maxRenderDimension: 960,
   options: {
-    charset: CHARSETS.dense,
-    colorMode: 'accent',
-    accentColor: '#e8d7b7',
-    normalize: true,
-    chromaKey: true,
-    chromaKeyTolerance: 84,
-  },
-});
-```
-
-### Native Scroll Scrub
-
-```ts
-const stop = await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: wrapper,
-  fontSize: 6,
-  scroll: {
-    trigger: wrapper,
-    from: 0,
-    to: 5,
-  },
-});
-```
-
-### Scroll Best Practices
-
-- Use `scroll` for time-to-scroll mapping, not custom `video.currentTime` loops.
-- Pass the same `from`/`to` as `trim.start`/`trim.end` when scrubbing a clipped range.
-- Use `scroll.speed` for faster or slower scrub pacing. `speed: 2` reaches the end in half the scroll distance; `speed: 0.5` takes twice the distance.
-- Use `fps: 30-60`; choose `60` for smooth short hero clips, `24-30` for heavy fullcolor.
-- Use `maxRenderDimension: 960-1280` for large full-width hero videos. Use `2048` only when truly needed.
-- Use `fontSize: 4-6` for detailed hero ASCII; below `4px` is expensive and should use compact text-frame paths only.
-- Avoid hover effects on dense scroll video. Hover is per-cell work.
-- Never set the backing video to `display: none`; the API keeps URL-created videos decode-safe automatically.
-
-## Performance Guide
-
-### Fastest Media Settings
-
-For smooth high-density video:
-
-```ts
-{
-  fontSize: 5,
-  fps: 60,
-  maxRenderDimension: 1280,
-  artStyle: 'classic',
-  options: {
-    charset: CHARSETS.dense,
-    colorMode: 'accent',
-    animationStyle: 'none',
-    hoverStrength: 0,
-    normalize: true,
-  }
-}
-```
-
-### Fullcolor Settings
-
-Fullcolor is supported by the compact text-frame path in `1.0.91+`.
-
-```ts
-{
-  fontSize: 6,
-  fps: 30,
-  maxRenderDimension: 1280,
-  artStyle: 'art',
-  options: {
-    charset: CHARSETS.dense,
+    charset: ' .:-=+*#%@',
     colorMode: 'fullcolor',
+    normalize: false,
     animationStyle: 'none',
     hoverStrength: 0,
-    normalize: true,
-  }
-}
-```
-
-Use fullcolor when the source color is important. Use `accent` when you want the highest FPS and a more designed monochrome look.
-
-### Detail Tuning
-
-- `fontSize`: main detail/performance knob. Smaller means more cells.
-- `maxRenderDimension`: caps media processing resolution before ASCII conversion.
-- `CHARSETS.dense`: best general image/video ramp.
-- `CHARSETS.braille`: very high visual resolution but can be visually noisy and heavier.
-- `normalize: true`: improves contrast/detail for muted media.
-- `ditherStrength: 0-0.25`: adds texture but costs more and can shimmer in video.
-- `chromaKey`: useful for green/blue-screen subjects over page backgrounds.
-
-### Expensive Features
-
-These are intentionally richer and can reduce FPS on dense canvases:
-
-- `renderMode: 'dots'`
-- `hoverStrength > 0`
-- `animationStyle !== 'none'`
-- `charsetFrames`
-- tiny `fontSize` with `fullcolor`
-- very high `maxRenderDimension`
-
-For interactive hover demos, use `fontSize >= 8` or smaller canvases.
-
-## Low-Level APIs
-
-### Compact Text Frames
-
-Use for dense static images, GIFs, videos, and fullcolor media where you do not need per-cell mutation.
-
-```ts
-import {
-  imageToAsciiTextFrame,
-  renderTextFrameToCanvas,
-  DEFAULT_OPTIONS,
-} from 'asciify-engine';
-
-const frame = imageToAsciiTextFrame(img, {
-  ...DEFAULT_OPTIONS,
-  fontSize: 6,
-  colorMode: 'fullcolor',
-}, 1280, 720);
-
-renderTextFrameToCanvas(ctx, frame, DEFAULT_OPTIONS, 1280, 720);
-```
-
-Available compact APIs:
-
-```ts
-imageToAsciiTextFrame(source, options, width?, height?) -> AsciiTextFrame
-videoToAsciiTextFrames(video, options, width, height, fps?, maxSec?, onProgress?, startTime?)
-gifToAsciiTextFrames(buffer, options, width, height, onProgress?)
-renderTextFrameToCanvas(ctx, textFrame, options, width, height)
-```
-
-`AsciiTextFrame` contains:
-
-```ts
-type AsciiTextFrame = {
-  rows: string[];
-  cols: number;
-  rowCount: number;
-  colors?: Uint8ClampedArray; // present for fullcolor compact frames
-}
-```
-
-### Legacy Object Frames
-
-Use when you need cell objects, hover transforms, dots rendering, or compatibility:
-
-```ts
-imageToAsciiFrame(source, options, width?, height?) -> { frame, cols, rows }
-videoToAsciiFrames(video, options, width, height, fps?, maxSec?, onProgress?, startTime?)
-gifToAsciiFrames(buffer, options, width, height, onProgress?)
-renderFrameToCanvas(ctx, frame, options, width, height, time?, mousePos?)
-```
-
-### Cache Management
-
-Long-lived editors/playgrounds that cycle many charsets or fonts can clear shared lookup caches:
-
-```ts
-import { clearAsciifyCaches } from 'asciify-engine';
-
-clearAsciifyCaches();
-```
-
-## React / Next.js Pattern
-
-```tsx
-'use client';
-
-import { useEffect, useRef } from 'react';
-import { asciifyVideo, CHARSETS } from 'asciify-engine';
-
-export function AsciiHero() {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    const canvas = canvasRef.current;
-    if (!wrapper || !canvas) return;
-
-    let cleanup: (() => void) | undefined;
-    let alive = true;
-
-    asciifyVideo('/hero.mp4', canvas, {
-      fitTo: wrapper,
-      fontSize: 5,
-      fps: 60,
-      maxRenderDimension: 1280,
-      artStyle: 'classic',
-      options: {
-        charset: CHARSETS.dense,
-        colorMode: 'accent',
-        accentColor: '#e8d7b7',
-        normalize: true,
-      },
-    }).then(stop => {
-      if (alive) cleanup = stop;
-      else stop();
-    });
-
-    return () => {
-      alive = false;
-      cleanup?.();
-    };
-  }, []);
-
-  return (
-    <div ref={wrapperRef} style={{ position: 'relative', width: '100%', height: '100vh' }}>
-      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-    </div>
-  );
-}
-```
-
-## Animated Backgrounds
-
-```ts
-import { asciiBackground } from 'asciify-engine';
-
-const stop = asciiBackground('#hero-bg', {
-  type: 'aurora',
-  colorScheme: 'auto',
-  fontSize: 14,
-  speed: 0.8,
-  density: 0.55,
-  accentColor: '#d4ff00',
+  },
 });
-
-stop();
+// On unmount: stop();
 ```
 
-Available background types:
+## Custom letters
 
-`wave`, `rain`, `stars`, `pulse`, `noise`, `grid`, `aurora`, `silk`, `void`, `morph`, `fire`, `dna`, `terrain`, `circuit`
+`options.charset` is the density ramp. `customText` repeats a string and is a different feature. To incorporate a brand's letters while retaining shading symbols, build a ramp such as:
 
-Individual `render*Background` functions are also exported for custom canvas loops.
-
-## Options Reference
-
-Common `AsciiOptions`:
-
-| Property | Type | Notes |
-|---|---|---|
-| `fontSize` | `number` | Main detail/performance knob. |
-| `charSpacing` | `number` | Cell spacing multiplier. |
-| `brightness` | `number` | `-1` to `1`. |
-| `contrast` | `number` | Positive increases contrast. |
-| `charset` | `string` | Use `CHARSETS`. |
-| `colorMode` | `'grayscale' | 'fullcolor' | 'matrix' | 'accent'` | Fullcolor is fast-path capable in `1.0.91+`. |
-| `accentColor` | `string` | Used for accent/matrix-style rendering. |
-| `invert` | `boolean | 'auto'` | Use `'auto'` for light/dark themes. |
-| `renderMode` | `'ascii' | 'dots'` | Dots is richer/heavier. |
-| `animationStyle` | `AnimationStyle` | Keep `'none'` for max FPS. |
-| `animationSpeed` | `number` | Animation speed multiplier. |
-| `dotSizeRatio` | `number` | Dot size for dots mode. |
-| `ditherStrength` | `number` | Use lightly for video. |
-| `hoverStrength` | `number` | Set `0` for fast media. |
-| `hoverRadius` | `number` | Hover influence radius. |
-| `hoverEffect` | `HoverEffect` | Spotlight/magnify/etc. |
-| `hoverColor` | `string` | Hover tint. |
-| `artStyle` | `ArtStyle` | Preset name. |
-| `customText` | `string` | Repeating custom text. |
-| `chromaKey` | `boolean | string | {r,g,b} | null` | Green/blue/custom keying. |
-| `chromaKeyTolerance` | `number` | Default around `60`; raise for noisy footage. |
-| `normalize` | `boolean` | Stretch source luminance. |
-| `charsetFrames` | `string[]` | Animated charset sequence; heavier. |
-| `charsetFps` | `number` | Charset sequence rate. |
-
-## Charsets And Styles
-
-Use:
-
-```ts
-import { CHARSETS, ART_STYLE_PRESETS } from 'asciify-engine';
+```js
+const letters = [...new Set('ASCIIFY'.toUpperCase().replace(/[^A-Z]/g, ''))].join('');
+const charset = ` .:-=+${letters}#%@`;
 ```
 
-Common charsets:
+Preview it: letter glyph densities differ, so arbitrary words are not automatically an evenly ordered ramp. Keep the leading space and the light/dense symbols. Use `CHARSETS.standard`, `dense`, `blocks`, or `braille` when they better suit the subject.
 
-- `CHARSETS.standard`
-- `CHARSETS.dense`
-- `CHARSETS.blocks`
-- `CHARSETS.braille`
-- `CHARSETS.lines`
-- `CHARSETS.dots`
-- `CHARSETS.letters`
-- `CHARSETS.katakana`
-- `CHARSETS.circles`
-- `CHARSETS.geometric`
-- `CHARSETS.shadows`
-- `CHARSETS.starfield`
+## Engine effects versus studio effects
 
-Common art styles:
+The public npm `HoverEffect` IDs in 1.1.0 are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
 
-- `classic`: standard ASCII.
-- `art`: dense fullcolor detail.
-- `particles`: dots/fullcolor.
-- `letters`: alphabet characters.
-- `terminal`: matrix green.
-- `braille`: high detail.
-- `box`, `lines`, `katakana`, `emoji`, `circles`, `shadows`, `geometric`, `waves`, `shards`, `smoke`.
+The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, and Off** through an optional studio surface module. Its Living Print, Slow Current, Reveal & Reform, and fine-dither treatments are also site features; do not invent npm options from their display names.
 
-## Hover And Animation
+To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). The module is downloadable application code. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
 
-Hover effects:
+For built-in hover alone, use a supported `options.hoverEffect` and a restrained nonzero `hoverStrength`; validate its behavior instead of promising that it matches the website.
 
-`spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, `glitchText`
+## Text layering
 
-Hover presets:
+Use real HTML for the headline, description, and links. The engine draws artwork; CSS controls which HTML sits in front of it.
 
-`none`, `subtle`, `flashlight`, `magnifier`, `forceField`, `neon`, `fire`, `ice`, `gravity`, `shatter`, `ghost`, `glitchReveal`
+For our cover relationship, use a single isolated hero stacking context:
 
-Animation styles:
+1. Headline at `z-index: 0`.
+2. Transparent ASCII canvas/stage at `z-index: 1`.
+3. Description, CTA, and motion controls at `z-index: 2` or above.
 
-`none`, `wave`, `pulse`, `rain`, `breathe`, `sparkle`, `glitch`, `spiral`, `typewriter`, `scatter`, `waveField`, `ripple`, `melt`, `orbit`, `cellular`
+Keep these as sibling layers. A transformed or isolated content wrapper can trap all its descendants below the canvas. Set decorative artwork to `pointer-events: none`; attach optional hover input to the positioned hero host. Keep controls clickable, focusable, and visually unobscured. Leave canvas background transparent; an opaque canvas or stage hides the headline beneath it.
 
-Best practice:
+Choose the more conventional arrangement—artwork behind all text—when it improves readability. The layered example explains both arrangements without imposing the Asciify homepage's branding or layout on another project.
 
-- For video backgrounds and scroll heroes, use `animationStyle: 'none'` and `hoverStrength: 0`.
-- For interactive hover demos, keep the canvas smaller or use `fontSize >= 8`.
-- Avoid combining tiny fonts, fullcolor, hover, and animation unless the visual really needs it.
+## Performance and lifecycle
 
-## Recording And Export
+- Reduce processing dimensions and cell count before dropping source playback FPS. Do not default to 60 fps on a 24 fps video.
+- Start video at 24–30 fps with a 720–960px processing cap. More processing pixels do not create detail absent from the source. Version 1.1.0 includes the renderer fixes previously applied by the website; it does not include the optional studio surface module.
+- Keep stable canvas dimensions; resize on layout changes, not on every animation frame.
+- Avoid remounting the renderer on pointer movement or each React render.
+- Pause media offscreen and when the document is hidden. Reduced-motion users should get a still; do not merely hide a playing video with CSS.
+- Guard asynchronous setup: if a component unmounts before an API resolves, immediately call its returned cleanup. Handle loading failures without removing the HTML content or CTA.
+- Compress media at a resolution appropriate to ASCII sampling, remove unused audio, use fast-start MP4, and provide a small poster. Immutable caching requires a content-hashed URL; keep this skill's URL revalidatable.
+- Fine dithering can add texture but can shimmer on moving footage. Compare a still and a loop, and offer a non-dithered rendering.
+- YouTube page URLs and iframe players are not direct canvas video sources. Use permitted direct media files with suitable CORS; see https://asciify.org/docs/youtube.
 
-```ts
-import { createRecorder, recordAndDownload } from 'asciify-engine';
+## Verify before handing off
 
-await recordAndDownload(canvas, { duration: 3000, filename: 'ascii-art' });
+Check the actual implementation: readable subject and text, no stretching or unintended empty margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, and cleanup after navigation. Observe several seconds of motion and an entire loop boundary. State the measured device/settings if reporting FPS; screenshots and recordings alone do not establish performance.
 
-const recorder = createRecorder(canvas, { fps: 30 });
-recorder.start();
-const blob = await recorder.stop();
-```
-
-## Type Imports
-
-```ts
-import type {
-  AsciiOptions,
-  AsciiCell,
-  AsciiFrame,
-  AsciiTextFrame,
-  AsciifySimpleOptions,
-  AsciifyVideoOptions,
-  VideoScrollScrubOptions,
-  ColorMode,
-  AnimationStyle,
-  ArtStyle,
-  HoverEffect,
-} from 'asciify-engine';
-```
+Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload` from 1.1.0. For recording, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.

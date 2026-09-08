@@ -4,6 +4,7 @@
 
 import type { AnimationStyle } from '../types';
 import type { HoverEffect, HoverShape } from '../types';
+import type { TrailPoint } from './hover';
 
 export function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
@@ -95,9 +96,11 @@ export function getAnimationMultiplier(
       }
       return 0.7 + 0.3 * Math.sin(sdist * 10 - t * 2);
     }
-    case 'waveField':
-      // waveField is handled as a full short-circuit in renderFrameToCanvas
-      return 1;
+    case 'waveField': {
+      // Animate the source field; procedural scenes belong to backgrounds.
+      const wave = Math.sin(x / cols * 9 + Math.sin(y / rows * 6 - t) * 2 + t * 1.5);
+      return 0.55 + wave * 0.45;
+    }
     case 'ripple': {
       // Ripples emanate from the center outward over time.
       const cx2 = cols / 2;
@@ -164,10 +167,12 @@ export function computeHoverEffect(
   cellH: number,
   effect: HoverEffect = 'spotlight',
   radiusFactor: number = 0.5,
-  shape: HoverShape = 'circle'
+  shape: HoverShape = 'circle',
+  trail: readonly TrailPoint[] = [],
+  aspect = 1,
 ): typeof _hoverResult {
-  const dx = nx - hoverX;
-  const dy = ny - hoverY;
+  const dx = (nx - hoverX) * Math.max(1, aspect);
+  const dy = (ny - hoverY) * Math.max(1, 1 / aspect);
 
   const radius = (0.08 + radiusFactor * 0.35) + strength * 0.04;
 
@@ -186,7 +191,7 @@ export function computeHoverEffect(
     maxDist = radius;
   }
 
-  if (dist >= maxDist) {
+  if (dist >= maxDist && (effect !== 'trail' || trail.length === 0)) {
     _hoverResult.scale = 1;
     _hoverResult.offsetX = 0;
     _hoverResult.offsetY = 0;
@@ -196,7 +201,7 @@ export function computeHoverEffect(
     return _hoverResult;
   }
 
-  const t = 1 - dist / maxDist;
+  const t = Math.max(0, 1 - dist / maxDist);
   const eased = smoothstep(t) * hoverIntensity;
 
   let scale = 1;
@@ -217,13 +222,13 @@ export function computeHoverEffect(
       break;
     }
     case 'magnify':
-      scale = 1 + eased * strength * 2.5;
+      scale = 1 + eased * strength * 0.85;
       glow = eased * strength * 0.15;
       break;
     case 'repel': {
-      scale = 1 + eased * strength * 0.3;
+      scale = 1;
       const angle2 = Math.atan2(dy, dx);
-      const push = eased * eased * strength * 1.2;
+      const push = eased * eased * strength * 1.8;
       offsetX = Math.cos(angle2) * push * cellW;
       offsetY = Math.sin(angle2) * push * cellH;
       break;
@@ -233,17 +238,18 @@ export function computeHoverEffect(
       colorBlend = eased * strength * 0.4;
       break;
     case 'colorShift':
-      scale = 1 + eased * strength * 0.4;
-      glow = eased * strength * 0.2;
-      colorBlend = eased * strength * 0.7;
+      // Ink changes the tone without inflating or displacing the glyph.
+      scale = 1;
+      glow = eased * strength * 0.12;
+      colorBlend = eased * strength;
       break;
     case 'attract': {
       // Inverse of repel — chars drift toward the cursor.
       const angle3 = Math.atan2(dy, dx);
       const pull = eased * eased * strength * 1.0;
       // Offset toward cursor (negative direction = toward)
-      offsetX = -Math.cos(angle3) * pull * cellW;
-      offsetY = -Math.sin(angle3) * pull * cellH;
+      offsetX = (-Math.cos(angle3) * .45 - Math.sin(angle3) * 1.6) * pull * cellW;
+      offsetY = (-Math.sin(angle3) * .45 + Math.cos(angle3) * 1.6) * pull * cellH;
       glow = eased * strength * 0.3;
       break;
     }
@@ -259,10 +265,27 @@ export function computeHoverEffect(
       break;
     }
     case 'trail': {
-      // Leaves a fading colour ghost: increase colorBlend and glow strongly within radius.
-      colorBlend = eased * strength * 0.9;
-      glow = eased * strength * 0.6;
-      scale = 1 + eased * strength * 0.15;
+      // A bounded cursor wake: velocity carries the field while a small curl
+      // bends it. Older samples fade independently, rather than following the
+      // current pointer as a rigid circle.
+      let field = eased;
+      let flowX = -dy * eased, flowY = dx * eased;
+      for (const point of trail) {
+        const tx = (nx - point.x) * Math.max(1, aspect);
+        const ty = (ny - point.y) * Math.max(1, 1 / aspect);
+        const distance = Math.hypot(tx, ty) / radius;
+        if (distance >= 1) continue;
+        const weight = smoothstep(1 - distance) * point.intensity;
+        field = Math.max(field, weight);
+        flowX += (point.vx * 0.35 - ty * 2) * weight * 0.35;
+        flowY += (point.vy * 0.35 + tx * 2) * weight * 0.35;
+      }
+      offsetX = Math.tanh(flowX * 2) * strength * cellW * 3;
+      offsetY = Math.tanh(flowY * 2) * strength * cellH * 3;
+      colorBlend = field * strength * 0.65;
+      glow = field * strength * 0.35;
+      scale = 1 + field * strength * 0.08;
+      _hoverResult.proximity = field;
       break;
     }
     case 'glitchText': {
@@ -280,6 +303,6 @@ export function computeHoverEffect(
   _hoverResult.offsetY = offsetY;
   _hoverResult.glow = glow;
   _hoverResult.colorBlend = colorBlend;
-  _hoverResult.proximity = eased;
+  if (effect !== 'trail') _hoverResult.proximity = eased;
   return _hoverResult;
 }

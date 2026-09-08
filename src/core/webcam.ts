@@ -113,7 +113,6 @@ export async function asciifyWebcam(
 
   // ── Hover tracking ────────────────────────────────────────────────────────
   let hoverPos: { x: number; y: number } | null = null;
-  const smoothHover = { x: 0.5, y: 0.5, intensity: 0 };
 
   const onMouseMove = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
@@ -159,23 +158,7 @@ export async function asciifyWebcam(
 
       const { frame } = imageToAsciiFrame(video, frameOptions, displayW, displayH);
 
-      // Smooth hover interpolation
-      if (hoverPos) {
-        const dx = hoverPos.x - smoothHover.x;
-        const dy = hoverPos.y - smoothHover.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const speed = Math.min(0.25, 0.06 + dist * 0.8);
-        smoothHover.x += dx * speed;
-        smoothHover.y += dy * speed;
-        smoothHover.intensity += (1 - smoothHover.intensity) * 0.12;
-      } else {
-        smoothHover.intensity *= 0.965;
-        if (smoothHover.intensity < 0.003) smoothHover.intensity = 0;
-      }
-
-      const hoverArg = smoothHover.intensity > 0.003
-        ? { x: smoothHover.x, y: smoothHover.y, intensity: smoothHover.intensity }
-        : null;
+      const hoverArg = hoverPos && mirror ? { x: 1 - hoverPos.x, y: hoverPos.y } : hoverPos;
 
       if (mirror) {
         ctx.save();

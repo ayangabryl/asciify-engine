@@ -8,6 +8,7 @@ import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
 import { createOffscreenCanvas, parseChromaKeyColor } from './utils';
 import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas, resolveSourceCrop } from './renderer';
 import type { AsciiTextFrame } from './renderer';
+import { createRenderLoop } from './hover';
 
 export { videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, resolveSourceCrop };
 
@@ -832,7 +833,7 @@ function computeFitSize(
  *
  * **Quality approach (matching the playground):**
  * - The canvas _buffer_ is set to source dimensions × DPR so characters are
- *   rendered at their natural font size (well above the 6 px fast-rect cutoff).
+ *   rendered at their natural font size (at the selected detail level).
  * - `ctx.scale(dpr)` maps the source-sized coordinate space into the DPR-scaled
  *   buffer for crisp Retina text.
  * - CSS `width`/`height` is the container-fitted display size — the browser's
@@ -918,7 +919,7 @@ export async function asciify(
   source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string,
   canvas: HTMLCanvasElement,
   { fontSize, artStyle = 'classic', options = {} }: AsciifySimpleOptions = {}
-): Promise<(() => void) | void> {
+): Promise<() => void> {
   let el: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
   if (typeof source === 'string') {
     const img = new Image();
@@ -941,7 +942,7 @@ export async function asciify(
 
   const preset = ART_STYLE_PRESETS[artStyle];
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, ...options, fontSize: resolvedFontSize };
+  const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, artStyle, ...options, fontSize: resolvedFontSize };
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
@@ -957,60 +958,24 @@ export async function asciify(
     ? Math.sqrt(MAX_PX / (renderW * renderH))
     : dpr;
 
-  if (canvas.width < renderW || canvas.height < renderH) {
+  if (canvas.width !== Math.round(renderW * cappedDpr) || canvas.height !== Math.round(renderH * cappedDpr)) {
     canvas.width  = Math.round(renderW * cappedDpr);
     canvas.height = Math.round(renderH * cappedDpr);
   }
 
-  // ── Hover-interactive mode ──────────────────────────────────────────
-  // When hoverStrength > 0, set up mouse tracking + RAF loop automatically.
-  if (merged.hoverStrength > 0) {
-    const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
-    let hoverPos: { x: number; y: number } | null = null;
-    let cancelled = false;
-    let rafId = 0;
-
-    const onMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      hoverPos = {
-        x: (e.clientX - rect.left) / rect.width,
-        y: (e.clientY - rect.top) / rect.height,
-      };
-    };
-    const onMouseLeave = () => { hoverPos = null; };
-
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseleave', onMouseLeave);
-
-    const tick = (t: number) => {
-      if (cancelled) return;
-      ctx.save();
-      ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
-      renderFrameToCanvas(ctx, frame, merged, renderW, renderH, t / 1000, hoverPos);
-      ctx.restore();
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mouseleave', onMouseLeave);
-    };
-  }
-
-  // ── Static mode (no hover) ─────────────────────────────────────────
-  ctx.save();
-  ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
-  if (canUseFastTextFrame(merged)) {
-    const frame = imageToAsciiTextFrame(el, merged, renderW, renderH);
-    renderTextFrameToCanvas(ctx, frame, merged, renderW, renderH);
-  } else {
-    const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
-    renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
-  }
-  ctx.restore();
+  const { frame } = imageToAsciiFrame(el, merged, renderW, renderH);
+  const draw = (time: number, hover: { x: number; y: number } | null) => {
+    ctx.save();
+    ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
+    renderFrameToCanvas(ctx, frame, merged, renderW, renderH, time / 1000, hover);
+    ctx.restore();
+  };
+  draw(0, null);
+  const loop = createRenderLoop(canvas, draw, {
+    continuous: merged.animationStyle !== 'none' || !!merged.charsetFrames?.length,
+    interactive: merged.hoverStrength > 0,
+  });
+  return loop.stop;
 }
 
 /**
@@ -1031,52 +996,22 @@ export async function asciifyGif(
     : source;
 
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], artStyle, ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
-  if (canUseFastTextFrame(merged)) {
-    const { frames, fps } = await gifToAsciiTextFrames(buffer, merged, canvas.width, canvas.height);
-    let cancelled = false;
-    let animId: number;
-    let i = 0;
-    let last = performance.now();
-    const interval = 1000 / fps;
-
-    const tick = (now: number) => {
-      if (cancelled) return;
-      if (now - last >= interval) {
-        renderTextFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
-        i = (i + 1) % frames.length;
-        last = now;
-      }
-      animId = requestAnimationFrame(tick);
-    };
-    animId = requestAnimationFrame(tick);
-
-    return () => { cancelled = true; cancelAnimationFrame(animId); };
-  }
-
   const { frames, fps } = await gifToAsciiFrames(buffer, merged, canvas.width, canvas.height);
-
-  let cancelled = false;
-  let animId: number;
-  let i = 0;
-  let last = performance.now();
-  const interval = 1000 / fps;
-
-  const tick = (now: number) => {
-    if (cancelled) return;
-    if (now - last >= interval) {
-      renderFrameToCanvas(ctx, frames[i], merged, canvas.width, canvas.height);
-      i = (i + 1) % frames.length;
-      last = now;
-    }
-    animId = requestAnimationFrame(tick);
-  };
-  animId = requestAnimationFrame(tick);
-
-  return () => { cancelled = true; cancelAnimationFrame(animId); };
+  if (!frames.length) throw new Error('asciifyGif: the GIF contains no renderable frames.');
+  const start = performance.now();
+  let lastIndex = -1;
+  const loop = createRenderLoop(canvas, (now, hover) => {
+    const index = Math.floor((now - start) * fps / 1000) % frames.length;
+    if (index === lastIndex && !hover && merged.hoverStrength <= 0 &&
+      merged.animationStyle === 'none' && !merged.charsetFrames?.length) return;
+    renderFrameToCanvas(ctx, frames[index], merged, canvas.width, canvas.height, (now - start) / 1000, hover);
+    lastIndex = index;
+  }, { continuous: true, interactive: merged.hoverStrength > 0 });
+  return loop.stop;
 }
 
 /**
@@ -1132,7 +1067,7 @@ export async function asciifyVideo(
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], artStyle, ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
   const container: HTMLElement | null =
@@ -1179,7 +1114,7 @@ export async function asciifyVideo(
       : dpr;
 
     // Ensure buffer is large enough
-    if (canvas.width < Math.round(renderW * cappedDpr)) {
+    if (canvas.width !== Math.round(renderW * cappedDpr) || canvas.height !== Math.round(renderH * cappedDpr)) {
       canvas.width  = Math.round(renderW * cappedDpr);
       canvas.height = Math.round(renderH * cappedDpr);
     }
@@ -1237,51 +1172,29 @@ export async function asciifyVideo(
     }
 
     const { frames, fps: extractedFps } = await videoToAsciiFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
-    const renderFrame = (index: number) => {
-      const frame = frames[index];
-      if (!frame) return;
+    if (!frames.length) throw new Error('asciifyVideo: no frames were decoded.');
+    let index = 0;
+    const start = performance.now();
+    const loop = createRenderLoop(canvas, (now, hover) => {
+      if (!scroll) index = Math.floor((now - start) * extractedFps / 1000) % frames.length;
       ctx.save();
       ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
-      renderFrameToCanvas(ctx, frame, merged, renderW, renderH);
+      renderFrameToCanvas(ctx, frames[index], merged, renderW, renderH, (now - start) / 1000, hover);
       ctx.restore();
       onFrame?.();
-    };
-
+    }, { continuous: !scroll || merged.animationStyle !== 'none' || !!merged.charsetFrames?.length,
+      interactive: merged.hoverStrength > 0 });
+    let cleanupScroll: (() => void) | undefined;
     if (scroll) {
-      let ready = false;
-      let lastIndex = -1;
-      const scrollOpts: VideoScrollScrubOptions = scroll === true ? {} : scroll;
-      const trigger = resolveElement(scrollOpts.trigger) ?? container ?? canvas;
-      const cleanup = createProgressScrollScrub(trigger, scrollOpts, progress => {
-        const eased = mapScrollProgress(progress, scrollOpts);
-        const index = Math.max(0, Math.min(frames.length - 1, Math.round(eased * (frames.length - 1))));
-        if (index === lastIndex) return;
-        lastIndex = index;
-        renderFrame(index);
-        if (!ready) { ready = true; onReady?.(video); }
-        scrollOpts.onUpdate?.(eased, video);
+      const scrollOpts = scroll === true ? {} : scroll;
+      cleanupScroll = createProgressScrollScrub(resolveElement(scrollOpts.trigger) ?? container ?? canvas, scrollOpts, progress => {
+        index = Math.max(0, Math.min(frames.length - 1, Math.round(mapScrollProgress(progress, scrollOpts) * (frames.length - 1))));
+        loop.wake();
+        scrollOpts.onUpdate?.(progress, video);
       });
-      renderFrame(0);
-      ready = true;
-      onReady?.(video);
-      return withCanvasLayoutCleanup(cleanup);
     }
-
-    let cancelled = false, animId: number, i = 0, last = performance.now();
-    let firstFrame = true;
-    const interval = 1000 / extractedFps;
-    const tick = (now: number) => {
-      if (cancelled) return;
-      if (now - last >= interval) {
-        renderFrame(i);
-        i = (i + 1) % frames.length;
-        last = now;
-        if (firstFrame) { firstFrame = false; onReady?.(video); }
-      }
-      animId = requestAnimationFrame(tick);
-    };
-    animId = requestAnimationFrame(tick);
-    return withCanvasLayoutCleanup(() => { cancelled = true; cancelAnimationFrame(animId); });
+    onReady?.(video);
+    return withCanvasLayoutCleanup(() => { loop.stop(); cleanupScroll?.(); });
   }
 
   // ── Live streaming mode (default) ────────────────────────────────────────
@@ -1291,6 +1204,7 @@ export async function asciifyVideo(
   if (typeof source === 'string') {
     // Keep off-screen but not display:none — browsers skip GPU decoding for hidden elements
     video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
     video.src = source;
     video.muted = true;
     video.loop = true;
@@ -1355,7 +1269,7 @@ export async function asciifyVideo(
   let ro: ResizeObserver | null = null;
   // Render dimensions = effective cropped source size for maximum detail without stretching.
   const effectiveLiveSource = getEffectiveSourceDims(video.videoWidth, video.videoHeight, merged);
-  const { renderW, renderH } = computeRenderDims(effectiveLiveSource.w, effectiveLiveSource.h, maxRenderDimension);
+  let { renderW, renderH } = computeRenderDims(effectiveLiveSource.w, effectiveLiveSource.h, maxRenderDimension);
   const trimFrameToRenderAspect = (sourceFrame: HTMLVideoElement): AsciiOptions =>
     merged.chromaKeyTrimMode === 'frame'
       ? resolveChromaContentCrop(sourceFrame, merged, renderW / renderH)
@@ -1365,12 +1279,14 @@ export async function asciifyVideo(
     const aspect = effectiveLiveSource.w / effectiveLiveSource.h;
     const vw = effectiveLiveSource.w, vh = effectiveLiveSource.h;
     const sizing = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, layoutOptions);
+    renderW = sizing.renderW; renderH = sizing.renderH;
     // Apply DPR scale transform once — will be refreshed on resize
     const sCtx = canvas.getContext('2d');
     if (sCtx) sCtx.setTransform(sizing.dpr, 0, 0, sizing.dpr, 0, 0);
 
     ro = new ResizeObserver(() => {
       const s = sizeCanvasToContainer(canvas, container, aspect, vw, vh, maxRenderDimension, layoutOptions);
+      renderW = s.renderW; renderH = s.renderH;
       const rCtx = canvas.getContext('2d');
       if (rCtx) rCtx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     });
@@ -1382,21 +1298,18 @@ export async function asciifyVideo(
     const cappedDpr = (renderW * dpr * renderH * dpr > MAX_PX)
       ? Math.sqrt(MAX_PX / (renderW * renderH))
       : dpr;
-    if (canvas.width < Math.round(renderW * cappedDpr)) {
+    if (canvas.width !== Math.round(renderW * cappedDpr) || canvas.height !== Math.round(renderH * cappedDpr)) {
       canvas.width  = Math.round(renderW * cappedDpr);
       canvas.height = Math.round(renderH * cappedDpr);
     }
     ctx.setTransform(cappedDpr, 0, 0, cappedDpr, 0, 0);
   }
 
-  let cancelled = false;
-  let animId: number;
   let firstFrame = true;
   let scrollCleanup: (() => void) | null = null;
   const enableScrollScrub = scroll && !preExtract;
   const renderInterval = fps && fps > 0 ? 1000 / fps : 0;
   let lastRenderAt = 0;
-  let lastRenderedVideoTime = -1;
 
   const canUseFastLiveTextFrames = !enableScrollScrub && canUseFastTextFrame(merged);
 
@@ -1622,44 +1535,44 @@ export async function asciifyVideo(
     });
   }
 
-  const tick = (now: number) => {
-    if (cancelled) return;
-    animId = requestAnimationFrame(tick);
+  let lastSampleTime = -1;
+  let decodedFrame = 0, sampledFrame = -1, videoFrameCallback = 0;
+  const tracksDecodedFrames = typeof video.requestVideoFrameCallback === 'function';
+  const trackDecodedFrame = () => {
+    videoFrameCallback = video.requestVideoFrameCallback(() => {
+      decodedFrame++;
+      trackDecodedFrame();
+    });
+  };
+  if (tracksDecodedFrames) trackDecodedFrame();
+  let sampledWidth = 0, sampledHeight = 0;
+  let liveFrame: ReturnType<typeof imageToAsciiFrame>['frame'] | null = null;
+  const loop = createRenderLoop(canvas, (now, hover) => {
     if (video.readyState < 2 || canvas.width === 0 || canvas.height === 0) return;
-    if (renderInterval > 0 && now - lastRenderAt < renderInterval) return;
-    // Skip frames outside trim window (prevents flash at time 0 on loop)
+    if (renderInterval > 0 && now - lastRenderAt < renderInterval && !hover) return;
     if (trimStart > 0 && video.currentTime < trimStart) return;
     if (trimEnd !== undefined && video.currentTime >= trimEnd) return;
-    if (enableScrollScrub && Math.abs(video.currentTime - lastRenderedVideoTime) < 1 / 240) return;
-
+    const mediaChanged = (tracksDecodedFrames ? decodedFrame !== sampledFrame : video.currentTime !== lastSampleTime) ||
+      sampledWidth !== renderW || sampledHeight !== renderH;
+    if (!mediaChanged && merged.hoverStrength <= 0 && merged.animationStyle === 'none' && !merged.charsetFrames?.length) return;
     if (canUseFastLiveTextFrames) {
       const frameOptions = trimFrameToRenderAspect(video);
       const frame = imageToAsciiTextFrame(video, frameOptions, renderW, renderH);
-      if (frame.rows.length > 0) {
-        renderTextFrameToCanvas(ctx, frame, frameOptions, renderW, renderH);
-        lastRenderAt = now;
-        lastRenderedVideoTime = video.currentTime;
-        if (firstFrame) { firstFrame = false; onReady?.(video); }
-        onFrame?.();
-      }
-      return;
+      renderTextFrameToCanvas(ctx, frame, frameOptions, renderW, renderH);
+    } else {
+      if (mediaChanged || !liveFrame) liveFrame = imageToAsciiFrame(video, trimFrameToRenderAspect(video), renderW, renderH).frame;
+      renderFrameToCanvas(ctx, liveFrame, merged, renderW, renderH, now / 1000, hover);
     }
-
-    const frameOptions = trimFrameToRenderAspect(video);
-    const { frame } = imageToAsciiFrame(video, frameOptions, renderW, renderH);
-    if (frame.length > 0) {
-      renderFrameToCanvas(ctx, frame, merged, renderW, renderH, 0, null);
-      lastRenderAt = now;
-      lastRenderedVideoTime = video.currentTime;
-      if (firstFrame) { firstFrame = false; onReady?.(video); }
-      onFrame?.();
-    }
-  };
-  animId = requestAnimationFrame(tick);
+    lastSampleTime = video.currentTime;
+    sampledFrame = decodedFrame; sampledWidth = renderW; sampledHeight = renderH;
+    lastRenderAt = now;
+    if (firstFrame) { firstFrame = false; onReady?.(video); }
+    onFrame?.();
+  }, { continuous: true, interactive: merged.hoverStrength > 0 });
 
   return withCanvasLayoutCleanup(() => {
-    cancelled = true;
-    cancelAnimationFrame(animId);
+    loop.stop();
+    if (videoFrameCallback) video.cancelVideoFrameCallback(videoFrameCallback);
     scrollCleanup?.();
     ro?.disconnect();
     if (timeupdateHandler) video.removeEventListener('timeupdate', timeupdateHandler);

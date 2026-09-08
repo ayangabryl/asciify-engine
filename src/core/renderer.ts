@@ -4,11 +4,10 @@
 
 import type { AsciiOptions, AsciiCell, AsciiFrame, SourceCrop } from '../types';
 import { DEFAULT_OPTIONS } from '../types';
-import { parseGIF, decompressFrames } from 'gifuct-js';
+// GIF decoding is loaded only by the asynchronous GIF conversion APIs.
 import {
   createOffscreenCanvas,
   adjustLuminance,
-  luminanceToChar,
   customTextToChar,
   applyDither,
   getCellColorStr,
@@ -17,18 +16,12 @@ import {
   isDarkMode,
 } from './utils';
 import { getAnimationMultiplier, computeHoverEffect } from './animation';
-import { renderWaveBackground } from '../backgrounds/wave';
+import { advanceHover, createHoverState, type HoverState, type RenderHover } from './hover';
 
 // Re-export AsciiFrame for downstream consumers that import from this module
 export type { AsciiFrame };
 void DEFAULT_OPTIONS; // keep import alive for tree-shaking hint
 
-const rasterCanvasCache = new WeakMap<CanvasRenderingContext2D, HTMLCanvasElement | OffscreenCanvas>();
-const rasterImageDataCache = new WeakMap<CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, {
-  width: number;
-  height: number;
-  imageData: ImageData;
-}>();
 let sharedSampleCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
 let sharedSampleCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
 
@@ -44,42 +37,6 @@ function getSharedSampleContext(width: number, height: number): CanvasRenderingC
   return sharedSampleCtx;
 }
 
-function getRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: number): {
-  canvas: HTMLCanvasElement | OffscreenCanvas;
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-} {
-  let canvas = rasterCanvasCache.get(ctx);
-  if (!canvas) {
-    canvas = createOffscreenCanvas(width, height).canvas;
-    rasterCanvasCache.set(ctx, canvas);
-  }
-
-  if (canvas.width !== width) canvas.width = width;
-  if (canvas.height !== height) canvas.height = height;
-
-  const rasterCtx = canvas.getContext('2d', { willReadFrequently: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!rasterCtx) throw new Error('renderFrameToCanvas: could not create raster context.');
-  return { canvas, ctx: rasterCtx };
-}
-
-function getTextRasterCanvas(ctx: CanvasRenderingContext2D, width: number, height: number): {
-  canvas: HTMLCanvasElement | OffscreenCanvas;
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-} {
-  let canvas = textRasterCanvasCache.get(ctx);
-  if (!canvas) {
-    canvas = createOffscreenCanvas(width, height).canvas;
-    textRasterCanvasCache.set(ctx, canvas);
-  }
-
-  if (canvas.width !== width) canvas.width = width;
-  if (canvas.height !== height) canvas.height = height;
-
-  const rasterCtx = canvas.getContext('2d', { willReadFrequently: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!rasterCtx) throw new Error('renderTextFrameToCanvas: could not create raster context.');
-  return { canvas, ctx: rasterCtx };
-}
-
 export interface AsciiTextFrame {
   rows: string[];
   cols: number;
@@ -89,13 +46,6 @@ export interface AsciiTextFrame {
 
 const charsetCharsCache = new Map<string, string[]>();
 const charLutCache = new Map<string, string[]>();
-const charWeightCache = new Map<string, Map<string, number>>();
-const textRasterCanvasCache = new WeakMap<CanvasRenderingContext2D, HTMLCanvasElement | OffscreenCanvas>();
-const textRasterImageDataCache = new WeakMap<CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, {
-  width: number;
-  height: number;
-  imageData: ImageData;
-}>();
 const textFrameRenderStateCache = new WeakMap<CanvasRenderingContext2D, {
   rows: string[];
   cols: number;
@@ -153,25 +103,13 @@ function getLuminanceCharLut(charset: string, invert: boolean, brightness: numbe
   return lut;
 }
 
-function getCharsetWeightMap(charset: string): Map<string, number> {
-  let weights = charWeightCache.get(charset);
-  if (!weights) {
-    const chars = getCharsetChars(charset);
-    const len = Math.max(1, chars.length);
-    weights = new Map();
-    for (let i = 0; i < chars.length; i++) {
-      if (!weights.has(chars[i])) weights.set(chars[i], Math.max(0.08, (i + 0.5) / len));
-    }
-    charWeightCache.set(charset, weights);
-  }
-  return weights;
-}
-
 /** Clear shared renderer caches. Useful for long-lived editors that cycle many fonts/charsets. */
 export function clearAsciifyCaches(): void {
   charsetCharsCache.clear();
   charLutCache.clear();
-  charWeightCache.clear();
+  hoverStates = new WeakMap();
+  stillFrames = new WeakMap();
+  lastFrames = new WeakMap();
   sharedSampleCanvas = null;
   sharedSampleCtx = null;
 }
@@ -212,7 +150,7 @@ function cssValueToHex(val: string): string | null {
  */
 function resolveAccentHex(accentColor: string | undefined): string {
   const v = accentColor || 'auto';
-  if (v !== 'auto') return v.replace('#', '');
+  if (v !== 'auto') return cssValueToHex(v) ?? 'ffffff';
 
   if (typeof document !== 'undefined') {
     const rootStyle = getComputedStyle(document.documentElement);
@@ -344,7 +282,11 @@ export function imageToAsciiFrame(
   const sampleH = rows * ssY;
 
   const ctx = getSharedSampleContext(sampleW, sampleH);
-  ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH);
+  // Replace the previous sample, including transparent pixels.
+  const previousComposite = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'copy';
+  try { ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH); }
+  finally { ctx.globalCompositeOperation = previousComposite; }
   const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
   const pixels = imageData.data;
 
@@ -517,7 +459,11 @@ export function imageToAsciiTextFrame(
 
   const ctx = getSharedSampleContext(sampleW, sampleH);
   const sourceCrop = resolveSourceCrop(options.sourceCrop, srcWidth, srcHeight);
-  ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH);
+  // Replace the previous sample, including transparent pixels.
+  const previousComposite = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'copy';
+  try { ctx.drawImage(source, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, sampleW, sampleH); }
+  finally { ctx.globalCompositeOperation = previousComposite; }
   const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
 
   const ck = options.chromaKey;
@@ -649,9 +595,9 @@ export function renderTextFrameToCanvas(
   }
 
   const acHex = resolveAccentHex(options.accentColor);
-  const acR = parseInt(acHex.substring(0, 2), 16) || 255;
-  const acG = parseInt(acHex.substring(2, 4), 16) || 255;
-  const acB = parseInt(acHex.substring(4, 6), 16) || 255;
+  const acR = parseInt(acHex.substring(0, 2), 16);
+  const acG = parseInt(acHex.substring(2, 4), 16);
+  const acB = parseInt(acHex.substring(4, 6), 16);
   const cellW = canvasWidth / textFrame.cols;
   const cellH = canvasHeight / textFrame.rowCount;
   const charAspect = 0.55;
@@ -661,44 +607,6 @@ export function renderTextFrameToCanvas(
   if (options.colorMode === 'fullcolor' && colors) {
     textFrameRenderStateCache.delete(ctx);
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    if (fontSize < 6) {
-      const { canvas: rasterCanvas, ctx: rasterCtx } = getTextRasterCanvas(ctx, textFrame.cols, textFrame.rowCount);
-      let cached = textRasterImageDataCache.get(rasterCtx);
-      if (!cached || cached.width !== textFrame.cols || cached.height !== textFrame.rowCount) {
-        cached = { width: textFrame.cols, height: textFrame.rowCount, imageData: rasterCtx.createImageData(textFrame.cols, textFrame.rowCount) };
-        textRasterImageDataCache.set(rasterCtx, cached);
-      }
-
-      const imageData = cached.imageData;
-      const out = imageData.data;
-      out.fill(0);
-      const weights = getCharsetWeightMap(options.charset);
-
-      for (let y = 0; y < textFrame.rowCount; y++) {
-        const line = textFrame.rows[y];
-        const lineChars = getRowChars(line);
-        for (let x = 0; x < textFrame.cols; x++) {
-          const ch = lineChars[x];
-          if (ch === ' ') continue;
-          const index = (y * textFrame.cols + x) * 4;
-          const alpha = colors[index + 3];
-          if (alpha < 10) continue;
-          const weight = weights.get(ch) ?? 0.5;
-          out[index] = colors[index];
-          out[index + 1] = colors[index + 1];
-          out[index + 2] = colors[index + 2];
-          out[index + 3] = Math.min(255, alpha * weight) | 0;
-        }
-      }
-
-      rasterCtx.putImageData(imageData, 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(rasterCanvas, 0, 0, canvasWidth, canvasHeight);
-      ctx.imageSmoothingEnabled = true;
-      ctx.globalAlpha = 1;
-      return;
-    }
-
     ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -880,6 +788,7 @@ export async function gifToAsciiFrames(
   targetHeight: number,
   onProgress?: (progress: number) => void
 ): Promise<{ frames: AsciiFrame[]; cols: number; rows: number; fps: number }> {
+  const { parseGIF, decompressFrames } = await import('gifuct-js');
   const gif = parseGIF(buffer);
   const rawFrames = decompressFrames(gif, true);
 
@@ -962,6 +871,7 @@ export async function gifToAsciiTextFrames(
   targetHeight: number,
   onProgress?: (progress: number) => void
 ): Promise<{ frames: AsciiTextFrame[]; cols: number; rows: number; fps: number }> {
+  const { parseGIF, decompressFrames } = await import('gifuct-js');
   const gif = parseGIF(buffer);
   const rawFrames = decompressFrames(gif, true);
 
@@ -1035,32 +945,113 @@ export async function gifToAsciiTextFrames(
  * Render an ASCII frame to a canvas context.
  * Supports both ASCII text mode and Dots mode.
  */
+let hoverStates = new WeakMap<CanvasRenderingContext2D, HoverState>();
+let lastFrames = new WeakMap<CanvasRenderingContext2D, { frame: AsciiFrame; since: number }>();
+let stillFrames = new WeakMap<CanvasRenderingContext2D, {
+  frame: AsciiFrame; key: string; canvas: HTMLCanvasElement;
+}>();
+
+/** Frames are immutable: replace a frame after editing cells to invalidate its cached drawing. */
 export function renderFrameToCanvas(
+  ctx: CanvasRenderingContext2D, frame: AsciiFrame, options: AsciiOptions,
+  width: number, height: number, time = 0,
+  pointer?: { x: number; y: number; intensity?: number } | null,
+): void {
+  if (!frame.length || !frame[0].length || width <= 0 || height <= 0) return;
+  let hover: RenderHover | null = null;
+  if (options.hoverStrength > 0) {
+    let state = hoverStates.get(ctx);
+    if (!state) { state = createHoverState(); hoverStates.set(ctx, state); }
+    hover = advanceHover(state, pointer ?? null, performance.now());
+  } else hoverStates.delete(ctx);
+
+  // Moving media and time-based styles use the direct path. A still image
+  // keeps one backing bitmap and redraws only cells touched by the cursor.
+  if (options.animationStyle !== 'none' || options.charsetFrames?.length || options.hoverStrength <= 0) {
+    stillFrames.delete(ctx);
+    drawFrameToCanvas(ctx, frame, options, width, height, time, hover);
+    return;
+  }
+  const previous = lastFrames.get(ctx);
+  if (previous?.frame !== frame) {
+    lastFrames.set(ctx, { frame, since: performance.now() }); stillFrames.delete(ctx);
+    drawFrameToCanvas(ctx, frame, options, width, height, time, hover);
+    return;
+  }
+  // Do not allocate a backing bitmap for every decoded video frame.
+  if (performance.now() - previous.since < 100) {
+    drawFrameToCanvas(ctx, frame, options, width, height, time, hover);
+    return;
+  }
+  const transform = ctx.getTransform();
+  // Rotated/sheared contexts retain the general renderer's behavior.
+  if (transform.b || transform.c || transform.a <= 0 || transform.d <= 0) {
+    drawFrameToCanvas(ctx, frame, options, width, height, time, hover);
+    return;
+  }
+  // Restore the original direct drawing when the wake settles. This also
+  // avoids a raster-cache antialiasing change in the final resting image.
+  if (!hover || (hover.intensity ?? 0) < 0.003) {
+    drawFrameToCanvas(ctx, frame, options, width, height, time, null);
+    return;
+  }
+  const dark = isDarkMode(ctx.canvas);
+  const resolvedOptions = { ...options, accentColor: '#' + resolveAccentHex(options.accentColor) };
+  const key = JSON.stringify([resolvedOptions, width, height, transform.a, transform.d, dark,
+    typeof document.fonts !== 'undefined' ? document.fonts.status : 'loaded']);
+  let cached = stillFrames.get(ctx);
+  if (!cached || cached.frame !== frame || cached.key !== key) {
+    const bitmap = cached?.canvas ?? document.createElement('canvas');
+    bitmap.width = Math.ceil(width * transform.a);
+    bitmap.height = Math.ceil(height * transform.d);
+    const base = bitmap.getContext('2d')!;
+    base.setTransform(transform.a, 0, 0, transform.d, 0, 0);
+    drawFrameToCanvas(base, frame, resolvedOptions, width, height, 0, null, undefined, dark);
+    cached = { frame, key, canvas: bitmap };
+    stillFrames.set(ctx, cached);
+  }
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(cached.canvas, 0, 0, width, height);
+  if (!hover || (hover.intensity ?? 0) < 0.003) return;
+  const rows = frame.length, cols = frame[0].length;
+  // Padding includes the largest existing displacement, magnification and
+  // glyph overhang, so the cached and live portions meet without clipped ink.
+  const radius = 0.08 + options.hoverRadius * 0.35 + options.hoverStrength * 0.04;
+  const points = options.hoverEffect === 'trail' ? [hover, ...(hover.trail ?? [])] : [hover];
+  let left = 1, top = 1, right = 0, bottom = 0;
+  for (const point of points) {
+    left = Math.min(left, point.x - radius); right = Math.max(right, point.x + radius);
+    top = Math.min(top, point.y - radius); bottom = Math.max(bottom, point.y + radius);
+  }
+  // Glitch words may extend farther than the radial cursor influence.
+  if (options.hoverEffect === 'glitchText') {
+    const text = options.hoverText;
+    const length = Math.max(1, ...(Array.isArray(text) ? text : [text]).map(word => word.length));
+    left = Math.min(left, hover.x - length / cols); right = Math.max(right, hover.x + length / cols);
+  }
+  const padding = Math.ceil(5 + options.hoverStrength * 4);
+  const region = { x: Math.max(0, Math.floor(left * cols) - padding), y: Math.max(0, Math.floor(top * rows) - padding),
+    right: Math.min(cols, Math.ceil(right * cols) + padding), bottom: Math.min(rows, Math.ceil(bottom * rows) + padding) };
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(region.x * width / cols, region.y * height / rows,
+    (region.right - region.x) * width / cols, (region.bottom - region.y) * height / rows);
+  ctx.clip();
+  drawFrameToCanvas(ctx, frame, resolvedOptions, width, height, time, hover, region, dark);
+  ctx.restore();
+}
+
+function drawFrameToCanvas(
   ctx: CanvasRenderingContext2D,
   frame: AsciiFrame,
   options: AsciiOptions,
   canvasWidth: number,
   canvasHeight: number,
   time: number = 0,
-  hoverPos?: { x: number; y: number; intensity?: number } | null
+  hoverPos?: RenderHover | null,
+  region?: { x: number; y: number; right: number; bottom: number },
+  darkOverride?: boolean,
 ) {
-  // waveField short-circuit
-  if (options.animationStyle === 'waveField') {
-    const mouseNorm = hoverPos ? { x: hoverPos.x, y: hoverPos.y } : { x: 0.5, y: 0.5 };
-    const acHexWF = options.accentColor ? resolveAccentHex(options.accentColor) : 'd4ff00';
-    renderWaveBackground(ctx, canvasWidth, canvasHeight, time, mouseNorm, {
-      accentColor: `#${acHexWF}`,
-      accentThreshold: 0.52,
-      mouseInfluence: options.hoverStrength > 0 ? Math.min(1, 0.3 + options.hoverStrength * 0.5) : 0.55,
-      mouseFalloff: 2.8,
-      speed: options.animationSpeed,
-      vortex: options.hoverStrength > 0,
-      sparkles: true,
-      breathe: true,
-    });
-    return;
-  }
-
   const rows = frame.length;
   if (rows === 0) return;
   const cols = frame[0].length;
@@ -1079,7 +1070,7 @@ export function renderFrameToCanvas(
   }
 
   const canvasEl = ctx.canvas as HTMLCanvasElement | null;
-  const dark = isDarkMode(canvasEl);
+  const dark = darkOverride ?? isDarkMode(canvasEl);
 
   if (!hasTransparency) {
     // Fill based on the detected colour scheme (probes ancestor backgrounds,
@@ -1090,28 +1081,21 @@ export function renderFrameToCanvas(
 
   const cellW = canvasWidth / cols;
   const cellH = canvasHeight / rows;
-  const totalCells = rows * cols;
 
   const hoverIntensity = hoverPos?.intensity ?? 1;
-  const animationActive = options.animationStyle !== 'none';
-  const suppressHover = animationActive && totalCells > 5_000;
-  const hoverActive = !suppressHover && !!(hoverPos && options.hoverStrength > 0 && hoverIntensity > 0.005);
+  const hoverActive = !!(hoverPos && options.hoverStrength > 0 && hoverIntensity > 0.005);
 
-  const hc = options.hoverColor || '#ffffff';
-  const hcR = parseInt(hc.slice(1, 3), 16) || 255;
-  const hcG = parseInt(hc.slice(3, 5), 16) || 255;
-  const hcB = parseInt(hc.slice(5, 7), 16) || 255;
+  const hc = '#' + (cssValueToHex(options.hoverColor || '#ffffff') ?? 'ffffff');
+  const hcR = parseInt(hc.slice(1, 3), 16);
+  const hcG = parseInt(hc.slice(3, 5), 16);
+  const hcB = parseInt(hc.slice(5, 7), 16);
 
   const acHex = resolveAccentHex(options.accentColor);
-  const acR = parseInt(acHex.substring(0, 2), 16) || 255;
-  const acG = parseInt(acHex.substring(2, 4), 16) || 255;
-  const acB = parseInt(acHex.substring(4, 6), 16) || 255;
+  const acR = parseInt(acHex.substring(0, 2), 16);
+  const acG = parseInt(acHex.substring(2, 4), 16);
+  const acB = parseInt(acHex.substring(4, 6), 16);
 
-  const radiusScale = totalCells > 30_000 ? 0.25
-                    : totalCells > 15_000 ? 0.4
-                    : totalCells > 5_000  ? 0.6
-                    : 1;
-  const effectiveHoverRadius = options.hoverRadius * radiusScale;
+  const effectiveHoverRadius = options.hoverRadius;
 
   let hoverMinCol = 0, hoverMaxCol = cols, hoverMinRow = 0, hoverMaxRow = rows;
   let hoverPosX = 0, hoverPosY = 0;
@@ -1123,6 +1107,16 @@ export function renderFrameToCanvas(
     hoverMaxCol = Math.min(cols, Math.ceil((hoverPosX + hoverNormRadius) * cols) + 1);
     hoverMinRow = Math.max(0, Math.floor((hoverPosY - hoverNormRadius) * rows) - 1);
     hoverMaxRow = Math.min(rows, Math.ceil((hoverPosY + hoverNormRadius) * rows) + 1);
+  }
+
+  if (hoverActive && options.hoverEffect === 'trail') {
+    for (const point of hoverPos?.trail ?? []) {
+      const radius = 0.08 + effectiveHoverRadius * 0.35 + options.hoverStrength * 0.04;
+      hoverMinCol = Math.min(hoverMinCol, Math.max(0, Math.floor((point.x - radius) * cols) - 1));
+      hoverMaxCol = Math.max(hoverMaxCol, Math.min(cols, Math.ceil((point.x + radius) * cols) + 1));
+      hoverMinRow = Math.min(hoverMinRow, Math.max(0, Math.floor((point.y - radius) * rows) - 1));
+      hoverMaxRow = Math.max(hoverMaxRow, Math.min(rows, Math.ceil((point.y + radius) * rows) + 1));
+    }
   }
 
   const animStyle = options.animationStyle;
@@ -1144,9 +1138,9 @@ export function renderFrameToCanvas(
   if (options.renderMode === 'dots') {
     const maxRadius = Math.min(cellW, cellH) * 0.5 * options.dotSizeRatio;
 
-    for (let y = 0; y < rows; y++) {
+    for (let y = region?.y ?? 0; y < (region?.bottom ?? rows); y++) {
       const rowData = frame[y];
-      for (let x = 0; x < cols; x++) {
+      for (let x = region?.x ?? 0; x < (region?.right ?? cols); x++) {
         const cell = rowData[x];
         if (cell.a < 10) continue;
 
@@ -1166,7 +1160,7 @@ export function renderFrameToCanvas(
         if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
             x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
-            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
+            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape, hoverPos?.trail, canvasWidth / canvasHeight
           );
           hoverMul = fx.scale;
           hoverOffX = fx.offsetX;
@@ -1210,7 +1204,7 @@ export function renderFrameToCanvas(
   } else {
     const charAspect = 0.55;
     const fontSize = Math.min(cellW / charAspect, cellH) * 0.9;
-    const useFastRect = fontSize < 6;
+    const useFastRect = false;
 
     if (!useFastRect) {
       const isEmoji = options.artStyle === 'emoji';
@@ -1228,73 +1222,6 @@ export function renderFrameToCanvas(
       ? dynFrms![Math.floor(Math.max(0, time) * (options.charsetFps ?? 2)) % dynFrms!.length]
       : options.charset;
 
-    if (useFastRect) {
-      const { canvas: rasterCanvas, ctx: rasterCtx } = getRasterCanvas(ctx, cols, rows);
-      let cached = rasterImageDataCache.get(rasterCtx);
-      if (!cached || cached.width !== cols || cached.height !== rows) {
-        cached = { width: cols, height: rows, imageData: rasterCtx.createImageData(cols, rows) };
-        rasterImageDataCache.set(rasterCtx, cached);
-      }
-      const imageData = cached.imageData;
-      const out = imageData.data;
-      out.fill(0);
-      const charWeights = getCharsetWeightMap(dynCharset);
-
-      for (let y = 0; y < rows; y++) {
-        const rowData = frame[y];
-        for (let x = 0; x < cols; x++) {
-          const cell = rowData[x];
-          const outIndex = (y * cols + x) * 4;
-          if (cell.a < 10) continue;
-
-          const drawChar = hasDyn && cell.lum != null
-            ? luminanceToChar(cell.lum, dynCharset, isInverted)
-            : cell.char;
-          if (drawChar === ' ') continue;
-
-          let intensity = charWeights.get(drawChar) ?? 0.5;
-          let hoverGlow = 0;
-          let hoverBlend = 0;
-
-          if (hoverActive && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
-            const fx = computeHoverEffect(
-              x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
-              hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
-            );
-            intensity *= fx.scale;
-            hoverGlow = fx.glow;
-            hoverBlend = fx.colorBlend;
-          }
-
-          let rr: number;
-          let gg: number;
-          let bb: number;
-          if (hoverBlend > 0) {
-            const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
-            rr = Math.min(255, (rgb[0] + (hcR - rgb[0]) * hoverBlend) | 0);
-            gg = Math.min(255, (rgb[1] + (hcG - rgb[1]) * hoverBlend) | 0);
-            bb = Math.min(255, (rgb[2] + (hcB - rgb[2]) * hoverBlend) | 0);
-          } else {
-            const rgb = getCellColorRGB(cell, colorMode, acR, acG, acB, isInverted);
-            rr = rgb[0]; gg = rgb[1]; bb = rgb[2];
-          }
-
-          const alpha = Math.min(255, Math.max(0, cell.a * intensity * (1 + hoverGlow)));
-          out[outIndex] = rr;
-          out[outIndex + 1] = gg;
-          out[outIndex + 2] = bb;
-          out[outIndex + 3] = alpha;
-        }
-      }
-
-      rasterCtx.putImageData(imageData, 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(rasterCanvas, 0, 0, canvasWidth, canvasHeight);
-      ctx.imageSmoothingEnabled = true;
-      ctx.globalAlpha = 1;
-      return;
-    }
-
     const baseTransform = !useFastRect ? ctx.getTransform() : null;
 
     const canBatchTextRows =
@@ -1302,9 +1229,17 @@ export function renderFrameToCanvas(
       !hoverActive &&
       noAnimation &&
       !hasDyn &&
-      colorMode === 'accent';
+      colorMode === 'accent' &&
+      !region && options.hoverStrength <= 0 && options.artStyle !== 'emoji' &&
+      'letterSpacing' in ctx && /^[\x20-\x7e]*$/.test(options.customText || options.charset) &&
+      frame.every(row => row.every(cell => cell.a < 10 ||
+        (cell.a === 255 && cell.char.length === 1 && /^[\x20-\x7e]$/.test(cell.char))));
 
     if (canBatchTextRows) {
+      const previousSpacing = ctx.letterSpacing;
+      ctx.letterSpacing = '0px';
+      const glyphWidth = ctx.measureText('M').width;
+      ctx.letterSpacing = `${cellW - glyphWidth}px`;
       ctx.fillStyle = `rgb(${acR},${acG},${acB})`;
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
@@ -1316,8 +1251,10 @@ export function renderFrameToCanvas(
           line += cell.a < 10 ? ' ' : cell.char;
         }
         if (line.trim().length === 0) continue;
-        ctx.fillText(line, cellW * 0.5, y * cellH + cellH * 0.5);
+        ctx.fillText(line, (cellW - glyphWidth) * 0.5, y * cellH + cellH * 0.5);
       }
+      ctx.letterSpacing = previousSpacing;
+      ctx.textAlign = 'center';
       ctx.globalAlpha = 1;
       return;
     }
@@ -1365,13 +1302,13 @@ export function renderFrameToCanvas(
       gtStartCol = gtCursorCol - Math.floor(gtWordLen / 2);
     }
 
-    for (let y = 0; y < rows; y++) {
+    for (let y = region?.y ?? 0; y < (region?.bottom ?? rows); y++) {
       const rowData = frame[y];
-      for (let x = 0; x < cols; x++) {
+      for (let x = region?.x ?? 0; x < (region?.right ?? cols); x++) {
         const cell = rowData[x];
         if (cell.a < 10) continue;
         let drawChar = hasDyn && cell.lum != null
-          ? luminanceToChar(cell.lum, dynCharset, isInverted)
+          ? luminanceToCharFast(cell.lum, getCharsetChars(dynCharset), isInverted)
           : cell.char;
         if (drawChar === ' ') continue;
 
@@ -1388,13 +1325,22 @@ export function renderFrameToCanvas(
         if (hoverActive && !isGlitchText && x >= hoverMinCol && x <= hoverMaxCol && y >= hoverMinRow && y <= hoverMaxRow) {
           const fx = computeHoverEffect(
             x * invCols, y * invRows, hoverPosX, hoverPosY, hoverIntensity,
-            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape
+            hoverStrength, cellW, cellH, hoverEffect, hoverRadiusFactor, hoverShape, hoverPos?.trail, canvasWidth / canvasHeight
           );
           hoverScale = fx.scale;
           hoverOffX = fx.offsetX;
           hoverOffY = fx.offsetY;
           hoverGlow = fx.glow;
           hoverBlend = fx.colorBlend;
+          if (hoverEffect === 'trail' && fx.proximity > 0) {
+            // Sample the source field through the cursor wake; brightness also
+            // changes glyph density, like a media-driven ASCII shader.
+            const sx = Math.max(0, Math.min(cols - 1, Math.round(x - fx.offsetX / cellW)));
+            const sy = Math.max(0, Math.min(rows - 1, Math.round(y - fx.offsetY / cellH)));
+            const sample = frame[sy][sx];
+            const lum = sample.lum ?? (sample.r * 0.299 + sample.g * 0.587 + sample.b * 0.114);
+            drawChar = luminanceToCharFast(Math.min(255, lum + fx.proximity * hoverStrength * 65), getCharsetChars(dynCharset), isInverted);
+          }
         }
 
         // ── glitchText character replacement ───────────────────────────
