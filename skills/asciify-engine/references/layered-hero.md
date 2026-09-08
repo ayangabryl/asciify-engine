@@ -1,6 +1,6 @@
 # Layer HTML text through ASCII artwork
 
-Use the companion [HTML](../examples/layered-hero.html), [CSS](../examples/layered-hero.css), and [JavaScript](../examples/layered-hero.js) in a browser app with `asciify-engine@1.1.0` installed. Rename the HTML to `index.html` in a Vite project, and provide `/hero.mp4` plus `/hero-poster.jpg` or change its data attributes. The example starts with `data-render-limit="720"`; set this no larger than the source video's longer dimension. No Asciify site footage or fonts are included.
+Use the companion [HTML](../examples/layered-hero.html), [CSS](../examples/layered-hero.css), and [JavaScript](../examples/layered-hero.js) in a browser app with `asciify-engine@1.2.0` installed. Rename the HTML to `index.html` in a Vite project, and provide `/hero.mp4` plus `/hero-poster.jpg` or change its data attributes. The example starts with `data-render-limit="720"`; set this no larger than the source video's longer dimension. No Asciify site footage or fonts are included.
 
 The script renders a poster before requesting video, respects initial reduced motion, pauses offscreen/hidden video, provides a keyboard-operable Play/Pause button, and returns cleanup synchronously while guarding asynchronous setup. Call it on mount and call its returned function on unmount. It uses the public package without the site's patched renderer or private hero sampler.
 

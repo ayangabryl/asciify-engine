@@ -1,4 +1,4 @@
-# Media API notes — published 1.1.0
+# Media API notes — published 1.2.0
 
 Use installed package types as the authority for exact signatures. Import from `asciify-engine`.
 

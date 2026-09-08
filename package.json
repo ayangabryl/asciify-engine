@@ -1,6 +1,6 @@
 {
   "name": "asciify-engine",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -36,6 +36,16 @@
         "types": "./dist/backgrounds.d.cts",
         "default": "./dist/backgrounds.cjs"
       }
+    },
+    "./hover": {
+      "import": {
+        "types": "./dist/hover.d.ts",
+        "default": "./dist/hover.js"
+      },
+      "require": {
+        "types": "./dist/hover.d.cts",
+        "default": "./dist/hover.cjs"
+      }
     }
   },
   "files": [
@@ -54,7 +64,8 @@
     "release:major": "npm version major",
     "release:push": "git push origin main --follow-tags",
     "prepublishOnly": "npm run build",
-    "test:browser": "node tests/serve-browser.mjs"
+    "test:browser": "node tests/serve-browser.mjs",
+    "test:hover": "node tests/hover-browser.mjs"
   },
   "keywords": [
     "ascii",
