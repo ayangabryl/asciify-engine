@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "1.1.0"
+  tested-engine: "1.2.0"
   updated: "2026-09-08"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.1.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.2.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -16,10 +16,10 @@ Use the published `asciify-engine` npm package for browser canvas rendering. Tes
 - Repository: https://github.com/ayangabryl/asciify-engine
 
 ```sh
-npm install asciify-engine@1.1.0
+npm install asciify-engine@1.2.0
 ```
 
-Version 1.1.0 exports `asciify-engine`, `asciify-engine/core` for media without procedural generators, and `asciify-engine/backgrounds` for optional backgrounds. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Site-internal studio modules are separate.
+Version 1.2.0 exports `asciify-engine`, `asciify-engine/core` for media without procedural generators, and `asciify-engine/backgrounds` for optional backgrounds. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Enhanced website hovers, living-image motion and fine dither are available from the optional `asciify-engine/hover` entry; root and `/core` do not load it.
 
 ## Install the agent skill
 
@@ -87,11 +87,11 @@ Preview it: letter glyph densities differ, so arbitrary words are not automatica
 
 ## Engine effects versus studio effects
 
-The public npm `HoverEffect` IDs in 1.1.0 are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
+The public npm `HoverEffect` IDs in 1.2.0 are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
 
-The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, and Off** through an optional studio surface module. Its Living Print, Slow Current, Reveal & Reform, and fine-dither treatments are also site features; do not invent npm options from their display names.
+The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, and Off** through an optional studio surface module. Its Living Print, Slow Current, Reveal & Reform, and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
 
-To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). The module is downloadable application code. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
+To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). Import `mountHover` from `asciify-engine/hover` (1.2.0+); no separate download is needed. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
 
 For built-in hover alone, use a supported `options.hoverEffect` and a restrained nonzero `hoverStrength`; validate its behavior instead of promising that it matches the website.
 
@@ -112,7 +112,7 @@ Choose the more conventional arrangement—artwork behind all text—when it imp
 ## Performance and lifecycle
 
 - Reduce processing dimensions and cell count before dropping source playback FPS. Do not default to 60 fps on a 24 fps video.
-- Start video at 24–30 fps with a 720–960px processing cap. More processing pixels do not create detail absent from the source. Version 1.1.0 includes the renderer fixes previously applied by the website; it does not include the optional studio surface module.
+- Start video at 24–30 fps with a 720–960px processing cap. More processing pixels do not create detail absent from the source. Version 1.2.0 includes the renderer fixes previously applied by the website; the enhanced surface module is included through the optional `/hover` import.
 - Keep stable canvas dimensions; resize on layout changes, not on every animation frame.
 - Avoid remounting the renderer on pointer movement or each React render.
 - Pause media offscreen and when the document is hidden. Reduced-motion users should get a still; do not merely hide a playing video with CSS.
@@ -125,4 +125,4 @@ Choose the more conventional arrangement—artwork behind all text—when it imp
 
 Check the actual implementation: readable subject and text, no stretching or unintended empty margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, and cleanup after navigation. Observe several seconds of motion and an entire loop boundary. State the measured device/settings if reporting FPS; screenshots and recordings alone do not establish performance.
 
-Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload` from 1.1.0. For recording, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.
+Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload` from 1.2.0. For recording, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.

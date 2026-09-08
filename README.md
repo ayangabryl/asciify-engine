@@ -64,6 +64,39 @@ npm install asciify-engine
 
 Works with any modern bundler (Vite, webpack, esbuild, Rollup) and any framework — React, Vue, Svelte, Angular, Next.js, or vanilla JS.
 
+### Website hovers, included in npm
+
+Since **1.2.0**, import the enhanced interactions through `asciify-engine/hover`. No extra download is needed. This optional entry leaves root and `/core` browser bundles unchanged.
+
+```js
+import { asciify } from 'asciify-engine/core';
+import { mountHover } from 'asciify-engine/hover';
+
+// <div id="art" style="position:relative;width:fit-content">
+//   <canvas id="ascii" style="display:block"></canvas>
+// </div>
+const host = document.querySelector('#art');
+const canvas = document.querySelector('#ascii');
+const charset = ' .:-=+*#%@';
+const stop = await asciify('/image.jpg', canvas, {
+  fontSize: 7,
+  options: { charset, charAspect: 0.58, hoverStrength: 0, animationStyle: 'none' },
+});
+const hover = mountHover(host, canvas, {
+  effect: 'trail', strength: 0.55, radius: 0.2,
+  fontSize: 7, charAspect: 0.58, charset,
+});
+// Switch: hover.update({ effect: 'water' });
+// Redraw a still: hover.invalidate();
+// On unmount: hover.destroy(); stop();
+```
+
+Effects: **Trail, Water, Contour, Dissolve, Silk, Vortex**, and `none`. Pass `effect` to `mountHover`, rather than passing these names to the legacy engine `hoverEffect` option. Keep engine hover and animation disabled to avoid stacking two renderers. Match `fontSize`, `charAspect`, `charSpacing`, `charset`, `customText`, and dot settings to the backing canvas.
+
+For video/GIF, set `animated: true, fps: 24` and coordinate `paused` with playback. For a still, optional `motion: 'print' | 'current' | 'reform'` adds living-image motion; `fineDither: true` enables stationary grain. `mountStudioHover` remains an alias for the existing standalone integration. The module observes reduced motion, sleeps when idle/offscreen, and uses Canvas 2D when WebGL is unavailable (simpler spatial refraction). Call `destroy()` on unmount; use `hover.canvas` for overlay layering or snapshots.
+
+See the [complete integration and lifecycle guide](skills/asciify-engine/references/studio-effects.md). A [standalone ES module](https://asciify.org/background-sources/studio-hover.js) remains available for projects without a bundler.
+
 ## Agent Skill
 
 This repository ships a standards-friendly Agent Skill at `skills/asciify-engine`. Install it with the current skills CLI:
