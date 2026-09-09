@@ -253,7 +253,7 @@ try {
   });
   assert.ok(lower, "Optical pass must keep source orientation");
   // Use actual artwork for timed visual comparison, not only a synthetic checksum.
-  const photo = await fs.readFile(root + '/../site/public/videos/hand-closeup-poster-1f3df178811b.jpg');
+  const photo = await fs.readFile(root + '/tests/fixtures/motion-still.jpg');
   await page.evaluate(async (url) => {
     window.photo = new Image(); photo.src = url; await photo.decode();
   }, 'data:image/jpeg;base64,' + photo.toString('base64'));
