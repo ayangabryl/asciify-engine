@@ -4,7 +4,7 @@ import type { AsciiFrame, AsciiOptions } from '../types';
  * color emoji keep their existing Canvas behavior. Ambient motion is composed
  * later by the surface shader and does not require repainting the glyphs. */
 export function supportsSurfaceGlyphs(options?: AsciiOptions): boolean {
-  return !!options && options.renderMode === 'ascii' && options.artStyle !== 'emoji' &&
+  return !!options && options.renderMode === 'ascii' && !/\p{Extended_Pictographic}/u.test(options.customText || options.charset) &&
     !options.charsetFrames?.length && ['fullcolor', 'grayscale', 'matrix', 'accent'].includes(options.colorMode) &&
     (options.colorMode !== 'accent' || /^#[\da-f]{6}$/i.test(options.accentColor));
 }

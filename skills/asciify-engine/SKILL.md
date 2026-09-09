@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "1.4.0"
+  tested-engine: "2.0.0"
   updated: "2026-09-09"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.4.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **2.0.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -135,3 +135,7 @@ Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanlin
 ## Studio composition and export
 
 For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). The new `/studio` API is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop. Use version 1.4.0 or newer for these APIs after verifying the installed package.
+
+## Standard catalogs in 2.0
+
+`CHARSETS` and `ART_STYLE_PRESETS` no longer include `emoji`, `musical` or `starfield`. Do not recommend or generate those names. For character selection in a Studio integration, use `STUDIO_CHARACTER_SETS` from `asciify-engine/studio` and assign an entry's `chars` to `settings.charset`. These ramps apply to the `ascii` style; other styles define their own marks. Custom Unicode strings remain supported. Read the upgrade reference when migrating 1.x preset names. The site now opens its primary workspace at `/editor`; `/editor/classic` preserves earlier workflows. Keep the engine imports modular: new editor defaults do not require importing Studio into an existing hero.

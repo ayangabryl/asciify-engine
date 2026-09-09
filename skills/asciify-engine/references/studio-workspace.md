@@ -90,3 +90,17 @@ Bounds: 4096 pixels per side and 16 megapixels for stills; video at most 3840×2
 `createStudioRenderer(canvas, settings, limits)` exposes `render(source, time, width, height)`, `configure`, `pointer`, `leave`, `invalidate`, and `destroy` for applications owning their own loop. Call `invalidate` when a canvas source changes in place; source identity alone does not indicate new pixels. Use an increasing time in seconds; pointer timestamps are milliseconds.
 
 `mountStudio` pauses when hidden/offscreen and respects reduced motion. Still scenes sleep when their interaction settles. Video sampling caches decoded frames independently of display-rate pointer animation. Adaptive preview reduces its cell budget when sustained render cost is high; disable with `adaptive: false` for fixed measurement. It does not change saved settings or the standard ASCII editor. Exports use their own explicit budget. Measure sustained behavior on real target devices; no renderer can guarantee 60 fps on every device with arbitrary effects and density.
+
+## Curated characters and the primary editor (2.0)
+
+The site opens the workspace directly at `/editor`. Upload media, choose Style, then use Canvas for framing/backdrops/masks, Effects for motion/hover/finishing, Looks for reuse, and Export for downloads/code. Optical finish and Lighting expand on demand; they keep applied values when collapsed. The prior editor remains at `/editor/classic` for earlier workflows.
+
+```ts
+import { STUDIO_CHARACTER_SETS, updateStudioSettings } from 'asciify-engine/studio';
+settings = updateStudioSettings(settings, {
+  style: 'ascii', charset: STUDIO_CHARACTER_SETS.asciify.chars,
+});
+player.update(settings);
+```
+
+Other renderer styles define their own marks, so character controls only apply to ASCII. Custom strings remain valid; Emoji, Musical and Starfield are no longer bundled presets.

@@ -6,3 +6,4 @@ export * from './studio/media';
 export * from './studio/export';
 export * from './studio/mount';
 export * from './studio/text';
+export * from './studio/characters';

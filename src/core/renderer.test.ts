@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHARSETS, DEFAULT_OPTIONS } from '../types';
+import { DEFAULT_OPTIONS } from '../types';
 import { renderTextFrameToCanvas, type AsciiTextFrame } from './renderer';
 
 function createRecordingContext() {
@@ -26,7 +26,7 @@ describe('renderTextFrameToCanvas', () => {
       matchMedia: () => ({ matches: true }),
     });
 
-    const glyphs = [...CHARSETS.emoji].slice(1, 6);
+    const glyphs = [...' ⬛🟫🟥🟧🟨🟩🟦🟪⬜'].slice(1, 6);
     const colors = new Uint8ClampedArray(glyphs.length * 4);
     for (let index = 0; index < glyphs.length; index++) {
       colors[index * 4] = 240;
@@ -45,7 +45,7 @@ describe('renderTextFrameToCanvas', () => {
 
     renderTextFrameToCanvas(ctx, frame, {
       ...DEFAULT_OPTIONS,
-      charset: CHARSETS.emoji,
+      charset: ' ⬛🟫🟥🟧🟨🟩🟦🟪⬜',
       colorMode: 'fullcolor',
     }, 120, 20);
 

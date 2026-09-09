@@ -3,7 +3,7 @@
 export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
 export type AnimationStyle = 'none' | 'wave' | 'pulse' | 'rain' | 'breathe' | 'sparkle' | 'glitch' | 'spiral' | 'typewriter' | 'scatter' | 'waveField' | 'ripple' | 'melt' | 'orbit' | 'cellular';
-export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'musical' | 'emoji' | 'circles' | 'shadows' | 'starfield' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke' | 'ascii' | 'interface' | 'prompt' | 'data' | 'humanist' | 'mesh';
+export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'circles' | 'shadows' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke' | 'ascii' | 'interface' | 'prompt' | 'data' | 'humanist' | 'mesh';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
 export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
@@ -331,11 +331,8 @@ export const CHARSETS = {
   lines: ' ˗‐–—―━',
   braille: ' ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿',
   katakana: ' ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ',
-  musical: ' ♩♪♫♬♭♮♯',
-  emoji: ' ⬛🟫🟥🟧🟨🟩🟦🟪⬜',
   circles:   ' .·:∘○◦°•∙',
   shadows:   ' ·∘◦○◎⊙●◉',
-  starfield:  ' ˙·∘∗✦✧★◆●',
   geometric:  ' ·△▷◇◈◆▣■█',
   pipes:      ' ╶─┐└├┤┬┴┼╬▒▓█',
   waves:      ' ˜∼≈〰≋∿∾∭∫',
@@ -364,8 +361,8 @@ export const CHARSETS = {
  * asciiBackground('#hero', { charsetFrames: CHARSET_SEQUENCES.cosmic })
  */
 export const CHARSET_SEQUENCES = {
-  /** Stars → softcircles → orbs — dreamy space feel */
-  cosmic:   [CHARSETS.starfield, CHARSETS.circles, CHARSETS.shadows] as string[],
+  /** Sparse marks → circles → orbs — soft tonal texture */
+  cosmic:   [CHARSETS.smoke, CHARSETS.circles, CHARSETS.shadows] as string[],
   /** Katakana → braille dots → binary — hacker rain */
   rain:     [CHARSETS.katakana, CHARSETS.braille, CHARSETS.binary] as string[],
   /** Box pipes → Claude glyphs → classic — terminal morph */
@@ -378,8 +375,8 @@ export const CHARSET_SEQUENCES = {
   pulse:    [CHARSETS.dense, CHARSETS.standard, CHARSETS.blocks] as string[],
   /** Braille → shadows → smoke — ethereal / dream-like */
   dream:    [CHARSETS.braille, CHARSETS.shadows, CHARSETS.smoke] as string[],
-  /** Geometric shapes → shards → starfield — sci-fi angular */
-  angular:  [CHARSETS.geometric, CHARSETS.shards, CHARSETS.starfield] as string[],
+  /** Geometric shapes → shards → blocks — angular texture */
+  angular:  [CHARSETS.geometric, CHARSETS.shards, CHARSETS.blocks] as string[],
   /** Interface controls → prompts → data nodes — clean assistant/product motion */
   assistant: [CHARSETS.interface, CHARSETS.prompt, CHARSETS.data] as string[],
   /** Mesh → data → ASCII — alive network signal with readable texture */
@@ -447,17 +444,6 @@ export const ART_STYLE_PRESETS: Record<ArtStyle, Partial<AsciiOptions>> = {
     charset: CHARSETS.katakana,
     colorMode: 'matrix',
   },
-  musical: {
-    renderMode: 'ascii',
-    charset: CHARSETS.musical,
-    colorMode: 'accent',
-    accentColor: '#e040fb',
-  },
-  emoji: {
-    renderMode: 'ascii',
-    charset: CHARSETS.emoji,
-    colorMode: 'fullcolor',
-  },
   circles: {
     renderMode: 'ascii',
     charset: CHARSETS.circles,
@@ -469,11 +455,6 @@ export const ART_STYLE_PRESETS: Record<ArtStyle, Partial<AsciiOptions>> = {
     charset: CHARSETS.shadows,
     colorMode: 'accent',
     accentColor: '#50a0ff',
-  },
-  starfield: {
-    renderMode: 'ascii',
-    charset: CHARSETS.starfield,
-    colorMode: 'fullcolor',
   },
   geometric: {
     renderMode: 'ascii',
