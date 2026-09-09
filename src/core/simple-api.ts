@@ -1,10 +1,11 @@
+import { resolveCoreStyle } from './style';
 /**
  * Simple one-call asciify API.
  * Wraps imageToAsciiFrame + renderFrameToCanvas behind easy-to-use helpers.
  */
 
 import type { AsciiOptions, ArtStyle } from '../types';
-import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
+import { DEFAULT_OPTIONS } from '../types';
 import { createOffscreenCanvas, parseChromaKeyColor } from './utils';
 import { imageToAsciiFrame, imageToAsciiTextFrame, videoToAsciiFrames, videoToAsciiTextFrames, gifToAsciiFrames, gifToAsciiTextFrames, renderFrameToCanvas, renderTextFrameToCanvas, resolveSourceCrop } from './renderer';
 import type { AsciiTextFrame } from './renderer';
@@ -16,12 +17,11 @@ export interface AsciifySimpleOptions {
   /** Character size in pixels. Default: 10 */
   fontSize?: number;
   /**
-   * Art style preset — controls charset, render mode, and color mode together.
-   * Shorthand for spreading `ART_STYLE_PRESETS[artStyle]` into options.
+   * Core media rendering uses `classic`. Use `/studio` for alternate render styles.
    * Default: `'classic'`
    */
   artStyle?: ArtStyle;
-  /** Extra options to merge on top of the preset */
+  /** Explicit character, color and rendering options */
   options?: Partial<AsciiOptions>;
 }
 
@@ -940,7 +940,7 @@ export async function asciify(
     el = source;
   }
 
-  const preset = ART_STYLE_PRESETS[artStyle];
+  const preset = resolveCoreStyle(artStyle);
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
   const merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...preset, artStyle, ...options, fontSize: resolvedFontSize };
 
@@ -996,7 +996,7 @@ export async function asciifyGif(
     : source;
 
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], artStyle, ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...resolveCoreStyle(artStyle), artStyle, ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2d context from canvas');
 
@@ -1067,7 +1067,7 @@ export async function asciifyVideo(
   const trimStart = trim?.start ?? 0;
   const trimEnd   = trim?.end;
   const resolvedFontSize = fontSize ?? options.fontSize ?? 10;
-  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...ART_STYLE_PRESETS[artStyle], artStyle, ...options, fontSize: resolvedFontSize };
+  let merged: AsciiOptions = { ...DEFAULT_OPTIONS, ...resolveCoreStyle(artStyle), artStyle, ...options, fontSize: resolvedFontSize };
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('asciifyVideo: could not get 2d context from canvas.');
   const container: HTMLElement | null =

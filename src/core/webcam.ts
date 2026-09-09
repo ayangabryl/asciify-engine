@@ -1,3 +1,4 @@
+import { resolveCoreStyle } from './style';
 /**
  * asciifyWebcam — live webcam → ASCII art on canvas.
  *
@@ -19,7 +20,7 @@
  */
 
 import type { AsciiOptions, ArtStyle } from '../types';
-import { DEFAULT_OPTIONS, ART_STYLE_PRESETS } from '../types';
+import { DEFAULT_OPTIONS } from '../types';
 import { imageToAsciiFrame, renderFrameToCanvas } from './renderer';
 
 export interface WebcamOptions {
@@ -82,6 +83,7 @@ export async function asciifyWebcam(
     throw new Error('asciifyWebcam: getUserMedia is not supported in this browser.');
   }
 
+  const coreStyle = resolveCoreStyle(style);
   const stream = await navigator.mediaDevices.getUserMedia({ video: constraints });
 
   const video = document.createElement('video');
@@ -97,7 +99,7 @@ export async function asciifyWebcam(
 
   const merged: AsciiOptions = {
     ...DEFAULT_OPTIONS,
-    ...ART_STYLE_PRESETS[style],
+    ...coreStyle,
     ...options,
     fontSize,
   };

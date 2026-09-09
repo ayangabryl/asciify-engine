@@ -7,7 +7,7 @@
   <a href="https://www.buymeacoffee.com/asciify"><img src="https://img.shields.io/badge/buy_me_a_coffee-%E2%98%95-d4ff00?labelColor=0a0a0a&style=flat-square" alt="Buy Me A Coffee" /></a>
 </p>
 
-A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, animated backgrounds, interactive hover effects, living charset motion presets, and embed generation.
+A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 15 Studio render styles, and export.
 
 ### Media first, optional backgrounds
 
@@ -512,12 +512,6 @@ studio.destroy();
 
 See the [Studio API guide](skills/asciify-engine/references/studio-workspace.md) for complete settings, import/export, media ownership, browser requirements, and performance budgets.
 
-## Version 2.0 migration
-
-Emoji, Musical and Starfield preset keys have been removed from `CHARSETS`, `ArtStyle` and `ART_STYLE_PRESETS`. Use `classic` with an application-owned `charset` to retain a custom alphabet, or choose structural presets such as braille/circles/geometric. General Unicode support remains. Cosmic and angular character sequences now use structural marks. Existing core rendering and hover APIs remain modular.
-
-`STUDIO_CHARACTER_SETS` from `asciify-engine/studio` provides named ramps with `{ label, chars }`; assign `chars` to Studio `charset` with `style: 'ascii'`. The website's new default workspace is [/editor](https://asciify.org/editor); earlier workflows remain in [/editor/classic](https://asciify.org/editor/classic).
-
 ### 2.0.1 size and export fixes
 
 `studioGrid` exposes the effective grid and minimum cell size for a bounded preview. Dither uses `dither.scale`; other styles use `cellSize`. Pass `time` to `exportStudio` for a PNG/JPEG of the current frame. Animation exports continue to start at zero. See the Studio guide for the shared preview/export density contract.
@@ -529,3 +523,12 @@ Use `motion: { type: 'current', speed: 1 }` with `/studio`, `motion: 'current'` 
 ## 4.0: optional background templates
 
 Procedural backgrounds no longer ship in the npm package or root exports. Download only the template you want from [the background gallery](https://asciify.org/backgrounds); its copied code and lifecycle belong to your application. Existing 3.x applications can remain pinned while migrating. `/backgrounds`, `asciiBackground`, `BACKGROUND_TYPES`, and procedural `render*Background` exports are removed; text/media background APIs remain. The default import and `/core` now expose the same media-first API. `CHARACTER_SETS` is the lightweight curated catalog shared by the hero and editor.
+
+
+## 4.1.0: current catalogs only
+
+This release removes `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS`, and their key types. **Although numbered 4.1.0 at the maintainer's request, these removals are breaking changes.** Update imports before upgrading. Removed core `artStyle` shortcuts throw with migration guidance.
+
+Use `STUDIO_STYLES` from `asciify-engine/studio` for the 15 current render styles: ASCII, Braille, Dots, Lines, Blocks, Dither, Cross, Diagonal, Diamond, Mixed, Pixel, Mosaic, Lego, Voxel and Disco. Set `settings.style` with `mountStudio` / `createStudioRenderer`; these styles are actual rendering methods, not character ramps. Core media APIs remain ASCII-first.
+
+Use `CHARACTER_SETS.standard.chars` (or another curated entry) from root or `/core` for an ASCII ramp; custom `options.charset` and `charsetFrames` arrays remain supported. Use explicit `options.colorMode`, `renderMode`, and hover/motion settings instead of the removed combined presets. No legacy catalog has been moved to a hidden compatibility bundle.

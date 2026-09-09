@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.0.0"
+  tested-engine: "4.1.0"
   updated: "2026-09-09"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.0.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.1.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -83,7 +83,7 @@ const letters = [...new Set('ASCIIFY'.toUpperCase().replace(/[^A-Z]/g, ''))].joi
 const charset = ` .:-=+${letters}#%@`;
 ```
 
-Preview it: letter glyph densities differ, so arbitrary words are not automatically an evenly ordered ramp. Keep the leading space and the light/dense symbols. Use `CHARSETS.standard`, `dense`, `blocks`, or `braille` when they better suit the subject.
+Preview it: letter glyph densities differ, so arbitrary words are not automatically an evenly ordered ramp. Keep the leading space and the light/dense symbols. Use the curated `CHARACTER_SETS.standard.chars`, `detailed.chars`, `blocks.chars`, or `braille.chars` from `/core` when appropriate.
 
 ## Engine effects versus studio effects
 
@@ -136,6 +136,6 @@ Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanlin
 
 For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). The new `/studio` API is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop. Use version 1.4.0 or newer for these APIs after verifying the installed package.
 
-## Standard catalogs in 2.0
+## Current catalogs (4.1)
 
-`CHARSETS` and `ART_STYLE_PRESETS` no longer include `emoji`, `musical` or `starfield`. Do not recommend or generate those names. For character selection in a Studio integration, use `STUDIO_CHARACTER_SETS` from `asciify-engine/studio` and assign an entry's `chars` to `settings.charset`. These ramps apply to the `ascii` style; other styles define their own marks. Custom Unicode strings remain supported. Read the upgrade reference when migrating 1.x preset names. The site now opens its primary workspace at `/editor`; `/editor/classic` preserves earlier workflows. Keep the engine imports modular: new editor defaults do not require importing Studio into an existing hero.
+Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS` and their key types are removed. Do not import them or generate old names such as Katakana, Binary, Waves or Smoke. Use the 15 `STUDIO_STYLES` for render-style selectors and `/studio` rendering. For ASCII-only character ramps use `CHARACTER_SETS` from `/core` or `STUDIO_CHARACTER_SETS` from `/studio`; custom Unicode and user-provided frame arrays remain supported. Core `artStyle` only accepts `classic`; use explicit options instead of preset shortcuts. Despite the requested 4.1.0 version number, migrating these removed APIs is a breaking change.
