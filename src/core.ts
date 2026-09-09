@@ -16,17 +16,10 @@ export type {
   AsciiCell,
   AsciiFrame,
   AsciiResult,
-  CharsetKey,
-  CharsetSequenceKey,
-  LivingStylePresetKey,
 } from './types';
 
 // Constants & presets
 export {
-  CHARSETS,
-  CHARSET_SEQUENCES,
-  ART_STYLE_PRESETS,
-  LIVING_STYLE_PRESETS,
   DEFAULT_OPTIONS,
   HOVER_PRESETS,
   PALETTE_THEMES,
@@ -72,3 +65,7 @@ export type { BigTextOptions } from './core/big-text';
 export { asciifyText, renderTextToCanvas } from './core/big-text';
 
 export { CHARACTER_SETS } from './studio/characters';
+
+/** Data-only catalog; renderer implementations remain in the optional /studio entry. */
+export { STUDIO_STYLES } from './studio/model';
+export type { StudioStyle } from './studio/model';

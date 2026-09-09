@@ -80,7 +80,7 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     const baseDue = dirty || options.animated && !paused && now-painted >= 1000/Math.max(1,Math.min(60,options.fps))-.5;
     if (baseDue || active || field.active || !paused && resolveMotion(options.motion) !== 'none') {
       if(baseDue) latestFrame=options.getFrame?.();
-      compositor.render(baseDue,field.refraction,width,height,options.fontSize*options.charSpacing,options.fontSize/options.charAspect*options.charSpacing,latestFrame,{charset:options.charset,customText:options.customText,renderMode:options.renderMode,dotSizeRatio:options.dotSizeRatio,colorMode:options.colorMode??'fullcolor',accentColor:options.accentColor??'#888888',animationStyle:options.motion,animationSpeed:options.motionSpeed ?? 1,artStyle:options.fineDither?'terminal':'classic',ditherStrength:options.ditherStrength ?? 1} as AsciiOptions,elapsed,{filter:options.filter,edgeEffect:options.edgeEffect,edgeSoftness:options.edgeSoftness,textMask:textMask?.read()});
+      compositor.render(baseDue,field.refraction,width,height,options.fontSize*options.charSpacing,options.fontSize/options.charAspect*options.charSpacing,latestFrame,{charset:options.charset,customText:options.customText,renderMode:options.renderMode,dotSizeRatio:options.dotSizeRatio,colorMode:options.colorMode??'fullcolor',accentColor:options.accentColor??'#888888',animationStyle:options.motion,animationSpeed:options.motionSpeed ?? 1,artStyle:'classic',fineDither:options.fineDither,ditherStrength:options.ditherStrength ?? 1} as AsciiOptions,elapsed,{filter:options.filter,edgeEffect:options.edgeEffect,edgeSoftness:options.edgeSoftness,textMask:textMask?.read()});
       if(baseDue) painted=now; dirty=false;
     }
     last=now;

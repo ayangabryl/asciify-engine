@@ -1,9 +1,11 @@
+import { CHARACTER_SETS } from './studio/characters';
 // ─── Asciify Types ────────────────────────────────────────────────
 
 export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
 export type AnimationStyle = 'none' | 'caustics' | 'current' | 'reform';
-export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'circles' | 'shadows' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke' | 'ascii' | 'interface' | 'prompt' | 'data' | 'humanist' | 'mesh';
+/** Core media draws ASCII/dots; use StudioStyle for the 15 render styles. */
+export type ArtStyle = 'classic';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
 export type HoverShape = 'circle' | 'box';
 export type HoverPreset = 'none' | 'subtle' | 'flashlight' | 'magnifier' | 'forceField' | 'neon' | 'fire' | 'ice' | 'gravity' | 'shatter' | 'ghost' | 'glitchReveal';
@@ -74,7 +76,7 @@ export interface AsciiOptions {
   contrast: number;
   /**
    * Character density ramp — ordered from lightest to darkest.
-   * Use `CHARSETS` for pre-built ramps or supply your own string.
+   * Use `CHARACTER_SETS.standard.chars` for a curated ramp or supply your own string.
    * Default: `' .:-=+*#%@'`
    */
   charset: string;
@@ -196,11 +198,12 @@ export interface AsciiOptions {
    */
   hoverText: string | string[];
   /**
-   * Art style preset applied at render time.
-   * Shorthand for a specific combination of `charset`, `renderMode`, and `colorMode`.
-   * See `ART_STYLE_PRESETS` for the full list. Default: `'classic'`
+   * Core renderer discriminator. No legacy preset lookup is performed.
+   * Core rendering uses `classic`; select the current render styles through `/studio`.
    */
   artStyle: ArtStyle;
+  /** Explicit fine-dither treatment for the optional hover compositor. */
+  fineDither?: boolean;
   /**
    * Custom repeating text used when `artStyle` is `'letters'` or when you set
    * a custom charset. Leave empty to use the selected `charset`. Default: `''`
@@ -289,10 +292,9 @@ export interface AsciiOptions {
    * render tick, re-mapping characters from stored cell luminance.
    * Pairs beautifully with `animationStyle` and `asciiBackground`.
    *
-   * Use `CHARSET_SEQUENCES` for curated combinations or build your own:
+   * Supply your own array of character ramps:
    * @example
-   * options: { charsetFrames: CHARSET_SEQUENCES.cosmic }
-   * options: { charsetFrames: [CHARSETS.standard, CHARSETS.blocks, CHARSETS.circles] }
+   * options: { charsetFrames: [CHARACTER_SETS.standard.chars, CHARACTER_SETS.blocks.chars] }
    */
   charsetFrames?: string[];
   /** Cycle rate for `charsetFrames` in frames-per-second. Default: `2` */
@@ -318,288 +320,12 @@ export interface AsciiResult {
   fps: number;
 }
 
-export const CHARSETS = {
-  standard: ' .:-=+*#%@',
-  blocks: ' ░▒▓█',
-  minimal: ' .:+',
-  dense: ' .\'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
-  binary: '01',
-  dots: ' ⠁⠃⠇⡇⣇⣧⣷⣿',
-  letters: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-  claudeCode: ' ╔╗╚╝║═╠╣╦╩╬░▒▓█│─┌┐└┘├┤┬┴┼',
-  box: ' ▪◾◼■█',
-  lines: ' ˗‐–—―━',
-  braille: ' ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿',
-  katakana: ' ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ',
-  circles:   ' .·:∘○◦°•∙',
-  shadows:   ' ·∘◦○◎⊙●◉',
-  geometric:  ' ·△▷◇◈◆▣■█',
-  pipes:      ' ╶─┐└├┤┬┴┼╬▒▓█',
-  waves:      ' ˜∼≈〰≋∿∾∭∫',
-  shards:     ' ╱╲╳◤◥◣◢△▲◆◼█',
-  smoke:      ' ·˙⁚⁖∶∷⋮⋰⋱∴∵',
-  /** All printable ASCII characters ordered from airy punctuation to dense symbols. */
-  ascii:      ' .\'`^",:;~-_+<>i!lI?/\\|()[]{}1tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
-  /** Clean product UI glyphs inspired by command palettes, panes, controls, and focus rings. */
-  interface:  ' ·•-–—+=:;<>[]{}()⌘⌥⇧⌃↵↗↘◇◆◈□■',
-  /** Prompt, shell, and assistant transcript glyphs for modern AI/dev surfaces. */
-  prompt:     ' .:;>_`/\\|{}[]()=+*#@$',
-  /** Analytical/data-viz glyphs: sparse dots into nodes, diamonds, and dense blocks. */
-  data:       ' ·∙•◦○●◇◆◈▱▰▣█',
-  /** Warm editorial/math symbols for quieter Claude-like and research-oriented pages. */
-  humanist:   ' ·˙,:;∴∵∷∶⁚⋮⋯∼≈≋∞',
-  /** Dense network/mesh characters for agent maps, model graphs, and infrastructure visuals. */
-  mesh:       ' ·╶╴╷╵─│┌┐└┘├┤┬┴┼╬░▒▓█',
-} as const;
-
-/**
- * Curated charset sequences for use with `charsetFrames`.
- * Each sequence morphs between 2–3 complementary charsets over time,
- * creating a living texture effect.
- *
- * @example
- * asciiBackground('#hero', { charsetFrames: CHARSET_SEQUENCES.cosmic })
- */
-export const CHARSET_SEQUENCES = {
-  /** Sparse marks → circles → orbs — soft tonal texture */
-  cosmic:   [CHARSETS.smoke, CHARSETS.circles, CHARSETS.shadows] as string[],
-  /** Katakana → braille dots → binary — hacker rain */
-  rain:     [CHARSETS.katakana, CHARSETS.braille, CHARSETS.binary] as string[],
-  /** Box pipes → Claude glyphs → classic — terminal morph */
-  terminal: [CHARSETS.pipes, CHARSETS.claudeCode, CHARSETS.standard] as string[],
-  /** Shards → blocks → squares — shattering crystal */
-  crystal:  [CHARSETS.shards, CHARSETS.geometric, CHARSETS.blocks] as string[],
-  /** Wave glyphs → smoke dots → circles — fluid / organic */
-  fluid:    [CHARSETS.waves, CHARSETS.smoke, CHARSETS.circles] as string[],
-  /** Dense classic → art → blocks — maximum detail pulse */
-  pulse:    [CHARSETS.dense, CHARSETS.standard, CHARSETS.blocks] as string[],
-  /** Braille → shadows → smoke — ethereal / dream-like */
-  dream:    [CHARSETS.braille, CHARSETS.shadows, CHARSETS.smoke] as string[],
-  /** Geometric shapes → shards → blocks — angular texture */
-  angular:  [CHARSETS.geometric, CHARSETS.shards, CHARSETS.blocks] as string[],
-  /** Interface controls → prompts → data nodes — clean assistant/product motion */
-  assistant: [CHARSETS.interface, CHARSETS.prompt, CHARSETS.data] as string[],
-  /** Mesh → data → ASCII — alive network signal with readable texture */
-  signal:    [CHARSETS.mesh, CHARSETS.data, CHARSETS.ascii] as string[],
-  /** Humanist symbols → waves → smoke — soft research/editorial motion */
-  editorial: [CHARSETS.humanist, CHARSETS.waves, CHARSETS.smoke] as string[],
-} as const;
-
-export type CharsetSequenceKey = keyof typeof CHARSET_SEQUENCES;
-
-export type CharsetKey = keyof typeof CHARSETS;
-
-/**
- * Art Style presets — each one sets render mode, charset, color mode, etc.
- */
-export const ART_STYLE_PRESETS: Record<ArtStyle, Partial<AsciiOptions>> = {
-  classic: {
-    renderMode: 'ascii',
-    charset: CHARSETS.standard,
-    colorMode: 'grayscale',
-  },
-  particles: {
-    renderMode: 'dots',
-    colorMode: 'fullcolor',
-    dotSizeRatio: 0.8,
-  },
-  letters: {
-    renderMode: 'ascii',
-    charset: CHARSETS.letters,
-    colorMode: 'fullcolor',
-  },
-  claudeCode: {
-    renderMode: 'ascii',
-    charset: CHARSETS.claudeCode,
-    colorMode: 'accent',
-    accentColor: '#f97316',
-  },
-  art: {
-    renderMode: 'ascii',
-    charset: CHARSETS.dense,
-    colorMode: 'fullcolor',
-  },
-  terminal: {
-    renderMode: 'ascii',
-    charset: CHARSETS.standard,
-    colorMode: 'matrix',
-  },
-  box: {
-    renderMode: 'ascii',
-    charset: CHARSETS.box,
-    colorMode: 'grayscale',
-  },
-  lines: {
-    renderMode: 'ascii',
-    charset: CHARSETS.lines,
-    colorMode: 'fullcolor',
-  },
-  braille: {
-    renderMode: 'ascii',
-    charset: CHARSETS.braille,
-    colorMode: 'fullcolor',
-  },
-  katakana: {
-    renderMode: 'ascii',
-    charset: CHARSETS.katakana,
-    colorMode: 'matrix',
-  },
-  circles: {
-    renderMode: 'ascii',
-    charset: CHARSETS.circles,
-    colorMode: 'accent',
-    accentColor: '#d4ff00',
-  },
-  shadows: {
-    renderMode: 'ascii',
-    charset: CHARSETS.shadows,
-    colorMode: 'accent',
-    accentColor: '#50a0ff',
-  },
-  geometric: {
-    renderMode: 'ascii',
-    charset: CHARSETS.geometric,
-    colorMode: 'grayscale',
-  },
-  pipes: {
-    renderMode: 'ascii',
-    charset: CHARSETS.pipes,
-    colorMode: 'accent',
-    accentColor: '#00ff88',
-  },
-  waves: {
-    renderMode: 'ascii',
-    charset: CHARSETS.waves,
-    colorMode: 'fullcolor',
-  },
-  shards: {
-    renderMode: 'ascii',
-    charset: CHARSETS.shards,
-    colorMode: 'grayscale',
-  },
-  smoke: {
-    renderMode: 'ascii',
-    charset: CHARSETS.smoke,
-    colorMode: 'accent',
-    accentColor: '#c850ff',
-  },
-  ascii: {
-    renderMode: 'ascii',
-    charset: CHARSETS.ascii,
-    colorMode: 'grayscale',
-  },
-  interface: {
-    renderMode: 'ascii',
-    charset: CHARSETS.interface,
-    colorMode: 'accent',
-    accentColor: '#f4f1ea',
-  },
-  prompt: {
-    renderMode: 'ascii',
-    charset: CHARSETS.prompt,
-    colorMode: 'matrix',
-  },
-  data: {
-    renderMode: 'ascii',
-    charset: CHARSETS.data,
-    colorMode: 'fullcolor',
-  },
-  humanist: {
-    renderMode: 'ascii',
-    charset: CHARSETS.humanist,
-    colorMode: 'accent',
-    accentColor: '#d6ccc2',
-  },
-  mesh: {
-    renderMode: 'ascii',
-    charset: CHARSETS.mesh,
-    colorMode: 'accent',
-    accentColor: '#8fd3ff',
-  },
-};
-
-/**
- * Higher-level living presets for output that should feel active immediately.
- * They intentionally compose existing primitives so renderers and integrations
- * can consume them as a normal `Partial<AsciiOptions>`.
- */
-export const LIVING_STYLE_PRESETS = {
-  agentField: {
-    ...ART_STYLE_PRESETS.interface,
-    charsetFrames: CHARSET_SEQUENCES.assistant,
-    charsetFps: 1.6,
-    animationStyle: 'caustics',
-    animationSpeed: 0.75,
-    ditherStrength: 0.12,
-    hoverEffect: 'glow',
-    hoverStrength: 0.42,
-    hoverRadius: 0.18,
-    hoverColor: '#f4f1ea',
-    normalize: true,
-  },
-  liquidSignal: {
-    ...ART_STYLE_PRESETS.data,
-    charsetFrames: CHARSET_SEQUENCES.signal,
-    charsetFps: 2.4,
-    animationStyle: 'current',
-    animationSpeed: 0.65,
-    ditherStrength: 0.45,
-    hoverEffect: 'repel',
-    hoverStrength: 0.55,
-    hoverRadius: 0.22,
-    hoverColor: '#8fd3ff',
-    normalize: true,
-  },
-  cursorGravity: {
-    ...ART_STYLE_PRESETS.mesh,
-    charsetFrames: CHARSET_SEQUENCES.angular,
-    charsetFps: 1.2,
-    animationStyle: 'current',
-    animationSpeed: 0.9,
-    ditherStrength: 0.2,
-    hoverEffect: 'attract',
-    hoverStrength: 0.82,
-    hoverRadius: 0.24,
-    hoverColor: '#ffffff',
-    normalize: true,
-  },
-  editorialPulse: {
-    ...ART_STYLE_PRESETS.humanist,
-    charsetFrames: CHARSET_SEQUENCES.editorial,
-    charsetFps: 0.9,
-    animationStyle: 'caustics',
-    animationSpeed: 0.55,
-    ditherStrength: 0.18,
-    hoverEffect: 'spotlight',
-    hoverStrength: 0.35,
-    hoverRadius: 0.2,
-    hoverColor: '#fff8ea',
-    normalize: true,
-  },
-  terminalFlow: {
-    ...ART_STYLE_PRESETS.prompt,
-    charsetFrames: CHARSET_SEQUENCES.terminal,
-    charsetFps: 3,
-    animationStyle: 'reform',
-    animationSpeed: 1.1,
-    ditherStrength: 0.22,
-    hoverEffect: 'glitchText',
-    hoverStrength: 0.65,
-    hoverRadius: 0.16,
-    hoverColor: '#d4ff00',
-    hoverText: ['BUILD', 'SHIP', 'RUN', 'ASK', 'MODEL'],
-    normalize: true,
-  },
-} as const satisfies Record<string, Partial<AsciiOptions>>;
-
-export type LivingStylePresetKey = keyof typeof LIVING_STYLE_PRESETS;
-
 export const DEFAULT_OPTIONS: AsciiOptions = {
   fontSize: 7,
   charSpacing: 1,
   brightness: 0,
   contrast: 0,
-  charset: CHARSETS.standard,
+  charset: CHARACTER_SETS.standard.chars,
   colorMode: 'grayscale',
   accentColor: '#d4ff00',
   invert: false,
@@ -617,6 +343,7 @@ export const DEFAULT_OPTIONS: AsciiOptions = {
   hoverShape: 'circle',
   hoverText: 'ASCIIFY',
   artStyle: 'classic',
+  fineDither: false,
   customText: '',
   chromaKey: null,
   chromaKeyTolerance: 60,

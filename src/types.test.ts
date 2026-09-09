@@ -1,49 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ART_STYLE_PRESETS,
-  CHARSET_SEQUENCES,
-  CHARSETS,
-  LIVING_STYLE_PRESETS,
-} from './types';
+import * as core from './core';
+import { CHARACTER_SETS } from './studio/characters';
+import { STUDIO_STYLES } from './studio/model';
+import { resolveCoreStyle } from './core/style';
 import { resolveSourceCrop } from './core/renderer';
 import { computeCanvasRenderSize } from './core/simple-api';
 
-describe('charset catalog', () => {
-  it('includes modern product glyph ramps for clean AI-era interfaces', () => {
-    expect(CHARSETS.interface).toContain('⌘');
-    expect(CHARSETS.prompt).toContain('>');
-    expect(CHARSETS.data).toContain('◇');
-    expect(CHARSETS.humanist).toContain('∴');
-    expect(CHARSETS.mesh).toContain('╬');
+describe('current catalogs', () => {
+  it('removes legacy catalog exports from the public media API', () => {
+    for(const key of ['CHARSETS','ART_STYLE_PRESETS','CHARSET_SEQUENCES','LIVING_STYLE_PRESETS']) expect(core).not.toHaveProperty(key);
   });
-
-  it('includes living charset sequences for motion-ready ASCII textures', () => {
-    expect(CHARSET_SEQUENCES.assistant).toEqual([
-      CHARSETS.interface,
-      CHARSETS.prompt,
-      CHARSETS.data,
-    ]);
-    expect(CHARSET_SEQUENCES.signal).toContain(CHARSETS.mesh);
+  it('retains the curated alphabets and exactly the 15 current render styles', () => {
+    expect(Object.keys(CHARACTER_SETS)).toEqual(['standard','asciify','minimal','detailed','letters','technical','blocks','braille']);
+    expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither']);
+  });
+  it('rejects removed shortcuts with migration guidance', () => {
+    for(const name of ['binary','katakana','waves','smoke','particles','letters','art','terminal']) expect(()=>resolveCoreStyle(name)).toThrow('asciify-engine/studio');
+    expect(resolveCoreStyle()).toEqual({artStyle:'classic'});
   });
 });
-
-describe('style presets', () => {
-  it('exposes art styles for the new charsets', () => {
-    expect(ART_STYLE_PRESETS.interface.charset).toBe(CHARSETS.interface);
-    expect(ART_STYLE_PRESETS.prompt.charset).toBe(CHARSETS.prompt);
-    expect(ART_STYLE_PRESETS.data.charset).toBe(CHARSETS.data);
-    expect(ART_STYLE_PRESETS.humanist.charset).toBe(CHARSETS.humanist);
-    expect(ART_STYLE_PRESETS.mesh.charset).toBe(CHARSETS.mesh);
-  });
-
-  it('provides living presets that combine charsets, motion, hover, and normalized contrast', () => {
-    expect(LIVING_STYLE_PRESETS.liquidSignal.charsetFrames).toEqual(CHARSET_SEQUENCES.signal);
-    expect(LIVING_STYLE_PRESETS.liquidSignal.animationStyle).toBe('current');
-    expect(LIVING_STYLE_PRESETS.cursorGravity.hoverStrength).toBeGreaterThan(0);
-    expect(LIVING_STYLE_PRESETS.agentField.normalize).toBe(true);
-  });
-});
-
 
 describe('source crop', () => {
   it('treats CSS-like insets as the exact source view box', () => {
@@ -92,15 +67,5 @@ describe('canvas render sizing', () => {
       renderW: 2048,
       renderH: 443,
     });
-  });
-});
-
-// Public preset retirement is deliberate in 2.0; custom Unicode remains supported.
-describe('standard catalog', () => {
-  it('excludes retired novelty presets', () => {
-    for (const key of ['emoji', 'musical', 'starfield']) {
-      expect(CHARSETS).not.toHaveProperty(key);
-      expect(ART_STYLE_PRESETS).not.toHaveProperty(key);
-    }
   });
 });

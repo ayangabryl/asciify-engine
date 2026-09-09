@@ -30,7 +30,7 @@ After updating, read the installed SKILL.md and its linked references, confirm i
 
 ## 2.0 catalog migration
 
-2.0.0 removes the `emoji`, `musical`, and `starfield` keys from `CHARSETS`, `ArtStyle`, and `ART_STYLE_PRESETS`. Before upgrading, search application settings and saved presets for those names. Use `classic` plus a custom `charset` to retain an application-owned alphabet, or use `circles`, `braille`, or `geometric` for structural alternatives. The existing cosmic sequence now uses sparse marks/circles/shadows, and angular uses geometry/shards/blocks. Other core options and renderers retain their behavior. Do not pass retired keys or tell users that custom Unicode has been removed.
+2.0.0 removes the `emoji`, `musical`, and `starfield` keys from `CHARSETS`, `ArtStyle`, and `ART_STYLE_PRESETS`. Before upgrading, search application settings and saved presets for those names. For current releases, use a custom `charset` or a current StudioStyle. The existing cosmic sequence now uses sparse marks/circles/shadows, and angular uses geometry/shards/blocks. Other core options and renderers retain their behavior. Do not pass retired keys or tell users that custom Unicode has been removed.
 
 The curated `STUDIO_CHARACTER_SETS` export is available from `/studio` in 2.0.0. Its values contain `label` and `chars`; assign `chars` to Studio settings only for `style: 'ascii'`. The primary editor at `/editor` uses Studio; earlier webcam and classic-editor workflows remain at `/editor/classic`.
 
@@ -48,4 +48,9 @@ Use one motion owner: `animationStyle` for core, `motion` for `/hover`, or `moti
 
 Remove imports from `asciify-engine/backgrounds` and generator imports from the root package. Download the chosen `.js` template from https://asciify.org/backgrounds and change the import to `./wave.js` (or your selected file). The template exports `asciiBackground`; keep calling `destroy()` on unmount. It handles resizing, hidden/offscreen suspension, reduced motion, and cleanup. A selected template contains only that generator; backgrounds.js is the optional full collection. Application-owned source templates are separate from npm updates. Existing installations can stay on 3.x while migrating. Text and media rendering remain supported, including text backgrounds.
 
-Use `CHARACTER_SETS` from root or `/core` for the same eight choices as the editor's `STUDIO_CHARACTER_SETS`. This data-only import does not load Studio. Keep custom characters available separately; do not populate standard UI choices from the larger legacy `CHARSETS` object.
+Use `CHARACTER_SETS` from root or `/core` for the same eight choices as the editor's `STUDIO_CHARACTER_SETS`. This data-only import does not load Studio. Keep custom characters available separately; do not import the removed `CHARSETS` object.
+
+
+## 4.1.0 — remove legacy catalogs
+
+This requested minor version contains breaking API removals: `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS`, `CharsetKey`, `CharsetSequenceKey`, and `LivingStylePresetKey`. Search source, saved settings, generated snippets, and documentation before upgrading. Use `/studio`'s 15 `STUDIO_STYLES` for render styles; use `/core`'s curated `CHARACTER_SETS` for ASCII alphabets. Replace old shorthand `artStyle` names with actual Studio rendering or explicit core charset/renderMode/colorMode options. Core only accepts `artStyle: 'classic'`. Custom `charset` and `charsetFrames` remain supported. Fine-dither hover integration uses explicit `fineDither: true`, not the removed terminal preset.

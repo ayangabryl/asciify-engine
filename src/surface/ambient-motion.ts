@@ -11,7 +11,7 @@ export function resolveMotion(style?: string): AmbientMotion {
   return MOTION_STYLES.find(s => s.value === style || s.mode === style)?.mode ?? 'none';
 }
 export const motionId = (mode: AmbientMotion) => ['none', 'caustics', 'current', 'reform'].indexOf(mode);
-export const isFineDither = (options?: Pick<AsciiOptions, 'artStyle' | 'customText' | 'charsetFrames' | 'charset'>) => options?.artStyle === 'terminal' && !options.customText && !options.charsetFrames?.length && !/[A-Za-z]/.test(options.charset ?? '');
+export const isFineDither = (options?: Pick<AsciiOptions, 'fineDither' | 'customText' | 'charsetFrames' | 'charset'>) => options?.fineDither === true && !options.customText && !options.charsetFrames?.length && !/[A-Za-z]/.test(options.charset ?? '');
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (a: number, b: number, v: number) => { const t = clamp((v-a)/(b-a)); return t*t*(3-2*t); };
 export const printGrain = (x: number, y: number) => { const v = 52.9829189 * ((x*.06711056+y*.00583715)%1); return v-Math.floor(v); };

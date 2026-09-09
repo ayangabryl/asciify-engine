@@ -105,7 +105,7 @@ Do not promise a 120 FPS minimum on every mobile device or arbitrary character c
 
 ### Hero character catalog
 
-Hero → Customize → Character set exposes every preset from the published engine `CHARSETS` catalog, plus the Asciify brand set. Selecting a set clears a custom-letter override; Apply letters modifies only the selected set, and Reset set restores it. Selection works while paused or with reduced motion. The hero remains gray; these are character ramps, not the playground’s Halftone/Dither rendering modes. Prism at 95% with 35% edge softness is the default hero finish: red/cyan separation with short soft shoulders at the perimeter, a clear center, and no blur on HTML text or controls. The same Prism shader is used by the playground and optional engine hover surface.
+Hero → Customize → Characters uses the same 15 render-style tiles as the editor, with six primary styles and nine under More render styles. Custom letters are available under ASCII. Alternate styles use the published Studio renderer and share the hero's video; they are not aliases for old alphabets. Default ASCII retains its GPU hover and Prism finish. Selecting styles works while paused or with reduced motion.
 
 The default Trail radius is now `0.45` in the hero, playground preset and optional engine mount. This widens the nominal fluid impulse by about 51% versus `0.2`, while preserving the same strength, bounded flow field. Pass `radius: 0.2` explicitly for the previous narrower reach. Other hover presets keep their existing sizes.
 
