@@ -193,7 +193,8 @@ export function mountStudioMedia(
       dirty = true;
       wake();
     },
-    resize(w: number, h: number) {
+    resize(w: number, h: number, pixelRatio?: number) {
+      if (pixelRatio !== undefined) renderer.setPixelRatio(pixelRatio);
       width = Math.max(2, w);
       height = Math.max(2, h);
       dirty = true;
@@ -221,6 +222,7 @@ export function mountStudioMedia(
     get paused() {
       return paused || reduced.matches;
     },
+    get pixelRatio() { return renderer.pixelRatio; },
     get maxCells() {
       return renderer.maxCells;
     },

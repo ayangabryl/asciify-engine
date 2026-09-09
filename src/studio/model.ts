@@ -189,7 +189,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   version: 1,
   aspectRatio: "original",
   style: "ascii",
-  cellSize: 7,
+  cellSize: 6,
   charset: " .:-=+*#%@",
   colorMode: "accent",
   ink: "#e8b900",
@@ -305,7 +305,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       "original",
     ),
     style: choice(v.style, STUDIO_STYLES, d.style),
-    cellSize: n(v.cellSize, 7, 3, 60),
+    cellSize: n(v.cellSize, d.cellSize, 3, 60),
     charset:
       typeof v.charset === "string" && v.charset.length
         ? Array.from(v.charset).slice(0, 128).join("")
