@@ -1,3 +1,4 @@
+import type { AmbientMotion } from '../surface/ambient-motion';
 /** Serializable, media-independent editing state. No DOM work at import time. */
 export const STUDIO_STYLES = [
   "ascii",
@@ -173,18 +174,7 @@ export interface StudioSettings {
     halftone: number;
   };
   motion: {
-    type:
-      | "none"
-      | "breathe"
-      | "wave"
-      | "reveal"
-      | "glitch"
-      | "rainbow"
-      | "hologram"
-      | "fire"
-      | "chrome"
-      | "ripple"
-      | "vapor";
+    type: AmbientMotion;
     speed: number;
   };
   hover: {
@@ -418,19 +408,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     motion: {
       type: choice(
         a.type,
-        [
-          "none",
-          "breathe",
-          "wave",
-          "reveal",
-          "glitch",
-          "rainbow",
-          "hologram",
-          "fire",
-          "chrome",
-          "ripple",
-          "vapor",
-        ],
+        ["none", "caustics", "current", "reform"],
         "none",
       ),
       speed: n(a.speed, 1, 0.1, 3),

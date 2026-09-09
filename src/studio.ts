@@ -7,3 +7,5 @@ export * from './studio/export';
 export * from './studio/mount';
 export * from './studio/text';
 export * from './studio/characters';
+
+export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';

@@ -110,3 +110,7 @@ Other renderer styles define their own marks, so character controls only apply t
 Use `studioGrid(width, height, settings, maxCells, pixelRatio)` to inspect `minimum`, `cell`, `columns`, `rows`, and `limited` at the actual preview resolution. ASCII/tile renderers use `cellSize`; Dither uses `dither.scale`. Respect the returned minimum in a size picker instead of offering a range that the performance budget silently clamps. Use the same budget and reference width for export to retain density.
 
 For PNG/JPEG, pass `time: player.time` to `exportStudio` to save the selected frame. Default time is zero; animation exports start at zero. Snapshot the time/settings/preview size before asynchronous loading. The editor's Export tab separates Image and Animation, shows validated pixel sizes and keeps website code in an expandable section.
+
+## Still-image motion (3.0)
+
+Import `STUDIO_MOTIONS` from `/studio` to populate controls; each item has `value`, `label`, and `description`. Use `motion: { type: 'caustics' | 'current' | 'reform' | 'none', speed: 1 }`. Off is the default. Caustics preserves the grid, Current introduces fluid displacement, and Reform uses a staggered dissolve with a readable hold. Loops last 12 / speed seconds and preserve source/accent/gray color choice. Speed is 0.1–3. Do not combine source video with ambient motion unless requested. Hover remains independently configurable. Retired saved motion names normalize to Off. See [upgrading.md](upgrading.md) before moving an existing integration to 3.0.

@@ -93,7 +93,7 @@ describe('hero renderer eligibility', () => {
   it('requires the engine fallback for unsupported effects and style modes', () => {
     expect(supportsGlyphRenderer(options)).toBe(true);
     for (const partial of [
-      { animationStyle: 'wave' }, { hoverStrength: .2 }, { charsetFrames: ['AB'] },
+      { animationStyle: 'current' }, { hoverStrength: .2 }, { charsetFrames: ['AB'] },
       { renderMode: 'dots' }, { artStyle: 'braille' }, { colorMode: 'accent', accentColor: 'auto' },
     ] as Partial<AsciiOptions>[]) expect(supportsGlyphRenderer({ ...options, ...partial })).toBe(false);
   });

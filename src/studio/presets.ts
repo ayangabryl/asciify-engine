@@ -83,7 +83,7 @@ export const STUDIO_LOOKS: {
     {
       backdrop: { mode: "blurred", blur: 18, opacity: 0.55 },
       ink: "#f2e9c9",
-      motion: { type: "breathe", speed: 0.5 },
+      motion: { type: "caustics", speed: 0.5 },
     },
   ],
   [

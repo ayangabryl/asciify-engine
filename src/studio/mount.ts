@@ -1,3 +1,4 @@
+import { AmbientTimeline } from '../surface/ambient-motion';
 import { createStudioRenderer } from "./renderer";
 import { loadStudioMedia, type StudioMedia } from "./media";
 import {
@@ -43,6 +44,7 @@ export function mountStudioMedia(
     width = options.width ?? media.width,
     height = options.height ?? media.height;
   const renderer = createStudioRenderer(canvas, settings, options);
+  const ambientClock = new AmbientTimeline();
   let frame = 0,
     disposed = false,
     dirty = true,
@@ -112,7 +114,8 @@ export function mountStudioMedia(
       try {
         if (media.animated && !video) renderer.invalidate();
         const [w, h] = studioDimensions(width, height, settings);
-        renderer.render(media.frame(video?.currentTime ?? time), time, w, h);
+        renderer.render(media.frame(video?.currentTime ?? time), time, w, h,
+          ambientClock.update(time, settings.motion.type, settings.motion.speed));
         const cost = performance.now() - start;
         options.onFrame?.(video?.currentTime ?? time, cost);
         costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;

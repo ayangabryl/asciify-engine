@@ -1,3 +1,4 @@
+import { sampleAmbient } from '../surface/ambient-motion';
 import {
   normalizeStudioSettings,
   studioCrop,
@@ -64,6 +65,7 @@ export function createStudioRenderer(
     revision = 0,
     prepared = "",
     pixels: Uint8ClampedArray = new Uint8ClampedArray(0),
+    motionPixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     cols = 0,
     rows = 0,
     last = 0;
@@ -72,6 +74,7 @@ export function createStudioRenderer(
   let flow = new WaterSurface();
   let aspect = 0;
   const field = [0, 0, 0];
+  const ambient = [0, 0, 0, 1];
   const maxDimension = Math.max(
       64,
       Math.min(
@@ -102,6 +105,7 @@ export function createStudioRenderer(
     time = 0,
     requestedWidth = 960,
     requestedHeight = 540,
+    motionTime = time * state.motion.speed,
   ) {
     if (!Number.isFinite(time)) time = 0;
     if (
@@ -191,9 +195,11 @@ export function createStudioRenderer(
     art.ctx.clearRect(0, 0, w, h);
     art.ctx.globalAlpha = 1;
     art.ctx.globalCompositeOperation = "source-over";
-    const phase = time * state.motion.speed;
+    const phase = motionTime;
     if (isDither) {
-      const data = new Uint8ClampedArray(pixels);
+      if (motionPixels.length !== pixels.length) motionPixels = new Uint8ClampedArray(pixels.length);
+      const data = motionPixels;
+      data.set(pixels);
       const motion = state.motion.type;
       if (flow.active || motion !== "none") {
         for (let y = 0; y < rows; y++)
@@ -211,52 +217,30 @@ export function createStudioRenderer(
               sy -= field[1] * rows;
               energy = field[2] / 3;
             }
-            if (motion === "wave")
-              sy += Math.sin(u * 8 + phase * 2 + v * 4) * rows * 0.015;
-            if (motion === "ripple") {
-              const dx = u - 0.5,
-                dy = v - 0.5,
-                wave = Math.sin(Math.hypot(dx, dy) * 30 - phase * 3) * 0.03;
-              sx += dx * wave * cols;
-              sy += dy * wave * rows;
-            }
-            if (motion === "breathe")
-              gain = 0.92 + 0.08 * Math.sin(phase * 1.5 + u * 3);
-            if (motion === "reveal")
-              alpha = Math.max(
-                0,
-                Math.min(1, (Math.sin(phase * 0.7) * 0.7 + 0.7 - u) * 4),
-              );
-            if (motion === "glitch" && noise(y, Math.floor(phase * 6)) > 0.93)
-              sx += Math.sin(phase * 5) * 8;
-            if (motion === "vapor")
-              sy += Math.sin(u * 6 + phase) * rows * 0.025;
-            if (motion === "fire") {
-              sy += Math.sin(u * 7 + phase * 3 + v * 8) * rows * 0.01;
-              gain = 0.8 + 0.2 * Math.sin(v * 12 - phase * 4);
-            }
-            if (motion === "hologram")
-              alpha = 0.72 + 0.28 * Math.sin(y * 0.65 + phase * 5);
-            if (motion === "chrome")
-              gain = 0.5 + Math.abs(Math.sin(v * 8 + phase));
-            const i = (y * cols + x) * 4,
-              j =
-                (Math.max(0, Math.min(rows - 1, Math.round(sy))) * cols +
-                  Math.max(0, Math.min(cols - 1, Math.round(sx)))) *
-                4;
+            sampleAmbient(motion, u, v, phase, ambient);
+            sx -= ambient[0] / 960 * cols;
+            sy -= ambient[1] / 960 * rows;
+            gain = 1 + ambient[2];
+            alpha = ambient[3];
+            // Sub-cell advection must interpolate; rounding creates visible stepping.
+            sx = Math.max(0, Math.min(cols - 1, sx));
+            sy = Math.max(0, Math.min(rows - 1, sy));
+            const x0 = Math.floor(sx), y0 = Math.floor(sy);
+            const fx = sx - x0, fy = sy - y0;
+            const i = (y * cols + x) * 4;
+            const j = (y0 * cols + x0) * 4;
+            const right = (y0 * cols + Math.min(cols - 1, x0 + 1)) * 4;
+            const below = (Math.min(rows - 1, y0 + 1) * cols + x0) * 4;
+            const corner = (Math.min(rows - 1, y0 + 1) * cols + Math.min(cols - 1, x0 + 1)) * 4;
             for (let c = 0; c < 3; c++) {
-              const tone = pixels[j + c] / 255;
+              const tone = ((pixels[j + c] * (1 - fx) + pixels[right + c] * fx) * (1 - fy) +
+                (pixels[below + c] * (1 - fx) + pixels[corner + c] * fx) * fy) / 255;
               let value =
                 (["trail", "contour"].includes(state.hover.effect)
                   ? invertTrailTone(tone, energy)
                   : state.hover.effect === "dissolve"
                     ? tone * Math.max(0, 1 + energy)
                     : tone) * gain;
-              if (motion === "rainbow")
-                value *= 0.65 + 0.35 * Math.sin(phase * 2 + u * 5 + c * 2.094);
-              if (motion === "hologram") value *= c === 0 ? 0.4 : 1;
-              if (motion === "fire")
-                value *= c === 0 ? 1.3 : c === 1 ? 0.7 : 0.3;
               data[i + c] = value * 255;
             }
             data[i + 3] = pixels[j + 3] * alpha;
@@ -323,32 +307,11 @@ export function createStudioRenderer(
           let px = x * cell,
             py = y * ch,
             alpha = 1;
-          if (motion === "breathe")
-            lum *= 0.92 + 0.08 * Math.sin(phase * 1.5 + x * 0.03);
-          if (motion === "wave")
-            py += Math.sin(x * 0.12 + phase * 2 + y * 0.08) * ch * 0.4;
-          if (motion === "ripple") {
-            const dx = x / cols - 0.5,
-              dy = y / rows - 0.5,
-              dist = Math.hypot(dx, dy),
-              wave = Math.sin(dist * 30 - phase * 3) * cell * 0.65;
-            px += dx * wave;
-            py += dy * wave;
-          }
-          if (motion === "fire") {
-            py -= Math.sin(x * 0.16 + phase * 3 + y * 0.09) * ch * 0.35;
-            lum *= 0.85 + 0.15 * Math.sin(y * 0.3 - phase * 4);
-          }
-          if (motion === "hologram")
-            alpha = 0.72 + 0.28 * Math.sin(y * 0.65 + phase * 5);
-          if (motion === "reveal")
-            alpha = Math.max(
-              0,
-              Math.min(1, (Math.sin(phase * 0.7) * 0.7 + 0.7 - x / cols) * 4),
-            );
-          if (motion === "glitch" && noise(y, Math.floor(phase * 6)) > 0.93)
-            px += Math.sin(phase * 5) * cell * 3;
-          if (motion === "vapor") py += Math.sin(x * 0.04 + phase) * ch;
+          sampleAmbient(motion, x / cols, y / rows, phase, ambient);
+          px += ambient[0] * w / 960;
+          py += ambient[1] * h / 960;
+          lum = Math.max(0, Math.min(1, lum + ambient[2]));
+          alpha = ambient[3];
           if (!glyphMode && state.colorMode === "accent") alpha *= lum;
           ac.globalAlpha = alpha;
           const toneDelta = (lum - sourceLum) * 255;
@@ -358,23 +321,13 @@ export function createStudioRenderer(
               : state.colorMode === "gray"
                 ? `rgb(${Math.round(lum * 255)},${Math.round(lum * 255)},${Math.round(lum * 255)})`
                 : state.ink;
-          if (motion === "rainbow")
-            ink = `hsl(${((x / cols) * 180 + phase * 40) % 360} 70% 65%)`;
-          if (motion === "fire")
-            ink = `hsl(${15 + lum * 40} 90% ${30 + lum * 45}%)`;
-          if (motion === "hologram") ink = `hsl(185 65% ${40 + lum * 40}%)`;
-          if (motion === "chrome")
-            ink = `hsl(210 12% ${25 + Math.abs(Math.sin(y * 0.2 + phase)) * 70}%)`;
           ac.fillStyle = ink;
           if (glyphMode) {
             const index = Math.max(
               0,
               Math.min(chars.length - 1, Math.floor(lum * (chars.length - 1))),
             );
-            if (
-              state.colorMode === "accent" &&
-              !["rainbow", "fire", "hologram", "chrome"].includes(motion)
-            )
+            if (state.colorMode === "accent")
               ac.drawImage(
                 atlas.canvas,
                 index * aw,
