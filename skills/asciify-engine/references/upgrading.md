@@ -10,6 +10,8 @@ Use this when a user asks for the latest package or skill, or a requested featur
 
 Version 1.3.0 adds velocity-driven Trail, character finishes (`filter`, `edgeEffect`, `edgeSoftness`), text cutouts (`textMask`) and optional boundary protection (`edgeSafe`, default false). Use `radius` from 0.1 to 1 for hover size. Existing core media APIs remain supported. Read [hero-finish.md](hero-finish.md) for complete examples and limits.
 
+Version 1.4.0 adds the optional `/studio` composition and export API. Its settings are separate from `AsciiOptions`; existing `/core` and `/hover` integrations keep their behavior. Read [studio-workspace.md](studio-workspace.md) only when adding these tools.
+
 ## Installed agent skill
 
 Inspect `npx skills list --json` for project installs or `npx skills list -g --json` for global installs. Refresh this skill in the same scope:

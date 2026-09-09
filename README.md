@@ -490,3 +490,23 @@ MIT © [asciify.org](https://asciify.org)
 ## Unreleased hero finish
 
 Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, and velocity-driven Trail source flow. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](skills/asciify-engine/references/hero-finish.md).
+
+## Optional Studio tools
+
+The `asciify-engine/studio` entry adds a reusable composition pipeline: alternate render styles, palette dithering, crop and masks, source/blurred/gradient backdrops, combined optical effects, saved looks, text fonts, and PNG/JPG/GIF/MP4/WebM export. Existing ASCII defaults and `/core` and `/hover` imports stay unchanged. Fonts and video encoders load on demand.
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const studio = await mountStudio(canvas, '/your-video.mp4', {
+  settings: {
+    style: 'ascii',
+    backdrop: { mode: 'blurred', opacity: 0.4 },
+  },
+});
+studio.update({ hover: { effect: 'water', radius: 0.35 } });
+// On unmount:
+studio.destroy();
+```
+
+See the [Studio API guide](skills/asciify-engine/references/studio-workspace.md) for complete settings, import/export, media ownership, browser requirements, and performance budgets.
