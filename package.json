@@ -1,6 +1,6 @@
 {
   "name": "asciify-engine",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -25,16 +25,6 @@
       "require": {
         "types": "./dist/core.d.cts",
         "default": "./dist/core.cjs"
-      }
-    },
-    "./backgrounds": {
-      "import": {
-        "types": "./dist/backgrounds.d.ts",
-        "default": "./dist/backgrounds.js"
-      },
-      "require": {
-        "types": "./dist/backgrounds.d.cts",
-        "default": "./dist/backgrounds.cjs"
       }
     },
     "./hover": {
@@ -108,7 +98,6 @@
     "terminal-art",
     "retro",
     "matrix-effect",
-    "matrix-rain",
     "ascii-video",
     "ascii-webcam",
     "ascii-image",
@@ -143,9 +132,6 @@
     "ascii-hero",
     "landing-page-background",
     "website-background",
-    "parallax-stars",
-    "aurora-effect",
-    "particle-effect",
     "ascii-particles"
   ],
   "author": "ayangabryl",

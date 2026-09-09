@@ -59,7 +59,9 @@ export function createStudioRenderer(
     tiny = surface(),
     atlas = surface(),
     inkMask = surface(),
-    glow = surface();
+    glow = surface(),
+    stud = surface();
+  let studSize = 0;
   let finish: ReturnType<typeof createStudioFinish> | undefined;
   let state = normalizeStudioSettings(settings),
     revision = 0,
@@ -278,6 +280,16 @@ export function createStudioRenderer(
           atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2),
         );
       }
+      if (state.style === 'lego' && studSize !== cell) {
+        studSize = cell;
+        resize(stud.canvas, Math.ceil(cell), Math.ceil(ch));
+        const sc = stud.ctx;
+        sc.clearRect(0,0,stud.canvas.width,stud.canvas.height);
+        sc.fillStyle = 'rgba(255,255,255,.2)';
+        sc.strokeStyle = 'rgba(0,0,0,.25)';
+        sc.lineWidth = Math.max(.5, pixelRatio * .6);
+        sc.beginPath(); sc.arc(cell/2,ch/2,cell*.28,0,Math.PI*2); sc.fill(); sc.stroke();
+      }
       ac.font = `${font}px monospace`;
       ac.textBaseline = "middle";
       ac.textAlign = "center";
@@ -381,12 +393,7 @@ export function createStudioRenderer(
               state.style === "pixel" ? 0 : Math.max(0.5, cell * 0.06);
             ac.fillRect(px, py, cell - gap, ch - gap);
             if (state.style === "lego") {
-              ac.fillStyle = "rgba(255,255,255,.2)";
-              ac.beginPath();
-              ac.arc(px + cell / 2, py + ch / 2, cell * 0.28, 0, Math.PI * 2);
-              ac.fill();
-              ac.strokeStyle = "rgba(0,0,0,.25)";
-              ac.stroke();
+              ac.drawImage(stud.canvas, px, py);
             }
             if (state.style === "disco") {
               ac.fillStyle = `rgba(255,255,255,${0.1 + noise(x, y) * 0.25})`;
@@ -607,6 +614,7 @@ export function createStudioRenderer(
         atlas,
         inkMask,
         glow,
+        stud,
       ])
         s.canvas.width = s.canvas.height = 1;
       sourceIdentity = null;

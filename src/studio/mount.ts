@@ -222,6 +222,12 @@ export function mountStudioMedia(
     get paused() {
       return paused || reduced.matches;
     },
+    setBudget(cells: number) {
+      renderer.setBudget(cells);
+      options.onQualityChange?.(renderer.maxCells);
+      dirty = true;
+      wake();
+    },
     get pixelRatio() { return renderer.pixelRatio; },
     get maxCells() {
       return renderer.maxCells;

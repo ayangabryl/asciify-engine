@@ -118,3 +118,10 @@ Import `STUDIO_MOTIONS` from `/studio` to populate controls; each item has `valu
 ## Sharp previews (3.0.1)
 
 Studio defaults to a 6-unit cell size. Separate the sampling grid from canvas backing resolution: `instance.resize(width, height, pixelRatio)` updates the backing size and raster scale together without remounting media. Doubling dimensions and passing 2 keeps the same character count while drawing sharper glyphs. Use a bounded backing dimension and at most the device DPR; avoid stretching a small bitmap with CSS. `instance.pixelRatio` reports the scale. When exporting, pass `referenceWidth: canvas.width / instance.pixelRatio` to preserve logical density. Explicit saved cell sizes remain valid. Do not force a tile style's coarse cell size onto ASCII when changing render styles.
+
+
+## Fine grids and sharp previews (4.0)
+
+Start with `cellSize: 6`; the editor remembers each style's size. A Retina preview uses `resize(width, height, pixelRatio)` on a `mountStudioMedia` handle to keep logical cells independent of physical raster resolution. Its `setBudget(maxCells)` changes the upper sampling budget; automatic adaptation may reduce it when frames are slow. At a 960×540 logical canvas, 32,768 cells permit Lego size 4, and 65,536 permit dither scale 3. Keep ASCII at a measured budget such as 12,000 cells. Smaller requested cells cannot bypass the active budget; show `studioGrid`'s actual minimum in controls. Fine grids cost more, so profile hover and motion on target devices. Studio caches Lego stud artwork.
+
+For menus shared with a media hero, import the eight `CHARACTER_SETS` from `asciify-engine/core`; `STUDIO_CHARACTER_SETS` is the identical catalog through `/studio`. A hero need not load the Studio runtime.

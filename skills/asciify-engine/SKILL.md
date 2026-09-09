@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "3.0.1"
+  tested-engine: "4.0.0"
   updated: "2026-09-09"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **3.0.1**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.0.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -19,7 +19,7 @@ Use the published `asciify-engine` npm package for browser canvas rendering. Tes
 npm install asciify-engine@latest
 ```
 
-Version 1.2.0 exports `asciify-engine`, `asciify-engine/core` for media without procedural generators, and `asciify-engine/backgrounds` for optional backgrounds. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Enhanced website hovers, living-image motion and fine dither are available from the optional `asciify-engine/hover` entry; root and `/core` do not load it.
+Version 4.0 exports `asciify-engine` and `asciify-engine/core` for media rendering. Procedural background templates are downloaded from asciify.org/backgrounds and are not npm exports. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Enhanced website hovers, living-image motion and fine dither are available from the optional `asciify-engine/hover` entry; root and `/core` do not load it.
 
 ## Install the agent skill
 
@@ -34,7 +34,7 @@ This uses the Vercel Skills CLI to install the repository skill and its linked r
 - Static image: `asciify(source, canvas, config)` returns `Promise<() => void>`. Call the cleanup on unmount, including for a still image.
 - Video: `asciifyVideo(source, canvas, config)` returns `Promise<() => void>`. Call that function on unmount. Use `fitTo` and `objectFit: 'cover'` for full-bleed heroes; `contain` for a whole-subject preview.
 - GIF: `asciifyGif(source, canvas, config)` returns a cleanup function asynchronously.
-- Procedural background: `asciiBackground(host, config)` returns an object with **`destroy()`**, not a stop function. Media conversion does not require adding a procedural background.
+- Procedural background: download a template from https://asciify.org/backgrounds and import its `asciiBackground` helper locally. Call its `destroy()` on unmount. No background generators ship in npm 4.0.
 - Dense custom rendering: use `imageToAsciiTextFrame` and `renderTextFrameToCanvas`; keep the same options when converting and rendering. Use object frames when per-cell mutation is required.
 
 For a hero with HTML layered through the ASCII, read [references/layered-hero.md](references/layered-hero.md) and use the accompanying [HTML](examples/layered-hero.html), [CSS](examples/layered-hero.css), and [JavaScript](examples/layered-hero.js). These are ordinary Vite/bundler inputs, not another npm dependency. Supply your own media.
