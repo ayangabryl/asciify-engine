@@ -44,7 +44,7 @@ These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEff
 
 ## Still-image motion and dither
 
-The module's `motion` IDs are `none`, `print` (Living Print), `current` (Slow Current), and `reform` (Reveal & Reform). Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
+The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), and `reform` (Reveal & Reform). Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
 
 For the website's fine-dither treatment, use the module's `fineDither: true` and `ditherStrength` after matching the backing canvas's character settings. This is separate from the core renderer’s built-in dither behavior. Check a still and a moving scene for flicker before choosing the default.
 
@@ -57,6 +57,6 @@ The module observes reduced motion and visibility. Coordinate explicit pause wit
 When using the low-level object-frame API, pass `getFrame: () => currentFrame` to preserve exact glyph identities and colors. With canvas-only integrations the module estimates density from sampled ink coverage.
 
 
-## Unreleased hero finish
+## Hero finish
 
 Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, Prism edge softness (`edgeSoftness`), and fixed-grid fluid Trail. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](hero-finish.md).

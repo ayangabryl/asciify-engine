@@ -1,3 +1,4 @@
+import { resolveMotion, sampleAmbient } from '../surface/ambient-motion';
 /**
  * Core frame-to-canvas renderer and source-to-frame converters.
  */
@@ -15,7 +16,7 @@ import {
   parseChromaKeyColor,
   isDarkMode,
 } from './utils';
-import { getAnimationMultiplier, computeHoverEffect } from './animation';
+import { computeHoverEffect } from './animation';
 import { advanceHover, createHoverState, type HoverState, type RenderHover } from './hover';
 
 // Re-export AsciiFrame for downstream consumers that import from this module
@@ -1121,7 +1122,9 @@ function drawFrameToCanvas(
 
   const animStyle = options.animationStyle;
   const animSpeed = options.animationSpeed;
-  const noAnimation = animStyle === 'none';
+  const ambientMode = resolveMotion(animStyle);
+  const noAnimation = ambientMode === 'none';
+  const ambient = [0, 0, 0, 1];
   const hoverStrength = options.hoverStrength;
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
@@ -1148,8 +1151,8 @@ function drawFrameToCanvas(
         const intensity = isInverted ? 1 - lum : lum;
         if (intensity < 0.02) continue;
 
-        const animMul = noAnimation ? 1
-          : getAnimationMultiplier(x, y, cols, rows, time, animStyle, animSpeed);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient);
+        const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
 
         let hoverMul = 1;
         let hoverOffX = 0;
@@ -1172,8 +1175,8 @@ function drawFrameToCanvas(
         const radius = maxRadius * intensity * animMul * hoverMul;
         if (radius < 0.3) continue;
 
-        const px = x * cellW + cellW * 0.5 + hoverOffX;
-        const py = y * cellH + cellH * 0.5 + hoverOffY;
+        const px = x * cellW + cellW * 0.5 + hoverOffX + ambient[0];
+        const py = y * cellH + cellH * 0.5 + hoverOffY + ambient[1];
 
         let color: string;
         if (hoverBlend > 0) {
@@ -1312,8 +1315,8 @@ function drawFrameToCanvas(
           : cell.char;
         if (drawChar === ' ') continue;
 
-        const animMul = noAnimation ? 1
-          : getAnimationMultiplier(x, y, cols, rows, time, animStyle, animSpeed);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient);
+        const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
         if (animMul < 0.05) continue;
 
         let hoverScale = 1;
@@ -1374,8 +1377,8 @@ function drawFrameToCanvas(
           }
         }
 
-        const px = x * cellW + cellW * 0.5 + hoverOffX;
-        const py = y * cellH + cellH * 0.5 + hoverOffY;
+        const px = x * cellW + cellW * 0.5 + hoverOffX + ambient[0];
+        const py = y * cellH + cellH * 0.5 + hoverOffY + ambient[1];
 
         let color: string;
         if (hoverBlend > 0) {

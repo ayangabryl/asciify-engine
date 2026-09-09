@@ -221,18 +221,7 @@ try {
   const motion = await page.evaluate(() => {
     const results = [];
     for (const style of ["ascii", "dither", "pixel"])
-      for (const type of [
-        "breathe",
-        "wave",
-        "reveal",
-        "glitch",
-        "rainbow",
-        "hologram",
-        "fire",
-        "chrome",
-        "ripple",
-        "vapor",
-      ]) {
+      for (const type of ["caustics", "current", "reform"]) {
         const s = api.normalizeStudioSettings({
           style,
           colorMode: "source",
@@ -242,7 +231,7 @@ try {
         results.push({
           style,
           type,
-          visible: render(s, 0.1) !== render(s, 1.1),
+          visible: render(s, 0.1) !== render(s, 3.5),
         });
       }
     return results;
@@ -263,6 +252,38 @@ try {
     return Math.abs(top[2] - sourcePixels[2]) < 10;
   });
   assert.ok(lower, "Optical pass must keep source orientation");
+  // Use actual artwork for timed visual comparison, not only a synthetic checksum.
+  const photo = await fs.readFile(root + '/../site/public/videos/hand-closeup-poster-1f3df178811b.jpg');
+  await page.evaluate(async (url) => {
+    window.photo = new Image(); photo.src = url; await photo.decode();
+  }, 'data:image/jpeg;base64,' + photo.toString('base64'));
+  for (const type of ['caustics', 'current', 'reform']) {
+    await fs.mkdir(out + '/' + type, { recursive: true });
+    for (let frame = 0; frame <= 144; frame++) {
+      const png = await page.evaluate(({type, frame}) => {
+        renderer.configure({colorMode:'accent', ink:'#888888', cellSize:5, hover:{effect:'none'}, motion:{type}});
+        renderer.render(photo, frame / 12, 640, 360);
+        return view.toDataURL().split(',')[1];
+      }, {type, frame});
+      await fs.writeFile(out + '/' + type + '/' + String(frame).padStart(3,'0') + '.png', Buffer.from(png,'base64'));
+    }
+  }
+  const motionPerformance = await page.evaluate(async () => {
+    const results = [];
+    for (const type of ['caustics','current','reform']) {
+      renderer.configure({cellSize:3, colorMode:'accent', motion:{type,speed:3}, hover:{effect:'trail',strength:1,radius:1}});
+      const costs=[], frames=[]; let previous=0;
+      for (let i=0;i<90;i++) {
+        const now=await new Promise(requestAnimationFrame);
+        if(previous)frames.push(now-previous); previous=now;
+        renderer.pointer(.1+(i%60)/75,.5+Math.sin(i*.2)*.3,now);
+        const start=performance.now(); renderer.render(photo,i/60,960,540); costs.push(performance.now()-start);
+      }
+      costs.sort((a,b)=>a-b); frames.sort((a,b)=>a-b);
+      results.push({type, renderMedian:costs[45],renderP95:costs[85],frameMedian:frames[44],frameP95:frames[84]});
+    }
+    return results;
+  });
   const timings = await page.evaluate(() => {
     renderer.destroy();
     renderer = api.createStudioRenderer(view, {
@@ -403,7 +424,7 @@ try {
     const idle = ticks;
     await new Promise((r) => setTimeout(r, 150));
     const sleeps = ticks === idle;
-    instance.update({ motion: { type: "breathe" } });
+    instance.update({ motion: { type: "caustics" } });
     await new Promise((r) => setTimeout(r, 200));
     const animates = ticks > idle;
     instance.pause();
@@ -455,6 +476,7 @@ try {
     fonts: fonts.map(({ ascii, ...rest }) => rest),
     hover,
     timings,
+    motionPerformance,
     exports,
     decodedGif,
     cancellation,

@@ -2,7 +2,7 @@
 
 export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
-export type AnimationStyle = 'none' | 'wave' | 'pulse' | 'rain' | 'breathe' | 'sparkle' | 'glitch' | 'spiral' | 'typewriter' | 'scatter' | 'waveField' | 'ripple' | 'melt' | 'orbit' | 'cellular';
+export type AnimationStyle = 'none' | 'caustics' | 'current' | 'reform';
 export type ArtStyle = 'classic' | 'particles' | 'letters' | 'claudeCode' | 'art' | 'terminal' | 'box' | 'lines' | 'braille' | 'katakana' | 'circles' | 'shadows' | 'geometric' | 'pipes' | 'waves' | 'shards' | 'smoke' | 'ascii' | 'interface' | 'prompt' | 'data' | 'humanist' | 'mesh';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';
 export type HoverShape = 'circle' | 'box';
@@ -528,7 +528,7 @@ export const LIVING_STYLE_PRESETS = {
     ...ART_STYLE_PRESETS.interface,
     charsetFrames: CHARSET_SEQUENCES.assistant,
     charsetFps: 1.6,
-    animationStyle: 'breathe',
+    animationStyle: 'caustics',
     animationSpeed: 0.75,
     ditherStrength: 0.12,
     hoverEffect: 'glow',
@@ -541,7 +541,7 @@ export const LIVING_STYLE_PRESETS = {
     ...ART_STYLE_PRESETS.data,
     charsetFrames: CHARSET_SEQUENCES.signal,
     charsetFps: 2.4,
-    animationStyle: 'melt',
+    animationStyle: 'current',
     animationSpeed: 0.65,
     ditherStrength: 0.45,
     hoverEffect: 'repel',
@@ -554,7 +554,7 @@ export const LIVING_STYLE_PRESETS = {
     ...ART_STYLE_PRESETS.mesh,
     charsetFrames: CHARSET_SEQUENCES.angular,
     charsetFps: 1.2,
-    animationStyle: 'orbit',
+    animationStyle: 'current',
     animationSpeed: 0.9,
     ditherStrength: 0.2,
     hoverEffect: 'attract',
@@ -567,7 +567,7 @@ export const LIVING_STYLE_PRESETS = {
     ...ART_STYLE_PRESETS.humanist,
     charsetFrames: CHARSET_SEQUENCES.editorial,
     charsetFps: 0.9,
-    animationStyle: 'ripple',
+    animationStyle: 'caustics',
     animationSpeed: 0.55,
     ditherStrength: 0.18,
     hoverEffect: 'spotlight',
@@ -580,7 +580,7 @@ export const LIVING_STYLE_PRESETS = {
     ...ART_STYLE_PRESETS.prompt,
     charsetFrames: CHARSET_SEQUENCES.terminal,
     charsetFps: 3,
-    animationStyle: 'rain',
+    animationStyle: 'reform',
     animationSpeed: 1.1,
     ditherStrength: 0.22,
     hoverEffect: 'glitchText',

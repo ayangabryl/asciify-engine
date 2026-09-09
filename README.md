@@ -520,3 +520,7 @@ Emoji, Musical and Starfield preset keys have been removed from `CHARSETS`, `Art
 ### 2.0.1 size and export fixes
 
 `studioGrid` exposes the effective grid and minimum cell size for a bounded preview. Dither uses `dither.scale`; other styles use `cellSize`. Pass `time` to `exportStudio` for a PNG/JPEG of the current frame. Animation exports continue to start at zero. See the Studio guide for the shared preview/export density contract.
+
+### Still-image motion — 3.0
+
+Use `motion: { type: 'current', speed: 1 }` with `/studio`, `motion: 'current'` with `/hover`, or `animationStyle: 'current'` with core. Choose one motion owner. The curated set is Off (`none`), Caustics (`caustics`, fixed-grid light), Slow Current (`current`, local flow), and Reveal & Reform (`reform`, staggered dissolve). All loop every 12 / speed seconds and preserve your chosen colors. Breathe, Fire, Rainbow and other old ambient motion IDs are retired. Old Studio presets restore with motion Off; update application-owned core options explicitly. Hover effects and optical finishes are independent. See [the 3.0 migration guide](skills/asciify-engine/references/upgrading.md).

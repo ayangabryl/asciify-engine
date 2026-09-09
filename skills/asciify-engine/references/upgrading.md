@@ -35,3 +35,11 @@ After updating, read the installed SKILL.md and its linked references, confirm i
 The curated `STUDIO_CHARACTER_SETS` export is available from `/studio` in 2.0.0. Its values contain `label` and `chars`; assign `chars` to Studio settings only for `style: 'ascii'`. The primary editor at `/editor` uses Studio; earlier webcam and classic-editor workflows remain at `/editor/classic`.
 
 2.0.1 fixes Dither size controls and publishes `studioGrid` for budget-aware size pickers. Still-image exports accept `time` for the selected frame. Existing calls default to frame zero. No preset names change in this patch.
+
+## 3.0 motion migration
+
+3.0 removes the old ambient animation identifiers from the public `AnimationStyle` and Studio types and deletes their implementations. Use `none`, `caustics`, `current`, or `reform` instead. The `/hover` module also replaces `print` with `caustics`. Old saved Studio IDs normalize to `none`; do not silently substitute an effect. Review application-owned saved core options when upgrading and replace retired IDs explicitly.
+
+These are actual new treatments, not aliases for Fire, Breathe, Rainbow, Hologram, or the old row-wave effects. Caustics moves light through a fixed grid; Current carries the image with bounded local flow; Reform disperses and reassembles cells with spatially staggered timing. Core Canvas uses the same field with simpler opacity modulation; `/hover` and `/studio` also modulate character density. Hover and optical glitch/blur finishes are separate and remain available. Optional procedural backgrounds are unchanged.
+
+Use one motion owner: `animationStyle` for core, `motion` for `/hover`, or `motion.type` for `/studio`. Keep Off as the default for video. Each motion loops every `12 / speed` seconds. Offer pause, respect reduced motion, and avoid claiming a guaranteed FPS on every device.

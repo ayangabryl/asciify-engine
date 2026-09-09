@@ -4,10 +4,10 @@ import { AmbientTimeline, sampleAmbient, resolveMotion, printGrain } from './amb
 describe('living image motion', () => {
   it('keeps pause and speed edits continuous and starts a new selection at its source', () => {
     const clock=new AmbientTimeline();
-    expect(clock.update(10,'print',1)).toBe(0);
-    expect(clock.update(11,'print',1)).toBe(1);
-    expect(clock.update(11,'print',3)).toBe(1);
-    expect(clock.update(12,'print',3)).toBe(4);
+    expect(clock.update(10,'caustics',1)).toBe(0);
+    expect(clock.update(11,'caustics',1)).toBe(1);
+    expect(clock.update(11,'caustics',3)).toBe(1);
+    expect(clock.update(12,'caustics',3)).toBe(4);
     expect(clock.update(12,'reform',1)).toBe(0);
     expect(clock.update(0,'reform',1)).toBe(0);
   });
@@ -23,9 +23,9 @@ describe('living image motion', () => {
     sampleAmbient('reform',.5,.5,10,[]).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
     expect(sampleAmbient('reform',.1,.5,3,[])[3]).toBeLessThan(sampleAmbient('reform',.9,.5,3,[])[3]);
   });
-  it('keeps print glyph geometry fixed with a bounded tonal modulation', () => {
-    for(let t=0;t<12;t+=.1){const a=sampleAmbient('print',.37,.42,t,[]);expect(a.slice(0,2)).toEqual([0,0]);expect(Math.abs(a[2])).toBeLessThanOrEqual(.065);expect(a[3]).toBeGreaterThanOrEqual(.8);}
-    expect(resolveMotion('orbit')).toBe('current');
+  it('keeps print glyph geometry fixed with a moving light without geometry changes', () => {
+    for(let t=0;t<12;t+=.1){const a=sampleAmbient('caustics',.37,.42,t,[]);expect(a.slice(0,2)).toEqual([0,0]);expect(Math.abs(a[2])).toBeLessThanOrEqual(.175);expect(a[3]).toBeGreaterThanOrEqual(.8);}
+    expect(resolveMotion('orbit')).toBe('none');
     expect(resolveMotion('unknown')).toBe('none');
   });
   it('uses a stable spatial grain with balanced threshold coverage', () => {

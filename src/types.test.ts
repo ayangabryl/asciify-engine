@@ -38,7 +38,7 @@ describe('style presets', () => {
 
   it('provides living presets that combine charsets, motion, hover, and normalized contrast', () => {
     expect(LIVING_STYLE_PRESETS.liquidSignal.charsetFrames).toEqual(CHARSET_SEQUENCES.signal);
-    expect(LIVING_STYLE_PRESETS.liquidSignal.animationStyle).toBe('melt');
+    expect(LIVING_STYLE_PRESETS.liquidSignal.animationStyle).toBe('current');
     expect(LIVING_STYLE_PRESETS.cursorGravity.hoverStrength).toBeGreaterThan(0);
     expect(LIVING_STYLE_PRESETS.agentField.normalize).toBe(true);
   });
