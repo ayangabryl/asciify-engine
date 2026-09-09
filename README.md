@@ -11,7 +11,7 @@ A framework-agnostic ASCII art rendering engine for the browser. Convert images,
 
 ### Media first, optional backgrounds
 
-Use `asciify-engine/core` for image, video, GIF, webcam, text, and interactive rendering. It excludes the procedural background generators. Existing root imports remain supported; generated scenes are also available from `asciify-engine/backgrounds`.
+Use `asciify-engine/core` for image, video, GIF, webcam, text, and interactive rendering. It excludes the procedural background generators. Root imports expose the same media API. Procedural scenes are downloadable templates at https://asciify.org/backgrounds.
 
 ```ts
 import { asciifyVideo } from 'asciify-engine/core';
@@ -36,7 +36,7 @@ The trail follows elapsed time, fades after the pointer leaves, and changes char
 
 Use your own CSS and source media for atmosphere; see [the copyable media background example](examples/media-background.ts). A background generator is optional. GIF decoding loads only when a GIF conversion API is called. Source maps remain available in local builds and are excluded from the npm archive.
 
-`waveField` now animates the supplied media rather than replacing it with a generated scene. For the previous procedural scene, import `renderWaveBackground` from `asciify-engine/backgrounds`.
+`waveField` now animates the supplied media rather than replacing it with a generated scene. For the previous procedural scene, download the Wave template from https://asciify.org/backgrounds.
 
 Prepared `AsciiFrame` objects are treated as immutable for drawing caches. Replace the frame object after editing cells, or call `clearAsciifyCaches()`. Always call the returned cleanup function, including when an async mount resolves after a component has unmounted.
 
@@ -365,14 +365,15 @@ canvas.addEventListener('mousemove', (e) => {
 
 ---
 
-## Animated Backgrounds
+## Downloadable Background Templates
 
 `asciiBackground` mounts a self-animating ASCII renderer onto any DOM element — ideal for hero sections, banners, or full-page backgrounds. It manages its own canvas, animation loop, and resize handling internally.
 
 ```ts
-import { asciiBackground } from 'asciify-engine';
+// Download a template from https://asciify.org/backgrounds
+import { asciiBackground } from './backgrounds.js';
 
-const stop = asciiBackground('#hero', {
+const { destroy } = asciiBackground('#hero', {
   type: 'rain',
   colorScheme: 'auto', // follows OS dark/light mode
   speed: 1.0,
@@ -381,7 +382,7 @@ const stop = asciiBackground('#hero', {
 });
 
 // Stop and clean up when no longer needed
-stop();
+destroy();
 ```
 
 ### Available Background Types
@@ -466,7 +467,7 @@ const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
 | `asciifyVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
 | `asciifyGif` | `(source, canvas, options?)` | `Promise<() => void>` |
 | `asciifyWebcam` | `(canvas, options?)` | `Promise<() => void>` |
-| `asciiBackground` | `(selector, options)` | `() => void` |
+| `asciiBackground` (downloaded template) | `(selector, options)` | `{ destroy() }` |
 | `imageToAsciiFrame` | `(source, options, w?, h?)` | `{ frame, cols, rows }` |
 | `renderFrameToCanvas` | `(ctx, frame, options, w, h, time?, hoverPos?)` | `void` |
 | `gifToAsciiFrames` | `(buffer, options, w, h, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
@@ -524,3 +525,7 @@ Emoji, Musical and Starfield preset keys have been removed from `CHARSETS`, `Art
 ### Still-image motion — 3.0
 
 Use `motion: { type: 'current', speed: 1 }` with `/studio`, `motion: 'current'` with `/hover`, or `animationStyle: 'current'` with core. Choose one motion owner. The curated set is Off (`none`), Caustics (`caustics`, fixed-grid light), Slow Current (`current`, local flow), and Reveal & Reform (`reform`, staggered dissolve). All loop every 12 / speed seconds and preserve your chosen colors. Breathe, Fire, Rainbow and other old ambient motion IDs are retired. Old Studio presets restore with motion Off; update application-owned core options explicitly. Hover effects and optical finishes are independent. See [the 3.0 migration guide](skills/asciify-engine/references/upgrading.md).
+
+## 4.0: optional background templates
+
+Procedural backgrounds no longer ship in the npm package or root exports. Download only the template you want from [the background gallery](https://asciify.org/backgrounds); its copied code and lifecycle belong to your application. Existing 3.x applications can remain pinned while migrating. `/backgrounds`, `asciiBackground`, `BACKGROUND_TYPES`, and procedural `render*Background` exports are removed; text/media background APIs remain. The default import and `/core` now expose the same media-first API. `CHARACTER_SETS` is the lightweight curated catalog shared by the hero and editor.

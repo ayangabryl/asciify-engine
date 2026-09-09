@@ -98,7 +98,7 @@ For GSAP, pass your installed `gsap` and `ScrollTrigger` instances through `scro
 ## Procedural backgrounds
 
 ```js
-import { asciiBackground } from 'asciify-engine';
+import { asciiBackground } from './wave.js'; // Download from asciify.org/backgrounds
 const background = asciiBackground(host, {
   type: 'aurora', fontSize: 14, speed: 0.8, density: 0.55,
 });
@@ -106,4 +106,4 @@ const background = asciiBackground(host, {
 background.destroy();
 ```
 
-The published background types are wave, rain, stars, pulse, noise, grid, aurora, silk, void, morph, fire, dna, terrain, and circuit. The website's fluid scene is separate application code; it is not a `type: 'fluid'` option in this package version.
+In 4.0, procedural backgrounds are copyable/downloadable templates at asciify.org/backgrounds, outside npm. Import the downloaded template locally. Fluid also remains application code. No procedural background type is a package option in 4.0.

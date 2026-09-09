@@ -34,7 +34,7 @@
 
 import type { AsciiFrame, AsciiOptions, HoverEffect } from '../types';
 import { DEFAULT_OPTIONS } from '../types';
-import { parseColor } from '../backgrounds/_shared';
+import { parseColor } from './color';
 import { renderFrameToCanvas } from './renderer';
 
 // ─── Public types ──────────────────────────────────────────────────────────

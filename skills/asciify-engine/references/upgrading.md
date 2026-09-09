@@ -43,3 +43,9 @@ The curated `STUDIO_CHARACTER_SETS` export is available from `/studio` in 2.0.0.
 These are actual new treatments, not aliases for Fire, Breathe, Rainbow, Hologram, or the old row-wave effects. Caustics moves light through a fixed grid; Current carries the image with bounded local flow; Reform disperses and reassembles cells with spatially staggered timing. Core Canvas uses the same field with simpler opacity modulation; `/hover` and `/studio` also modulate character density. Hover and optical glitch/blur finishes are separate and remain available. Optional procedural backgrounds are unchanged.
 
 Use one motion owner: `animationStyle` for core, `motion` for `/hover`, or `motion.type` for `/studio`. Keep Off as the default for video. Each motion loops every `12 / speed` seconds. Offer pause, respect reduced motion, and avoid claiming a guaranteed FPS on every device.
+
+## 4.0 background migration
+
+Remove imports from `asciify-engine/backgrounds` and generator imports from the root package. Download the chosen `.js` template from https://asciify.org/backgrounds and change the import to `./wave.js` (or your selected file). The template exports `asciiBackground`; keep calling `destroy()` on unmount. It handles resizing, hidden/offscreen suspension, reduced motion, and cleanup. A selected template contains only that generator; backgrounds.js is the optional full collection. Application-owned source templates are separate from npm updates. Existing installations can stay on 3.x while migrating. Text and media rendering remain supported, including text backgrounds.
+
+Use `CHARACTER_SETS` from root or `/core` for the same eight choices as the editor's `STUDIO_CHARACTER_SETS`. This data-only import does not load Studio. Keep custom characters available separately; do not populate standard UI choices from the larger legacy `CHARSETS` object.

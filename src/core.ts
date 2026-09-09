@@ -70,3 +70,5 @@ export { asciifyWebcam } from './core/webcam';
 // ── Big-text / Figlet-style ────────────────────────────────────────────────
 export type { BigTextOptions } from './core/big-text';
 export { asciifyText, renderTextToCanvas } from './core/big-text';
+
+export { CHARACTER_SETS } from './studio/characters';
