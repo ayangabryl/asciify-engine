@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "1.2.0"
-  updated: "2026-09-08"
+  tested-engine: "1.3.0"
+  updated: "2026-09-09"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.2.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **1.3.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -16,7 +16,7 @@ Use the published `asciify-engine` npm package for browser canvas rendering. Tes
 - Repository: https://github.com/ayangabryl/asciify-engine
 
 ```sh
-npm install asciify-engine@1.2.0
+npm install asciify-engine@latest
 ```
 
 Version 1.2.0 exports `asciify-engine`, `asciify-engine/core` for media without procedural generators, and `asciify-engine/backgrounds` for optional backgrounds. Root imports remain supported. GIF decoding loads `gifuct-js` when a GIF API is called. Enhanced website hovers, living-image motion and fine dither are available from the optional `asciify-engine/hover` entry; root and `/core` do not load it.
@@ -27,7 +27,7 @@ Version 1.2.0 exports `asciify-engine`, `asciify-engine/core` for media without 
 npx skills add ayangabryl/asciify-engine --skill asciify-engine
 ```
 
-This uses the Vercel Skills CLI to install the repository skill and its linked resources. Updating the npm dependency alone does not update an already installed skill. Use `npx skills update asciify-engine` to refresh it.
+This uses the Vercel Skills CLI to install the repository skill and its linked resources. The npm dependency and an installed agent skill update separately. When asked to update Asciify or when an integration needs newer options, follow [references/upgrading.md](references/upgrading.md): check npm's current `latest`, update with the project's package manager, then refresh only this skill in its installed scope. Do not treat this document's tested version as permanently latest, or upgrade unrelated skills/dependencies.
 
 ## Choose the integration
 
@@ -126,3 +126,8 @@ Choose the more conventional arrangement—artwork behind all text—when it imp
 Check the actual implementation: readable subject and text, no stretching or unintended empty margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, and cleanup after navigation. Observe several seconds of motion and an entire loop boundary. State the measured device/settings if reporting FPS; screenshots and recordings alone do not establish performance.
 
 Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload` from 1.2.0. For recording, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.
+
+
+## Unreleased hero finish
+
+Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, Prism edge softness (`edgeSoftness`), and fixed-grid fluid Trail. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](references/hero-finish.md).

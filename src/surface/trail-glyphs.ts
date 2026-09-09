@@ -1,17 +1,19 @@
 import type { AsciiFrame, AsciiOptions } from '../types';
+import { createFramePalette } from './frame-palette';
 import { packGlyphFrame, prepareGlyphAtlas, type GlyphAtlasPlan, type PackedGlyphFrame } from './glyph-renderer';
 
 /** Cached source metadata: no image reads or font work on pointer-only frames. */
 export function createTrailGlyphs() {
   const atlas=document.createElement('canvas'), sampler=document.createElement('canvas');
   const ctx=atlas.getContext('2d')!, sampleCtx=sampler.getContext('2d',{willReadFrequently:true})!;
+  const framePalette=createFramePalette();
   let plan: GlyphAtlasPlan|null=null, packed: PackedGlyphFrame|undefined;
   return {
     update(source: HTMLCanvasElement,width:number,height:number,cw:number,ch:number,ratio:number,frame?:AsciiFrame,options?:AsciiOptions) {
       const cols=frame?.[0]?.length ?? Math.max(1,Math.round(width/cw)),rows=frame?.length ?? Math.max(1,Math.round(height/ch));
       const settings=options ?? {charset:' .:-=+*#%@',customText:'',colorMode:'fullcolor'} as AsciiOptions;
       // Charset sequences may contain glyphs outside the current palette.
-      const chars=settings.charset+(settings.charsetFrames?.join('') ?? '');
+      const chars=framePalette(frame,settings.charset+(settings.charsetFrames?.join('') ?? ''),settings.customText);
       const next=prepareGlyphAtlas(plan,{...settings,charset:chars},width,height,ratio,cols,rows);
       if(next!==plan) {
         atlas.width=next.atlasWidth; atlas.height=next.atlasHeight;
@@ -21,11 +23,7 @@ export function createTrailGlyphs() {
       plan=next;
       if(frame) {
         packed=packGlyphFrame(frame,plan.indices,settings,packed,true);
-        // Spare code channels retain continuous tone for the fine dither surface.
-        for(let y=0;y<rows;y++)for(let x=0;x<cols;x++) {
-          const c=frame[y][x],i=(y*cols+x)*4;
-          packed.indices[i+2]=Math.round(c.r*.299+c.g*.587+c.b*.114);
-        }
+
       }
       else {
         // Canvas-only integrations (including camera) have no AsciiFrame to pass.
@@ -41,6 +39,7 @@ export function createTrailGlyphs() {
       }
       return {plan,packed,atlas,dots:settings.renderMode==='dots',dotSize:settings.dotSizeRatio ?? .72};
     },
+    reset() { plan=null; },
     destroy() { atlas.width=atlas.height=sampler.width=sampler.height=1; packed=undefined; plan=null; },
   };
 }

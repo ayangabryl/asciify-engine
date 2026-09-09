@@ -1,3 +1,5 @@
+import { EDGE_FINISH_GLSL, finishSettings, type SurfaceFinish } from './surface-finish';
+import type { TextMaskFrame } from './text-mask';
 import { INK_TRAIL_GLSL, isDensityHover } from './ink-trail';
 import type { AsciiFrame, AsciiOptions } from '../types';
 import { SURFACE_LIGHT_GLSL, type SurfaceRefraction } from './water-surface';
@@ -41,12 +43,12 @@ export function prepareGlyphAtlas(
   previous: GlyphAtlasPlan | null,
   options: Pick<AsciiOptions, 'charset' | 'customText'>,
   width: number, height: number, dpr: number, cols: number, rows: number,
-  maxTextureSize = 4096, fontRevision = 0,
+  maxTextureSize = 4096, fontRevision = 0, glyphScale = 1,
 ): GlyphAtlasPlan {
   if (![width, height, dpr, cols, rows, maxTextureSize].every(value => Number.isFinite(value) && value > 0)) {
     throw new Error('Glyph atlas dimensions must be positive and finite.');
   }
-  const key = JSON.stringify([options.charset, options.customText, width, height, dpr, cols, rows, maxTextureSize, fontRevision]);
+  const key = JSON.stringify([options.charset, options.customText, width, height, dpr, cols, rows, maxTextureSize, fontRevision, glyphScale]);
   if (previous?.key === key) return previous;
   // Each cell stores a whole glyph, including surrogate pairs and combining marks.
   const glyphs = [...new Set([' ', ...graphemes(options.charset), ...graphemes(options.customText ?? '')])];
@@ -54,8 +56,8 @@ export function prepareGlyphAtlas(
   const cellWidth = width / cols, cellHeight = height / rows;
   // Match the published renderer's centered/middle text metrics, without its
   // small-font pixel substitution. Atlas dimensions are physical pixels.
-  const fontSize = Math.min(cellWidth / .55, cellHeight) * .9;
-  const padding = 2;
+  const fontSize = Math.min(cellWidth / .55, cellHeight) * .9 * glyphScale;
+  const padding = 3;
   const tileWidth = Math.ceil(cellWidth * dpr) + padding * 2;
   const tileHeight = Math.ceil(cellHeight * dpr) + padding * 2;
   const atlasColumns = Math.min(glyphs.length, Math.floor(maxTextureSize / tileWidth));
@@ -108,6 +110,8 @@ export function packGlyphFrame(
       if (!preserveEmpty && r === 0 && g === 0 && b === 0) continue;
       packed.indices[offset] = index & 255;
       packed.indices[offset + 1] = index >>> 8;
+      // Source luminance survives accent-color replacement and custom palettes.
+      packed.indices[offset + 2] = Math.round(cell.r * .299 + cell.g * .587 + cell.b * .114);
       packed.colors[offset] = r; packed.colors[offset + 1] = g; packed.colors[offset + 2] = b;
       packed.colors[offset + 3] = cell.a;
     }
@@ -116,8 +120,9 @@ export function packGlyphFrame(
 }
 
 export interface GlyphRenderer {
+  readonly transitioning: boolean;
   resize(width: number, height: number, dpr: number): void;
-  render(frame: AsciiFrame, options: AsciiOptions, width: number, height: number, refraction?: SurfaceRefraction): void;
+  render(frame: AsciiFrame, options: AsciiOptions, width: number, height: number, refraction?: SurfaceRefraction, snap?: boolean, textMask?: TextMaskFrame, finish?: SurfaceFinish): void;
   destroy(): void;
 }
 
@@ -130,6 +135,12 @@ const FRAGMENT_SHADER = `
 precision highp float;
 uniform sampler2D glyphs;
 uniform sampler2D colors;
+uniform sampler2D previousGlyphs;
+uniform sampler2D previousColors;
+uniform float frameBlend;
+uniform float peripheralLens;
+uniform sampler2D textMask;
+uniform float hasTextMask;
 uniform sampler2D atlas;
 uniform sampler2D surface;
 uniform vec2 surfaceSize;
@@ -145,6 +156,37 @@ uniform float padding;
 uniform float glyphCount;
 ${INK_TRAIL_GLSL}
 ${SURFACE_LIGHT_GLSL}
+${EDGE_FINISH_GLSL}
+vec4 characterAt(vec2 pixel, vec2 cell) {
+  if (cell.x < 0.0 || cell.y < 0.0 || cell.x >= gridSize.x || cell.y >= gridSize.y) return vec4(0.0);
+  vec2 address = (cell + 0.5) / gridSize;
+  vec4 field = trailAmount > 0.0 ? trailField(address) : vec4(0.0);
+  vec2 local = pixel - cell * cellSize;
+  if (local.x < 0.0 || local.y < 0.0 || local.x >= cellSize.x || local.y >= cellSize.y) return vec4(0.0);
+  float density = trailFieldDensity(field);
+  bool flowing = trailKind < .5 && density > .0001;
+  vec2 source = flowing ? trailSource(cell,gridSize,field) : address;
+  vec2 code = flowing ? flowGlyph(glyphs,source,gridSize) : decodedGlyph(texture2D(glyphs,address));
+  float index = code.x;
+  vec4 color = texture2D(colors,source);
+  if (frameBlend < 1.0) {
+    vec2 previousCode = flowing ? flowGlyph(previousGlyphs,source,gridSize) : decodedGlyph(texture2D(previousGlyphs,address));
+    index = mix(previousCode.x,index,frameBlend);
+    color = mix(texture2D(previousColors,source),color,frameBlend);
+  }
+  index = trailIndex(index, glyphCount, density * (trailKind < .5 ? trailPin(cell,gridSize) : 1.), cell);
+  color.rgb = trailInk(color.rgb,density);
+  if (index < 0.5 || color.a == 0.0) {
+    return vec4(0.0);
+  }
+  vec2 slot = vec2(mod(index, atlasColumns), floor(index / atlasColumns));
+  vec2 uv = (slot * tileSize + vec2(padding) + local) / atlasSize;
+  vec3 coverage=edgeCoverage(atlas,uv,atlasSize,vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y),sceneSize,peripheralLens)*color.a;
+  float alpha=max(coverage.r,max(coverage.g,coverage.b));
+  vec3 ink=illuminate(color.rgb,surfaceLight(address,sceneSize));
+  if(hasTextMask>.5) ink=mix(ink,vec3(.035),texture2D(textMask,vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y)/sceneSize).a);
+  return vec4(ink*coverage,alpha);
+}
 void main() {
   vec2 pixel = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
   if (pixel.x >= sceneSize.x || pixel.y >= sceneSize.y) {
@@ -157,29 +199,15 @@ void main() {
     // Pin two complete outer rows/columns, then ease into the water surface.
     // No displaced sample can expose a gap or pull the perimeter out of line.
     vec2 edgeCells = min(pixel, sceneSize - pixel) / cellSize;
-    float edgeHold = smoothstep(2.0, 8.0, min(edgeCells.x, edgeCells.y));
+    float edgeHold = mix(1.,smoothstep(2.0, 8.0, min(edgeCells.x, edgeCells.y)),edgeSafe);
     pixel -= slope * refractionStrength * edgeHold;
     if (pixel.x < 0.0 || pixel.y < 0.0 || pixel.x >= sceneSize.x || pixel.y >= sceneSize.y) {
       gl_FragColor = vec4(0.0); return;
     }
   }
   vec2 cell = floor(pixel / cellSize);
-  vec2 address = (cell + 0.5) / gridSize;
-  vec2 code = floor(texture2D(glyphs, address).rg * 255.0 + 0.5);
-  float index = code.x + code.y * 256.0;
-  vec4 color = texture2D(colors, address);
-  float density = trailAmount > 0.0 ? trailDensity(address) : 0.0;
-  index = trailIndex(index, glyphCount, density, cell);
-  color.rgb = trailInk(color.rgb, density);
-  if (index < 0.5 || color.a == 0.0) {
-    gl_FragColor = vec4(0.0); return;
-  }
-  vec2 slot = vec2(mod(index, atlasColumns), floor(index / atlasColumns));
-  vec2 local = pixel - cell * cellSize;
-  vec2 uv = (slot * tileSize + vec2(padding) + local) / atlasSize;
-  float alpha = texture2D(atlas, uv).a * color.a;
-  // Canvas drawImage expects this context's premultiplied RGBA output.
-  gl_FragColor = vec4(illuminate(color.rgb, surfaceLight(address, sceneSize)) * alpha, alpha);
+  vec4 ink = characterAt(pixel,cell);
+  gl_FragColor=ink;
 }
 `;
 
@@ -191,7 +219,7 @@ void main() {
  * owns fallback to its separate Canvas2D renderer. Font loads invalidate the
  * atlas on the next render, so paused callers should request a refresh then.
  */
-export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error: Error) => void): GlyphRenderer | null {
+export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error: Error) => void, glyphScale = 1, transitionMs = 0, peripheralLens = 0): GlyphRenderer | null {
   let gl: WebGLRenderingContext | null;
   try {
     gl = canvas.getContext('webgl', {
@@ -209,6 +237,8 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
   let disposed = false, failure: Error | null = null;
   let dpr = 1, fontRevision = 0, plan: GlyphAtlasPlan | null = null;
   let packed: PackedGlyphFrame | undefined, uploadedCols = 0, uploadedRows = 0;
+  let previousIndices = new Uint8Array(0), previousColors = new Uint8ClampedArray(0), transitionStart = -Infinity;
+  const phase = (now: number) => { const t = transitionMs ? Math.max(0, Math.min(1, (now - transitionStart) / transitionMs)) : 1; return t; };
   const maxTextureSize = gpu.getParameter(gpu.MAX_TEXTURE_SIZE) as number;
   const fail = (error: unknown): Error => {
     if (!failure) {
@@ -249,8 +279,8 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
     const position = gpu.getAttribLocation(program, 'position');
     gpu.enableVertexAttribArray(position); gpu.vertexAttribPointer(position, 2, gpu.FLOAT, false, 0, 0);
     const locations = Object.fromEntries([
-      'glyphs', 'colors', 'atlas', 'resolution', 'sceneSize', 'gridSize', 'cellSize',
-      'atlasSize', 'tileSize', 'atlasColumns', 'padding', 'surface', 'surfaceSize', 'refractionStrength', 'hoverMode', 'hoverFocus', 'trailKind', 'trailAmount', 'glyphCount',
+      'glyphs', 'colors', 'previousGlyphs', 'previousColors', 'frameBlend', 'finishSoftness','finishMode', 'finishPixelRatio', 'peripheralLens', 'textMask', 'hasTextMask', 'atlas', 'resolution', 'sceneSize', 'gridSize', 'cellSize',
+      'atlasSize', 'tileSize', 'atlasColumns', 'padding', 'surface', 'surfaceSize', 'refractionStrength', 'hoverMode', 'hoverFocus', 'trailKind', 'edgeSafe', 'trailAmount', 'glyphCount',
     ].map(name => [name, gpu.getUniformLocation(program!, name)]));
     const texture = (unit: number, filter: number) => {
       const result = gpu.createTexture();
@@ -262,10 +292,20 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
       gpu.texParameteri(gpu.TEXTURE_2D, gpu.TEXTURE_WRAP_T, gpu.CLAMP_TO_EDGE);
       return result;
     };
-    const glyphTexture = texture(0, gpu.NEAREST), colorTexture = texture(1, gpu.NEAREST), atlasTexture = texture(2, gpu.LINEAR);
+    const glyphTexture = texture(0, gpu.NEAREST), colorTexture = texture(1, gpu.LINEAR), atlasTexture = texture(2, gpu.LINEAR);
     const surfaceTexture = texture(3, gpu.LINEAR);
     gpu.texImage2D(gpu.TEXTURE_2D, 0, gpu.RGBA, 1, 1, 0, gpu.RGBA, gpu.UNSIGNED_BYTE, new Uint8Array([128, 0, 128, 0]));
     gpu.uniform1i(locations.surface, 3);
+    const previousGlyphTexture = texture(4, gpu.NEAREST), previousColorTexture = texture(5, gpu.LINEAR);
+    for (const [unit, target] of [[4, previousGlyphTexture], [5, previousColorTexture]] as const) {
+      gpu.activeTexture(gpu.TEXTURE0 + unit); gpu.bindTexture(gpu.TEXTURE_2D, target);
+      gpu.texImage2D(gpu.TEXTURE_2D, 0, gpu.RGBA, 1, 1, 0, gpu.RGBA, gpu.UNSIGNED_BYTE, new Uint8Array(4));
+    }
+    gpu.uniform1i(locations.previousGlyphs, 4); gpu.uniform1i(locations.previousColors, 5);
+    const maskTexture=texture(6,gpu.LINEAR);
+    gpu.texImage2D(gpu.TEXTURE_2D,0,gpu.RGBA,1,1,0,gpu.RGBA,gpu.UNSIGNED_BYTE,new Uint8Array(4));
+    gpu.uniform1i(locations.textMask,6);
+    let uploadedMask: TextMaskFrame | undefined;
     let surfaceWidth = 1, surfaceHeight = 1;
     let uploadedFrame: AsciiFrame | undefined;
     gpu.uniform1i(locations.glyphs, 0); gpu.uniform1i(locations.colors, 1); gpu.uniform1i(locations.atlas, 2);
@@ -289,7 +329,7 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
       if (canvas.height !== physicalHeight) canvas.height = physicalHeight;
       gpu.viewport(0, 0, canvas.width, canvas.height);
     };
-    const render = (frame: AsciiFrame, options: AsciiOptions, width: number, height: number, refraction?: SurfaceRefraction) => {
+    const render = (frame: AsciiFrame, options: AsciiOptions, width: number, height: number, refraction?: SurfaceRefraction, snap = false, textMask?: TextMaskFrame, finish?: SurfaceFinish) => {
       check();
       try {
         if (!supportsGlyphRenderer(options)) throw new Error('These options require the full Canvas2D engine renderer.');
@@ -297,7 +337,7 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
         if (!frame.length || !frame[0].length) { gpu.clear(gpu.COLOR_BUFFER_BIT); return; }
         const cols = frame[0].length, rows = frame.length;
         if (cols > maxTextureSize || rows > maxTextureSize) throw new Error('The cell grid exceeds the available GPU texture size.');
-        const nextPlan = prepareGlyphAtlas(plan, options, width, height, dpr, cols, rows, maxTextureSize, fontRevision);
+        const nextPlan = prepareGlyphAtlas(plan, options, width, height, dpr, cols, rows, maxTextureSize, fontRevision, glyphScale);
         const atlasChanged = nextPlan !== plan;
         if (atlasChanged) {
           atlasCanvas.width = nextPlan.atlasWidth; atlasCanvas.height = nextPlan.atlasHeight;
@@ -315,8 +355,25 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
         }
         plan = nextPlan;
         const frameChanged = !refraction || uploadedFrame !== frame || atlasChanged;
-        if (frameChanged) packed = packGlyphFrame(frame, plan.indices, options, packed, true);
         const changedGrid = uploadedCols !== cols || uploadedRows !== rows;
+        const now = performance.now();
+        if (frameChanged) {
+          const reset = changedGrid || atlasChanged || !packed;
+          if (transitionMs > 0 && !reset) {
+            const blend = phase(now);
+            if (blend === 1) { previousIndices.set(packed!.indices); previousColors.set(packed!.colors); }
+            else for (let i = 0; i < previousIndices.length; i += 4) {
+              const from = previousIndices[i] + previousIndices[i + 1] * 256, to = packed!.indices[i] + packed!.indices[i + 1] * 256;
+              const rank = Math.round(from + (to - from) * blend);
+              previousIndices[i] = rank & 255; previousIndices[i + 1] = rank >>> 8;
+              for (let k = 0; k < 4; k++) previousColors[i + k] += (packed!.colors[i + k] - previousColors[i + k]) * blend;
+            }
+          }
+          packed = packGlyphFrame(frame, plan.indices, options, packed, true);
+          if (transitionMs > 0 && reset) { previousIndices = packed.indices.slice(); previousColors = packed.colors.slice(); }
+          transitionStart = reset || snap ? -Infinity : now;
+        }
+        if (snap) transitionStart = -Infinity;
         const upload = (unit: number, targetTexture: WebGLTexture, data: Uint8Array | Uint8ClampedArray) => {
           gpu.activeTexture(gpu.TEXTURE0 + unit); gpu.bindTexture(gpu.TEXTURE_2D, targetTexture);
           if (changedGrid) gpu.texImage2D(gpu.TEXTURE_2D, 0, gpu.RGBA, cols, rows, 0, gpu.RGBA, gpu.UNSIGNED_BYTE, data);
@@ -324,6 +381,9 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
         };
         if (frameChanged) {
           upload(0, glyphTexture, packed!.indices); upload(1, colorTexture, packed!.colors);
+          if (transitionMs > 0) {
+            upload(4, previousGlyphTexture, previousIndices); upload(5, previousColorTexture, previousColors);
+          }
           uploadedFrame = frame;
         }
         if (refraction) {
@@ -333,7 +393,8 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
             surfaceWidth = refraction.width; surfaceHeight = refraction.height;
           } else gpu.texSubImage2D(gpu.TEXTURE_2D, 0, 0, 0, refraction.width, refraction.height, gpu.RGBA, gpu.UNSIGNED_BYTE, refraction.pixels);
         }
-        gpu.uniform1f(locations.trailKind,refraction?.mode==='dissolve'?2:0);
+        gpu.uniform1f(locations.trailKind,refraction?.mode==='dissolve'?2:refraction?.mode==='contour'?1:0);
+        gpu.uniform1f(locations.edgeSafe,refraction?.edgeSafe ? 1 : 0);
         gpu.uniform1f(locations.trailAmount, refraction && isDensityHover(refraction.mode) ? refraction.focus[2] : 0);
         gpu.uniform1f(locations.glyphCount, plan.glyphs.length);
         gpu.uniform1f(locations.hoverMode, refraction?.mode === 'light' ? 1 : refraction?.mode === 'scan' ? 2 : 0);
@@ -349,6 +410,17 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
         gpu.uniform2f(locations.atlasSize, plan.atlasWidth, plan.atlasHeight);
         gpu.uniform2f(locations.tileSize, plan.tileWidth, plan.tileHeight);
         gpu.uniform1f(locations.atlasColumns, plan.atlasColumns); gpu.uniform1f(locations.padding, plan.padding);
+        if(textMask && textMask!==uploadedMask) {
+          gpu.activeTexture(gpu.TEXTURE6);gpu.bindTexture(gpu.TEXTURE_2D,maskTexture);
+          gpu.texImage2D(gpu.TEXTURE_2D,0,gpu.RGBA,gpu.RGBA,gpu.UNSIGNED_BYTE,textMask.canvas);uploadedMask=textMask;
+        }
+        gpu.uniform1f(locations.hasTextMask,textMask?1:0);
+        gpu.uniform1f(locations.frameBlend, phase(now));
+        const treatment = finishSettings(finish ?? { edgeEffect: peripheralLens });
+        gpu.uniform1f(locations.peripheralLens, treatment.amount);
+        gpu.uniform1f(locations.finishMode, treatment.mode);
+        gpu.uniform1f(locations.finishSoftness, treatment.softness);
+        gpu.uniform1f(locations.finishPixelRatio, dpr);
         gpu.drawArrays(gpu.TRIANGLE_STRIP, 0, 4);
       } catch (error) { throw fail(error); }
     };
@@ -357,6 +429,7 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
     document.fonts?.addEventListener('loadingdone', fontLoaded);
     canvas.addEventListener('webglcontextlost', contextLost);
     return {
+      get transitioning() { return !disposed && phase(performance.now()) < 1; },
       resize, render,
       destroy() {
         if (disposed) return;
