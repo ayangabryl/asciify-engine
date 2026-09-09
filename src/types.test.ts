@@ -94,3 +94,13 @@ describe('canvas render sizing', () => {
     });
   });
 });
+
+// Public preset retirement is deliberate in 2.0; custom Unicode remains supported.
+describe('standard catalog', () => {
+  it('excludes retired novelty presets', () => {
+    for (const key of ['emoji', 'musical', 'starfield']) {
+      expect(CHARSETS).not.toHaveProperty(key);
+      expect(ART_STYLE_PRESETS).not.toHaveProperty(key);
+    }
+  });
+});

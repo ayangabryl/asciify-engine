@@ -1207,7 +1207,7 @@ function drawFrameToCanvas(
     const useFastRect = false;
 
     if (!useFastRect) {
-      const isEmoji = options.artStyle === 'emoji';
+      const isEmoji = /\p{Extended_Pictographic}/u.test(options.customText || options.charset);
       ctx.font = isEmoji
         ? `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`
         : `${fontSize}px "JetBrains Mono", monospace`;
@@ -1230,7 +1230,7 @@ function drawFrameToCanvas(
       noAnimation &&
       !hasDyn &&
       colorMode === 'accent' &&
-      !region && options.hoverStrength <= 0 && options.artStyle !== 'emoji' &&
+      !region && options.hoverStrength <= 0 && !/\p{Extended_Pictographic}/u.test(options.customText || options.charset) &&
       'letterSpacing' in ctx && /^[\x20-\x7e]*$/.test(options.customText || options.charset) &&
       frame.every(row => row.every(cell => cell.a < 10 ||
         (cell.a === 255 && cell.char.length === 1 && /^[\x20-\x7e]$/.test(cell.char))));

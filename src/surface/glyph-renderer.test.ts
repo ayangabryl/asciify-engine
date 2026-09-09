@@ -94,7 +94,7 @@ describe('hero renderer eligibility', () => {
     expect(supportsGlyphRenderer(options)).toBe(true);
     for (const partial of [
       { animationStyle: 'wave' }, { hoverStrength: .2 }, { charsetFrames: ['AB'] },
-      { renderMode: 'dots' }, { artStyle: 'emoji' }, { colorMode: 'accent', accentColor: 'auto' },
+      { renderMode: 'dots' }, { artStyle: 'braille' }, { colorMode: 'accent', accentColor: 'auto' },
     ] as Partial<AsciiOptions>[]) expect(supportsGlyphRenderer({ ...options, ...partial })).toBe(false);
   });
 });
