@@ -4,6 +4,7 @@ export type AfterimageMode = 'dissolve' | 'silk' | 'vortex';
 
 /** A decaying stroke memory, not fluid advection. Fixed storage at every image size. */
 export class AfterimageField {
+  edgeSafe = false;
   readonly width:number; readonly height:number; readonly pixels:Uint8Array;
   private ink:Float32Array; private targetX:Float32Array; private targetY:Float32Array;
   private offsetX:Float32Array; private offsetY:Float32Array; private edge:Float32Array;
@@ -69,7 +70,7 @@ export class AfterimageField {
         this.targetX[i]*=decay;this.targetY[i]*=decay;
         this.offsetX[i]+=(this.targetX[i]-this.offsetX[i])*follow;this.offsetY[i]+=(this.targetY[i]-this.offsetY[i])*follow;
         peak=Math.max(peak,Math.abs(this.offsetX[i]),Math.abs(this.offsetY[i]),Math.abs(this.targetX[i]),Math.abs(this.targetY[i]));
-        const x=Math.round(this.offsetX[i]*this.edge[i]*32767+32768),y=Math.round(this.offsetY[i]*this.edge[i]*32767+32768);
+        const x=Math.round(this.offsetX[i]*(this.edgeSafe?this.edge[i]:1)*32767+32768),y=Math.round(this.offsetY[i]*(this.edgeSafe?this.edge[i]:1)*32767+32768);
         this.pixels[i*4]=x>>>8;this.pixels[i*4+1]=x&255;this.pixels[i*4+2]=y>>>8;this.pixels[i*4+3]=y&255;
       }
     }
@@ -79,8 +80,8 @@ export class AfterimageField {
     const gx=Math.max(0,Math.min(this.width-1.001,x*(this.width-1))),gy=Math.max(0,Math.min(this.height-1.001,y*(this.height-1)));
     const ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy,a=iy*this.width+ix,b=a+this.width;
     const read=(v:Float32Array)=>(v[a]*(1-fx)+v[a+1]*fx)*(1-fy)+(v[b]*(1-fx)+v[b+1]*fx)*fy;
-    out[0]=read(this.offsetX)*surfaceEdgeWeight(x,y,this.width/this.height)*.08;
-    out[1]=read(this.offsetY)*surfaceEdgeWeight(x,y,this.width/this.height)*.08;
+    out[0]=read(this.offsetX)*(this.edgeSafe?surfaceEdgeWeight(x,y,this.width/this.height):1)*.08;
+    out[1]=read(this.offsetY)*(this.edgeSafe?surfaceEdgeWeight(x,y,this.width/this.height):1)*.08;
     out[2]=this.mode==='dissolve'?-read(this.ink)*6:0;
   }
 }

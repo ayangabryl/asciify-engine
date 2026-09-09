@@ -55,3 +55,8 @@ The module observes reduced motion and visibility. Coordinate explicit pause wit
 `surface.update({ effect: 'water' })` replaces the effect and clears the previous wake. `surface.invalidate()` uploads a newly drawn still. `surface.canvas` is the visible overlay, useful for layering or snapshots; the supplied canvas remains the source. `surface.destroy()` removes the overlay, listeners and observers and restores the source visibility. Stop the source renderer separately. Reduced motion disables hover and ambient motion; offscreen and hidden surfaces stop scheduling frames. Canvas 2D fallback preserves artwork when WebGL is unavailable, with simpler spatial refraction.
 
 When using the low-level object-frame API, pass `getFrame: () => currentFrame` to preserve exact glyph identities and colors. With canvas-only integrations the module estimates density from sampled ink coverage.
+
+
+## Unreleased hero finish
+
+Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, Prism edge softness (`edgeSoftness`), and fixed-grid fluid Trail. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](hero-finish.md).

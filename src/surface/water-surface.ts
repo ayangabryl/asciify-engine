@@ -15,6 +15,8 @@ export interface SurfaceRefraction {
   /** Maximum displacement in CSS pixels, independent of viewport size. */
   strength: number;
   mode: HeroHover;
+  /** Preserve outer glyph rows and attenuate border displacement. Default false. */
+  edgeSafe?: boolean;
   /** Normalized focus and settled intensity; lighting never modifies geometry. */
   focus: [number, number, number, number];
 }
@@ -66,6 +68,7 @@ export class WaterSurface implements PointerField {
     this.afterimage = new AfterimageField(this.columns,this.rows);
     this.clear();
   }
+  get invertsDensity() { return this.mode === 'trail'; }
   get densityTrail() { return ['trail','contour','dissolve'].includes(this.mode); }
   get hasRefraction() { return this.active || this.lensStrength > .00015; }
   get active() { if(['dissolve','silk','vortex'].includes(this.mode))return this.afterimage.active; if(this.mode==='contour') return this.contour.active; if (this.mode === 'trail') return this.trail.active; return this.pending || this.energy > .00015; }
@@ -76,21 +79,23 @@ export class WaterSurface implements PointerField {
     this.refraction.pixels = mode === 'trail' ? this.trail.pixels : mode === 'contour' ? this.contour.pixels : ['dissolve','silk','vortex'].includes(mode) ? this.afterimage.pixels : this.waterPixels;
     this.refraction.strength = mode === 'water' ? 30 * this.amount / .55 : mode==='silk'?28*this.amount:mode==='vortex'?38*this.amount:0;
   }
-  configure(mode: HeroHover, amount = .55, radius = .2) {
+  configure(mode: HeroHover, amount = .55, radius = .2, edgeSafe = false) {
     this.setMode(mode);
+    this.refraction.edgeSafe = edgeSafe;
+    this.afterimage.edgeSafe = edgeSafe;
     this.amount = Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : .55;
     this.radius = Number.isFinite(radius) ? Math.max(.1, Math.min(1, radius)) : .2;
     this.refraction.strength = mode === 'water' ? 30 * this.amount / .55 : mode==='silk'?28*this.amount:mode==='vortex'?38*this.amount:0;
     this.refraction.focus[2] = this.densityTrail ? this.amount : this.lensStrength * this.amount;
     this.refraction.focus[3] = this.radius;
   }
-  move(x: number, y: number) {
+  move(x: number, y: number, time?: number) {
     if (this.mode === 'none' || this.amount === 0) return;
     if (!Number.isFinite(x + y)) return;
     x = Math.max(0, Math.min(1, x)); y = Math.max(0, Math.min(1, y));
     if(['dissolve','silk','vortex'].includes(this.mode)){this.afterimage.move(x,y,this.radius);return;}
     if (this.mode === 'contour') { this.contour.move(x,y,this.radius); return; }
-    if (this.mode === 'trail') { this.trail.move(x, y, this.radius); return; }
+    if (this.mode === 'trail') { this.trail.move(x, y, this.radius, time); return; }
     if (this.mode !== 'water') {
       if (!this.previous && this.lensStrength < .001) { this.lensX = x; this.lensY = y; }
       this.previous = { x, y }; this.pending = true; return;
@@ -165,7 +170,7 @@ export class WaterSurface implements PointerField {
       const i = y * this.columns + x;
       const nx = (this.heights[y * this.columns + Math.max(0, x - 1)] - this.heights[y * this.columns + Math.min(this.columns - 1, x + 1)]) * scale;
       const ny = (this.heights[Math.max(0, y - 1) * this.columns + x] - this.heights[Math.min(this.rows - 1, y + 1) * this.columns + x]) * scale;
-      const a = Math.tanh(nx) * this.edgeMask[i], b = Math.tanh(ny) * this.edgeMask[i];
+      const a = Math.tanh(nx) * (this.refraction.edgeSafe ? this.edgeMask[i] : 1), b = Math.tanh(ny) * (this.refraction.edgeSafe ? this.edgeMask[i] : 1);
       this.normals[i * 2] = a; this.normals[i * 2 + 1] = b;
       const ex = Math.round(a * 32767 + 32768), ey = Math.round(b * 32767 + 32768);
       this.refraction.pixels[i * 4] = ex >>> 8; this.refraction.pixels[i * 4 + 1] = ex & 255;

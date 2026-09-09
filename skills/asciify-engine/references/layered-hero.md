@@ -43,3 +43,8 @@ Do not paint a solid rectangle behind the ASCII glyphs. A black stage/canvas at 
 This example shows portable layering and lifecycle with the published package. It does not claim the exact GPU performance or custom interactions of the Asciify production hero. Match the website's enhanced hover behavior only by intentionally adding the [optional studio module](studio-effects.md). That module adds a canvas and must occupy the same artwork layer, not cover the controls.
 
 For additional custom text in the artwork, change `options.charset` while retaining its tonal symbols. Keep the headline itself in HTML so it remains readable, searchable, selectable, and accessible.
+
+
+## Unreleased hero finish
+
+Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, Prism edge softness (`edgeSoftness`), and fixed-grid fluid Trail. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](hero-finish.md).

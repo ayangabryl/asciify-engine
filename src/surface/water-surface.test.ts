@@ -57,7 +57,7 @@ describe('water-surface hero interaction', () => {
 
 describe('shared fixed-grid illumination', () => {
   it.each(['water', 'light', 'scan', 'none'] as const)('keeps all edges stationary in %s at maximum settings', mode => {
-    const surface = new WaterSurface(1.6); surface.configure(mode, 1, 1);
+    const surface = new WaterSurface(1.6); surface.configure(mode, 1, 1, true);
     for (let n = 0; n < 60; n++) {
       surface.move(n % 2 ? .01 : .99, n % 3 ? .02 : .98); surface.step(1 / 60);
       for (const t of [0, .2, .5, .8, 1]) for (const [x, y] of [[0, t], [1, t], [t, 0], [t, 1]]) expect(sample(surface, x, y).slice(0,2).map(Math.abs)).toEqual([0, 0]);
@@ -65,7 +65,7 @@ describe('shared fixed-grid illumination', () => {
     expect(surface.refraction.pixels.length).toBeLessThanOrEqual(128 * 128 * 4);
   });
   it.each(['light', 'scan'] as const)('%s holds illumination without continuous simulation and fades after exit', mode => {
-    const surface = new WaterSurface(); surface.configure(mode, 1, 1); surface.move(.5, .5);
+    const surface = new WaterSurface(); surface.configure(mode, 1, 1, true); surface.move(.5, .5);
     for (let n = 0; n < 90; n++) surface.step(1 / 60);
     expect(surface.active).toBe(false); expect(surface.hasRefraction).toBe(true);
     expect(sample(surface, .5, .5)[2]).toBeGreaterThan(.9);

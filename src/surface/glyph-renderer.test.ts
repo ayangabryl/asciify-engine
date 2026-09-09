@@ -28,8 +28,8 @@ describe('hero glyph atlas', () => {
     expect(plan.cellWidth).toBe(4);
     expect(plan.cellHeight).toBe(5);
     expect(plan.fontSize).toBe(4.5);
-    expect(plan.tileWidth).toBe(12);
-    expect(plan.tileHeight).toBe(14);
+    expect(plan.tileWidth).toBe(14);
+    expect(plan.tileHeight).toBe(16);
     expect(plan.atlasWidth).toBe(plan.atlasColumns * plan.tileWidth);
     expect(plan.glyphs).toContain('A');
   });
@@ -47,7 +47,7 @@ describe('hero glyph data', () => {
       { char: 'B', r: 255, g: 64, b: 1, a: 255 },
     ]];
     const packed = packGlyphFrame(frame, glyphs, options);
-    expect([...packed.indices]).toEqual([1, 2, 0, 0, 2, 0, 0, 0]);
+    expect([...packed.indices]).toEqual([1, 2, 110, 0, 2, 0, 114, 0]);
     expect([...packed.colors]).toEqual([17, 129, 253, 127, 255, 64, 1, 255]);
   });
 
@@ -104,4 +104,12 @@ it('keeps black source coverage for a density wake without reviving transparent 
   const result=packGlyphFrame(frame,new Map([[' ',0]]),options,undefined,true);
   expect(result.colors[3]).toBe(255);expect(result.colors[7]).toBe(0);
   expect(result.indices.every(v=>v===0)).toBe(true);
+});
+
+
+it('retains source tone independently of accent ink and arbitrary custom-letter order', () => {
+  const frame: AsciiFrame = [[{char:'Y',r:30,g:30,b:30,a:255},{char:'A',r:220,g:220,b:220,a:255}]];
+  const result=packGlyphFrame(frame,new Map([['Y',7],['A',1]]),{...options,colorMode:'accent',accentColor:'#888888'});
+  expect([result.indices[2],result.indices[6]]).toEqual([30,220]);
+  expect([...result.colors]).toEqual([136,136,136,255,136,136,136,255]);
 });

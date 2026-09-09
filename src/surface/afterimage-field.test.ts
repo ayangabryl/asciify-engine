@@ -10,7 +10,7 @@ describe('decaying cursor memory',()=>{
     for(let i=0;i<300;i++)f.step(1/60);expect(f.active).toBe(false);expect(f.pixels.every(v=>v===0)).toBe(true);
   });
   it.each(['silk','vortex'] as const)('%s remembers travel, restores its surface and pins every outer edge',mode=>{
-    const f=new AfterimageField(128,72);f.setMode(mode);f.move(.2,.5,1);expect(f.active).toBe(false);
+    const f=new AfterimageField(128,72);f.setMode(mode);f.edgeSafe=true;f.move(.2,.5,1);expect(f.active).toBe(false);
     f.move(.8,.5,1);for(let i=0;i<8;i++)f.step(1/60);
     expect(Math.abs(sample(f,.5,.56)[0])+Math.abs(sample(f,.5,.56)[1])).toBeGreaterThan(.001);
     for(const t of [0,.1,.5,.9,1])for(const [x,y] of [[0,t],[1,t],[t,0],[t,1]])expect(sample(f,x,y).slice(0,2).map(Math.abs)).toEqual([0,0]);

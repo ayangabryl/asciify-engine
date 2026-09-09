@@ -1,9 +1,10 @@
 /** Shared input contract for procedural flow and the hero water surface. */
 export interface PointerField {
   readonly densityTrail?: boolean;
+  readonly invertsDensity?: boolean;
   readonly active: boolean;
   readonly hasRefraction?: boolean;
-  move(x: number, y: number): void;
+  move(x: number, y: number, time?: number): void;
   leave(): void;
   clear(): void;
   step(seconds: number): void;
