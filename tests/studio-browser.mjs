@@ -218,6 +218,18 @@ try {
     hover.push({ effect, visible: result });
     assert.ok(result, effect);
   }
+  const rasterQuality = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    const r = api.createStudioRenderer(c, {cellSize:6,colorMode:'accent',ink:'#888888',hover:{effect:'none'}}, {maxDimension:2560});
+    r.render(source,0,640,360);
+    const logical=api.studioGrid(640,360,r.settings,r.maxCells,r.pixelRatio);
+    r.setPixelRatio(2); r.render(source,0,1280,720);
+    const sharp=api.studioGrid(1280,720,r.settings,r.maxCells,r.pixelRatio);
+    const result={size:[c.width,c.height],logical:[logical.columns,logical.rows],sharp:[sharp.columns,sharp.rows]};
+    r.destroy(); return result;
+  });
+  assert.deepEqual(rasterQuality.size,[1280,720]);
+  assert.deepEqual(rasterQuality.logical,rasterQuality.sharp);
   const motion = await page.evaluate(() => {
     const results = [];
     for (const style of ["ascii", "dither", "pixel"])
@@ -470,6 +482,7 @@ try {
     lifecycle,
     fallback,
     motion,
+    rasterQuality,
     styles: styles.map((x) => x[0]),
     effects,
     masks,

@@ -90,7 +90,7 @@ export function createStudioRenderer(
       ),
     );
   let budgetCells = maxCells;
-  const pixelRatio = Math.max(0.1, Math.min(8, limits.pixelRatio ?? 1));
+  let pixelRatio = Math.max(0.1, Math.min(8, limits.pixelRatio ?? 1));
   const pointer = (x: number, y: number, time: number) => {
     flow.configure(
       state.hover.effect,
@@ -325,7 +325,7 @@ export function createStudioRenderer(
           if (glyphMode) {
             const index = Math.max(
               0,
-              Math.min(chars.length - 1, Math.floor(lum * (chars.length - 1))),
+              Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))),
             );
             if (state.colorMode === "accent")
               ac.drawImage(
@@ -334,8 +334,8 @@ export function createStudioRenderer(
                 0,
                 aw,
                 ah,
-                px + (cell - aw) / 2,
-                py + (ch - ah) / 2,
+                motion === 'none' || motion === 'caustics' ? Math.round(px + (cell - aw) / 2) : px + (cell - aw) / 2,
+                motion === 'none' || motion === 'caustics' ? Math.round(py + (ch - ah) / 2) : py + (ch - ah) / 2,
                 aw,
                 ah,
               );
@@ -564,6 +564,11 @@ export function createStudioRenderer(
   return {
     canvas,
     render,
+    /** Change raster scale without adding logical cells or remounting media. */
+    setPixelRatio(ratio: number) {
+      pixelRatio = Math.max(0.1, Math.min(8, Number.isFinite(ratio) ? ratio : 1));
+    },
+    get pixelRatio() { return pixelRatio; },
     setBudget(cells: number) {
       budgetCells = Math.max(1500, Math.min(maxCells, Math.round(cells)));
     },

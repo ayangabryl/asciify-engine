@@ -114,3 +114,7 @@ For PNG/JPEG, pass `time: player.time` to `exportStudio` to save the selected fr
 ## Still-image motion (3.0)
 
 Import `STUDIO_MOTIONS` from `/studio` to populate controls; each item has `value`, `label`, and `description`. Use `motion: { type: 'caustics' | 'current' | 'reform' | 'none', speed: 1 }`. Off is the default. Caustics preserves the grid, Current introduces fluid displacement, and Reform uses a staggered dissolve with a readable hold. Loops last 12 / speed seconds and preserve source/accent/gray color choice. Speed is 0.1–3. Do not combine source video with ambient motion unless requested. Hover remains independently configurable. Retired saved motion names normalize to Off. See [upgrading.md](upgrading.md) before moving an existing integration to 3.0.
+
+## Sharp previews (3.0.1)
+
+Studio defaults to a 6-unit cell size. Separate the sampling grid from canvas backing resolution: `instance.resize(width, height, pixelRatio)` updates the backing size and raster scale together without remounting media. Doubling dimensions and passing 2 keeps the same character count while drawing sharper glyphs. Use a bounded backing dimension and at most the device DPR; avoid stretching a small bitmap with CSS. `instance.pixelRatio` reports the scale. When exporting, pass `referenceWidth: canvas.width / instance.pixelRatio` to preserve logical density. Explicit saved cell sizes remain valid. Do not force a tile style's coarse cell size onto ASCII when changing render styles.

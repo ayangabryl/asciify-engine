@@ -67,7 +67,7 @@ describe("Studio project interchange", () => {
       }),
       b = normalizeStudioSettings();
     expect(a).not.toHaveProperty("mediaUrl");
-    expect(a.cellSize).toBe(7);
+    expect(a.cellSize).toBe(6);
     expect(a.dither.palette).toBe("mono");
     expect(a.lights).toHaveLength(4);
     expect(a.effects.blur).toBe(24);
@@ -198,4 +198,15 @@ describe('Studio cell size', () => {
     expect(exportGrid.cell).toBe(preview.cell*2);
     expect(studioGrid(960,540,{...settings,dither:{...settings.dither,scale:12}}).cell).toBe(12);
   });
+});
+
+it('keeps sampling density unchanged when only raster sharpness increases', () => {
+  const settings = normalizeStudioSettings();
+  for (const scale of [.5, 1.5, 2]) {
+    const logical = studioGrid(960, 540, settings, 12000);
+    const raster = studioGrid(960 * scale, 540 * scale, settings, 12000, scale);
+    expect([raster.columns, raster.rows]).toEqual([logical.columns, logical.rows]);
+    expect(raster.minimum).toBe(logical.minimum);
+    expect(raster.columns * raster.rows).toBeLessThanOrEqual(12000);
+  }
 });
