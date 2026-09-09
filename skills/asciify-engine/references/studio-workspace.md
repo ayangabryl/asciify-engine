@@ -104,3 +104,9 @@ player.update(settings);
 ```
 
 Other renderer styles define their own marks, so character controls only apply to ASCII. Custom strings remain valid; Emoji, Musical and Starfield are no longer bundled presets.
+
+## Size controls and still frames (2.0.1)
+
+Use `studioGrid(width, height, settings, maxCells, pixelRatio)` to inspect `minimum`, `cell`, `columns`, `rows`, and `limited` at the actual preview resolution. ASCII/tile renderers use `cellSize`; Dither uses `dither.scale`. Respect the returned minimum in a size picker instead of offering a range that the performance budget silently clamps. Use the same budget and reference width for export to retain density.
+
+For PNG/JPEG, pass `time: player.time` to `exportStudio` to save the selected frame. Default time is zero; animation exports start at zero. Snapshot the time/settings/preview size before asynchronous loading. The editor's Export tab separates Image and Animation, shows validated pixel sizes and keeps website code in an expandable section.

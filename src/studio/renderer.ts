@@ -1,6 +1,7 @@
 import {
   normalizeStudioSettings,
   studioCrop,
+  studioGrid,
   type StudioSettings,
 } from "./model";
 import { ditherPixels, noise } from "./dither";
@@ -142,18 +143,9 @@ export function createStudioRenderer(
         : 0;
     const key = [revision, w, h, mediaTime].join(":");
     const isDither = state.style === "dither";
-    const baseCell =
-      (isDither ? state.dither.scale : state.cellSize) * pixelRatio;
-    const cell = Math.max(baseCell, Math.sqrt((w * h) / budgetCells));
-    const ch =
-      isDither ||
-      ["pixel", "mosaic", "lego", "voxel", "disco", "dots"].includes(
-        state.style,
-      )
-        ? cell
-        : cell * 1.65;
-    const nextCols = Math.max(1, Math.ceil(w / cell)),
-      nextRows = Math.max(1, Math.ceil(h / ch));
+    const grid = studioGrid(w, h, state, budgetCells, pixelRatio);
+    const cell = grid.cell, ch = grid.rowHeight;
+    const nextCols = grid.columns, nextRows = grid.rows;
     if (
       prepared !== key ||
       sourceIdentity !== source ||

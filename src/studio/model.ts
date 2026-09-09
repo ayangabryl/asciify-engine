@@ -518,3 +518,19 @@ export function updateStudioSettings(
   }
   return normalizeStudioSettings(merged);
 }
+
+/** Effective grid and usable cell-size range at a bounded render resolution.
+ * pixelRatio preserves preview density when exporting at a larger resolution.
+ */
+export function studioGrid(width: number, height: number, settings: Pick<StudioSettings, 'style' | 'cellSize' | 'dither'>, maxCells = 12000, pixelRatio = 1) {
+  const w = Math.max(2, Number.isFinite(width) ? width : 960);
+  const h = Math.max(2, Number.isFinite(height) ? height : 540);
+  const budget = Math.max(1, Math.floor(Number.isFinite(maxCells) ? maxCells : 12000));
+  const ratio = Math.max(0.01, Number.isFinite(pixelRatio) ? pixelRatio : 1);
+  const aspect = ['dither', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dots'].includes(settings.style) ? 1 : 1.65;
+  let minimum = Math.max(1, Math.ceil(Math.sqrt(w * h / (budget * aspect)) / ratio));
+  while (Math.ceil(w / (minimum * ratio)) * Math.ceil(h / (minimum * ratio * aspect)) > budget) minimum++;
+  const requested = settings.style === 'dither' ? settings.dither.scale : settings.cellSize;
+  const cell = Math.max(minimum, requested) * ratio;
+  return {cell, rowHeight: cell * aspect, columns: Math.ceil(w / cell), rows: Math.ceil(h / (cell * aspect)), minimum, limited: requested < minimum};
+}
