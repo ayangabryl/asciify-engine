@@ -300,10 +300,11 @@ try {
             colorMode: "source",
             effects: { prism: 0.5 },
           }),
-          progress = [];
+          progress = [], sampleTimes = [];
         const blob = await api.exportStudio(
           {
             frame: (t) => {
+              sampleTimes.push(t);
               paint(t);
               return source;
             },
@@ -314,6 +315,7 @@ try {
             width: 320,
             height: 180,
             duration: 1,
+            time: 1.5,
             fps: 12,
             onProgress: (p) => progress.push(p),
           },
@@ -323,13 +325,14 @@ try {
           f.onload = () => r(f.result);
           f.readAsDataURL(blob);
         });
-        return { format, type: blob.type, size: blob.size, data, progress };
+        return { format, type: blob.type, size: blob.size, data, progress, sampleTimes };
       } catch (error) {
         return { format, error: error.message };
       }
     }, format);
     assert.equal(result.error, undefined, JSON.stringify(result));
     assert.ok(result.size > 100);
+    assert.equal(result.sampleTimes[0], ["png","jpeg"].includes(format) ? 1.5 : 0);
     assert.equal(result.progress.at(-1), 1);
     await fs.writeFile(
       out + "/export." + (format === "jpeg" ? "jpg" : format),

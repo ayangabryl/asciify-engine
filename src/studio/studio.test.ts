@@ -5,6 +5,7 @@ import {
   serializeStudioSettings,
   studioDimensions,
   studioCrop,
+  studioGrid,
   updateStudioSettings,
   DITHER_ALGORITHMS,
   STUDIO_PALETTES,
@@ -169,5 +170,32 @@ describe("Dither kernels", () => {
     ditherPixels(a, 64, 32, settings.dither, 0);
     ditherPixels(b, 64, 32, settings.dither, 1);
     expect(a).not.toEqual(b);
+  });
+});
+
+describe('Studio cell size', () => {
+  it('provides distinct usable sizes and stays within the cell budget', () => {
+    for (const style of ['ascii', 'dots', 'dither'] as const) {
+      const settings = normalizeStudioSettings({style});
+      const minimum = studioGrid(960, 540, settings).minimum;
+      let previous = Infinity;
+      for (let size = minimum; size <= 40; size++) {
+        const grid = studioGrid(960, 540, {...settings, cellSize: size, dither: {...settings.dither, scale: size}});
+        expect(grid.columns * grid.rows).toBeLessThanOrEqual(12000);
+        expect(grid.cell).toBe(size);
+        expect(grid.columns * grid.rows).toBeLessThanOrEqual(previous);
+        previous = grid.columns * grid.rows;
+      }
+    }
+  });
+  it('uses dither scale and preserves the same grid for upscaled exports', () => {
+    const settings = normalizeStudioSettings({style:'dither', cellSize:40, dither:{scale:2}});
+    const preview = studioGrid(960,540,settings);
+    const exportGrid = studioGrid(1920,1080,settings,12000,2);
+    expect(preview.limited).toBe(true);
+    expect(preview.columns).toBe(exportGrid.columns);
+    expect(preview.rows).toBe(exportGrid.rows);
+    expect(exportGrid.cell).toBe(preview.cell*2);
+    expect(studioGrid(960,540,{...settings,dither:{...settings.dither,scale:12}}).cell).toBe(12);
   });
 });

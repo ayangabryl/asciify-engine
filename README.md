@@ -516,3 +516,7 @@ See the [Studio API guide](skills/asciify-engine/references/studio-workspace.md)
 Emoji, Musical and Starfield preset keys have been removed from `CHARSETS`, `ArtStyle` and `ART_STYLE_PRESETS`. Use `classic` with an application-owned `charset` to retain a custom alphabet, or choose structural presets such as braille/circles/geometric. General Unicode support remains. Cosmic and angular character sequences now use structural marks. Existing core rendering and hover APIs remain modular.
 
 `STUDIO_CHARACTER_SETS` from `asciify-engine/studio` provides named ramps with `{ label, chars }`; assign `chars` to Studio `charset` with `style: 'ascii'`. The website's new default workspace is [/editor](https://asciify.org/editor); earlier workflows remain in [/editor/classic](https://asciify.org/editor/classic).
+
+### 2.0.1 size and export fixes
+
+`studioGrid` exposes the effective grid and minimum cell size for a bounded preview. Dither uses `dither.scale`; other styles use `cellSize`. Pass `time` to `exportStudio` for a PNG/JPEG of the current frame. Animation exports continue to start at zero. See the Studio guide for the shared preview/export density contract.
