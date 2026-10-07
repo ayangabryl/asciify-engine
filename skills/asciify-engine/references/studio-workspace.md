@@ -40,7 +40,7 @@ Start with `normalizeStudioSettings({ ... })`, `DEFAULT_STUDIO_SETTINGS`, or `st
 - `aspectRatio`: `original`, `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`. `studioDimensions` resolves dimensions from the source and rotation.
 - `crop`: normalized `x`/`y` anchor, `zoom` 1–5, rotation in 90-degree steps. Cover framing fills the output.
 - `backdrop`: `solid`, `transparent`, `source`, `blurred`, or `gradient`; `color`, `color2`, `opacity`, `blur`. A wallpaper look is an opt-in composition, not an operating-system wallpaper installer.
-- `color`: brightness, contrast, saturation, grayscale, tint amount/color and blend mode. Tint and lights retain the artwork alpha rather than filling empty glyph cells.
+- `color`: brightness, contrast, saturation, grayscale, tint amount/color and blend mode. From 4.5, input black/white points, gamma, shadows and highlights are also available. Tint and lights retain the artwork alpha rather than filling empty glyph cells.
 - `dither`: algorithm, palette/custom colors, amount, scale, threshold, pattern motion (`none`, `drift`, `shimmer`) and speed. Diffusion and ordered patterns differ; animated thresholds can shimmer intentionally.
 - `mask`: enable/invert and a list of rectangle, ellipse, or brush shapes. Coordinates are normalized to the output canvas. Masks are bounded to 64 shapes and 2,048 total brush points. Masking affects the artwork; the backdrop remains visible.
 - `lights`: at most four colored radial lights with normalized position, radius, and intensity. This is 2D illumination, not physically based material lighting.
@@ -185,3 +185,28 @@ Stationary artwork, masks, lights, backdrops and character bloom are cached whil
 Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all eleven hovers and ten still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; new motion IDs are `parallax`, `weave`, `print`, `trace`. `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
 
 Example: `player.update({ motion: { type: 'trace', speed: 1, amount: .7 }, hover: { effect: 'etch', radius: .45, strength: .65 } })`. Tone and character choices remain yours. See [effect behaviors and combinations](studio-effects.md#catalogs-and-useful-combinations-44). Do not run several looping thumbnail canvases just to display this catalog; apply the selected treatment to one shared preview.
+
+## Tonal detail and blue noise (4.5)
+
+Use `color.gamma` to lift midtones (above 1) or deepen them (below 1), from 0.25 to 4. `color.shadows` and `color.highlights` range from −1 to 1; positive lifts that region, negative darkens it. They form a monotone curve with fixed black, middle and white anchors. This is a bounded tonal curve, not a freely editable per-channel curve graph. It cannot recover clipped source detail.
+
+`color.blackPoint` (0–0.99, default 0) and `color.whitePoint` (default 1) map the input range before gamma. White is normalized to at least 1/255 above black. These controls apply equally to all 18 renderers before dither/character conversion, preserve source alpha, and round-trip in settings. Neutral settings skip the transform. The 256-entry lookup is rebuilt on configuration changes and reused for source frames. Reset with `{ blackPoint: 0, whitePoint: 1, gamma: 1, shadows: 0, highlights: 0 }`.
+
+`blue-noise` uses a deterministic 64×64 toroidal rank tile generated offline with void-and-cluster relaxation. It suppresses low-frequency clumping; it is not white noise with a different label. A palette-pair projection controls coverage, preserving flat grayscale means for a black/white palette at full strength. Arbitrary color palettes still approximate the source. The original palette uses web-safe channel quantization. The rank tile is 8 KiB in memory, loads only with `/studio`, and has no network request or runtime generator.
+
+Keep `dither.motion: 'none'` for a stationary pattern. `drift`, direction and speed translate the matrix; `shimmer` modulates tone. As with Bayer, stable thresholds do not guarantee flicker-free source video—changing source tones can change the quantized result. Start around a 320×180 sampling grid for animated artwork, then measure the target device. More detail is an explicit CPU tradeoff.
+
+```ts
+const player = await mountStudio(canvas, '/portrait.jpg', {
+  settings: {
+    style: 'dither',
+    color: { gamma: 1.12, shadows: .15, highlights: -.12 },
+    dither: { algorithm: 'blue-noise', palette: 'gray8', scale: 3 },
+    motion: { type: 'trace', speed: .7, amount: .25 },
+  },
+  maxDimension: 960,
+  maxCells: 65536,
+});
+// Use the same player.settings for live embedding and independent export.
+// On unmount: player.destroy().
+```

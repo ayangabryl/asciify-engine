@@ -1,4 +1,5 @@
 import { samplePixel } from './sample-pixel';
+import { createToneLookup, applyToneLookup } from './tone';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
 import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
 import {
@@ -82,6 +83,7 @@ export function createStudioRenderer(
   const field = [0, 0, 0];
   const ambient = [0, 0, 0, 1];
   const sampled = [0, 0, 0, 0];
+  let toneLookup = createToneLookup(state.color);
   const maxDimension = Math.max(
       64,
       Math.min(
@@ -200,6 +202,7 @@ export function createStudioRenderer(
             g.brightness * 255;
         }
       }
+      if (toneLookup) applyToneLookup(pixels, toneLookup);
     }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
@@ -646,6 +649,7 @@ export function createStudioRenderer(
     },
     configure(input: unknown) {
       state = normalizeStudioSettings(input);
+      toneLookup = createToneLookup(state.color);
       revision++;
     },
     pointer,

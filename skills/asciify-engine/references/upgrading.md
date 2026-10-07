@@ -62,3 +62,6 @@ This requested minor version contains breaking API removals: `CHARSETS`, `ART_ST
 ## 4.4
 
 Adds Emboss, Elastic and Rake hover; Parallax, Woven Flow, Print Shift and Contour Light motion. Existing IDs, defaults, saved projects and v1 settings remain valid. `STUDIO_HOVERS` and `STUDIO_MOTIONS` are now shared public catalogs in `/studio` and `/hover`; generate selection controls from them. The four new ambient IDs are also accepted by core `animationStyle`. Keep only one owner for motion.
+### 4.5 tonal controls and blue noise
+
+Adds the `blue-noise` dither algorithm and optional Studio `color.blackPoint`, `whitePoint`, `gamma`, `shadows`, and `highlights` fields. Existing render defaults and existing dither output are unchanged. The serialized settings version remains 1; older engines will ignore these new choices, so check the installed package before using them. Refresh the agent skill separately from the npm dependency. These are Studio features, not additional core `AsciiOptions`.

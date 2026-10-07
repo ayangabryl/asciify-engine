@@ -7,7 +7,7 @@
   <a href="https://www.buymeacoffee.com/asciify"><img src="https://img.shields.io/badge/buy_me_a_coffee-%E2%98%95-d4ff00?labelColor=0a0a0a&style=flat-square" alt="Buy Me A Coffee" /></a>
 </p>
 
-A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 15 Studio render styles, and export.
+A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 18 Studio render styles, and export.
 
 ### Media first, optional backgrounds
 
@@ -560,3 +560,9 @@ player.update({
 ```
 
 All motion choices repeat every `12 / speed` seconds. Still exports preserve the selected preview phase; animated exports include motion without pointer events. Grain, dust, glitch, animated dither and source video have separate timing. No external AI service is used. See [effect integration](skills/asciify-engine/references/studio-effects.md).
+
+### Tonal detail and blue-noise dithering (4.5)
+
+Studio adds `dither.algorithm: 'blue-noise'`: a stable precomputed dispersed pattern with no runtime generation or asset download. `noise` remains white noise. Choose the algorithm from `DITHER_ALGORITHMS`; drift and shimmer remain independently controlled.
+
+Recover usable shadow/highlight separation before conversion with `color.gamma`, `shadows`, `highlights`, `blackPoint` and `whitePoint`. All 18 styles share these controls and retain neutral defaults. They are a bounded monotone tonal curve, not arbitrary per-channel curve editing. See [exact ranges, sampling budgets and a live-project example](skills/asciify-engine/references/studio-workspace.md#tonal-detail-and-blue-noise-45).

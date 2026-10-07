@@ -3,6 +3,7 @@ import {
   type StudioSettings,
   type DitherAlgorithm,
 } from "./model";
+import { BLUE_NOISE_RANKS, BLUE_NOISE_SIZE } from './blue-noise';
 export const noise = (x: number, y: number) => {
   const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return v - Math.floor(v);
@@ -110,6 +111,7 @@ export function ditherPixels(
   time = 0,
 ) {
   const { algorithm, amount, threshold } = options;
+  const blueNoise = algorithm === 'blue-noise';
   const orderedSize = algorithm.startsWith("bayer") ? Number(algorithm.slice(5)) : 0;
   const ordered = orderedTables.get(orderedSize);
   const orderedMask = orderedSize - 1;
@@ -140,6 +142,9 @@ export function ditherPixels(
         continue;
       }
       let pattern = 0;
+      const blueThreshold = blueNoise
+        ? (BLUE_NOISE_RANKS[((y - dy) & (BLUE_NOISE_SIZE - 1)) * BLUE_NOISE_SIZE + ((x - dx) & (BLUE_NOISE_SIZE - 1))] + .5) / BLUE_NOISE_RANKS.length
+        : 0;
       if (ordered)
         pattern = ordered[((y - dy) & orderedMask) * orderedSize + ((x - dx) & orderedMask)];
       else if (algorithm === "noise") pattern = noise(x - dx, y - dy) - 0.5;
@@ -157,11 +162,19 @@ export function ditherPixels(
         cg = 0,
         cb = 0;
       if (!palette.length) {
-        cr = Math.round(r / 51) * 51;
-        cg = Math.round(g / 51) * 51;
-        cb = Math.round(b / 51) * 51;
+        if (blueNoise) {
+          const step = Math.max(0, Math.min(1, .5 + (blueThreshold - .5) * amount));
+          cr = Math.floor(r / 51 + 1 - step) * 51;
+          cg = Math.floor(g / 51 + 1 - step) * 51;
+          cb = Math.floor(b / 51 + 1 - step) * 51;
+        } else {
+          cr = Math.round(r / 51) * 51;
+          cg = Math.round(g / 51) * 51;
+          cb = Math.round(b / 51) * 51;
+        }
       } else {
         let best = Infinity;
+        let second = Infinity, bestIndex = 0, secondIndex = 0;
         const tone = r * .299 + g * .587 + b * .114;
         for (let pi = 0; pi < palette.length; pi++) {
           const c = palette[pi];
@@ -170,9 +183,24 @@ export function ditherPixels(
             (g - c[1]) ** 2 * 0.587 +
             (b - c[2]) ** 2 * 0.114;
           if (d < best) {
+            if (blueNoise) { second = best; secondIndex = bestIndex; bestIndex = pi; }
             best = d;
             [cr, cg, cb] = c;
+          } else if (blueNoise && d < second) {
+            second = d; secondIndex = pi;
           }
+        }
+        if (blueNoise && amount > 0 && Number.isFinite(second)) {
+          // Mix the two closest palette entries by projection, rather than
+          // adding arbitrary RGB noise. This preserves monochrome coverage.
+          const target = palette[secondIndex];
+          const dr = target[0] - cr, dg = target[1] - cg, db = target[2] - cb;
+          const dl = paletteLuma[secondIndex] - paletteLuma[bestIndex];
+          const denominator = luminanceMapping ? dl * dl : dr * dr * .299 + dg * dg * .587 + db * db * .114;
+          const projection = luminanceMapping ? (tone - paletteLuma[bestIndex]) * dl :
+            (r - cr) * dr * .299 + (g - cg) * dg * .587 + (b - cb) * db * .114;
+          const mix = denominator ? Math.max(0, Math.min(1, projection / denominator * amount)) : 0;
+          if (blueThreshold < mix) [cr, cg, cb] = target;
         }
       }
       data[i] = cr;
