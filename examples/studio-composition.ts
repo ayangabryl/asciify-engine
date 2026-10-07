@@ -3,7 +3,6 @@ import {
   loadStudioMedia,
   exportStudio,
   normalizeStudioSettings,
-  updateStudioSettings,
   serializeStudioSettings,
   parseStudioSettings,
   type StudioInput,
@@ -16,7 +15,7 @@ export async function createComposition(
   source: File | string,
   signal?: AbortSignal,
 ) {
-  let settings = normalizeStudioSettings({
+  const settings = normalizeStudioSettings({
     style: 'ascii',
     cellSize: 6,
     ink: '#b3ed82',
@@ -55,13 +54,11 @@ export async function createComposition(
   return {
     player,
     update(patch: StudioInput) {
-      settings = updateStudioSettings(settings, patch);
-      player.update(settings);
+      player.update(patch);
     },
-    saveLook: () => serializeStudioSettings(settings),
+    saveLook: () => serializeStudioSettings(player.settings),
     restoreLook(json: string) {
-      settings = parseStudioSettings(json);
-      player.update(settings);
+      player.update(parseStudioSettings(json));
     },
     exportPng: (signal?: AbortSignal) => exportComposition('png', signal),
     exportMp4: (signal?: AbortSignal) => exportComposition('mp4', signal),

@@ -13,6 +13,11 @@ it('passes saved curves and noise reduction to the independent export renderer',
   await exportStudio({frame:()=>({}) as HTMLCanvasElement},settings,{format:'png',width:32,height:24});
   expect(create.mock.calls[0][1]).toEqual(settings);
 });
+it('passes ordered warps and their edge handling to the export renderer',async()=>{
+  const settings=normalizeStudioSettings({warps:[{type:'twirl',amount:.3},{type:'fragment',frequency:9}],warpEdge:'transparent'});
+  await exportStudio({frame:()=>({}) as HTMLCanvasElement},settings,{format:'png',width:32,height:24});
+  expect(create.mock.calls[0][1]).toEqual(settings);
+});
 it('exports the selected still with its displayed phase after live speed edits',async()=>{
   const image={} as HTMLCanvasElement;
   const frame=vi.fn(async()=>image);

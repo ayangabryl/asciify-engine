@@ -580,3 +580,17 @@ const settings = player.settings; // detached snapshot for save/export
 ```
 
 See [settings, normalization, processing order and performance guidance](skills/asciify-engine/references/studio-workspace.md#channel-curves-and-source-noise-46). Curves are local source controls, not another art-style alias or AI restoration.
+
+### Ordered source shaping (4.7)
+
+Combine up to eight source transformations before ASCII, dither or any Studio style: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Edit strength, position and radius, plus direction/frequency where applicable. Reorder or disable stages without losing their settings; choose extended or transparent edges. Generate controls from `STUDIO_WARPS` and `MAX_STUDIO_WARPS`.
+
+```ts
+player.update({
+  warps: [{type:'sphere',amount:.3,radius:.7}, {type:'shear',amount:.15,angle:25}],
+  warpEdge:'clamp',
+  motion:{type:'parallax',amount:.5},
+});
+```
+
+The stack is static shaping; motion and pointer hover remain independent. Coordinate maps are cached across video frames, and stills reuse shaped pixels during interaction. Empty stacks are free of additional pixel work. Defaults and root/core/hover behavior remain unchanged. Dither motion also gains alpha-correct interpolation at transparent edges. See [parameters, order, persistence/export and measured CPU tradeoffs](skills/asciify-engine/references/source-shaping.md).

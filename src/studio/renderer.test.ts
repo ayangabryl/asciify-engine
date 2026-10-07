@@ -5,6 +5,7 @@ import { STUDIO_STYLES } from './model';
 import { MOTION_STYLES } from '../surface/ambient-motion';
 import { ditherPixels } from './dither';
 import { SourceDenoiser } from './denoise';
+import { SourceWarpProcessor, STUDIO_WARPS } from './warps';
 vi.mock('./dither', async importOriginal => {
   const actual = await importOriginal<typeof import('./dither')>();
   return {...actual, ditherPixels: vi.fn(actual.ditherPixels)};
@@ -60,6 +61,41 @@ it('caches source filtering across lively motion and hover, invalidating only on
   renderer.invalidate();renderer.render(source,.3,32,24);
   expect(filtering).toHaveBeenCalledTimes(3);
   renderer.destroy();filtering.mockRestore();
+});
+it.each(STUDIO_STYLES)('warps the sampled source before %s, caches during interactions, and clears on reset', style=>{
+  const processing=vi.spyOn(SourceWarpProcessor.prototype,'apply');
+  const renderer=createStudioRenderer(canvas(),{style,warps:[{type:'twirl',amount:.7}],motion:{type:'current'}});
+  const source=canvas(),sample=contexts[2];
+  sample.getImageData.mockImplementation((_x,_y,w,h)=>{
+    const data=new Uint8ClampedArray(w*h*4);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)data.set([x/w*255,y/h*255,(x+y)%2*255,255],(y*w+x)*4);
+    return {data};
+  });
+  renderer.render(source,0,64,48);renderer.render(source,1,64,48);
+  expect(processing).toHaveBeenCalledTimes(1);
+  const input=processing.mock.calls[0][0],result=processing.mock.results[0].value;
+  expect(result).not.toEqual(input);
+  renderer.configure({style});renderer.render(source,2,64,48);
+  expect(processing.mock.results[1].value).toBe(processing.mock.calls[1][0]);
+  renderer.destroy();processing.mockRestore();
+});
+it('dither motion interpolates alpha and keeps hidden transparent RGB out of visible edges',()=>{
+  // Inspect the resampling boundary before palette quantization changes RGB in place.
+  vi.mocked(ditherPixels).mockImplementationOnce(()=>{});
+  const renderer=createStudioRenderer(canvas(),{style:'dither',dither:{amount:0,scale:1},motion:{type:'current',amount:2}}, {maxCells:12000});
+  const source=canvas(),sample=contexts[2];
+  sample.getImageData.mockImplementation((_x,_y,w,h)=>{
+    const data=new Uint8ClampedArray(w*h*4);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)data.set(x<w/2?[20,80,200,255]:[255,0,30,0],(y*w+x)*4);
+    return {data};
+  });
+  renderer.render(source,2,40,24);
+  const data=vi.mocked(ditherPixels).mock.calls.at(-1)![0];
+  let partial=0;
+  for(let i=0;i<data.length;i+=4)if(data[i+3]>0&&data[i+3]<255) {
+    partial++;expect([...data.slice(i,i+3)]).toEqual([20,80,200]);
+  }
+  expect(partial).toBeGreaterThan(0);renderer.destroy();
 });
 
 it.each(STUDIO_STYLES)('renders %s through the common composition pipeline without an unsupported-style exception', style => {
@@ -182,6 +218,8 @@ it.each(STUDIO_STYLES)('%s accepts every hover × ambient combination with finit
       colorMode:(['source','gray','accent'] as const)[(hi+mi)%3],
       motion:{type:mode,speed:.7,amount:1.2},
       hover:{effect:hovers[hi],strength:1,radius:1,edgeSafe:hi%2===0},
+      warps:Array.from({length:(hi+mi)%3},(_,i)=>({type:STUDIO_WARPS[(hi+mi+i)%STUDIO_WARPS.length].value,amount:i?.6:-.4,radius:.7})),
+      warpEdge:hi%2?'transparent':'clamp',
       dither:{algorithm:'bayer4',scale:2},
       backdrop:{mode:'gradient',color:'#102030',color2:'#b3ed82'},
       effects:{grain:.2,prism:.15},

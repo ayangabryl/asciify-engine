@@ -1,6 +1,7 @@
 import { SURFACE_HOVERS, type SurfaceHover } from '../surface/hover-catalog';
 import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
 import { normalizeStudioCurves, type StudioCurves } from './curves';
+import { normalizeStudioWarps, type StudioWarp, type StudioWarpEdge } from './warps';
 /** Serializable, media-independent editing state. No DOM work at import time. */
 export const STUDIO_STYLES = [
   "ascii",
@@ -142,6 +143,8 @@ export interface StudioSettings {
   colorMode: "accent" | "source" | "gray";
   ink: string;
   crop: { x: number; y: number; zoom: number; rotation: number };
+  warps?: StudioWarp[];
+  warpEdge?: StudioWarpEdge;
   backdrop: {
     mode: "solid" | "transparent" | "source" | "blurred" | "gradient";
     color: string;
@@ -220,6 +223,8 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   colorMode: "accent",
   ink: "#e8b900",
   crop: { x: 0.5, y: 0.5, zoom: 1, rotation: 0 },
+  warps: [],
+  warpEdge: 'clamp',
   backdrop: {
     mode: "solid",
     color: "#080808",
@@ -351,6 +356,8 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
         : d.charset,
     colorMode: choice(v.colorMode, ["accent", "source", "gray"], d.colorMode),
     ink: color(v.ink, d.ink),
+    warps: normalizeStudioWarps(v.warps),
+    warpEdge: choice(v.warpEdge,['clamp','transparent'] as const,'clamp'),
     crop: {
       x: n(c.x, 0.5, 0, 1),
       y: n(c.y, 0.5, 0, 1),

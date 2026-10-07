@@ -69,3 +69,7 @@ Adds the `blue-noise` dither algorithm and optional Studio `color.blackPoint`, `
 ### 4.6 channel curves and source noise
 
 Adds Studio `color.curves` and `color.denoise` with neutral defaults. Curves support independently editable RGB/red/green/blue control points; incremental updates merge channels, replacing only supplied point arrays. `player.settings` returns a detached current snapshot for persistence/export. Settings version remains 1; older packages ignore the new fields and do not expose the getter. Read the installed types, update the runtime dependency and refresh the agent skill together when adopting these APIs. Root/core/hover behavior is unchanged.
+
+### 4.7 ordered source warps
+
+Adds optional Studio `warps` and `warpEdge` with an empty default stack. Nine transform types are exposed through `STUDIO_WARPS`, plus `MAX_STUDIO_WARPS` and `normalizeStudioWarps` for control builders. Updating `warps` replaces the array. Reuse `player.settings` for save/export. Static shaping does not enable motion; existing motion and hover remain independent. Dither now interpolates alpha with color during motion/hover. Settings version stays 1, root/core/hover behavior remains unchanged, and older packages ignore the new fields. See [source shaping](source-shaping.md); update the runtime and installed skill separately.
