@@ -147,7 +147,13 @@ export class InkTrail {
   }
 }
 
-export const isDensityHover = (mode: string) => ['trail','contour','dissolve'].includes(mode);
+export const isDensityHover = (mode: string) => ['trail','contour','dissolve','etch'].includes(mode);
+
+/** Shared signed-density texture contract for Canvas and GPU renderers. */
+export const densityHoverKind = (mode: string) => mode === 'etch' ? 3 : mode === 'dissolve' ? 2 : mode === 'contour' ? 1 : 0;
+export const decodeDensity = (pixels: Uint8Array, index: number, mode: string, amount: number) =>
+  (mode === 'etch' ? (pixels[index] * 256 + pixels[index + 1] - 32768) / 32767 :
+    (pixels[index] * 256 + pixels[index + 1]) / 65535) * amount;
 
 /** Bounded reversal: sparse marks fill in, dense marks open up along the wake. */
 export function invertTrailTone(tone: number, density: number) {
@@ -199,7 +205,8 @@ vec4 trailField(vec2 address) {
   return texture2D(surface,(address*(surfaceSize-1.0)+.5)/surfaceSize);
 }
 float trailFieldDensity(vec4 field) {
-  return (field.r*65280.0+field.g*255.0)/65535.0*trailAmount;
+  float packed=field.r*65280.0+field.g*255.0;
+  return (trailKind>2.5?(packed-32768.)/32767.:packed/65535.)*trailAmount;
 }
 float trailDensity(vec2 address) { return trailFieldDensity(trailField(address)); }
 float trailPin(vec2 cell, vec2 grid) {
@@ -236,11 +243,13 @@ float flowIndex(float index,float count,float density) {
   return max(0.,last-abs(last-(index+response*last*2.1)));
 }
 float trailTone(float tone, float density) {
+  if (trailKind > 2.5) return clamp(tone+density*.35,0.,1.);
   if (trailKind < .5) return flowIndex(tone,2.,density);
   return clamp(tone + (trailKind > 1.5 ? -density : density) * .65, 0.0, 1.0);
 }
 float trailIndex(float index, float count, float density, vec2 cell) {
   float grain=fract((cell.x*cell.x*17.0+cell.y*cell.y*23.0+cell.x*cell.y*19.0)*.0137);
+  if(trailKind>2.5) return clamp(floor(index+density*(count-1.)*.35+.5),0.,count-1.);
   if(trailKind>1.5) return max(0.0,index-floor(density*count*(1.35+grain*.9)));
   if(trailKind<.5) {
     float seed=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);

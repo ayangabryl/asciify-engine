@@ -1,3 +1,4 @@
+import { SURFACE_HOVERS } from '../surface/hover-catalog';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { createStudioRenderer } from './renderer';
 import { STUDIO_STYLES } from './model';
@@ -136,7 +137,7 @@ it('bounds requested budgets and ignores non-finite values without poisoning the
 // Exercise render-path interactions; this deliberately does not stand in for
 // GPU screenshots, visual acceptance or device frame-pacing measurements.
 it.each(STUDIO_STYLES)('%s accepts every hover × ambient combination with finite draw commands', style => {
-  const hovers=['none','trail','water','contour','dissolve','silk','vortex','magnetic','scatter'] as const;
+  const hovers=SURFACE_HOVERS.map(effect=>effect.value);
   for(let hi=0;hi<hovers.length;hi++) for(let mi=0;mi<MOTION_STYLES.length;mi++) {
     contexts.length=0;
     const mode=MOTION_STYLES[mi].mode;
@@ -157,4 +158,14 @@ it.each(STUDIO_STYLES)('%s accepts every hover × ambient combination with finit
     }
     renderer.destroy();
   }
+});
+
+it.each(MOTION_STYLES.filter(({mode})=>mode!=='none'))('keeps dither visible with $label motion', ({mode}) => {
+  const renderer=createStudioRenderer(canvas(),{style:'dither',motion:{type:mode},dither:{algorithm:'bayer4'}});
+  renderer.render(canvas(),3,32,24);
+  const data=vi.mocked(ditherPixels).mock.calls.at(-1)![0];
+  let coverage=0;
+  for(let i=3;i<data.length;i+=4)coverage+=data[i];
+  expect(coverage).toBeGreaterThan(data.length/4*20);
+  renderer.destroy();
 });

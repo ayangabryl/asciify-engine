@@ -9,3 +9,5 @@ export * from './studio/text';
 export * from './studio/characters';
 
 export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';
+
+export { SURFACE_HOVERS as STUDIO_HOVERS } from './surface/hover-catalog';

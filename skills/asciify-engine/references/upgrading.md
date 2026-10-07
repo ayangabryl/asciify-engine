@@ -58,3 +58,7 @@ This requested minor version contains breaking API removals: `CHARSETS`, `ART_ST
 ## 4.3 and 4.3.1
 
 4.3 adds Magnetic Pull and Scatter hover (`magnetic`, `scatter`) and Sheen, Tidal Rings and Living Grain motion (`sheen`, `tidal`, `grain`). Old defaults remain. 4.3.1 fixes CMYK tonal interactions and idle-frame work, caches stationary compositions, and accelerates ordered dithering without changing its output. Read [project-integration.md](project-integration.md) for one-owner live integration and independent PNG/video export.
+
+## 4.4
+
+Adds Emboss, Elastic and Rake hover; Parallax, Woven Flow, Print Shift and Contour Light motion. Existing IDs, defaults, saved projects and v1 settings remain valid. `STUDIO_HOVERS` and `STUDIO_MOTIONS` are now shared public catalogs in `/studio` and `/hover`; generate selection controls from them. The four new ambient IDs are also accepted by core `animationStyle`. Keep only one owner for motion.

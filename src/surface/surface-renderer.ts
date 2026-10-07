@@ -2,7 +2,7 @@ import { EDGE_FINISH_GLSL, finishSettings, type SurfaceFinish } from './surface-
 import { createTextMaskPainter, type TextMaskFrame } from './text-mask';
 import { AMBIENT_GLSL, AmbientTimeline, resolveMotion, motionId, isFineDither, sampleAmbient, printGrain } from './ambient-motion';
 import type { AsciiFrame, AsciiOptions } from '../types';
-import { INK_TRAIL_GLSL, isDensityHover, sampleFlowGlyph, flowTrailIndex } from './ink-trail';
+import { INK_TRAIL_GLSL, densityHoverKind, decodeDensity, isDensityHover, sampleFlowGlyph, flowTrailIndex } from './ink-trail';
 import { createTrailGlyphs } from './trail-glyphs';
 import { supportsSurfaceGlyphs, hasSurfaceTransparency, surfaceBackdrop } from './surface-glyph-path';
 import { SURFACE_LIGHT_GLSL, type SurfaceRefraction } from './water-surface';
@@ -107,7 +107,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           vec2 edge = min(pixel, sceneSize - pixel) / cellSize;
           uv -= slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) / sceneSize;
         }
-        vec4 ambient=ambientAt(uv);
+        vec4 ambient=ambientAt(uv,motionMode>9.5?toneAt(uv):.5);
         uv -= ambient.xy/sceneSize;
         pixel=uv*sceneSize;
         vec4 ink = vec4(0.);
@@ -229,7 +229,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
       }
       if (gl) {
         gl.uniform1f(locations.motionMode,motionId(mode)); gl.uniform1f(locations.motionTime,phase); gl.uniform1f(locations.fineDither,dither?1:0); gl.uniform1f(locations.ditherAmount,Math.max(0,Math.min(2,options?.ditherStrength ?? 1)));
-        gl.uniform1f(locations.trailKind,field.mode==='dissolve'?2:field.mode==='contour'?1:0);
+        gl.uniform1f(locations.trailKind,densityHoverKind(field.mode));
         gl.uniform1f(locations.edgeSafe,field.edgeSafe ? 1 : 0);
         gl.uniform1f(locations.trailAmount,isDensityHover(field.mode)?field.focus[2]:0);
         gl.viewport(0,0,w,h);
@@ -273,12 +273,12 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           for(let y=0;y<packed.rows;y++)for(let x=0;x<packed.cols;x++) {
             const u=(x+.5)/packed.cols,v=(y+.5)/packed.rows,i=(y*packed.cols+x)*4;
             if(packed.colors[i+3]<10)continue;
-            sampleAmbient(mode,u,v,phase,a);
+            sampleAmbient(mode,u,v,phase,a,packed.indices[i+2]/255);
             const fi=(Math.min(field.height-1,Math.round(v*(field.height-1)))*field.width+Math.min(field.width-1,Math.round(u*(field.width-1))))*4;
-            const density=isDensityHover(field.mode)?(field.pixels[fi]*256+field.pixels[fi+1])/65535*field.focus[2]:0;
+            const density=isDensityHover(field.mode)?decodeDensity(field.pixels,fi,field.mode,field.focus[2]):0;
             const original=packed.indices[i]+packed.indices[i+1]*256;
             if(field.mode==='trail') sampleFlowGlyph(packed.indices,packed.colors,packed.cols,packed.rows,x,y,density,(field.pixels[fi+2]-128)/127,(field.pixels[fi+3]-128)/127,plan.glyphs.length,flow,field.edgeSafe);
-            let index=field.mode==='trail'?flow[0]:field.mode==='dissolve'?original-Math.floor(density*plan.glyphs.length*1.8):original+Math.floor(density*plan.glyphs.length*.85);
+            let index=field.mode==='trail'?flow[0]:field.mode==='etch'?Math.round(original+density*(plan.glyphs.length-1)*.35):field.mode==='dissolve'?original-Math.floor(density*plan.glyphs.length*1.8):original+Math.floor(density*plan.glyphs.length*.85);
             if(original>0)index+=a[2]*(plan.glyphs.length-1);
             index=Math.max(0,Math.min(plan.glyphs.length-1,Math.floor(index+printGrain(x,y))));
             let dx=a[0],dy=a[1];
@@ -289,7 +289,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             const color=`rgb(${r/peak*255},${g/peak*255},${b/peak*255})`;
             ctx.fillStyle=color;
             if(dither) {
-              const tone=field.mode==='trail'?flowTrailIndex(Math.max(0,Math.min(1,flow[1]+a[2])),2,density):Math.max(0,Math.min(1,packed.indices[i+2]/255+a[2]+(field.mode==='dissolve'?-density:density)*.65));
+              const tone=field.mode==='trail'?flowTrailIndex(Math.max(0,Math.min(1,flow[1]+a[2])),2,density):Math.max(0,Math.min(1,packed.indices[i+2]/255+a[2]+(field.mode==='etch'?density*.35:(field.mode==='dissolve'?-density:density)*.65)));
               ctx.globalAlpha=alpha;
               for(let oy=0;oy<cellHeight;oy+=pitch)for(let ox=0;ox<cellWidth;ox+=pitch)
                 if(tone>.5+(printGrain(Math.floor((px+ox)/pitch),Math.floor((py+oy)/pitch))-.5)*Math.max(0,Math.min(2,options?.ditherStrength??1)))ctx.fillRect(px+ox,py+oy,Math.min(pitch,cellWidth-ox),Math.min(pitch,cellHeight-oy));
@@ -307,10 +307,10 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           const {plan,packed,atlas}=glyphData, flow=[0,0,0,0,0,0];
           for(let y=0;y<packed.rows;y++) for(let x=0;x<packed.cols;x++) {
             const fi=(Math.min(field.height-1,Math.round((y+.5)/packed.rows*(field.height-1)))*field.width+Math.min(field.width-1,Math.round((x+.5)/packed.cols*(field.width-1))))*4;
-            const density=(field.pixels[fi]*256+field.pixels[fi+1])/65535*field.focus[2],i=(y*packed.cols+x)*4;
+            const density=decodeDensity(field.pixels,fi,field.mode,field.focus[2]),i=(y*packed.cols+x)*4;
             const seed=(x*x*17+y*y*23+x*y*19)*.0137,grain=seed-Math.floor(seed);
             if(field.mode==='trail') sampleFlowGlyph(packed.indices,packed.colors,packed.cols,packed.rows,x,y,density,(field.pixels[fi+2]-128)/127,(field.pixels[fi+3]-128)/127,plan.glyphs.length,flow,field.edgeSafe);
-            const original=packed.indices[i]+packed.indices[i+1]*256,index=field.mode==='trail'?Math.round(flow[0]):field.mode==='dissolve'?Math.max(0,original-Math.floor(density*plan.glyphs.length*(1.35+grain*.9))):Math.min(plan.glyphs.length-1,original+Math.floor(density*plan.glyphs.length*.85));
+            const original=packed.indices[i]+packed.indices[i+1]*256,index=field.mode==='trail'?Math.round(flow[0]):field.mode==='etch'?Math.max(0,Math.min(plan.glyphs.length-1,Math.round(original+density*(plan.glyphs.length-1)*.35))):field.mode==='dissolve'?Math.max(0,original-Math.floor(density*plan.glyphs.length*(1.35+grain*.9))):Math.min(plan.glyphs.length-1,original+Math.floor(density*plan.glyphs.length*.85));
             if((index===original && (field.mode!=='trail' || density<.0001)) || packed.colors[i+3]<10) continue;
             const px=x*cellWidth,py=y*cellHeight;
             ctx.clearRect(px,py,cellWidth,cellHeight);
@@ -322,7 +322,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             ctx.globalAlpha=1;
             ctx.globalCompositeOperation='source-atop';
             const r=field.mode==='trail'?flow[2]:packed.colors[i],g=field.mode==='trail'?flow[3]:packed.colors[i+1],b=field.mode==='trail'?flow[4]:packed.colors[i+2];
-            const peak=Math.max(r,g,b), raised=(field.mode==='dissolve'||field.mode==='trail')?peak:Math.max(peak,Math.min(112,density*191)), gain=peak?raised/peak:0;
+            const peak=Math.max(r,g,b), raised=(field.mode==='dissolve'||field.mode==='trail'||field.mode==='etch')?peak:Math.max(peak,Math.min(112,density*191)), gain=peak?raised/peak:0;
             ctx.fillStyle=`rgb(${peak?r*gain:raised},${peak?g*gain:raised},${peak?b*gain:raised})`;
             ctx.fillRect(px,py,cellWidth,cellHeight); ctx.globalCompositeOperation='source-over';
           }

@@ -1,4 +1,5 @@
-import type { AmbientMotion } from '../surface/ambient-motion';
+import { SURFACE_HOVERS, type SurfaceHover } from '../surface/hover-catalog';
+import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
 /** Serializable, media-independent editing state. No DOM work at import time. */
 export const STUDIO_STYLES = [
   "ascii",
@@ -195,7 +196,7 @@ export interface StudioSettings {
   };
   hover: {
     effect:
-      "none" | "trail" | "water" | "contour" | "dissolve" | "silk" | "vortex" | "magnetic" | "scatter";
+      SurfaceHover;
     strength: number;
     radius: number;
     edgeSafe: boolean;
@@ -432,7 +433,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     motion: {
       type: choice(
         a.type,
-        ["none", "caustics", "current", "reform", "sheen", "tidal", "grain"],
+        MOTION_STYLES.map(style => style.mode),
         "none",
       ),
       speed: n(a.speed, 1, 0.1, 3),
@@ -441,7 +442,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     hover: {
       effect: choice(
         p.effect,
-        ["none", "trail", "water", "contour", "dissolve", "silk", "vortex", "magnetic", "scatter"],
+        SURFACE_HOVERS.map(style => style.value),
         "trail",
       ),
       strength: n(p.strength, 0.55, 0, 1),

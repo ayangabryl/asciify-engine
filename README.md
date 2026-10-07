@@ -91,9 +91,9 @@ const hover = mountHover(host, canvas, {
 // On unmount: hover.destroy(); stop();
 ```
 
-Effects: **Trail, Water, Contour, Dissolve, Silk, Vortex**, and `none`. Pass `effect` to `mountHover`, rather than passing these names to the legacy engine `hoverEffect` option. Keep engine hover and animation disabled to avoid stacking two renderers. Match `fontSize`, `charAspect`, `charSpacing`, `charset`, `customText`, and dot settings to the backing canvas.
+Effects: **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, Emboss, Elastic, Rake**, and `none`. Inspect `STUDIO_HOVERS` for typed IDs and behavior groups (4.4+). Pass `effect` to `mountHover`, rather than passing these names to the legacy engine `hoverEffect` option. Keep engine hover and animation disabled to avoid stacking two renderers. Match `fontSize`, `charAspect`, `charSpacing`, `charset`, `customText`, and dot settings to the backing canvas.
 
-For video/GIF, set `animated: true, fps: 24` and coordinate `paused` with playback. For a still, optional `motion: 'print' | 'current' | 'reform'` adds living-image motion; `fineDither: true` enables stationary grain. `mountStudioHover` remains an alias for the existing standalone integration. The module observes reduced motion, sleeps when idle/offscreen, and uses Canvas 2D when WebGL is unavailable (simpler spatial refraction). Call `destroy()` on unmount; use `hover.canvas` for overlay layering or snapshots.
+For video/GIF, set `animated: true, fps: 24` and coordinate `paused` with playback. For a still, optional `motion: 'caustics' | 'current' | 'reform'` (or the other IDs in `STUDIO_MOTIONS`) adds living-image motion; `fineDither: true` enables stationary grain. `mountStudioHover` remains an alias for the existing standalone integration. The module observes reduced motion, sleeps when idle/offscreen, and uses Canvas 2D when WebGL is unavailable (simpler spatial refraction). Call `destroy()` on unmount; use `hover.canvas` for overlay layering or snapshots.
 
 See the [complete integration and lifecycle guide](skills/asciify-engine/references/studio-effects.md). A [standalone ES module](https://asciify.org/background-sources/studio-hover.js) remains available for projects without a bundler.
 
@@ -545,3 +545,18 @@ Studio includes six still-image motions plus Off: Caustics, Slow Current, Reveal
 ### Studio correctness and performance (4.3.1)
 
 Stationary compositions are reused during animated finishing. Hidden dither settings and zero-strength motion no longer keep still previews awake. Ordered dithering uses cached thresholds with byte-identical output; Scatter caches its spatial noise. CMYK now responds to tonal hovers and still motion. For a selected PNG/JPEG frame after changing motion speed, pass `time: player.time` and `motionTime: player.motionTime` to `exportStudio`. See the packaged project-integration skill reference for a live component and independent image/video export.
+
+### More ways to bring photos to life (4.4)
+
+Eleven pointer interactions and ten autonomous motions, plus Off. Emboss presses paired light and shadow into a fixed character grid; Elastic stores directional momentum and springs back; Rake combs the source into alternating ribbons. Parallax, Woven Flow, Print Shift and Contour Light join the still-image motions. Contour Light follows the actual source tones.
+
+```js
+import { STUDIO_HOVERS, STUDIO_MOTIONS } from 'asciify-engine/studio';
+// value / label / group / description: use these to build a complete picker.
+player.update({
+  motion: { type: 'parallax', speed: 1, amount: .7 },
+  hover: { effect: 'elastic', radius: .45, strength: .65 },
+});
+```
+
+All motion choices repeat every `12 / speed` seconds. Still exports preserve the selected preview phase; animated exports include motion without pointer events. Grain, dust, glitch, animated dither and source video have separate timing. No external AI service is used. See [effect integration](skills/asciify-engine/references/studio-effects.md).

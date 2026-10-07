@@ -11,7 +11,7 @@ try {
     platform:'node',format:'esm',outExtension:{'.js':'.mjs'},logLevel:'silent'});
   const {WaterSurface}=await import(pathToFileURL(join(temporary,'water-surface.mjs')).href);
   const rows=[];
-  for(const aspect of [16/9,9/16]) for(const effect of ['trail','water','contour','dissolve','silk','vortex','magnetic','scatter']) {
+  for(const aspect of [16/9,9/16]) for(const effect of ['trail','water','contour','dissolve','silk','vortex','magnetic','scatter','etch','elastic','rake']) {
     const field=new WaterSurface(aspect);field.configure(effect,1,1,false);
     const samples=[];
     for(let i=0;i<240;i++) {
