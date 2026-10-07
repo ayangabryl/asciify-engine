@@ -7,6 +7,7 @@ A downloaded PNG is one output; it is not a substitute for a live component.
 | --- | --- | --- |
 | Image/video/GIF hero with HTML titles and text cutouts | `/core` media API + optional `/hover` | Disable core hover/motion when `/hover` owns them. |
 | Art-style editor, live still image, saved look, backdrop, masks, PNG/video export | `/studio` → `mountStudio` | Studio owns motion, hover and finishing. Do not stack `mountHover` on it. |
+| Multiple media/text layers with independent styles, placement, blends and exports | `/studio` → `mountStudioProject` (4.8+) | One shared loop and budget; see [layered-projects.md](layered-projects.md). |
 | Application-owned render loop | `/studio` → `createStudioRenderer` | Caller passes time, pointer input, invalidation and cleanup. |
 | ASCII text data | Core frame/text conversion | No animation loop needed unless requested. |
 

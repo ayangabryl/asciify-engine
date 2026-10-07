@@ -1,8 +1,8 @@
 interface:
   display_name: "Asciify Engine"
   short_description: "Build fast ASCII media effects"
-  brand_color: "#E8B900"
-  default_prompt: "Use $asciify-engine to build a layered ASCII hero with readable HTML text, appropriate performance settings, and lifecycle cleanup."
+  brand_color: "#B3ED82"
+  default_prompt: "Use $asciify-engine to build interactive ASCII media or layered compositions, keeping HTML controls readable, rendering budgets explicit, and media lifecycles isolated."
 
 policy:
   allow_implicit_invocation: true

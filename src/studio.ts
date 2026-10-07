@@ -10,6 +10,11 @@ export * from './studio/characters';
 export * from './studio/curves';
 export { STUDIO_WARPS, MAX_STUDIO_WARPS, normalizeStudioWarps } from './studio/warps';
 export type { StudioWarp, StudioWarpType, StudioWarpEdge } from './studio/warps';
+export * from './studio/project-model';
+export * from './studio/project-renderer';
+export * from './studio/project-mount';
+export * from './studio/project-export';
+export type { StudioProjectSource, StudioProjectSources, StudioProjectMedia, StudioProjectTextSource } from './studio/project-media';
 
 export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';
 

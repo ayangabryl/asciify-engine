@@ -1,6 +1,6 @@
 {
   "name": "asciify-engine",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -56,6 +56,7 @@
     "LICENSE",
     "examples/media-background.ts",
     "examples/studio-composition.ts",
+    "examples/layered-composition.ts",
     "THIRD_PARTY.md",
     "licenses"
   ],

@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-07",
+  "version": "4.8.0",
+  "node": "v25.9.0",
+  "hardware": "Apple M4 Pro",
+  "platform": "darwin",
+  "arch": "arm64",
+  "width": 1920,
+  "height": 1080,
+  "maxCells": 24000,
+  "maxRasterPixels": 2097152,
+  "scope": "CPU project visibility, shared-budget allocation and inverse pointer geometry only. Excludes actual rendering, media decode, Canvas, GPU, browser frame pacing and exports. Not an FPS result.",
+  "results": [
+    {
+      "layers": 1,
+      "medianMs": 0.000234,
+      "p95Ms": 0.000501
+    },
+    {
+      "layers": 4,
+      "medianMs": 0.000536,
+      "p95Ms": 0.000837
+    },
+    {
+      "layers": 8,
+      "medianMs": 0.000611,
+      "p95Ms": 0.000705
+    }
+  ]
+}

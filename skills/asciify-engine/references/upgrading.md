@@ -73,3 +73,7 @@ Adds Studio `color.curves` and `color.denoise` with neutral defaults. Curves sup
 ### 4.7 ordered source warps
 
 Adds optional Studio `warps` and `warpEdge` with an empty default stack. Nine transform types are exposed through `STUDIO_WARPS`, plus `MAX_STUDIO_WARPS` and `normalizeStudioWarps` for control builders. Updating `warps` replaces the array. Reuse `player.settings` for save/export. Static shaping does not enable motion; existing motion and hover remain independent. Dither now interpolates alpha with color during motion/hover. Settings version stays 1, root/core/hover behavior remains unchanged, and older packages ignore the new fields. See [source shaping](source-shaping.md); update the runtime and installed skill separately.
+
+### 4.8 layered projects
+
+Adds `mountStudioProject`, `mountStudioProjectMedia`, `createStudioProjectRenderer`, `exportStudioProject` and the typed project model in optional `/studio`. Up to eight independently styled media/text layers share a playback loop and cell/raster budgets. Existing single-source APIs/defaults remain. Layered project JSON uses a distinct `kind` and source keys; it is not interchangeable with single-source settings JSON and does not contain media. See [layered-projects.md](layered-projects.md) for ownership, pointer routing, export consistency and migration choices. Refresh this skill separately from npm; do not migrate simple heroes unnecessarily.
