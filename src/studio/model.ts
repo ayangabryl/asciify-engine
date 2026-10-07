@@ -16,6 +16,9 @@ export const STUDIO_STYLES = [
   "voxel",
   "disco",
   "dither",
+  "hex",
+  "led",
+  "cmyk",
 ] as const;
 export type StudioStyle = (typeof STUDIO_STYLES)[number];
 export const DITHER_ALGORITHMS = [
@@ -34,6 +37,9 @@ export const DITHER_ALGORITHMS = [
   "halftone",
   "lines",
   "noise",
+  "vertical-lines",
+  "diagonal-lines",
+  "radial",
 ] as const;
 export type DitherAlgorithm = (typeof DITHER_ALGORITHMS)[number];
 export const BLEND_MODES = [
@@ -52,6 +58,11 @@ export const BLEND_MODES = [
 ] as const;
 export const STUDIO_PALETTES: Record<string, readonly string[]> = {
   original: [],
+  gray4: ["#000000", "#555555", "#aaaaaa", "#ffffff"],
+  gray8: ["#000000", "#242424", "#494949", "#6d6d6d", "#929292", "#b6b6b6", "#dbdbdb", "#ffffff"],
+  rgb8: ["#000000", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#ffffff"],
+  cyberpunk: ["#08081a", "#3c1670", "#ed299a", "#29dfef", "#fff7bf"],
+  pastel: ["#393448", "#a5b4d4", "#9ed9c6", "#e7aac1", "#f5e8be"],
   mono: ["#080808", "#f2f2e8"],
   asciify: ["#080808", "#625b38", "#a19558", "#e8b900"],
   gameboy: ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"],
@@ -153,6 +164,8 @@ export interface StudioSettings {
     threshold: number;
     motion: "none" | "drift" | "shimmer";
     speed: number;
+    direction?: number;
+    colorSpace?: "rgb" | "luminance";
   };
   mask: { enabled: boolean; invert: boolean; shapes: StudioMask[] };
   lights: StudioLight[];
@@ -164,6 +177,8 @@ export interface StudioSettings {
     scanlines: number;
     crt: number;
     prism: number;
+    rgbSplit?: number;
+    sharpen?: number;
     vignette: number;
     glitch: number;
     pixelate: number;
@@ -176,6 +191,7 @@ export interface StudioSettings {
   motion: {
     type: AmbientMotion;
     speed: number;
+    amount?: number;
   };
   hover: {
     effect:
@@ -219,6 +235,8 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     threshold: 0.5,
     motion: "none",
     speed: 1,
+    direction: 45,
+    colorSpace: "rgb",
   },
   mask: { enabled: false, invert: false, shapes: [] },
   lights: [],
@@ -230,6 +248,8 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     scanlines: 0,
     crt: 0,
     prism: 0,
+    rgbSplit: 0,
+    sharpen: 0,
     vignette: 0,
     glitch: 0,
     pixelate: 0,
@@ -239,7 +259,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     focus: 0.5,
     halftone: 0,
   },
-  motion: { type: "none", speed: 1 },
+  motion: { type: "none", speed: 1, amount: 1 },
   hover: { effect: "trail", strength: 0.55, radius: 0.2, edgeSafe: false },
 };
 const record = (v: unknown): Record<string, unknown> =>
@@ -282,6 +302,8 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     "scanlines",
     "crt",
     "prism",
+    "rgbSplit",
+    "sharpen",
     "vignette",
     "glitch",
     "pixelate",
@@ -305,7 +327,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       "original",
     ),
     style: choice(v.style, STUDIO_STYLES, d.style),
-    cellSize: n(v.cellSize, d.cellSize, 3, 60),
+    cellSize: n(v.cellSize, d.cellSize, ["pixel", "mosaic", "lego", "voxel", "disco", "dots", "hex", "led", "cmyk"].includes(String(v.style)) ? 1 : 3, 60),
     charset:
       typeof v.charset === "string" && v.charset.length
         ? Array.from(v.charset).slice(0, 128).join("")
@@ -354,6 +376,8 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       threshold: n(h.threshold, 0.5, 0, 1),
       motion: choice(h.motion, ["none", "drift", "shimmer"], "none"),
       speed: n(h.speed, 1, 0.1, 3),
+      direction: n(h.direction, 45, -180, 180),
+      colorSpace: choice(h.colorSpace, ["rgb", "luminance"] as const, "rgb"),
     },
     mask: {
       enabled: m.enabled === true,
@@ -412,6 +436,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
         "none",
       ),
       speed: n(a.speed, 1, 0.1, 3),
+      amount: n(a.amount, 1, 0, 2),
     },
     hover: {
       effect: choice(
@@ -505,7 +530,7 @@ export function studioGrid(width: number, height: number, settings: Pick<StudioS
   const h = Math.max(2, Number.isFinite(height) ? height : 540);
   const budget = Math.max(1, Math.floor(Number.isFinite(maxCells) ? maxCells : 12000));
   const ratio = Math.max(0.01, Number.isFinite(pixelRatio) ? pixelRatio : 1);
-  const aspect = ['dither', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dots'].includes(settings.style) ? 1 : 1.65;
+  const aspect = ['dither', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dots', 'hex', 'led', 'cmyk'].includes(settings.style) ? 1 : 1.65;
   let minimum = Math.max(1, Math.ceil(Math.sqrt(w * h / (budget * aspect)) / ratio));
   while (Math.ceil(w / (minimum * ratio)) * Math.ceil(h / (minimum * ratio * aspect)) > budget) minimum++;
   const requested = settings.style === 'dither' ? settings.dither.scale : settings.cellSize;

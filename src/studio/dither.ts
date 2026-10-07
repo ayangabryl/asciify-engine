@@ -10,8 +10,8 @@ export const noise = (x: number, y: number) => {
 export function bayer(x: number, y: number, size: number): number {
   let value = 0;
   for (let step = 1; step < size; step *= 2) {
-    const a = Math.floor(x / step) % 2,
-      b = Math.floor(y / step) % 2;
+    const a = ((Math.floor(x / step) % 2) + 2) % 2,
+      b = ((Math.floor(y / step) % 2) + 2) % 2;
     value =
       value * 4 +
       [
@@ -112,8 +112,12 @@ export function ditherPixels(
   const palette = colors.map(rgb),
     kernel = kernels[algorithm];
   const errors = kernel ? new Float32Array(width * 3 * 3) : null;
-  const shift =
-    options.motion === "drift" ? Math.floor(time * options.speed * 3) : 0;
+  const shift = options.motion === "drift" ? time * options.speed * 3 : 0;
+  const direction = (options.direction ?? 45) * Math.PI / 180;
+  const dx = Math.round(Math.cos(direction) * shift);
+  const dy = Math.round(Math.sin(direction) * shift);
+  const mod = (n: number, m: number) => ((n % m) + m) % m;
+  const paletteLuma = palette.map(c => c[0] * .299 + c[1] * .587 + c[2] * .114);
   const phase =
     options.motion === "shimmer"
       ? Math.sin(time * options.speed * 2) * 0.15
@@ -129,14 +133,17 @@ export function ditherPixels(
       let pattern = 0;
       if (algorithm.startsWith("bayer"))
         pattern = bayer(
-          (x + shift) & 15,
-          (y + shift) & 15,
+          (x - dx) & 15,
+          (y - dy) & 15,
           Number(algorithm.slice(5)),
         );
-      else if (algorithm === "noise") pattern = noise(x, y) - 0.5;
-      else if (algorithm === "lines") pattern = ((y + shift) % 4) / 3 - 0.5;
+      else if (algorithm === "noise") pattern = noise(x - dx, y - dy) - 0.5;
+      else if (algorithm === "lines") pattern = mod(y - dy, 4) / 3 - 0.5;
+      else if (algorithm === "vertical-lines") pattern = mod(x - dx, 4) / 3 - .5;
+      else if (algorithm === "diagonal-lines") pattern = mod(x - dx + y - dy, 4) / 3 - .5;
+      else if (algorithm === "radial") pattern = mod(Math.hypot(x - width / 2, y - height / 2) - shift, 6) / 6 - .5;
       else if (algorithm === "halftone")
-        pattern = Math.hypot((x % 6) - 2.5, (y % 6) - 2.5) / 3.54 - 0.5;
+        pattern = Math.hypot(mod(x - dx, 6) - 2.5, mod(y - dy, 6) - 2.5) / 3.54 - 0.5;
       const offset = (pattern * amount + phase + (0.5 - threshold)) * 128;
       const r = data[i] + offset + (errors?.[ex] ?? 0),
         g = data[i + 1] + offset + (errors?.[ex + 1] ?? 0),
@@ -150,8 +157,10 @@ export function ditherPixels(
         cb = Math.round(b / 51) * 51;
       } else {
         let best = Infinity;
-        for (const c of palette) {
-          const d =
+        const tone = r * .299 + g * .587 + b * .114;
+        for (let pi = 0; pi < palette.length; pi++) {
+          const c = palette[pi];
+          const d = options.colorSpace === "luminance" ? (tone - paletteLuma[pi]) ** 2 :
             (r - c[0]) ** 2 * 0.299 +
             (g - c[1]) ** 2 * 0.587 +
             (b - c[2]) ** 2 * 0.114;

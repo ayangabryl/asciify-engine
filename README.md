@@ -532,3 +532,8 @@ This release removes `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVI
 Use `STUDIO_STYLES` from `asciify-engine/studio` for the 15 current render styles: ASCII, Braille, Dots, Lines, Blocks, Dither, Cross, Diagonal, Diamond, Mixed, Pixel, Mosaic, Lego, Voxel and Disco. Set `settings.style` with `mountStudio` / `createStudioRenderer`; these styles are actual rendering methods, not character ramps. Core media APIs remain ASCII-first.
 
 Use `CHARACTER_SETS.standard.chars` (or another curated entry) from root or `/core` for an ASCII ramp; custom `options.charset` and `charsetFrames` arrays remain supported. Use explicit `options.colorMode`, `renderMode`, and hover/motion settings instead of the removed combined presets. No legacy catalog has been moved to a hidden compatibility bundle.
+
+
+### Studio detail controls (4.2)
+
+The optional `asciify-engine/studio` entry includes 18 render styles, including hex mosaic, LED matrix and CMYK print. Dither supports pixel scale, custom palettes, RGB/luminance mapping, pattern speed and direction. Use `studioGrid` to report effective density and opt into a larger `maxCells` budget for one-pixel output; defaults stay performance-bounded. Mounts expose `setAdaptive` for an explicit detail/performance choice. Still-image motion has `amount`, and finishing adds `rgbSplit` and `sharpen` (WebGL required). See the [complete controls and export guidance](skills/asciify-engine/references/studio-workspace.md#fine-detail-and-controls-42). No AI service or server upload is introduced.

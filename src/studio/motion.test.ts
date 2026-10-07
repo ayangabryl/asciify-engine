@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest';
 import { normalizeStudioSettings } from './model';
-import { MOTION_STYLES, sampleAmbient } from '../surface/ambient-motion';
+import { MOTION_STYLES, sampleAmbient, scaleMotion } from '../surface/ambient-motion';
 
 it('restores every retired Studio motion as Off without losing other settings', () => {
   for (const type of ['breathe','wave','reveal','glitch','rainbow','hologram','fire','chrome','ripple','vapor']) {
     const state = normalizeStudioSettings({ motion: { type, speed: 1.4 }, ink: '#e8b900', hover: { effect: 'water' } });
-    expect(state.motion).toEqual({ type: 'none', speed: 1.4 });
+    expect(state.motion).toEqual({ type: 'none', speed: 1.4, amount: 1 });
     expect(state.ink).toBe('#e8b900');
     expect(state.hover.effect).toBe('water');
   }
@@ -23,4 +23,15 @@ it('loops smoothly with bounded fields and no random frame flicker', () => {
       }
     }
   }
+});
+
+it('scales displacement and opacity without changing animation phase', () => {
+  for (const {mode} of MOTION_STYLES) {
+    const base=sampleAmbient(mode,.4,.6,4,[]);
+    scaleMotion([...base],0).forEach((v,i) => expect(v).toBeCloseTo(i===3 ? 1 : 0));
+    const half=scaleMotion([...base],.5);
+    expect(half[0]).toBe(base[0]*.5);
+    expect(half[3]).toBeCloseTo(1+(base[3]-1)*.5);
+  }
+  expect(normalizeStudioSettings({motion:{amount:99}}).motion.amount).toBe(2);
 });

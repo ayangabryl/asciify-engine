@@ -71,3 +71,11 @@ export const AMBIENT_GLSL = `
     return vec4(sin(uv.y*9.+p)*gone*(1.-gone)*24.*edge,-gone*(1.-gone)*(8.+grain*12.)*edge,-gone*.45,1.-gone*.9);
   }
 `;
+
+/** Scale motion without changing its phase or the stationary image. */
+export function scaleMotion(out: number[], amount: number) {
+  const strength = Math.max(0, Math.min(2, Number.isFinite(amount) ? amount : 1));
+  out[0] *= strength; out[1] *= strength; out[2] *= strength;
+  out[3] = clamp(1 + (out[3] - 1) * strength);
+  return out;
+}

@@ -10,9 +10,9 @@ describe('current catalogs', () => {
   it('removes legacy catalog exports from the public media API', () => {
     for(const key of ['CHARSETS','ART_STYLE_PRESETS','CHARSET_SEQUENCES','LIVING_STYLE_PRESETS']) expect(core).not.toHaveProperty(key);
   });
-  it('retains the curated alphabets and exactly the 15 current render styles', () => {
+  it('retains the curated alphabets and the curated render styles', () => {
     expect(Object.keys(CHARACTER_SETS)).toEqual(['standard','asciify','minimal','detailed','letters','technical','blocks','braille']);
-    expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither']);
+    expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither','hex','led','cmyk']);
   });
   it('rejects removed shortcuts with migration guidance', () => {
     for(const name of ['binary','katakana','waves','smoke','particles','letters','art','terminal']) expect(()=>resolveCoreStyle(name)).toThrow('asciify-engine/studio');

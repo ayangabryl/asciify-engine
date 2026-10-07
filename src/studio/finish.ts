@@ -31,22 +31,24 @@ export function createStudioFinish() {
     p,
     compile(
       gl.FRAGMENT_SHADER,
-      `precision mediump float;varying vec2 uv;uniform sampler2D src;uniform vec2 size;uniform float t,bloom,grain,dust,scanlines,crt,prism,vignette,glitch,pixelate,blur,blurMode,angle,focus,halftone;
+      `precision mediump float;varying vec2 uv;uniform sampler2D src;uniform vec2 size;uniform float t,bloom,grain,dust,scanlines,crt,prism,vignette,glitch,pixelate,blur,blurMode,angle,focus,halftone,rgbSplit,sharpen;
  float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
  vec4 sampleAt(vec2 p){if(min(min(p.x,p.y),min(1.-p.x,1.-p.y))<0.)return vec4(0.);return texture2D(src,vec2(p.x,1.-p.y));}
  void main(){vec2 q=uv,c=q-.5;q=c*(1.+dot(c,c)*crt*.25)+.5;
  if(glitch>0.)q.x+=(hash(vec2(floor(q.y*35.),floor(t*5.)))-.5)*.07*glitch*step(.82,hash(vec2(floor(q.y*35.),floor(t*5.)+3.)));
  if(pixelate>0.){vec2 grid=size/(1.+pixelate*20.);q=(floor(q*grid)+.5)/grid;}
  vec4 base=sampleAt(q);float edge=smoothstep(.12,.65,length(c));
- vec2 shift=vec2(prism*3.*edge/size.x,prism*edge/size.y);
- if(prism>0.)base.rgb=vec3(sampleAt(q+shift).r,base.g,sampleAt(q-shift).b);
+ vec2 shift=vec2((prism*3.*edge+rgbSplit*8.)/size.x,prism*edge/size.y);
+ if(prism>0.||rgbSplit>0.)base.rgb=vec3(sampleAt(q+shift).r,base.g,sampleAt(q-shift).b);
  vec2 dir=vec2(cos(angle),sin(angle))/size;float amount=blur;
  if(blurMode>1.5&&blurMode<2.5){dir=normalize(c+vec2(.0001))/size;amount*=length(c)*2.;}
  if(blurMode>2.5)amount*=smoothstep(.05,.5,abs(q.y-focus));
  vec4 blurred=base;
  if(amount>0.){blurred=base*.2;for(int i=1;i<=4;i++){float f=float(i)*amount*.35;vec2 off=dir*f;if(blurMode<.5)off=vec2(cos(float(i)*1.57),sin(float(i)*1.57))*amount/size;blurred+=sampleAt(q+off)*.1+sampleAt(q-off)*.1;}}
  vec3 light=vec3(0.);if(bloom>0.)for(int i=0;i<4;i++){float a=float(i)*1.5708;vec3 s=sampleAt(q+vec2(cos(a),sin(a))*6./size).rgb;light+=max(vec3(0.),s-.35)*.25;}
- vec3 col=blurred.rgb+light*bloom;col*=1.-scanlines*.4*(.5+.5*cos(q.y*size.y*3.14159));
+ vec3 col=blurred.rgb+light*bloom;
+ if(sharpen>0.){vec2 px=1./size;vec3 near=sampleAt(q+vec2(px.x,0.)).rgb+sampleAt(q-vec2(px.x,0.)).rgb+sampleAt(q+vec2(0.,px.y)).rgb+sampleAt(q-vec2(0.,px.y)).rgb;col+=(base.rgb*4.-near)*sharpen*.5;}
+col*=1.-scanlines*.4*(.5+.5*cos(q.y*size.y*3.14159));
  col*=1.-vignette*smoothstep(.15,.72,length(c));
  col+=(hash(floor(q*size)+floor(t*12.))-.5)*grain*.2;
  if(dust>0.)col+=step(1.-dust*.002,hash(floor(q*size*.25)+floor(t*2.)))*.4;
@@ -82,6 +84,8 @@ export function createStudioFinish() {
     "scanlines",
     "crt",
     "prism",
+    "rgbSplit",
+    "sharpen",
     "vignette",
     "glitch",
     "pixelate",
