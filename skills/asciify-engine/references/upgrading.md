@@ -81,3 +81,7 @@ Adds `mountStudioProject`, `mountStudioProjectMedia`, `createStudioProjectRender
 ## 4.9 print rendering
 
 Six additional `STUDIO_STYLES` use optional `print` settings. Existing v1 settings remain valid and ASCII defaults stay unchanged. The print group merges on partial updates. Import the shared catalog and read [print-styles.md](print-styles.md); offer print-specific controls only for those styles. Existing `print` and `riso` look IDs retain their dither behavior. Refresh the npm dependency and installed skill separately.
+
+## 4.10 interaction expansion
+
+Adds `lens`, `smudge`, `ripple` hover and `relight`, `shimmer`, `breeze`, `unfold` ambient motion. No IDs are removed and existing defaults remain. `STUDIO_ANIMATION_PRESETS` is exported by Studio and hover; its nested settings are shaped for `player.update`. Core accepts the new ambient IDs through `animationStyle`, with its existing simpler opacity treatment. Do not pass the new surface hover IDs to core `hoverEffect`. Update the npm dependency and refresh the agent skill separately; older packages do not implement these IDs.

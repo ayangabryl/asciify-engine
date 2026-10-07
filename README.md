@@ -615,3 +615,15 @@ player.updateLayer('photo', { settings: { hover: { effect: 'water' } } });
 ### Print and illustration (4.9)
 
 Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism add distinct print geometry to `/studio`. All share hover, living-image motion, masks, source shaping, saved settings and exports. Tune coverage, mark weight, angle, repeatable texture, light/dark ink polarity and two-ink registration with `print`. Use `STUDIO_PRINT_STYLES` for labels and [the print guide](skills/asciify-engine/references/print-styles.md) for a live still-image example, bounds and performance limits. ASCII remains the default.
+
+## 4.10: more life for still images
+
+Three additional pointer responses—Lens wake, Smudge and Ripple rings—and four autonomous motions—Relight, Shimmer, Breeze and Unfold—bring the catalogs to 14 each, plus Off. Source images, art styles and colors remain yours. Six editable combinations in `STUDIO_ANIMATION_PRESETS` help choose a starting point without replacing your look.
+
+```ts
+import { STUDIO_ANIMATION_PRESETS } from 'asciify-engine/studio';
+const preset = STUDIO_ANIMATION_PRESETS.find(p => p.id === 'quiet-light')!;
+player.update({ motion: preset.motion, hover: preset.hover });
+```
+
+Use one Studio player for live rendering, settings persistence and independent animation export. See [the complete interaction guide](skills/asciify-engine/references/studio-effects.md#lively-images-410) and [living-image helper](examples/living-image.ts). CPU simulation is bounded and wakes settle; device frame rates and visual fidelity still require browser measurement. Existing defaults and saved IDs are unchanged.

@@ -1,8 +1,8 @@
 import { surfaceEdgeWeight } from './surface-edge';
 
-export type AfterimageMode = 'dissolve' | 'silk' | 'vortex' | 'magnetic' | 'scatter' | 'etch' | 'elastic' | 'rake';
+export type AfterimageMode = 'dissolve' | 'silk' | 'vortex' | 'magnetic' | 'scatter' | 'etch' | 'elastic' | 'rake' | 'lens' | 'smudge';
 export const isAfterimageMode = (mode: string): mode is AfterimageMode =>
-  ['dissolve', 'silk', 'vortex', 'magnetic', 'scatter', 'etch', 'elastic', 'rake'].includes(mode);
+  ['dissolve', 'silk', 'vortex', 'magnetic', 'scatter', 'etch', 'elastic', 'rake', 'lens', 'smudge'].includes(mode);
 
 /** A decaying stroke memory, not fluid advection. Fixed storage at every image size. */
 export class AfterimageField {
@@ -54,12 +54,12 @@ export class AfterimageField {
     const previous=this.previous;this.previous={x,y};
     const w=this.width,h=this.height,sx=Math.max(1,w/h),sy=Math.max(1,h/w);
     const dx=previous?(x-previous.x)*sx:0,dy=previous?(y-previous.y)*sy:0,travel=Math.hypot(dx,dy);
-    if(!previous && this.mode!=='dissolve' && this.mode!=='etch')return;
+    if(!previous && this.mode!=='dissolve' && this.mode!=='etch' && this.mode!=='lens')return;
     if(previous && travel<.0001)return;
     const r=.035+Math.max(.1,Math.min(1,radius))*.11;
     const count=Math.min(128,Math.max(1,Math.ceil(travel/(r*.45))));
     const tx=travel?dx/travel:1,ty=travel?dy/travel:0;
-    const gain=Math.min(1,travel/(r*count)*2.2);
+    const gain=!previous&&this.mode==='lens'?.32:Math.min(1,travel/(r*count)*2.2);
     for(let s=0;s<count;s++){
       const t=(s+.5)/count,cx=previous?previous.x+(x-previous.x)*t:x,cy=previous?previous.y+(y-previous.y)*t:y;
       const left=Math.max(0,Math.floor((cx-r*2.5/sx)*(w-1))),right=Math.min(w-1,Math.ceil((cx+r*2.5/sx)*(w-1)));
@@ -72,6 +72,16 @@ export class AfterimageField {
           // the existing velocity, and the spring can overshoot its rest point.
           this.springX![i]=Math.max(-24,Math.min(24,this.springX![i]+tx*k*gain*8));
           this.springY![i]=Math.max(-24,Math.min(24,this.springY![i]+ty*k*gain*8));
+        }
+        else if(this.mode==='lens'){
+          // Positive radial source offsets sample toward the stroke center,
+          // magnifying it. Bounded accumulation avoids a hard lens boundary.
+          this.targetX[i]=Math.max(-.65,Math.min(.65,this.targetX[i]+rx*k*gain*1.6));
+          this.targetY[i]=Math.max(-.65,Math.min(.65,this.targetY[i]+ry*k*gain*1.6));
+        }
+        else if(this.mode==='smudge'){
+          this.targetX[i]=Math.max(-1,Math.min(1,this.targetX[i]+tx*k*gain*1.3));
+          this.targetY[i]=Math.max(-1,Math.min(1,this.targetY[i]+ty*k*gain*1.3));
         }
         else {
           // Silk shears opposite sides of a stroke; Vortex turns around it.
@@ -87,7 +97,10 @@ export class AfterimageField {
   }
   step(seconds:number){
     if(!this.active||!Number.isFinite(seconds))return;
-    const dt=Math.max(0,Math.min(.05,seconds)),decay=Math.exp(-(this.mode==='dissolve'?2.15:3.2)*dt),follow=1-Math.exp(-22*dt);
+    const dt=Math.max(0,Math.min(.05,seconds));
+    const rate=this.mode==='dissolve'?2.15:this.mode==='smudge'?2.4:3.2;
+    const response=this.mode==='lens'?16:22;
+    const decay=Math.exp(-rate*dt),follow=1-Math.exp(-response*dt);
     let peak=0;
     // Exact damped spring integration, independent of frame subdivision.
     const damping=8,omega=Math.sqrt(400-damping*damping),attenuation=Math.exp(-damping*dt);
@@ -107,8 +120,17 @@ export class AfterimageField {
           this.springY![i]=attenuation*(vy*cosine-(damping*vy+400*y)*sine);
           peak=Math.max(peak,Math.abs(this.springX![i])*.05,Math.abs(this.springY![i])*.05);
         }else{
-          this.targetX[i]*=decay;this.targetY[i]*=decay;
-          this.offsetX[i]+=(this.targetX[i]-this.offsetX[i])*follow;this.offsetY[i]+=(this.targetY[i]-this.offsetY[i])*follow;
+          if(this.mode==='lens'||this.mode==='smudge'){
+            // Exact exponential target + follower integration makes release
+            // independent of 30/60/120Hz simulation subdivisions.
+            const lag=1-follow, coupling=response/(response-rate)*(decay-lag);
+            this.offsetX[i]=this.offsetX[i]*lag+this.targetX[i]*coupling;
+            this.offsetY[i]=this.offsetY[i]*lag+this.targetY[i]*coupling;
+            this.targetX[i]*=decay;this.targetY[i]*=decay;
+          }else{
+            this.targetX[i]*=decay;this.targetY[i]*=decay;
+            this.offsetX[i]+=(this.targetX[i]-this.offsetX[i])*follow;this.offsetY[i]+=(this.targetY[i]-this.offsetY[i])*follow;
+          }
         }
         peak=Math.max(peak,Math.abs(this.offsetX[i]),Math.abs(this.offsetY[i]),Math.abs(this.targetX[i]),Math.abs(this.targetY[i]));
         const x=Math.round(this.offsetX[i]*(this.edgeSafe?this.edge[i]:1)*32767+32768),y=Math.round(this.offsetY[i]*(this.edgeSafe?this.edge[i]:1)*32767+32768);

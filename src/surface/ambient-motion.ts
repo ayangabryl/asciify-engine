@@ -1,6 +1,6 @@
 import type { AsciiOptions } from '../types';
 
-export type AmbientMotion = 'none' | 'caustics' | 'current' | 'reform' | 'sheen' | 'tidal' | 'grain' | 'parallax' | 'weave' | 'print' | 'trace';
+export type AmbientMotion = 'none' | 'caustics' | 'current' | 'reform' | 'sheen' | 'tidal' | 'grain' | 'parallax' | 'weave' | 'print' | 'trace' | 'relight' | 'shimmer' | 'breeze' | 'unfold';
 export const MOTION_STYLES = [
   { value: 'none', mode: 'none', group: 'Still', label: 'Off', description: 'Keep the image still. Hover stays available.' },
   { value: 'caustics', mode: 'caustics', group: 'Light and texture', label: 'Caustics', description: 'Soft ribbons of light travel across a stationary character grid.' },
@@ -13,12 +13,16 @@ export const MOTION_STYLES = [
   { value: 'weave', mode: 'weave', group: 'Flow and depth', label: 'Woven Flow', description: 'Interlaced bands move in opposing directions, like a flexible printed fabric.' },
   { value: 'print', mode: 'print', group: 'Rebuild', label: 'Print Shift', description: 'Staggered rows lift, soften and register back into the image.' },
   { value: 'trace', mode: 'trace', group: 'Light and texture', label: 'Contour Light', description: 'Light follows the source image’s tonal contours; every character stays anchored.' },
+  { value: 'relight', mode: 'relight', group: 'Light and texture', label: 'Relight', description: 'A slow orbit of light models the image’s midtones, while the character grid stays fixed.' },
+  { value: 'shimmer', mode: 'shimmer', group: 'Light and texture', label: 'Shimmer', description: 'Small highlights glint at different moments. Shadows stay quiet and the image stays in place.' },
+  { value: 'breeze', mode: 'breeze', group: 'Flow and depth', label: 'Breeze', description: 'A traveling bend gently sways the image, like a print suspended in moving air.' },
+  { value: 'unfold', mode: 'unfold', group: 'Rebuild', label: 'Unfold', description: 'Narrow panels turn, soften and return to a complete image, with a readable hold between cycles.' },
 ] as const;
 export function resolveMotion(style?: string): AmbientMotion {
   return MOTION_STYLES.find(s => s.value === style || s.mode === style)?.mode ?? 'none';
 }
 export const motionId = (mode: AmbientMotion) => MOTION_STYLES.findIndex(style => style.mode === mode);
-export const isAnchoredMotion = (mode: AmbientMotion) => ['none', 'caustics', 'sheen', 'grain', 'trace'].includes(mode);
+export const isAnchoredMotion = (mode: AmbientMotion) => ['none', 'caustics', 'sheen', 'grain', 'trace', 'relight', 'shimmer'].includes(mode);
 export const isFineDither = (options?: Pick<AsciiOptions, 'fineDither' | 'customText' | 'charsetFrames' | 'charset'>) => options?.fineDither === true && !options.customText && !options.charsetFrames?.length && !/[A-Za-z]/.test(options.charset ?? '');
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (a: number, b: number, v: number) => { const t = clamp((v-a)/(b-a)); return t*t*(3-2*t); };
@@ -73,6 +77,25 @@ export function sampleAmbient(mode: AmbientMotion, x: number, y: number, time: n
   } else if(mode==='trace') {
     const level=.5+.5*Math.cos(p);
     out[2]=Math.pow(Math.max(0,1-Math.abs(clamp(tone)-level)/.16),3)*.22-.015;
+  } else if(mode==='relight') {
+    const dx=x-.5,dy=y-.5,light=(dx*Math.cos(p)+dy*Math.sin(p))*1.3;
+    out[2]=light*.3*(.25+3*clamp(tone)*(1-clamp(tone)))*envelope;
+  } else if(mode==='shimmer') {
+    const phase=printGrain(Math.floor(x*160),Math.floor(y*100))*Math.PI*2;
+    const glint=Math.pow(.5+.5*Math.cos(p+phase),10);
+    out[2]=(glint-.1762)*.28*smooth(.35,.9,tone);
+  } else if(mode==='breeze') {
+    const bend=Math.sin(p-y*4),depth=.35+.65*(1-y);
+    out[0]=bend*10*depth*envelope;
+    out[1]=Math.sin(p*2-y*4+x*3)*2.5*depth*envelope;
+    out[2]=Math.cos(p-y*4)*.035*envelope;
+  } else if(mode==='unfold') {
+    const column=Math.floor(x*12),local=x*12-column-.5;
+    const cycle=((time-column*.11)%12+12)%12;
+    const turn=smooth(1,3,cycle)*(1-smooth(5,7,cycle));
+    out[0]=-local*turn*24*envelope;
+    out[1]=Math.sin(column*1.7)*turn*3*envelope;
+    out[2]=-turn*.12;out[3]=1-turn*.65;
   } else if(mode==='reform') {
     const cycle=((time%12)+12)%12;
     const grain=printGrain(Math.floor(x*160),Math.floor(y*100));
@@ -97,6 +120,25 @@ export const AMBIENT_GLSL = `
       return vec4(0.,0.,(light*.22-.045)*edge,1.);
     }
     if(motionMode<2.5) return vec4(sin(uv.y*9.+p)*cos(uv.x*7.-p)*10.*edge,cos(uv.x*8.+p)*sin(uv.y*6.-p)*7.*edge,0.,1.);
+    if(motionMode>13.5) {
+      float column=floor(uv.x*12.),local=uv.x*12.-column-.5;
+      float cycle=mod(motionTime-column*.11,12.);
+      float turn=smoothstep(1.,3.,cycle)*(1.-smoothstep(5.,7.,cycle));
+      return vec4(-local*turn*24.*edge,sin(column*1.7)*turn*3.*edge,-turn*.12,1.-turn*.65);
+    }
+    if(motionMode>12.5) {
+      float depth=.35+.65*(1.-uv.y);
+      return vec4(sin(p-uv.y*4.)*10.*depth*edge,sin(p*2.-uv.y*4.+uv.x*3.)*2.5*depth*edge,cos(p-uv.y*4.)*.035*edge,1.);
+    }
+    if(motionMode>11.5) {
+      float phase=printGrain(floor(uv*vec2(160.,100.)))*6.28318530718;
+      float glint=pow(.5+.5*cos(p+phase),10.);
+      return vec4(0.,0.,(glint-.1762)*.28*smoothstep(.35,.9,tone),1.);
+    }
+    if(motionMode>10.5) {
+      float light=dot(uv-.5,vec2(cos(p),sin(p)))*1.3,level=clamp(tone,0.,1.);
+      return vec4(0.,0.,light*.3*(.25+3.*level*(1.-level))*edge,1.);
+    }
     if(motionMode>9.5) {
       float level=.5+.5*cos(p);
       return vec4(0.,0.,pow(max(0.,1.-abs(clamp(tone,0.,1.)-level)/.16),3.)*.22-.015,1.);

@@ -263,7 +263,7 @@ export function createStudioRenderer(
                   let value =
                     (["trail", "contour"].includes(state.hover.effect)
                       ? invertTrailTone(tone, energy)
-                      : state.hover.effect === "etch" ? Math.max(0, Math.min(1, tone + energy * .35))
+                      : (state.hover.effect === "etch" || state.hover.effect === "ripple") ? Math.max(0, Math.min(1, tone + energy * .35))
                       : state.hover.effect === "dissolve"
                         ? tone * Math.max(0, 1 + energy)
                         : tone) * gain;
@@ -339,7 +339,7 @@ export function createStudioRenderer(
             let lum = sourceLum;
             if (["trail", "contour"].includes(state.hover.effect) && energy)
               lum = invertTrailTone(lum, energy);
-            else if (state.hover.effect === "etch")
+            else if ((state.hover.effect === "etch" || state.hover.effect === "ripple"))
               lum = Math.max(0, Math.min(1, lum + energy * .35));
             else if (state.hover.effect === "dissolve") {
               const gain = Math.max(0, 1 + energy);

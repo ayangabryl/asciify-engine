@@ -147,12 +147,12 @@ export class InkTrail {
   }
 }
 
-export const isDensityHover = (mode: string) => ['trail','contour','dissolve','etch'].includes(mode);
+export const isDensityHover = (mode: string) => ['trail','contour','dissolve','etch','ripple'].includes(mode);
 
 /** Shared signed-density texture contract for Canvas and GPU renderers. */
-export const densityHoverKind = (mode: string) => mode === 'etch' ? 3 : mode === 'dissolve' ? 2 : mode === 'contour' ? 1 : 0;
+export const densityHoverKind = (mode: string) => (mode === 'etch' || mode === 'ripple') ? 3 : mode === 'dissolve' ? 2 : mode === 'contour' ? 1 : 0;
 export const decodeDensity = (pixels: Uint8Array, index: number, mode: string, amount: number) =>
-  (mode === 'etch' ? (pixels[index] * 256 + pixels[index + 1] - 32768) / 32767 :
+  ((mode === 'etch' || mode === 'ripple') ? (pixels[index] * 256 + pixels[index + 1] - 32768) / 32767 :
     (pixels[index] * 256 + pixels[index + 1]) / 65535) * amount;
 
 /** Bounded reversal: sparse marks fill in, dense marks open up along the wake. */

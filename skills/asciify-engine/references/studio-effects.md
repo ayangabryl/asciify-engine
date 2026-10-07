@@ -43,6 +43,9 @@ The positioned host must fit the displayed source canvas. The surface appends a 
 | `etch` | Signed light-and-shadow impression; the glyph grid stays fixed. |
 | `elastic` | Directional momentum, damped recoil and a return to rest. |
 | `rake` | Alternating strips shear with the pointer, then align again. |
+| `lens` | Smooth local magnification, relaxing when the pointer stops. |
+| `smudge` | Directional source drag with a non-oscillating release. |
+| `ripple` | Expanding signed tonal wave packets; speed-sensitive and fixed-grid. |
 | `none` | No hover effect. |
 
 These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEffect` values. For example, passing `hoverEffect: 'water'` to the published engine is invalid.
@@ -75,3 +78,29 @@ For a fixed grid, try Contour Light with Emboss. For continuous spatial movement
 All ambient modes repeat after `12 / speed` seconds. Looping the motion does not guarantee that a source video, film grain, dust, glitch or animated dither has the same boundary. Exported PNG/JPEG captures one frame; MP4/WebM/GIF carries autonomous motion, not live pointer movement. For complete composition export, use `/studio` rather than capturing the hover overlay.
 
 The pointer simulations have bounded storage. Elastic allocates its two velocity buffers only when first selected; idle effects stop. This is not a device-independent FPS promise. Test dense grids, fast reversal and the actual finish stack on the target device.
+
+## Lively images (4.10)
+
+The catalogs contain fourteen active hover effects and fourteen active ambient motions, plus Off for each. New motion IDs are `relight`, `shimmer`, `breeze`, and `unfold`. Relight models midtones with a rotating light field; Shimmer slowly animates source highlights. Both keep geometry stationary. Breeze bends the image with a traveling sway. Unfold closes and opens staggered panels, then holds the complete image. All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` changes strength. These are local image treatments, not AI-generated scene or subject motion.
+
+`STUDIO_ANIMATION_PRESETS` is exported by `/studio` and `/hover`. Its six entries have `id`, `label`, `description`, `motion: {type,speed,amount}`, and `hover: {effect,radius,strength}`. These are editable combinations, not additional renderer styles. Do not overwrite the rest of a user's settings to apply one:
+
+```ts
+import { mountStudio, STUDIO_ANIMATION_PRESETS } from 'asciify-engine/studio';
+const preset = STUDIO_ANIMATION_PRESETS.find(item => item.id === 'quiet-light')!;
+const player = await mountStudio(canvas, '/photo.webp', {
+  settings: { style: 'ascii', cellSize: 6, motion: preset.motion, hover: preset.hover },
+  maxDimension: 960,
+});
+player.update({ motion: { amount: .6 }, hover: { radius: .55 } });
+// Stop on unmount. Do not mount a second /hover instance on this canvas.
+player.destroy();
+```
+
+For a complete integration with independent PNG/MP4 export, copy the repository's `examples/living-image.ts` and `examples/studio-composition.ts`. Keep their relative import together; these helpers are example application code, not npm exports. Saved Studio state stores the resolved settings, so later catalog edits do not change a saved look.
+
+For `/hover`, the same catalog needs an explicit shape conversion: `surface.update({ motion: preset.motion.type, motionSpeed: preset.motion.speed, effect: preset.hover.effect, radius: preset.hover.radius, strength: preset.hover.strength })`. `/hover` has no `motion.amount` option; use Studio for independently adjustable motion strength. Do not spread the nested Studio groups directly into surface options.
+
+Ripple rings uses at most eight wave packets and a fixed-resolution field. It does not allocate particles per character. Lens and Smudge reuse the existing field; their release integrates elapsed time, not a fixed frame count. Zero strength suppresses hover input; completed wakes sleep. These bounds and tests are not a guaranteed frame rate on every device.
+
+To export a loop of a photo, use duration `12 / speed`. Restrict the speed/duration to your encoder's limits and use a frame count that fits whole cycles. Film grain, dust, glitch, pattern animation and input videos may not loop at that boundary. Pointer paths are not included in offline export. Respect reduced motion and provide pause; do not advertise artificial depth as true scene reconstruction.

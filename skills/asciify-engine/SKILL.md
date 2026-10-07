@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.9.0"
+  tested-engine: "4.10.0"
   updated: "2026-10-07"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.9.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.10.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -92,7 +92,7 @@ Preview it: letter glyph densities differ, so arbitrary words are not automatica
 
 The public npm `HoverEffect` IDs in 1.2.0 are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
 
-The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, Emboss, Elastic, Rake, and Off** through an optional studio surface module. Its ten still-image motions—Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, Living Grain, Parallax, Woven Flow, Print Shift, Contour Light—and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
+The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, Emboss, Elastic, Rake, Lens wake, Smudge, Ripple rings, and Off** through an optional studio surface module. Its fourteen still-image motions—Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, Living Grain, Parallax, Woven Flow, Print Shift, Contour Light, Relight, Shimmer, Breeze, Unfold—and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
 
 To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). Import `mountHover` from `asciify-engine/hover` (1.2.0+); no separate download is needed. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
 
@@ -157,3 +157,7 @@ From 4.6, Studio adds `color.curves` (RGB, red, green, blue) and optional edge-p
 From 4.7, Studio supports up to eight ordered source warps: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Build controls from `STUDIO_WARPS`, retain array order, and read [source shaping](references/source-shaping.md) for bounds, alpha/edge policy and cached-map performance. These shape the source; use `motion.type` to bring a still image to life and `hover.effect` for pointer interaction. Keep them independent, with an empty warp stack by default.
 
 From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism with a shared `print` settings group. Read [print and illustration](references/print-styles.md) for exact controls, light-ink versus dark-ink polarity, still-motion integration and dense-render limits. These are genuine additional render paths; do not substitute dither presets for their IDs.
+
+## Lively images and interaction starting points (4.10)
+
+`STUDIO_ANIMATION_PRESETS` provides six editable motion/hover pairings through `/studio` and `/hover`. Apply `motion` and `hover` to an existing Studio player to keep the source and art style; do not treat the pairings as additional art styles. Read [studio-effects.md](references/studio-effects.md#lively-images-410) for exact new IDs, loop limits and the live component example.
