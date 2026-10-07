@@ -219,7 +219,7 @@ Incremental `player.update({color:{curves:{red: [...]}}})` preserves the other c
 
 `color.denoise` is 0–1, default 0. It performs a bounded 3×3 edge-preserving filter on sampled source pixels, preserving alpha and excluding hidden transparent colors. Use it for small source noise; strong settings can remove intentional texture and do not recover clipped or missing detail. It is not generative restoration or temporal video denoising.
 
-Processing order: crop/sample → reduce noise → brightness/contrast/saturation/grayscale → levels/gamma/shadow/highlight tone → RGB curve → individual channel curves → style/dither → composition/finish. Use `colorMode:'source'` to retain the resulting colors; accent and gray modes use the adjusted source tones for their own ink mapping. The backdrop remains its existing source/background pipeline.
+Processing order: crop/sample → reduce noise → brightness/contrast/saturation/grayscale → levels/gamma/shadow/highlight tone → RGB curve → individual channel curves → source warps (4.7+) → hover/motion → style/dither → composition/finish. Use `colorMode:'source'` to retain the resulting colors; accent and gray modes use the adjusted source tones for their own ink mapping. The backdrop remains its existing source/background pipeline.
 
 Curves compile to three 256-entry tables only when configured. Noise reduction uses one bounded source copy; static images reuse their processed pixels during motion/hover. Video must process changed source frames, so dense one-pixel sampling adds CPU cost. Start with the default 12,000-cell budget or measure a larger budget on the target device. Neutral settings skip both processing paths; root/core/hover entry points do not load them.
 
@@ -239,3 +239,7 @@ const saved = serializeStudioSettings(player.settings);
 ```
 
 `player.settings` is an owned snapshot, not a live mutable reference. Use `player.update()` to edit. Reuse it for JSON, independent PNG/video export and restoring a live component. Check installed version before using this getter (4.6+).
+
+## Ordered source shaping (4.7)
+
+`warps` stores up to eight optional transforms applied in array order before all styles. `warpEdge` selects extended or transparent edges. Read [source shaping](source-shaping.md) for the nine mechanisms, controls, normalization, editor construction and dense-video cost. This is separate from art-style selection, pointer response and autonomous motion. The default stack is empty.

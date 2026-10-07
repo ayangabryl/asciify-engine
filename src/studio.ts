@@ -8,6 +8,8 @@ export * from './studio/mount';
 export * from './studio/text';
 export * from './studio/characters';
 export * from './studio/curves';
+export { STUDIO_WARPS, MAX_STUDIO_WARPS, normalizeStudioWarps } from './studio/warps';
+export type { StudioWarp, StudioWarpType, StudioWarpEdge } from './studio/warps';
 
 export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';
 

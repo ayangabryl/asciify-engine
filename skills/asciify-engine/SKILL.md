@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.6.0"
+  tested-engine: "4.7.0"
   updated: "2026-10-07"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.6.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.7.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -151,3 +151,5 @@ Studio adds `hex`, `led`, and `cmyk` render styles, directional/radial dither pa
 From 4.5, `dither.algorithm: 'blue-noise'` uses a precomputed dispersed threshold tile, separate from white `noise`. Studio `color` also accepts `blackPoint`, `whitePoint`, `gamma`, `shadows` and `highlights` to shape detail before conversion. All are neutral by default. Read [tonal detail and blue noise](references/studio-workspace.md#tonal-detail-and-blue-noise-45) before adding these controls; they belong to `/studio`, not core `AsciiOptions`.
 
 From 4.6, Studio adds `color.curves` (RGB, red, green, blue) and optional edge-preserving `color.denoise`. `player.settings` returns a detached snapshot for saving or exporting after updates. Read [channel curves and source noise](references/studio-workspace.md#channel-curves-and-source-noise-46) for point limits, update semantics and the processing budget. Do not turn noise reduction on by default or apply it again to the already-rendered characters.
+
+From 4.7, Studio supports up to eight ordered source warps: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Build controls from `STUDIO_WARPS`, retain array order, and read [source shaping](references/source-shaping.md) for bounds, alpha/edge policy and cached-map performance. These shape the source; use `motion.type` to bring a still image to life and `hover.effect` for pointer interaction. Keep them independent, with an empty warp stack by default.

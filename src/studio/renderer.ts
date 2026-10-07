@@ -1,6 +1,7 @@
 import { samplePixel } from './sample-pixel';
 import { createColorLookups, applyColorLookups } from './tone';
 import { SourceDenoiser } from './denoise';
+import { SourceWarpProcessor } from './warps';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
 import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
 import {
@@ -86,6 +87,7 @@ export function createStudioRenderer(
   const sampled = [0, 0, 0, 0];
   let toneLookup = createColorLookups(state.color);
   const denoiser = new SourceDenoiser(state.color.denoise);
+  const warper = new SourceWarpProcessor(state.warps,state.warpEdge);
   const maxDimension = Math.max(
       64,
       Math.min(
@@ -206,6 +208,7 @@ export function createStudioRenderer(
         }
       }
       if (toneLookup) applyColorLookups(pixels, toneLookup);
+      pixels = warper.apply(pixels,cols,rows,w/h);
     }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
@@ -250,18 +253,10 @@ export function createStudioRenderer(
                 gain = 1 + ambient[2];
                 alpha = ambient[3];
                 // Sub-cell advection must interpolate; rounding creates visible stepping.
-                sx = Math.max(0, Math.min(cols - 1, sx));
-                sy = Math.max(0, Math.min(rows - 1, sy));
-                const x0 = Math.floor(sx), y0 = Math.floor(sy);
-                const fx = sx - x0, fy = sy - y0;
                 const i = (y * cols + x) * 4;
-                const j = (y0 * cols + x0) * 4;
-                const right = (y0 * cols + Math.min(cols - 1, x0 + 1)) * 4;
-                const below = (Math.min(rows - 1, y0 + 1) * cols + x0) * 4;
-                const corner = (Math.min(rows - 1, y0 + 1) * cols + Math.min(cols - 1, x0 + 1)) * 4;
+                samplePixel(pixels,cols,rows,sx,sy,sampled);
                 for (let c = 0; c < 3; c++) {
-                  const tone = ((pixels[j + c] * (1 - fx) + pixels[right + c] * fx) * (1 - fy) +
-                    (pixels[below + c] * (1 - fx) + pixels[corner + c] * fx) * fy) / 255;
+                  const tone = sampled[c] / 255;
                   let value =
                     (["trail", "contour"].includes(state.hover.effect)
                       ? invertTrailTone(tone, energy)
@@ -271,7 +266,7 @@ export function createStudioRenderer(
                         : tone) * gain;
                   data[i + c] = value * 255;
                 }
-                data[i + 3] = pixels[j + 3] * alpha;
+                data[i + 3] = sampled[3] * alpha;
               }
           }
           ditherPixels(data, cols, rows, state.dither, time);
@@ -654,6 +649,7 @@ export function createStudioRenderer(
       state = normalizeStudioSettings(input);
       toneLookup = createColorLookups(state.color);
       denoiser.configure(state.color.denoise);
+      warper.configure(state.warps,state.warpEdge);
       revision++;
     },
     pointer,
@@ -674,6 +670,8 @@ export function createStudioRenderer(
     },
     destroy() {
       finish?.destroy();
+      warper.clear();
+      denoiser.configure(0);
       for (const s of [
         scene,
         sample,
@@ -689,6 +687,7 @@ export function createStudioRenderer(
         s.canvas.width = s.canvas.height = 1;
       sourceIdentity = null;
       pixels = new Uint8ClampedArray(0);
+      motionPixels = new Uint8ClampedArray(0);
     },
   };
 }
