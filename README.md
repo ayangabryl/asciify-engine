@@ -7,7 +7,7 @@
   <a href="https://www.buymeacoffee.com/asciify"><img src="https://img.shields.io/badge/buy_me_a_coffee-%E2%98%95-d4ff00?labelColor=0a0a0a&style=flat-square" alt="Buy Me A Coffee" /></a>
 </p>
 
-A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 18 Studio render styles, and export.
+A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 24 Studio render styles, and export.
 
 ### Media first, optional backgrounds
 
@@ -536,7 +536,7 @@ Use `CHARACTER_SETS.standard.chars` (or another curated entry) from root or `/co
 
 ### Studio detail controls (4.2)
 
-The optional `asciify-engine/studio` entry includes 18 render styles, including hex mosaic, LED matrix and CMYK print. Dither supports pixel scale, custom palettes, RGB/luminance mapping, pattern speed and direction. Use `studioGrid` to report effective density and opt into a larger `maxCells` budget for one-pixel output; defaults stay performance-bounded. Mounts expose `setAdaptive` for an explicit detail/performance choice. Still-image motion has `amount`, and finishing adds `rgbSplit` and `sharpen` (WebGL required). See the [complete controls and export guidance](skills/asciify-engine/references/studio-workspace.md#fine-detail-and-controls-42). No AI service or server upload is introduced.
+The optional `asciify-engine/studio` entry includes 24 render styles, including hex mosaic, LED matrix and CMYK print. Dither supports pixel scale, custom palettes, RGB/luminance mapping, pattern speed and direction. Use `studioGrid` to report effective density and opt into a larger `maxCells` budget for one-pixel output; defaults stay performance-bounded. Mounts expose `setAdaptive` for an explicit detail/performance choice. Still-image motion has `amount`, and finishing adds `rgbSplit` and `sharpen` (WebGL required). See the [complete controls and export guidance](skills/asciify-engine/references/studio-workspace.md#fine-detail-and-controls-42). No AI service or server upload is introduced.
 
 ### More motion for still images (4.3)
 
@@ -565,7 +565,7 @@ All motion choices repeat every `12 / speed` seconds. Still exports preserve the
 
 Studio adds `dither.algorithm: 'blue-noise'`: a stable precomputed dispersed pattern with no runtime generation or asset download. `noise` remains white noise. Choose the algorithm from `DITHER_ALGORITHMS`; drift and shimmer remain independently controlled.
 
-Recover usable shadow/highlight separation before conversion with `color.gamma`, `shadows`, `highlights`, `blackPoint` and `whitePoint`. All 18 styles share these controls and retain neutral defaults. They are a bounded monotone tonal curve, not arbitrary per-channel curve editing. See [exact ranges, sampling budgets and a live-project example](skills/asciify-engine/references/studio-workspace.md#tonal-detail-and-blue-noise-45).
+Recover usable shadow/highlight separation before conversion with `color.gamma`, `shadows`, `highlights`, `blackPoint` and `whitePoint`. All Studio styles share these controls and retain neutral defaults. They are a bounded monotone tonal curve, not arbitrary per-channel curve editing. See [exact ranges, sampling budgets and a live-project example](skills/asciify-engine/references/studio-workspace.md#tonal-detail-and-blue-noise-45).
 
 ### Channel curves and source noise reduction (4.6)
 
@@ -611,3 +611,7 @@ player.updateLayer('photo', { settings: { hover: { effect: 'water' } } });
 ```
 
 `exportStudioProject` owns independent export media, so it does not disturb the live preview. Save layouts with `serializeStudioProject`, retain/rebind source assets separately, and restore with `parseStudioProject`. See the [layered-project guide](skills/asciify-engine/references/layered-projects.md) and [typed live/export example](examples/layered-composition.ts) for geometry, picking, ownership, cancellation and performance limits. This is an optional local composition API, not a claim of complete competitor-style or FPS parity.
+
+### Print and illustration (4.9)
+
+Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism add distinct print geometry to `/studio`. All share hover, living-image motion, masks, source shaping, saved settings and exports. Tune coverage, mark weight, angle, repeatable texture, light/dark ink polarity and two-ink registration with `print`. Use `STUDIO_PRINT_STYLES` for labels and [the print guide](skills/asciify-engine/references/print-styles.md) for a live still-image example, bounds and performance limits. ASCII remains the default.

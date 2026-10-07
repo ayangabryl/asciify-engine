@@ -12,7 +12,7 @@ describe('current catalogs', () => {
   });
   it('retains the curated alphabets and the curated render styles', () => {
     expect(Object.keys(CHARACTER_SETS)).toEqual(['standard','asciify','minimal','detailed','letters','technical','blocks','braille']);
-    expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither','hex','led','cmyk']);
+    expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither','hex','led','cmyk','stipple','engraving','crosshatch','woodblock','risograph','pointillism']);
   });
   it('rejects removed shortcuts with migration guidance', () => {
     for(const name of ['binary','katakana','waves','smoke','particles','letters','art','terminal']) expect(()=>resolveCoreStyle(name)).toThrow('asciify-engine/studio');

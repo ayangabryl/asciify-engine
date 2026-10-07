@@ -2,6 +2,8 @@ import { samplePixel } from './sample-pixel';
 import { createColorLookups, applyColorLookups } from './tone';
 import { SourceDenoiser } from './denoise';
 import { SourceWarpProcessor } from './warps';
+import { isStudioPrintStyle } from './print-model';
+import { createPrintPainter } from './print-renderer';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
 import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
 import {
@@ -86,6 +88,7 @@ export function createStudioRenderer(
   const ambient = [0, 0, 0, 1];
   const sampled = [0, 0, 0, 0];
   let toneLookup = createColorLookups(state.color);
+  let printPainter = createPrintPainter(state.print);
   const denoiser = new SourceDenoiser(state.color.denoise);
   const warper = new SourceWarpProcessor(state.warps,state.warpEdge);
   const maxDimension = Math.max(
@@ -280,6 +283,7 @@ export function createStudioRenderer(
           ac = art.ctx;
         const accent = rgb(state.ink);
         const glyphMode = state.style === "ascii" || !!ramps[state.style];
+        const printStyle = isStudioPrintStyle(state.style) ? state.style : null;
         const font = Math.max(3, Math.round(ch * 0.92)),
           aw = Math.ceil(cell + 4),
           ah = Math.ceil(ch + 4);
@@ -337,8 +341,10 @@ export function createStudioRenderer(
               lum = invertTrailTone(lum, energy);
             else if (state.hover.effect === "etch")
               lum = Math.max(0, Math.min(1, lum + energy * .35));
-            else if (state.hover.effect === "dissolve")
-              lum *= Math.max(0, 1 + energy);
+            else if (state.hover.effect === "dissolve") {
+              const gain = Math.max(0, 1 + energy);
+              lum = printStyle && printPainter.settings.invert ? 1 - (1 - lum) * gain : lum * gain;
+            }
             let px = x * cell,
               py = y * ch,
               alpha = 1;
@@ -348,7 +354,7 @@ export function createStudioRenderer(
             py += ambient[1] * h / 960;
             lum = Math.max(0, Math.min(1, lum + ambient[2]));
             alpha = ambient[3] * sampled[3] / 255;
-            if (!glyphMode && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
+            if (!glyphMode && !printStyle && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
             ac.globalAlpha = alpha;
             const toneDelta = (lum - sourceLum) * 255;
             const ink =
@@ -358,7 +364,12 @@ export function createStudioRenderer(
                   ? `rgb(${Math.round(lum * 255)},${Math.round(lum * 255)},${Math.round(lum * 255)})`
                   : state.ink;
             ac.fillStyle = ink;
-            if (glyphMode) {
+            if (printStyle) {
+              printPainter.paint(ac, printStyle, x, y, px, py, cell, lum, ink,
+                state.colorMode === 'gray' ? lum * 255 : r + toneDelta,
+                state.colorMode === 'gray' ? lum * 255 : g + toneDelta,
+                state.colorMode === 'gray' ? lum * 255 : b + toneDelta, state.colorMode);
+            } else if (glyphMode) {
               const index = Math.max(
                 0,
                 Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))),
@@ -648,6 +659,7 @@ export function createStudioRenderer(
     configure(input: unknown) {
       state = normalizeStudioSettings(input);
       toneLookup = createColorLookups(state.color);
+      printPainter = createPrintPainter(state.print);
       denoiser.configure(state.color.denoise);
       warper.configure(state.warps,state.warpEdge);
       revision++;

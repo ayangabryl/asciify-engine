@@ -2,6 +2,7 @@ import { SURFACE_HOVERS, type SurfaceHover } from '../surface/hover-catalog';
 import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
 import { normalizeStudioCurves, type StudioCurves } from './curves';
 import { normalizeStudioWarps, type StudioWarp, type StudioWarpEdge } from './warps';
+import { DEFAULT_STUDIO_PRINT, STUDIO_PRINT_STYLE_IDS, isStudioPrintStyle, normalizeStudioPrint, type StudioPrintSettings } from './print-model';
 /** Serializable, media-independent editing state. No DOM work at import time. */
 export const STUDIO_STYLES = [
   "ascii",
@@ -22,6 +23,7 @@ export const STUDIO_STYLES = [
   "hex",
   "led",
   "cmyk",
+  ...STUDIO_PRINT_STYLE_IDS,
 ] as const;
 export type StudioStyle = (typeof STUDIO_STYLES)[number];
 export const DITHER_ALGORITHMS = [
@@ -142,6 +144,7 @@ export interface StudioSettings {
   charset: string;
   colorMode: "accent" | "source" | "gray";
   ink: string;
+  print?: Partial<StudioPrintSettings>;
   crop: { x: number; y: number; zoom: number; rotation: number };
   warps?: StudioWarp[];
   warpEdge?: StudioWarpEdge;
@@ -222,6 +225,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   charset: " .:-=+*#%@",
   colorMode: "accent",
   ink: "#e8b900",
+  print: {...DEFAULT_STUDIO_PRINT},
   crop: { x: 0.5, y: 0.5, zoom: 1, rotation: 0 },
   warps: [],
   warpEdge: 'clamp',
@@ -349,13 +353,14 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       "original",
     ),
     style: choice(v.style, STUDIO_STYLES, d.style),
-    cellSize: n(v.cellSize, d.cellSize, ["pixel", "mosaic", "lego", "voxel", "disco", "dots", "hex", "led", "cmyk"].includes(String(v.style)) ? 1 : 3, 60),
+    cellSize: n(v.cellSize, d.cellSize, isStudioPrintStyle(String(v.style)) || ["pixel", "mosaic", "lego", "voxel", "disco", "dots", "hex", "led", "cmyk"].includes(String(v.style)) ? 1 : 3, 60),
     charset:
       typeof v.charset === "string" && v.charset.length
         ? Array.from(v.charset).slice(0, 128).join("")
         : d.charset,
     colorMode: choice(v.colorMode, ["accent", "source", "gray"], d.colorMode),
     ink: color(v.ink, d.ink),
+    print: normalizeStudioPrint(v.print),
     warps: normalizeStudioWarps(v.warps),
     warpEdge: choice(v.warpEdge,['clamp','transparent'] as const,'clamp'),
     crop: {
@@ -546,6 +551,7 @@ export function updateStudioSettings(
     "effects",
     "motion",
     "hover",
+    "print",
   ] as const) {
     if (patch[key])
       Object.assign(merged, { [key]: { ...current[key], ...patch[key] } });
@@ -562,7 +568,7 @@ export function studioGrid(width: number, height: number, settings: Pick<StudioS
   const h = Math.max(2, Number.isFinite(height) ? height : 540);
   const budget = Math.max(1, Math.floor(Number.isFinite(maxCells) ? maxCells : 12000));
   const ratio = Math.max(0.01, Number.isFinite(pixelRatio) ? pixelRatio : 1);
-  const aspect = ['dither', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dots', 'hex', 'led', 'cmyk'].includes(settings.style) ? 1 : 1.65;
+  const aspect = isStudioPrintStyle(settings.style) || ['dither', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dots', 'hex', 'led', 'cmyk'].includes(settings.style) ? 1 : 1.65;
   let minimum = Math.max(1, Math.ceil(Math.sqrt(w * h / (budget * aspect)) / ratio));
   while (Math.ceil(w / (minimum * ratio)) * Math.ceil(h / (minimum * ratio * aspect)) > budget) minimum++;
   const requested = settings.style === 'dither' ? settings.dither.scale : settings.cellSize;

@@ -6,6 +6,7 @@ import { MOTION_STYLES } from '../surface/ambient-motion';
 import { ditherPixels } from './dither';
 import { SourceDenoiser } from './denoise';
 import { SourceWarpProcessor, STUDIO_WARPS } from './warps';
+import { STUDIO_PRINT_STYLES } from './print-model';
 vi.mock('./dither', async importOriginal => {
   const actual = await importOriginal<typeof import('./dither')>();
   return {...actual, ditherPixels: vi.fn(actual.ditherPixels)};
@@ -17,7 +18,7 @@ function makeContext() {
   return {
     clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
     drawImage: vi.fn(), fillText: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
-    fill: vi.fn(), stroke: vi.fn(), rect: vi.fn(), ellipse: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), closePath: vi.fn(),
+    fill: vi.fn(), stroke: vi.fn(function(this:{lineWidth:number}){return this.lineWidth;}), rect: vi.fn(), ellipse: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), closePath: vi.fn(),
     createLinearGradient: () => ({addColorStop: vi.fn()}),
     createRadialGradient: () => ({addColorStop: vi.fn()}),
     getImageData: vi.fn((_x:number,_y:number,w:number,h:number) => {
@@ -196,6 +197,27 @@ it.each(['caustics','sheen','grain','dissolve','trail'] as const)('CMYK ink scre
   expect(art.arc.mock.calls.map(c=>c[2])).not.toEqual(first);
   renderer.destroy();
 });
+it.each(STUDIO_PRINT_STYLES)('$label responds to tonal still motion',({value:style})=>{
+  const renderer=createStudioRenderer(canvas(),{style,motion:{type:'sheen'},print:{invert:true}});
+  const source=canvas(),art=contexts[3];
+  renderer.render(source,0,64,48);
+  const commands=()=>JSON.stringify([art.arc.mock.calls,art.lineTo.mock.calls,art.ellipse.mock.calls,art.stroke.mock.results.map(r=>r.value)]);
+  const before=commands();art.arc.mockClear();art.lineTo.mockClear();art.ellipse.mockClear();art.stroke.mockClear();
+  renderer.render(source,3,64,48);
+  expect(commands()).not.toEqual(before);
+  expect(art.clearRect).toHaveBeenCalledTimes(2);renderer.destroy();
+});
+it('dissolve reduces ink coverage on both positive and negative stipple prints',()=>{
+  for(const invert of [false,true]){
+    contexts.length=0;
+    const renderer=createStudioRenderer(canvas(),{style:'stipple',print:{invert},hover:{effect:'dissolve',strength:1,radius:1}});
+    const source=canvas(),art=contexts[3];renderer.render(source,0,64,48);
+    const before=art.arc.mock.calls.reduce((sum,c)=>sum+c[2]*c[2],0);art.arc.mockClear();
+    renderer.pointer(.2,.5,1);renderer.pointer(.8,.5,18);renderer.render(source,.05,64,48);
+    const after=art.arc.mock.calls.reduce((sum,c)=>sum+c[2]*c[2],0);
+    expect(after).toBeLessThan(before);renderer.destroy();
+  }
+});
 it('bounds requested budgets and ignores non-finite values without poisoning the grid', () => {
   const renderer=createStudioRenderer(canvas(),{}, {maxCells:512});
   for(const cells of [NaN,Infinity,-10,Number.MAX_VALUE]) {
@@ -209,9 +231,9 @@ it('bounds requested budgets and ignores non-finite values without poisoning the
 
 // Exercise render-path interactions; this deliberately does not stand in for
 // GPU screenshots, visual acceptance or device frame-pacing measurements.
-it.each(STUDIO_STYLES)('%s accepts every hover × ambient combination with finite draw commands', style => {
+it.each(STUDIO_STYLES.flatMap(style=>SURFACE_HOVERS.map(({value},hi)=>({style,hover:value,hi}))))('$style with $hover accepts every ambient motion with finite draw commands', ({style,hi}) => {
   const hovers=SURFACE_HOVERS.map(effect=>effect.value);
-  for(let hi=0;hi<hovers.length;hi++) for(let mi=0;mi<MOTION_STYLES.length;mi++) {
+  for(let mi=0;mi<MOTION_STYLES.length;mi++) {
     contexts.length=0;
     const mode=MOTION_STYLES[mi].mode;
     const renderer=createStudioRenderer(canvas(),{style,cellSize:4,
@@ -228,9 +250,9 @@ it.each(STUDIO_STYLES)('%s accepts every hover × ambient combination with finit
     renderer.pointer(.2,.5,1);renderer.pointer(.8,.4,18);
     renderer.render(source,.03,32,24);
     expect(contexts[0].drawImage).toHaveBeenCalledTimes(2);
-    for(const context of contexts) for(const method of [context.drawImage,context.arc,context.fillRect,context.lineTo]) {
-      for(const args of method.mock.calls) for(const value of args) if(typeof value==='number') expect(Number.isFinite(value)).toBe(true);
-    }
+    expect(contexts.every(context=>[context.drawImage,context.arc,context.ellipse,context.fillRect,context.lineTo,context.moveTo].every(
+      method=>method.mock.calls.every(args=>args.every(value=>typeof value!=='number'||Number.isFinite(value))),
+    ))).toBe(true);
     renderer.destroy();
   }
 });
