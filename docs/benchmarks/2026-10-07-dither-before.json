@@ -1,0 +1,122 @@
+{
+  "scope": "CPU palette quantization only; not rendering, GPU, interaction latency or browser FPS",
+  "timestamp": "2026-10-07T09:19:53.883Z",
+  "node": "v25.9.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4 Pro",
+  "rows": [
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "bayer4",
+      "palette": "pico8",
+      "medianMs": 4.042,
+      "p95Ms": 4.236
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "bayer16",
+      "palette": "pico8",
+      "medianMs": 5.213,
+      "p95Ms": 5.467
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "floyd-steinberg",
+      "palette": "pico8",
+      "medianMs": 7.924,
+      "p95Ms": 7.989
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "atkinson",
+      "palette": "pico8",
+      "medianMs": 9.636,
+      "p95Ms": 9.82
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "halftone",
+      "palette": "pico8",
+      "medianMs": 3.818,
+      "p95Ms": 4.088
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "noise",
+      "palette": "pico8",
+      "medianMs": 4.457,
+      "p95Ms": 4.538
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "radial",
+      "palette": "pico8",
+      "medianMs": 4.675,
+      "p95Ms": 4.92
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "bayer4",
+      "palette": "pico8",
+      "medianMs": 15.232,
+      "p95Ms": 15.566
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "bayer16",
+      "palette": "pico8",
+      "medianMs": 21.264,
+      "p95Ms": 22.388
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "floyd-steinberg",
+      "palette": "pico8",
+      "medianMs": 31.213,
+      "p95Ms": 31.507
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "atkinson",
+      "palette": "pico8",
+      "medianMs": 37.964,
+      "p95Ms": 38.281
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "halftone",
+      "palette": "pico8",
+      "medianMs": 14.721,
+      "p95Ms": 14.839
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "noise",
+      "palette": "pico8",
+      "medianMs": 17.224,
+      "p95Ms": 17.353
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "radial",
+      "palette": "pico8",
+      "medianMs": 18.258,
+      "p95Ms": 18.437
+    }
+  ]
+}

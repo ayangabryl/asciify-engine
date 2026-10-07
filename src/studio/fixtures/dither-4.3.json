@@ -1,0 +1,1010 @@
+[
+  {
+    "options": {
+      "algorithm": "none",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "d56bd936df22c377427486d50ba0590a2f4f83e8e943be4dfb2328c23fd27df1"
+  },
+  {
+    "options": {
+      "algorithm": "none",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "96bd1e57ab304842aca0cd29e60362d0fc488835c16dcb4de58f6a724acef805"
+  },
+  {
+    "options": {
+      "algorithm": "none",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "7f3a2f4db656fe6486d549a6a414ad6322734ecf7bddbc989a3d746e7d01ca41"
+  },
+  {
+    "options": {
+      "algorithm": "bayer2",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "ab2e0ed3e1fc7dff0d68048561d0275cd61402a20873f2a4a070cb40bd5fee6c"
+  },
+  {
+    "options": {
+      "algorithm": "bayer2",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "5291a7e5810254336217c9e7fac38fb7f7d2717c900a5e9388564401e0aee44c"
+  },
+  {
+    "options": {
+      "algorithm": "bayer2",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "97d58f0d01109fc1909bc5d0ec620272bb8591bf2325371bb25e85f7b50210a3"
+  },
+  {
+    "options": {
+      "algorithm": "bayer4",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "21a4bdeef79878bb86c161f432613b88c3a3f4da7d1733dfd8f06b68630c414d"
+  },
+  {
+    "options": {
+      "algorithm": "bayer4",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "5d57bead29b1517f39f81f6d7c2b2d89c288036c9f27b4bb7c28fc7d4d2f3f5b"
+  },
+  {
+    "options": {
+      "algorithm": "bayer4",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "10b18f9010da18a76bf877a4819d31fa72d5898e1da5a74481a401306d3c7fdc"
+  },
+  {
+    "options": {
+      "algorithm": "bayer8",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "2eb9870ea9bb4a011571f85a726d2b45107ac739b91c95a1a727dc4e655cbef3"
+  },
+  {
+    "options": {
+      "algorithm": "bayer8",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "a54891b9474f770848977f035f0e16fea37ff3d9d2a50261ed354fa0a3f9b3cf"
+  },
+  {
+    "options": {
+      "algorithm": "bayer8",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "684777b7f4c22539d8af323e7ebf42a4abefc0f6673e9f7f9cb08c9f9be6fb49"
+  },
+  {
+    "options": {
+      "algorithm": "bayer16",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "9a94527160e0265d4edbfb1720157b11913b773643b0657bc5d5f531806e22ff"
+  },
+  {
+    "options": {
+      "algorithm": "bayer16",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "a367f112124ac34c3420a23892886e111d33d4cb62180297c453868cf0f50410"
+  },
+  {
+    "options": {
+      "algorithm": "bayer16",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "ec8b5c6e7dee6fd74faf4476df5eb5aa62e1da695ba97b6545786e5926326f87"
+  },
+  {
+    "options": {
+      "algorithm": "floyd-steinberg",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "0857a6a23b67a0d96d4d25a0a804724ff3407fcba267ae1214021cbecce241ba"
+  },
+  {
+    "options": {
+      "algorithm": "floyd-steinberg",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "6c8d41c7024dc16406c0dfc51ea65bc553e5612be438ae2639122c8aee887fbc"
+  },
+  {
+    "options": {
+      "algorithm": "floyd-steinberg",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "38cafb310e84c2d7a5b435fa1103ce1e4894e445e0f3d27549bdb4930a492eb9"
+  },
+  {
+    "options": {
+      "algorithm": "atkinson",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "319f8fc7cfaa36e361e4261b24c1c6b2cd8e7f1f0ae12cc0f83619b5a0f0418a"
+  },
+  {
+    "options": {
+      "algorithm": "atkinson",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "f9c2980f07c905d893665bdb797c7beeb1df51c7b8ffc351e585d4bb2ca56622"
+  },
+  {
+    "options": {
+      "algorithm": "atkinson",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "7e379dff727c4c34e47f691c815775307935dff35eb0b9900de32305f56d5780"
+  },
+  {
+    "options": {
+      "algorithm": "stucki",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "dc9bce7c0c30548819920fecc0284c6d042376c0369777627cea6428f04bef20"
+  },
+  {
+    "options": {
+      "algorithm": "stucki",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "9a3f57d7410b16812e3c15ca109da9796ea9f23736e42f10d6ddb10324dfa426"
+  },
+  {
+    "options": {
+      "algorithm": "stucki",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "46e8bdedff07562a528e3586d9bbb1d97227b623f17b18d94e91128370e33777"
+  },
+  {
+    "options": {
+      "algorithm": "sierra",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "92ab64c3f50d6594b9e297fd7fd0039813ff4c084bfb91e494aef939a9d76bd5"
+  },
+  {
+    "options": {
+      "algorithm": "sierra",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "10078283ea743cd098895d964591314a9438bf95696d4abb360c2e9920df0afe"
+  },
+  {
+    "options": {
+      "algorithm": "sierra",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "a5d42d9ac7f75a89ebf92d8ee230c293b4f2483686c985ac524d3f74c85c27f4"
+  },
+  {
+    "options": {
+      "algorithm": "sierra-lite",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "7e0564c2ffd301a5c3e303d4ed09ce094d5e8b9f8d680cfa382f78e0c68774f8"
+  },
+  {
+    "options": {
+      "algorithm": "sierra-lite",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "81917095cd9efe65b2a732c93f159b68b52b8eff644c430990f191ef295145d5"
+  },
+  {
+    "options": {
+      "algorithm": "sierra-lite",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "3c71b41e16122050ab3058c64018892813fb6be367f626ff74d0d96dc698c253"
+  },
+  {
+    "options": {
+      "algorithm": "burkes",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "6c3a374247b497a56fa3074d88d440df18633f02c2ac047ecddd3f74fc32aca3"
+  },
+  {
+    "options": {
+      "algorithm": "burkes",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "72e69a02b0fd03563c03a54233a7d255bb766cf89a755a354080f8b7b8bb0070"
+  },
+  {
+    "options": {
+      "algorithm": "burkes",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "922aa2dfa718af672ef21c3a0e3bb04cc80d8cefe70842fe6439f64446cc62ef"
+  },
+  {
+    "options": {
+      "algorithm": "jarvis",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "6a12957b6738951a466a52994de5a5059c86b92bbc286adc7952e0516099ab7b"
+  },
+  {
+    "options": {
+      "algorithm": "jarvis",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "163b8dc7ff68f4a098dd904d29da85fc8f56dad297cf6d01de7556b0dee40b69"
+  },
+  {
+    "options": {
+      "algorithm": "jarvis",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "1731fbf825e4b4d9aa8f3cbf3e70e671da1cd2e3b92c87f02ef81240a7710e33"
+  },
+  {
+    "options": {
+      "algorithm": "halftone",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "140c48895102dacf21490011b5745c1aa9bfb4ecf0671147c56998ba77d38eb3"
+  },
+  {
+    "options": {
+      "algorithm": "halftone",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "bbd04eb8efa73f254ab4b8350b7e84227cc52ba37da32fa23164c47fc70520c2"
+  },
+  {
+    "options": {
+      "algorithm": "halftone",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "01faa18ef23276d03648d8694502e389ed2d90bb460e31d669b7a9d9b5b8f662"
+  },
+  {
+    "options": {
+      "algorithm": "lines",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "a3c962c4d0c056130c1d27ef62ea8cde1ae796a6d8fd3b5f7b438b0da4850939"
+  },
+  {
+    "options": {
+      "algorithm": "lines",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "c4d5b59877e93bb3d89cc0ca720405a81b4ed2d82a5715b0606e77d25ae1cf66"
+  },
+  {
+    "options": {
+      "algorithm": "lines",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "049fc14a4b9d3dcf02af585c0d3106971d8b46f8791e43e0be2c8ee846cc69ab"
+  },
+  {
+    "options": {
+      "algorithm": "noise",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "393e0c44c4f12cfb50b26c6bf8c3c0396009a10bf47db17a5ca15883e049017c"
+  },
+  {
+    "options": {
+      "algorithm": "noise",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "c1f58fb4daee10ff2d52a2677a35d0e8b15aa20bcbcbf1e6eb0960a7ff2d4d36"
+  },
+  {
+    "options": {
+      "algorithm": "noise",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "ed4418c9cd5a3e58ee76384a8e3098cfdd612e9601a69b38ae8a465adaede761"
+  },
+  {
+    "options": {
+      "algorithm": "vertical-lines",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "80e260d044380001426de530c4a05ca5100f57f24bb09a529e98f70e88c2cdfb"
+  },
+  {
+    "options": {
+      "algorithm": "vertical-lines",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "25dc395c6e22a50f4b4ab1d49f18dd124c6784fbe5911bd994ab6a6d155f1458"
+  },
+  {
+    "options": {
+      "algorithm": "vertical-lines",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "5baee059e97b29f64e1eb649c2870ba26ea5381011a44c69215db3e1b4f8fc1a"
+  },
+  {
+    "options": {
+      "algorithm": "diagonal-lines",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "81c7ce6bf64177b1422c55411a525c8dc32c1bdb74e05eec363d8cf94c73e0e5"
+  },
+  {
+    "options": {
+      "algorithm": "diagonal-lines",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "4def0b39780356b7c94db94845b3c3c090485aeb0f787e8c0688188e42199323"
+  },
+  {
+    "options": {
+      "algorithm": "diagonal-lines",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "5f7cd6e226ebd8c7dd5c2e9003fa57d2afb8105528497dc05bcfc0c4b8f55f36"
+  },
+  {
+    "options": {
+      "algorithm": "radial",
+      "palette": "pico8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "none",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "rgb"
+    },
+    "sha256": "3d6abdd093375db7bc0bbb6554df36fa1fa03ecf57f5a0975f1b4bf7cf7de812"
+  },
+  {
+    "options": {
+      "algorithm": "radial",
+      "palette": "custom",
+      "colors": [
+        "#103148",
+        "#82a189",
+        "#fce184",
+        "#c45161"
+      ],
+      "amount": 1,
+      "scale": 2,
+      "threshold": 0.5,
+      "motion": "drift",
+      "speed": 1.7,
+      "direction": -140,
+      "colorSpace": "rgb"
+    },
+    "sha256": "6000fc51751424f76b4b0b96957d6dc46831deeb75207a665aed93ed89410ea7"
+  },
+  {
+    "options": {
+      "algorithm": "radial",
+      "palette": "gray8",
+      "colors": [
+        "#080808",
+        "#e8b900"
+      ],
+      "amount": 0.85,
+      "scale": 2,
+      "threshold": 0.67,
+      "motion": "shimmer",
+      "speed": 1,
+      "direction": 45,
+      "colorSpace": "luminance"
+    },
+    "sha256": "8b9af6cc6bd54b59751d6ceb54155ba3771aa5820354f2ea1bb665bf2d7d6ed3"
+  }
+]

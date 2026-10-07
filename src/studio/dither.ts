@@ -21,6 +21,11 @@ export function bayer(x: number, y: number, size: number): number {
   }
   return (value + 0.5) / (size * size) - 0.5;
 }
+// Ordered thresholds repeat. Build their tiny lookup tables once, rather than
+// evaluating the Bayer recurrence and parsing an algorithm ID for every pixel.
+const orderedTables = new Map<number, Float64Array>([2, 4, 8, 16].map(size => [
+  size, Float64Array.from({length: size * size}, (_, i) => bayer(i % size, Math.floor(i / size), size)),
+]));
 const kernels: Partial<Record<DitherAlgorithm, [number, number, number][]>> = {
   "floyd-steinberg": [
     [1, 0, 7 / 16],
@@ -105,6 +110,10 @@ export function ditherPixels(
   time = 0,
 ) {
   const { algorithm, amount, threshold } = options;
+  const orderedSize = algorithm.startsWith("bayer") ? Number(algorithm.slice(5)) : 0;
+  const ordered = orderedTables.get(orderedSize);
+  const orderedMask = orderedSize - 1;
+  const luminanceMapping = options.colorSpace === "luminance";
   const colors =
     options.palette === "custom"
       ? options.colors
@@ -131,12 +140,8 @@ export function ditherPixels(
         continue;
       }
       let pattern = 0;
-      if (algorithm.startsWith("bayer"))
-        pattern = bayer(
-          (x - dx) & 15,
-          (y - dy) & 15,
-          Number(algorithm.slice(5)),
-        );
+      if (ordered)
+        pattern = ordered[((y - dy) & orderedMask) * orderedSize + ((x - dx) & orderedMask)];
       else if (algorithm === "noise") pattern = noise(x - dx, y - dy) - 0.5;
       else if (algorithm === "lines") pattern = mod(y - dy, 4) / 3 - 0.5;
       else if (algorithm === "vertical-lines") pattern = mod(x - dx, 4) / 3 - .5;
@@ -160,7 +165,7 @@ export function ditherPixels(
         const tone = r * .299 + g * .587 + b * .114;
         for (let pi = 0; pi < palette.length; pi++) {
           const c = palette[pi];
-          const d = options.colorSpace === "luminance" ? (tone - paletteLuma[pi]) ** 2 :
+          const d = luminanceMapping ? (tone - paletteLuma[pi]) ** 2 :
             (r - c[0]) ** 2 * 0.299 +
             (g - c[1]) ** 2 * 0.587 +
             (b - c[2]) ** 2 * 0.114;

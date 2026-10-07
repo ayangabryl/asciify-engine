@@ -1,0 +1,155 @@
+{
+  "scope": "CPU pointer deposition and simulation only; not browser FPS",
+  "timestamp": "2026-10-07T09:33:07.282Z",
+  "node": "v25.9.0",
+  "cpu": "Apple M4 Pro",
+  "radius": 1,
+  "strength": 1,
+  "edgeSafe": false,
+  "rows": [
+    {
+      "effect": "trail",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 1.021,
+      "p95Ms": 1.291,
+      "settled": true,
+      "settleFrames": 308
+    },
+    {
+      "effect": "water",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.471,
+      "p95Ms": 0.542,
+      "settled": true,
+      "settleFrames": 358
+    },
+    {
+      "effect": "contour",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.914,
+      "p95Ms": 0.956,
+      "settled": true,
+      "settleFrames": 100
+    },
+    {
+      "effect": "dissolve",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.173,
+      "p95Ms": 0.253,
+      "settled": true,
+      "settleFrames": 237
+    },
+    {
+      "effect": "silk",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.299,
+      "p95Ms": 0.407,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "vortex",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.288,
+      "p95Ms": 0.402,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "magnetic",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.294,
+      "p95Ms": 0.402,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "scatter",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.285,
+      "p95Ms": 0.383,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "trail",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 1.223,
+      "p95Ms": 1.488,
+      "settled": true,
+      "settleFrames": 314
+    },
+    {
+      "effect": "water",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.476,
+      "p95Ms": 0.545,
+      "settled": true,
+      "settleFrames": 354
+    },
+    {
+      "effect": "contour",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.857,
+      "p95Ms": 0.93,
+      "settled": true,
+      "settleFrames": 100
+    },
+    {
+      "effect": "dissolve",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.146,
+      "p95Ms": 0.209,
+      "settled": true,
+      "settleFrames": 237
+    },
+    {
+      "effect": "silk",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.267,
+      "p95Ms": 0.359,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "vortex",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.273,
+      "p95Ms": 0.373,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "magnetic",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.272,
+      "p95Ms": 0.355,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "scatter",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.278,
+      "p95Ms": 0.381,
+      "settled": true,
+      "settleFrames": 162
+    }
+  ]
+}

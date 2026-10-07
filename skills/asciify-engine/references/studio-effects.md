@@ -33,18 +33,20 @@ The positioned host must fit the displayed source canvas. The surface appends a 
 | Module `effect` | Behavior |
 | --- | --- |
 | `trail` | Density wake with a fading tail; glyph grid remains fixed. |
-| `water` | Local refraction with aligned outer boundaries. |
+| `water` | Local refraction; opt into protected boundaries with `edgeSafe: true`. |
 | `contour` | Expanding ring echoes along the pointer path. |
 | `dissolve` | Fading/reforming density trace with a lingering tail. |
 | `silk` | Directional folds following the stroke. |
 | `vortex` | Local rotational wake. |
+| `magnetic` | Attracts the field toward a stroke, then relaxes. |
+| `scatter` | Spatially varied radial scatter with a decaying wake. |
 | `none` | No hover effect. |
 
 These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEffect` values. For example, passing `hoverEffect: 'water'` to the published engine is invalid.
 
 ## Still-image motion and dither
 
-The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), and `reform` (Reveal & Reform). Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
+The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), `reform` (Reveal & Reform), `sheen` (diagonal light sweep), `tidal` (Tidal Rings), and `grain` (Living Grain). Sheen and Living Grain keep the grid anchored. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
 
 For the website's fine-dither treatment, use the module's `fineDither: true` and `ditherStrength` after matching the backing canvas's character settings. This is separate from the core renderer’s built-in dither behavior. Check a still and a moving scene for flicker before choosing the default.
 

@@ -1,3 +1,4 @@
+import { hasAnimatedEffects } from './activity';
 import { AmbientTimeline } from '../surface/ambient-motion';
 import { createStudioRenderer } from "./renderer";
 import { loadStudioMedia, type StudioMedia } from "./media";
@@ -51,6 +52,7 @@ export function mountStudioMedia(
     paused = false,
     visible = true,
     time = 0,
+    renderedMotionTime = 0,
     last = 0,
     painted = 0,
     videoFrame = -1;
@@ -87,21 +89,9 @@ export function mountStudioMedia(
     const moving = shouldPlay();
     if (moving) time += last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
-    const animated =
-      moving &&
-      (media.animated ||
-        settings.motion.type !== "none" ||
-        settings.dither.motion !== "none" ||
-        settings.effects.grain > 0 ||
-        settings.effects.dust > 0 ||
-        settings.effects.glitch > 0);
+    const needsMotion = hasAnimatedEffects(settings);
+    const animated = moving && (media.animated || needsMotion);
     const decoded = video?.getVideoPlaybackQuality?.().totalVideoFrames ?? -1;
-    const needsMotion =
-      settings.motion.type !== "none" ||
-      settings.dither.motion !== "none" ||
-      settings.effects.grain > 0 ||
-      settings.effects.dust > 0 ||
-      settings.effects.glitch > 0;
     const sourceChanged = !video || decoded < 0 || decoded !== videoFrame;
     const due =
       dirty ||
@@ -115,8 +105,8 @@ export function mountStudioMedia(
       try {
         if (media.animated && !video) renderer.invalidate();
         const [w, h] = studioDimensions(width, height, settings);
-        renderer.render(media.frame(video?.currentTime ?? time), time, w, h,
-          ambientClock.update(time, settings.motion.type, settings.motion.speed));
+        renderedMotionTime = ambientClock.update(time, settings.motion.type, settings.motion.speed);
+        renderer.render(media.frame(video?.currentTime ?? time), time, w, h, renderedMotionTime);
         const cost = performance.now() - start;
         options.onFrame?.(video?.currentTime ?? time, cost);
         costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
@@ -220,6 +210,8 @@ export function mountStudioMedia(
     get time() {
       return video?.currentTime ?? time;
     },
+    /** Ambient phase of the last displayed frame, preserved across speed edits. */
+    get motionTime() { return renderedMotionTime; },
     get paused() {
       return paused || reduced.matches;
     },

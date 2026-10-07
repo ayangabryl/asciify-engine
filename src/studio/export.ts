@@ -8,6 +8,8 @@ export interface StudioExportOptions {
   duration?: number;
   /** Timeline position for a still image. Animations start at zero. */
   time?: number;
+  /** For still exports, use the mounted preview's motionTime after speed edits. */
+  motionTime?: number;
   fps?: number;
   quality?: number;
   signal?: AbortSignal;
@@ -55,6 +57,8 @@ export async function exportStudio(
   const still = format === "png" || format === "jpeg";
   const stillTime = options.time ?? 0;
   if (!Number.isFinite(stillTime) || stillTime < 0) throw new Error("Image time must be a finite non-negative number.");
+  if (options.motionTime !== undefined && (!Number.isFinite(options.motionTime) || options.motionTime < 0))
+    throw new Error("Motion time must be a finite non-negative number.");
   if (!still && width * height > 3840 * 2160)
     throw new Error("Video exports support up to 3840 × 2160 pixels.");
   if (format === "gif" && (width * height > 1280 * 720 || duration * fps > 600))
@@ -82,7 +86,7 @@ export async function exportStudio(
     abort(signal);
     options.onProgress?.(0);
     if (still) {
-      renderer.render(await source.frame(stillTime, signal), stillTime, width, height);
+      renderer.render(await source.frame(stillTime, signal), stillTime, width, height, options.motionTime);
       if (canvas.dataset.studioFinish === "unavailable")
         throw new Error(
           "Optical effects need WebGL. Disable these effects or export in a supported browser.",
