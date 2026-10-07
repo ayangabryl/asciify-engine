@@ -157,3 +157,21 @@ studio.setBudget(65536);
 ```
 
 When exporting, pass the same `maxCells` and logical `referenceWidth` as the preview to retain cell density. Increasing output resolution alone should not invent a different composition. Older projects normalize new fields to neutral defaults.
+
+
+## Additional local interactions (4.3)
+
+Studio and `asciify-engine/hover` support `magnetic` (gathers toward a stroke)
+and `scatter` (radial, spatially varied scatter that relaxes). Both retain a
+bounded field after cursor exit; radius and strength control the response.
+Use `hover.effect` in Studio and `effect` in mountHover. Defaults remain unchanged.
+
+Still-image motion now has six active choices: `caustics`, `current`, `reform`,
+`sheen`, `tidal`, and `grain`, plus `none`. Sheen and Living Grain change tone
+without displacement; Tidal Rings moves the image with protected edges.
+Set Studio `motion: { type: 'sheen', speed: 0.7, amount: 0.6 }`.
+Core uses `animationStyle`; mountHover uses `motion` and `motionSpeed`.
+Base cycles last 12 seconds; speed scales duration. Studio amount scales strength.
+Keep automatic motion off for source video unless requested. Respect reduced motion.
+These are local effects, not AI-generated frames. Frame rate depends on device,
+resolution and other effects; no universal FPS guarantee.

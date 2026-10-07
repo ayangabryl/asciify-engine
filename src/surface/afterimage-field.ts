@@ -1,6 +1,6 @@
 import { surfaceEdgeWeight } from './surface-edge';
 
-export type AfterimageMode = 'dissolve' | 'silk' | 'vortex';
+export type AfterimageMode = 'dissolve' | 'silk' | 'vortex' | 'magnetic' | 'scatter';
 
 /** A decaying stroke memory, not fluid advection. Fixed storage at every image size. */
 export class AfterimageField {
@@ -49,8 +49,10 @@ export class AfterimageField {
         else {
           // Silk shears opposite sides of a stroke; Vortex turns around it.
           const fold=(-rx*ty+ry*tx)*k*2.8;
-          const fx=this.mode==='silk'?tx*fold:-ry*k*2.5;
-          const fy=this.mode==='silk'?ty*fold:rx*k*2.5;
+          const grain=Math.sin(gx*127.1+gy*311.7)*43758.5453;
+          const angle=(grain-Math.floor(grain))*Math.PI*2;
+          const fx=this.mode==='magnetic'?-rx*k*2.5:this.mode==='scatter'?(rx+Math.cos(angle)*.7)*k*2:this.mode==='silk'?tx*fold:-ry*k*2.5;
+          const fy=this.mode==='magnetic'?-ry*k*2.5:this.mode==='scatter'?(ry+Math.sin(angle)*.7)*k*2:this.mode==='silk'?ty*fold:rx*k*2.5;
           this.targetX[i]=Math.max(-1,Math.min(1,this.targetX[i]+fx*gain));
           this.targetY[i]=Math.max(-1,Math.min(1,this.targetY[i]+fy*gain));
         }
