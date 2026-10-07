@@ -25,7 +25,7 @@ await studio.seek(1.5);
 studio.destroy();
 ```
 
-Keep complete settings in application state. Apply edits with `updateStudioSettings(settings, patch)` and pass that state to `studio.update`; the mounted instance does not expose a settings getter. Serialize your application state when saving a look.
+Keep complete settings in application state. Apply edits with `updateStudioSettings(settings, patch)` and pass that state to `studio.update`; from 4.6 the mounted instance also exposes a detached `settings` snapshot. Serialize that snapshot or your application state when saving a look.
 
 In React, create the AbortController inside the effect. On cleanup, abort and destroy the returned instance; if setup resolves after disposal, immediately destroy that instance. Do not remount for slider changes: call `update`. The mount owns its loaded media. `mountStudioMedia` takes ownership of an already loaded `StudioMedia`. Use an independent media instance for export.
 
@@ -190,7 +190,7 @@ Example: `player.update({ motion: { type: 'trace', speed: 1, amount: .7 }, hover
 
 Use `color.gamma` to lift midtones (above 1) or deepen them (below 1), from 0.25 to 4. `color.shadows` and `color.highlights` range from −1 to 1; positive lifts that region, negative darkens it. They form a monotone curve with fixed black, middle and white anchors. This is a bounded tonal curve, not a freely editable per-channel curve graph. It cannot recover clipped source detail.
 
-`color.blackPoint` (0–0.99, default 0) and `color.whitePoint` (default 1) map the input range before gamma. White is normalized to at least 1/255 above black. These controls apply equally to all 18 renderers before dither/character conversion, preserve source alpha, and round-trip in settings. Neutral settings skip the transform. The 256-entry lookup is rebuilt on configuration changes and reused for source frames. Reset with `{ blackPoint: 0, whitePoint: 1, gamma: 1, shadows: 0, highlights: 0 }`.
+`color.blackPoint` (0–0.99, default 0) and `color.whitePoint` (default 1) map the input range before gamma. White is normalized to at least 1/255 above black. These controls apply equally to all Studio renderers before dither/character conversion, preserve source alpha, and round-trip in settings. Neutral settings skip the transform. The 256-entry lookup is rebuilt on configuration changes and reused for source frames. Reset with `{ blackPoint: 0, whitePoint: 1, gamma: 1, shadows: 0, highlights: 0 }`.
 
 `blue-noise` uses a deterministic 64×64 toroidal rank tile generated offline with void-and-cluster relaxation. It suppresses low-frequency clumping; it is not white noise with a different label. A palette-pair projection controls coverage, preserving flat grayscale means for a black/white palette at full strength. Arbitrary color palettes still approximate the source. The original palette uses web-safe channel quantization. The rank tile is 8 KiB in memory, loads only with `/studio`, and has no network request or runtime generator.
 
@@ -243,3 +243,7 @@ const saved = serializeStudioSettings(player.settings);
 ## Ordered source shaping (4.7)
 
 `warps` stores up to eight optional transforms applied in array order before all styles. `warpEdge` selects extended or transparent edges. Read [source shaping](source-shaping.md) for the nine mechanisms, controls, normalization, editor construction and dense-video cost. This is separate from art-style selection, pointer response and autonomous motion. The default stack is empty.
+
+## Print and illustration (4.9)
+
+The catalog adds six print treatments with fine square cells and an optional `print` settings group. See [print-styles.md](print-styles.md) for the mechanisms, controls, polarity, bounded rendering and living-image example. They use the same Studio pipeline, saved settings and exports.

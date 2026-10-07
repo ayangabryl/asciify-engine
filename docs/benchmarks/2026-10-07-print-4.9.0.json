@@ -1,0 +1,137 @@
+{
+  "version": "4.9.0",
+  "date": "2026-10-07",
+  "hardware": "Apple M4 Pro",
+  "node": "v25.9.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "scope": "CPU print-geometry generation and color formatting into counting sinks, not Canvas drawing. Excludes source processing, hover simulation, media decode, GPU, browser frame pacing and exports. Static artwork caches this work. Not an FPS result.",
+  "results": [
+    {
+      "style": "stipple",
+      "cells": 12000,
+      "operations": 119520,
+      "medianMs": 0.726,
+      "p95Ms": 0.789
+    },
+    {
+      "style": "stipple",
+      "cells": 24000,
+      "operations": 239040,
+      "medianMs": 1.451,
+      "p95Ms": 1.521
+    },
+    {
+      "style": "stipple",
+      "cells": 96000,
+      "operations": 956170,
+      "medianMs": 5.79,
+      "p95Ms": 5.866
+    },
+    {
+      "style": "engraving",
+      "cells": 12000,
+      "operations": 90480,
+      "medianMs": 0.669,
+      "p95Ms": 0.694
+    },
+    {
+      "style": "engraving",
+      "cells": 24000,
+      "operations": 180960,
+      "medianMs": 1.33,
+      "p95Ms": 1.438
+    },
+    {
+      "style": "engraving",
+      "cells": 96000,
+      "operations": 723902,
+      "medianMs": 5.321,
+      "p95Ms": 5.601
+    },
+    {
+      "style": "crosshatch",
+      "cells": 12000,
+      "operations": 208200,
+      "medianMs": 1.429,
+      "p95Ms": 1.465
+    },
+    {
+      "style": "crosshatch",
+      "cells": 24000,
+      "operations": 416602,
+      "medianMs": 2.815,
+      "p95Ms": 2.906
+    },
+    {
+      "style": "crosshatch",
+      "cells": 96000,
+      "operations": 1667724,
+      "medianMs": 11.315,
+      "p95Ms": 11.58
+    },
+    {
+      "style": "woodblock",
+      "cells": 12000,
+      "operations": 240302,
+      "medianMs": 1.899,
+      "p95Ms": 1.999
+    },
+    {
+      "style": "woodblock",
+      "cells": 24000,
+      "operations": 480617,
+      "medianMs": 3.789,
+      "p95Ms": 3.889
+    },
+    {
+      "style": "woodblock",
+      "cells": 96000,
+      "operations": 1922392,
+      "medianMs": 15.242,
+      "p95Ms": 15.476
+    },
+    {
+      "style": "risograph",
+      "cells": 12000,
+      "operations": 71712,
+      "medianMs": 0.318,
+      "p95Ms": 0.359
+    },
+    {
+      "style": "risograph",
+      "cells": 24000,
+      "operations": 143424,
+      "medianMs": 0.642,
+      "p95Ms": 0.677
+    },
+    {
+      "style": "risograph",
+      "cells": 96000,
+      "operations": 573702,
+      "medianMs": 2.561,
+      "p95Ms": 2.614
+    },
+    {
+      "style": "pointillism",
+      "cells": 12000,
+      "operations": 143424,
+      "medianMs": 2.666,
+      "p95Ms": 2.727
+    },
+    {
+      "style": "pointillism",
+      "cells": 24000,
+      "operations": 286848,
+      "medianMs": 5.28,
+      "p95Ms": 5.437
+    },
+    {
+      "style": "pointillism",
+      "cells": 96000,
+      "operations": 1147404,
+      "medianMs": 21.089,
+      "p95Ms": 21.537
+    }
+  ]
+}

@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.8.0"
+  tested-engine: "4.9.0"
   updated: "2026-10-07"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.8.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.9.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -143,7 +143,7 @@ For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved lo
 
 For multiple media/text layers in one live component, use 4.8+ `mountStudioProject` and read [layered-projects.md](references/layered-projects.md). It shares one playback loop and rendering budgets across up to eight independently styled layers. Persist source keys separately from media, and use `exportStudioProject` for independent exports. Do not create one mounted Studio instance per layer or rasterize accessible interface text.
 
-Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS` and their key types are removed. Do not import them or generate old names such as Katakana, Binary, Waves or Smoke. Use the 18 `STUDIO_STYLES` for render-style selectors and `/studio` rendering. For ASCII-only character ramps use `CHARACTER_SETS` from `/core` or `STUDIO_CHARACTER_SETS` from `/studio`; custom Unicode and user-provided frame arrays remain supported. Core `artStyle` only accepts `classic`; use explicit options instead of preset shortcuts. Despite the requested 4.1.0 version number, migrating these removed APIs is a breaking change.
+Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS` and their key types are removed. Do not import them or generate old names such as Katakana, Binary, Waves or Smoke. Use the 24 `STUDIO_STYLES` for render-style selectors and `/studio` rendering. For ASCII-only character ramps use `CHARACTER_SETS` from `/core` or `STUDIO_CHARACTER_SETS` from `/studio`; custom Unicode and user-provided frame arrays remain supported. Core `artStyle` only accepts `classic`; use explicit options instead of preset shortcuts. Despite the requested 4.1.0 version number, migrating these removed APIs is a breaking change.
 
 
 ## Fine dither and creative controls (4.2)
@@ -155,3 +155,5 @@ From 4.5, `dither.algorithm: 'blue-noise'` uses a precomputed dispersed threshol
 From 4.6, Studio adds `color.curves` (RGB, red, green, blue) and optional edge-preserving `color.denoise`. `player.settings` returns a detached snapshot for saving or exporting after updates. Read [channel curves and source noise](references/studio-workspace.md#channel-curves-and-source-noise-46) for point limits, update semantics and the processing budget. Do not turn noise reduction on by default or apply it again to the already-rendered characters.
 
 From 4.7, Studio supports up to eight ordered source warps: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Build controls from `STUDIO_WARPS`, retain array order, and read [source shaping](references/source-shaping.md) for bounds, alpha/edge policy and cached-map performance. These shape the source; use `motion.type` to bring a still image to life and `hover.effect` for pointer interaction. Keep them independent, with an empty warp stack by default.
+
+From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism with a shared `print` settings group. Read [print and illustration](references/print-styles.md) for exact controls, light-ink versus dark-ink polarity, still-motion integration and dense-render limits. These are genuine additional render paths; do not substitute dither presets for their IDs.

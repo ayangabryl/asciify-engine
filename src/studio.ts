@@ -8,6 +8,7 @@ export * from './studio/mount';
 export * from './studio/text';
 export * from './studio/characters';
 export * from './studio/curves';
+export * from './studio/print-model';
 export { STUDIO_WARPS, MAX_STUDIO_WARPS, normalizeStudioWarps } from './studio/warps';
 export type { StudioWarp, StudioWarpType, StudioWarpEdge } from './studio/warps';
 export * from './studio/project-model';

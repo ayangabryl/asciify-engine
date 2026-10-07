@@ -81,3 +81,16 @@ See [CPU warp benchmark](benchmarks/2026-10-07-warps-4.7.0.json), Node v25.9.0 o
 Design references for algorithms: [shape-preserving interpolation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html), [edge-preserving filtering](https://docs.opencv.org/3.4.19/dd/d6a/tutorial_js_filtering.html). No third-party implementation or runtime dependency was copied.
 
 The build keeps all root/core/hover ESM and CJS JavaScript byte-identical to the 4.5.0 preflight artifact. Studio is 76.87 KiB ESM (minified, uncompressed). Site controls extend the accepted inspector with native controls; they do not add another live canvas. Browser visual, input, codec and frame-pacing checks remain blocked by the prior URL-policy rejection. These results do not establish competitor superiority.
+
+
+## 4.9 print geometry and interaction coverage
+
+Six optional Studio renderers add stipple dots, continuous engraving cuts, crossing screens, carved woodblock polygons, registered two-ink dots and pointillist pigment strokes. Stable spatial seeds avoid frame-time random texture. Settings compile once; directions and a bounded carving lookup are reused. Ordinary stills keep the existing whole-composition cache. Dissolve reduces coverage for both light-ink and dark-ink polarity. Defaults remain ASCII.
+
+The matrix now covers 24 styles × 12 hover choices × 11 motion choices = 3,168 Canvas-command combinations, including shaping and finishing settings. Cases are split by hover to avoid one giant test timeout. Geometric tests cover density, weight, polarity, line continuity, distinct mechanisms, registration, finite bounded work, deterministic seeds, partial settings updates and preview/export scaling. These establish implementation behavior, not visual similarity or actual GPU output.
+
+[Full print-geometry report](benchmarks/2026-10-07-print-4.9.0.json): Apple M4 Pro, Node v25.9.0. At 24,000 cells the CPU-only p95 ranges from 0.677 ms (Risograph) to 5.437 ms (Pointillism). Woodblock is 3.889 ms after removing repeated trigonometry, down from 14.111 ms in the initial local implementation. At 96,000 cells Crosshatch/Pointillism geometry alone costs 11.580 / 21.537 ms. This is why high-detail animation is an explicit tradeoff, not a universal 60fps promise. The benchmark uses counting sinks, excluding Canvas commands, decode, source processing, hover simulation, GPU, presentation and real exports.
+
+The root/core minified ESM entries grow by 73 bytes for catalog IDs; their CJS counterparts grow by 83 bytes. Hover ESM/CJS files are byte-identical to 4.8.0. Actual print code stays in optional Studio, which grows by 4,662 bytes to 100.31 KiB minified ESM. Source assets and background generators were not added to npm.
+
+Browser verification remains blocked by the prior automatic URL-policy rejection. Visual quality, real codec playback and target-device frame pacing are unverified. Site controls extend the accepted inspector rather than redesigning it.

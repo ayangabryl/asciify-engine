@@ -77,3 +77,7 @@ Adds optional Studio `warps` and `warpEdge` with an empty default stack. Nine tr
 ### 4.8 layered projects
 
 Adds `mountStudioProject`, `mountStudioProjectMedia`, `createStudioProjectRenderer`, `exportStudioProject` and the typed project model in optional `/studio`. Up to eight independently styled media/text layers share a playback loop and cell/raster budgets. Existing single-source APIs/defaults remain. Layered project JSON uses a distinct `kind` and source keys; it is not interchangeable with single-source settings JSON and does not contain media. See [layered-projects.md](layered-projects.md) for ownership, pointer routing, export consistency and migration choices. Refresh this skill separately from npm; do not migrate simple heroes unnecessarily.
+
+## 4.9 print rendering
+
+Six additional `STUDIO_STYLES` use optional `print` settings. Existing v1 settings remain valid and ASCII defaults stay unchanged. The print group merges on partial updates. Import the shared catalog and read [print-styles.md](print-styles.md); offer print-specific controls only for those styles. Existing `print` and `riso` look IDs retain their dither behavior. Refresh the npm dependency and installed skill separately.
