@@ -1,3 +1,4 @@
+import { createStudioCurveLookup, type StudioCurves } from './curves';
 /** Pre-conversion RGB levels and a monotone five-point tonal curve. */
 export interface ToneControls {
   blackPoint?: number;
@@ -5,6 +6,28 @@ export interface ToneControls {
   gamma?: number;
   shadows?: number;
   highlights?: number;
+}
+
+/** Compose levels → RGB curve → channel curves into three small lookup tables. */
+export function createColorLookups(options: ToneControls & {curves?: Partial<StudioCurves>}): Uint8Array | null {
+  const tone = createToneLookup(options), curves = options.curves;
+  if (!tone && (!curves || Object.values(curves).every(points => points.every(([x, y]) => x === y)))) return null;
+  const master = createStudioCurveLookup(curves?.rgb);
+  const channels = [curves?.red, curves?.green, curves?.blue].map(createStudioCurveLookup);
+  const lookup = new Uint8Array(768);
+  for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) {
+    lookup[c * 256 + i] = channels[c][master[tone ? tone[i] : i]];
+  }
+  return lookup;
+}
+
+export function applyColorLookups(pixels: Uint8ClampedArray, lookup: Uint8Array) {
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (!pixels[i + 3]) continue;
+    pixels[i] = lookup[pixels[i]];
+    pixels[i + 1] = lookup[256 + pixels[i + 1]];
+    pixels[i + 2] = lookup[512 + pixels[i + 2]];
+  }
 }
 
 /** Null is the identity fast path. Build only when settings change. */

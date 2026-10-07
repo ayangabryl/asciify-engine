@@ -65,3 +65,7 @@ Adds Emboss, Elastic and Rake hover; Parallax, Woven Flow, Print Shift and Conto
 ### 4.5 tonal controls and blue noise
 
 Adds the `blue-noise` dither algorithm and optional Studio `color.blackPoint`, `whitePoint`, `gamma`, `shadows`, and `highlights` fields. Existing render defaults and existing dither output are unchanged. The serialized settings version remains 1; older engines will ignore these new choices, so check the installed package before using them. Refresh the agent skill separately from the npm dependency. These are Studio features, not additional core `AsciiOptions`.
+
+### 4.6 channel curves and source noise
+
+Adds Studio `color.curves` and `color.denoise` with neutral defaults. Curves support independently editable RGB/red/green/blue control points; incremental updates merge channels, replacing only supplied point arrays. `player.settings` returns a detached current snapshot for persistence/export. Settings version remains 1; older packages ignore the new fields and do not expose the getter. Read the installed types, update the runtime dependency and refresh the agent skill together when adopting these APIs. Root/core/hover behavior is unchanged.

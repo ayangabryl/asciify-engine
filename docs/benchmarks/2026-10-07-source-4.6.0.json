@@ -1,0 +1,92 @@
+{
+  "scope": "CPU sampled-source processing only; static sources reuse this result during motion/hover. Excludes decoding, Canvas, GPU and frame pacing.",
+  "timestamp": "2026-10-07T11:17:09.761Z",
+  "node": "v25.9.0",
+  "cpu": "Apple M4 Pro",
+  "rows": [
+    {
+      "width": 160,
+      "height": 90,
+      "mode": "curves",
+      "medianMs": 0.025,
+      "p95Ms": 0.069
+    },
+    {
+      "width": 160,
+      "height": 90,
+      "mode": "denoise",
+      "medianMs": 0.46,
+      "p95Ms": 1.942
+    },
+    {
+      "width": 160,
+      "height": 90,
+      "mode": "combined",
+      "medianMs": 0.475,
+      "p95Ms": 0.489
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "mode": "curves",
+      "medianMs": 0.09,
+      "p95Ms": 0.093
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "mode": "denoise",
+      "medianMs": 1.869,
+      "p95Ms": 1.923
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "mode": "combined",
+      "medianMs": 1.99,
+      "p95Ms": 2.245
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "mode": "curves",
+      "medianMs": 0.358,
+      "p95Ms": 0.421
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "mode": "denoise",
+      "medianMs": 7.396,
+      "p95Ms": 7.454
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "mode": "combined",
+      "medianMs": 7.753,
+      "p95Ms": 7.978
+    },
+    {
+      "width": 960,
+      "height": 540,
+      "mode": "curves",
+      "medianMs": 0.876,
+      "p95Ms": 1.079
+    },
+    {
+      "width": 960,
+      "height": 540,
+      "mode": "denoise",
+      "medianMs": 17.372,
+      "p95Ms": 17.802
+    },
+    {
+      "width": 960,
+      "height": 540,
+      "mode": "combined",
+      "medianMs": 18.753,
+      "p95Ms": 19.595
+    }
+  ]
+}

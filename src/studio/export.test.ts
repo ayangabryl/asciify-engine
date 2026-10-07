@@ -1,13 +1,18 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { exportStudio } from './export';
 import { normalizeStudioSettings } from './model';
-const {renderer}=vi.hoisted(()=>({renderer:{render:vi.fn(),destroy:vi.fn()}}));
-vi.mock('./renderer',()=>({createStudioRenderer:()=>renderer}));
+const {renderer,create}=vi.hoisted(()=>({renderer:{render:vi.fn(),destroy:vi.fn()},create:vi.fn()}));
+vi.mock('./renderer',()=>({createStudioRenderer:(...args:unknown[])=>{create(...args);return renderer;}}));
 beforeEach(()=>{
   vi.clearAllMocks();
   vi.stubGlobal('document',{createElement:()=>({dataset:{},toBlob:(done:(b:Blob)=>void)=>done(new Blob(['image'],{type:'image/png'}))})});
 });
 afterEach(()=>vi.unstubAllGlobals());
+it('passes saved curves and noise reduction to the independent export renderer',async()=>{
+  const settings=normalizeStudioSettings({color:{denoise:.6,curves:{rgb:[[0,0],[.4,.6],[1,1]],blue:[[0,.1],[1,.8]]}}});
+  await exportStudio({frame:()=>({}) as HTMLCanvasElement},settings,{format:'png',width:32,height:24});
+  expect(create.mock.calls[0][1]).toEqual(settings);
+});
 it('exports the selected still with its displayed phase after live speed edits',async()=>{
   const image={} as HTMLCanvasElement;
   const frame=vi.fn(async()=>image);

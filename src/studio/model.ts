@@ -1,5 +1,6 @@
 import { SURFACE_HOVERS, type SurfaceHover } from '../surface/hover-catalog';
 import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
+import { normalizeStudioCurves, type StudioCurves } from './curves';
 /** Serializable, media-independent editing state. No DOM work at import time. */
 export const STUDIO_STYLES = [
   "ascii",
@@ -161,6 +162,8 @@ export interface StudioSettings {
     gamma?: number;
     shadows?: number;
     highlights?: number;
+    curves?: Partial<StudioCurves>;
+    denoise?: number;
   };
   dither: {
     algorithm: DitherAlgorithm;
@@ -237,6 +240,8 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     gamma: 1,
     shadows: 0,
     highlights: 0,
+    curves: {rgb:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]},
+    denoise: 0,
   },
   dither: {
     algorithm: "none",
@@ -376,6 +381,8 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       gamma: n(g.gamma, 1, .25, 4),
       shadows: n(g.shadows, 0, -1, 1),
       highlights: n(g.highlights, 0, -1, 1),
+      curves: normalizeStudioCurves(g.curves),
+      denoise: n(g.denoise, 0, 0, 1),
     },
     dither: {
       algorithm: choice(h.algorithm, DITHER_ALGORITHMS, "none"),
@@ -536,6 +543,7 @@ export function updateStudioSettings(
     if (patch[key])
       Object.assign(merged, { [key]: { ...current[key], ...patch[key] } });
   }
+  if (patch.color?.curves) merged.color.curves = { ...current.color.curves, ...patch.color.curves };
   return normalizeStudioSettings(merged);
 }
 
