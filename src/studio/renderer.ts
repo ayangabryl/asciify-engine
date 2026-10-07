@@ -1,4 +1,4 @@
-import { sampleAmbient } from '../surface/ambient-motion';
+import { sampleAmbient, scaleMotion } from '../surface/ambient-motion';
 import {
   normalizeStudioSettings,
   studioCrop,
@@ -66,6 +66,7 @@ export function createStudioRenderer(
   let state = normalizeStudioSettings(settings),
     revision = 0,
     prepared = "",
+    ditherCacheKey = "",
     pixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     motionPixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     cols = 0,
@@ -87,7 +88,7 @@ export function createStudioRenderer(
     maxCells = Math.max(
       256,
       Math.min(
-        160000,
+        1048576,
         Number.isFinite(limits.maxCells) ? limits.maxCells! : 12000,
       ),
     );
@@ -160,6 +161,7 @@ export function createStudioRenderer(
     ) {
       sourceIdentity = source;
       prepared = key;
+      ditherCacheKey = "";
       cols = nextCols;
       rows = nextRows;
       scene.ctx.clearRect(0, 0, w, h);
@@ -199,6 +201,8 @@ export function createStudioRenderer(
     art.ctx.globalCompositeOperation = "source-over";
     const phase = motionTime;
     if (isDither) {
+      const stableDither = !flow.active && state.motion.type === "none" && state.dither.motion === "none";
+      if (!stableDither || ditherCacheKey !== key) {
       if (motionPixels.length !== pixels.length) motionPixels = new Uint8ClampedArray(pixels.length);
       const data = motionPixels;
       data.set(pixels);
@@ -220,6 +224,7 @@ export function createStudioRenderer(
               energy = field[2] / 3;
             }
             sampleAmbient(motion, u, v, phase, ambient);
+            scaleMotion(ambient, state.motion.amount ?? 1);
             sx -= ambient[0] / 960 * cols;
             sy -= ambient[1] / 960 * rows;
             gain = 1 + ambient[2];
@@ -250,6 +255,8 @@ export function createStudioRenderer(
       }
       ditherPixels(data, cols, rows, state.dither, time);
       sample.ctx.putImageData(new ImageData(data, cols, rows), 0, 0);
+      ditherCacheKey = stableDither ? key : "";
+      }
       art.ctx.imageSmoothingEnabled = false;
       art.ctx.drawImage(sample.canvas, 0, 0, w, h);
     } else {
@@ -320,11 +327,12 @@ export function createStudioRenderer(
             py = y * ch,
             alpha = 1;
           sampleAmbient(motion, x / cols, y / rows, phase, ambient);
+          scaleMotion(ambient, state.motion.amount ?? 1);
           px += ambient[0] * w / 960;
           py += ambient[1] * h / 960;
           lum = Math.max(0, Math.min(1, lum + ambient[2]));
           alpha = ambient[3];
-          if (!glyphMode && state.colorMode === "accent") alpha *= lum;
+          if (!glyphMode && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
           ac.globalAlpha = alpha;
           const toneDelta = (lum - sourceLum) * 255;
           let ink =
@@ -362,6 +370,38 @@ export function createStudioRenderer(
               Math.PI * 2,
             );
             ac.fill();
+          } else if (state.style === "led") {
+            // Individual circular emitters, separated by an unlit matrix.
+            ac.beginPath(); ac.arc(px + cell/2, py + ch/2, cell*.39, 0, Math.PI*2); ac.fill();
+            ac.globalAlpha = alpha*.35;
+            ac.fillStyle = "#ffffff";
+            ac.beginPath(); ac.arc(px + cell*.43, py + ch*.4, cell*.11, 0, Math.PI*2); ac.fill();
+          } else if (state.style === "hex") {
+            const cx = px + cell/2, cy = py + ch/2;
+            ac.beginPath();
+            for (let side=0; side<6; side++) {
+              const angle = Math.PI/3*side;
+              const hx = cx + Math.cos(angle)*cell*.49, hy = cy + Math.sin(angle)*ch*.49;
+              if (side===0) ac.moveTo(hx,hy); else ac.lineTo(hx,hy);
+            }
+            ac.closePath(); ac.fill();
+          } else if (state.style === "cmyk") {
+            // Four offset subtractive ink screens on a paper cell.
+            ac.fillStyle = "#ffffff"; ac.fillRect(px, py, cell, ch);
+            const black = 1 - Math.max(r,g,b)/255;
+            const denominator = Math.max(.001,1-black);
+            const inks = [
+              ["#00ffff", (1-r/255-black)/denominator, .36, .36],
+              ["#ff00ff", (1-g/255-black)/denominator, .64, .36],
+              ["#ffff00", (1-b/255-black)/denominator, .5, .66],
+              ["#000000", black, .5, .5],
+            ] as const;
+            ac.globalCompositeOperation = "multiply";
+            for (const [color, density, ox, oy] of inks) {
+              ac.fillStyle = color; ac.beginPath();
+              ac.arc(px+cell*ox, py+ch*oy, cell*.48*Math.sqrt(Math.max(0,density)),0,Math.PI*2); ac.fill();
+            }
+            ac.globalCompositeOperation = "source-over";
           } else if (state.style === "voxel") {
             const vx = px + cell / 2,
               vy = py + ch / 2;

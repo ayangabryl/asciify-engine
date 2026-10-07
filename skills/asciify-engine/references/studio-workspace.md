@@ -125,3 +125,35 @@ Studio defaults to a 6-unit cell size. Separate the sampling grid from canvas ba
 Start with `cellSize: 6`; the editor remembers each style's size. A Retina preview uses `resize(width, height, pixelRatio)` on a `mountStudioMedia` handle to keep logical cells independent of physical raster resolution. Its `setBudget(maxCells)` changes the upper sampling budget; automatic adaptation may reduce it when frames are slow. At a 960×540 logical canvas, 32,768 cells permit Lego size 4, and 65,536 permit dither scale 3. Keep ASCII at a measured budget such as 12,000 cells. Smaller requested cells cannot bypass the active budget; show `studioGrid`'s actual minimum in controls. Fine grids cost more, so profile hover and motion on target devices. Studio caches Lego stud artwork.
 
 For menus shared with a media hero, import the eight `CHARACTER_SETS` from `asciify-engine/core`; `STUDIO_CHARACTER_SETS` is the identical catalog through `/studio`. A hero need not load the Studio runtime.
+
+
+## Fine detail and controls (4.2)
+
+- The style catalog adds `hex` (hexagonal tiles), `led` (circular emitters), and `cmyk` (offset cyan/magenta/yellow/black ink dots on white paper). CMYK uses source channel coverage. These remain in the optional `/studio` entry; `/core` does not import them.
+- Tile styles accept `cellSize: 1`; glyph styles retain a minimum of 3. Dither uses `dither.scale` from 1 to 12, independent of `cellSize`. Values are logical pixels in the reference frame, not device pixels.
+- `studioGrid(width, height, settings, maxCells, pixelRatio)` reports the actual grid, `minimum`, and `limited`. Explain a limit in the UI rather than presenting a requested 1px value as an actual 1px grid.
+- `maxCells` can be explicitly raised to 1,048,576. Defaults remain bounded. For a 960 × 540 reference, `maxCells: 1048576` allows one-pixel dithering. This is a detail option, not a promise of real-time performance at that density. Larger reference frames can still be limited.
+- Mounts expose `setAdaptive(boolean)` and `setBudget(cells)`. The budget cannot exceed the mount's original `maxCells`. Adaptive mode can reduce the grid during animation/hover; disable it deliberately when exact density is more important. Static dither is cached until its source/settings/grid change.
+- New dither algorithms: `vertical-lines`, `diagonal-lines`, `radial`. `lines` remains horizontal; `noise` remains deterministic white noise, not blue noise. New palettes: `gray4`, `gray8`, `rgb8`, `cyberpunk`, `pastel`.
+- `dither.colorSpace` is `rgb` (nearest palette color) or `luminance` (nearest perceived brightness); default `rgb`. `dither.direction` is degrees from −180 to 180, with 0 toward positive X and 90 toward positive Y. It controls drift, with `motion: 'drift'` and `speed: 0.1–3`. Radial drift travels through concentric thresholds, so direction does not apply. Diffusion has no ordered matrix to translate; choose an ordered algorithm for drift.
+- `effects.rgbSplit` and `effects.sharpen` are 0–1, default 0. RGB split is uniform channel separation; `prism` remains peripheral separation. Both need WebGL finishing. Do not silently claim unsupported effects were rendered.
+- `motion.amount` is 0–2, default 1. It changes displacement/light/dissolve strength without changing phase or speed. Zero retains the stationary image. Caustics, Slow Current, and Reveal & Reform remain the supported motion types.
+
+```ts
+const studio = await mountStudio(canvas, file, {
+  width: 960, height: 540, maxDimension: 960,
+  maxCells: 1048576, adaptive: false,
+  settings: {
+    style: 'dither',
+    dither: { scale: 1, algorithm: 'bayer8', palette: 'gray4',
+      colorSpace: 'luminance', motion: 'drift', direction: 90, speed: .5 },
+    motion: { type: 'current', speed: .4, amount: .35 },
+    effects: { sharpen: .15 },
+  },
+});
+// Return to an interactive budget without remounting:
+studio.setAdaptive(true);
+studio.setBudget(65536);
+```
+
+When exporting, pass the same `maxCells` and logical `referenceWidth` as the preview to retain cell density. Increasing output resolution alone should not invent a different composition. Older projects normalize new fields to neutral defaults.

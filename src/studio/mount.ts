@@ -54,6 +54,7 @@ export function mountStudioMedia(
     last = 0,
     painted = 0,
     videoFrame = -1;
+  let adaptive = options.adaptive !== false;
   let samples = 0,
     costAverage = 0,
     overBudget = 0;
@@ -119,7 +120,7 @@ export function mountStudioMedia(
         const cost = performance.now() - start;
         options.onFrame?.(video?.currentTime ?? time, cost);
         costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
-        if (++samples > 20 && options.adaptive !== false) {
+        if (++samples > 20 && adaptive && (animated || renderer.active)) {
           overBudget = costAverage > 13 ? overBudget + 1 : 0;
           if (overBudget >= 12 && renderer.maxCells > 3000) {
             renderer.setBudget(Math.max(3000, renderer.maxCells * 0.8));
@@ -221,6 +222,10 @@ export function mountStudioMedia(
     },
     get paused() {
       return paused || reduced.matches;
+    },
+    setAdaptive(enabled: boolean) {
+      adaptive = enabled;
+      samples = overBudget = costAverage = 0;
     },
     setBudget(cells: number) {
       renderer.setBudget(cells);

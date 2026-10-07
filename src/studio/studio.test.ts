@@ -210,3 +210,54 @@ it('keeps sampling density unchanged when only raster sharpness increases', () =
     expect(raster.columns * raster.rows).toBeLessThanOrEqual(12000);
   }
 });
+
+
+describe('Fine rendering and dither controls', () => {
+  it('resolves one-pixel dither with a sufficient explicit budget, and reports limited previews', () => {
+    const settings = normalizeStudioSettings({style:'dither', dither:{scale:1}});
+    const fine = studioGrid(960,540,settings,1048576);
+    expect(fine.cell).toBe(1);
+    expect([fine.columns,fine.rows]).toEqual([960,540]);
+    expect(fine.limited).toBe(false);
+    const limited = studioGrid(960,540,settings,65536);
+    expect(limited.limited).toBe(true);
+    expect(limited.columns*limited.rows).toBeLessThanOrEqual(65536);
+    const exported = studioGrid(3840,2160,settings,1048576,4);
+    expect([exported.columns,exported.rows]).toEqual([fine.columns,fine.rows]);
+  });
+  it('retains fine tile sizes and optional finishing through project interchange', () => {
+    const settings = normalizeStudioSettings({style:'led', cellSize:1, effects:{rgbSplit:.4,sharpen:.6},dither:{direction:-90,colorSpace:'luminance'}});
+    expect(settings.cellSize).toBe(1);
+    expect(parseStudioSettings(serializeStudioSettings(settings))).toEqual(settings);
+    expect(settings.effects.rgbSplit).toBe(.4);
+    expect(settings.effects.sharpen).toBe(.6);
+  });
+  it('drifts on the requested axis and remains deterministic', () => {
+    const source = new Uint8ClampedArray(16*16*4).fill(128);
+    for(let i=3;i<source.length;i+=4) source[i]=255;
+    const config = normalizeStudioSettings({dither:{algorithm:'lines',motion:'drift',direction:0}}).dither;
+    const base=source.slice(), horizontal=source.slice(), vertical=source.slice();
+    ditherPixels(base,16,16,config,0);
+    ditherPixels(horizontal,16,16,config,1);
+    ditherPixels(vertical,16,16,{...config,direction:90},1);
+    expect(horizontal).toEqual(base);
+    expect(vertical).not.toEqual(base);
+  });
+  it('uses luminance mapping when requested rather than nearest RGB', () => {
+    const config = normalizeStudioSettings({dither:{algorithm:'none',palette:'custom',colors:['#ff0000','#005500']}}).dither;
+    const color=new Uint8ClampedArray([0,128,0,255]), luma=color.slice();
+    ditherPixels(color,1,1,config);
+    ditherPixels(luma,1,1,{...config,colorSpace:'luminance'});
+    expect(Array.from(color)).toEqual([0,85,0,255]);
+    expect(Array.from(luma)).toEqual([255,0,0,255]);
+  });
+  it('wraps negative ordered coordinates without invalid indexes', () => {
+    for(let x=-17;x<0;x++) for(let y=-17;y<0;y++) expect(bayer(x,y,16)).toBe(bayer(x+32,y+32,16));
+  });
+});
+
+it('propagates Floyd–Steinberg error forward along a row', () => {
+  const pixels = new Uint8ClampedArray([128,128,128,255,128,128,128,255,128,128,128,255,128,128,128,255]);
+  ditherPixels(pixels,4,1,normalizeStudioSettings({dither:{algorithm:'floyd-steinberg',palette:'custom',colors:['#000000','#ffffff']}}).dither);
+  expect([pixels[0],pixels[4],pixels[8],pixels[12]]).toEqual([255,0,255,0]);
+});
