@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.3.0"
+  tested-engine: "4.3.1"
   updated: "2026-10-07"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.3.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.3.1**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -30,6 +30,9 @@ npx skills add ayangabryl/asciify-engine --skill asciify-engine
 This uses the Vercel Skills CLI to install the repository skill and its linked resources. The npm dependency and an installed agent skill update separately. When asked to update Asciify or when an integration needs newer options, follow [references/upgrading.md](references/upgrading.md): check npm's current `latest`, update with the project's package manager, then refresh only this skill in its installed scope. Do not treat this document's tested version as permanently latest, or upgrade unrelated skills/dependencies.
 
 ## Choose the integration
+
+For a live project component, start with [project-integration.md](references/project-integration.md): it maps each use case to one rendering pipeline, covers instance ownership, and keeps PNG/video export independent of live playback. Use `/studio` for a new composition with art styles, masks, backdrops and saved settings. It already owns hover/motion; do not add another `/hover` instance on top.
+
 
 - Static image: `asciify(source, canvas, config)` returns `Promise<() => void>`. Call the cleanup on unmount, including for a still image.
 - Video: `asciifyVideo(source, canvas, config)` returns `Promise<() => void>`. Call that function on unmount. Use `fitTo` and `objectFit: 'cover'` for full-bleed heroes; `contain` for a whole-subject preview.
@@ -89,7 +92,7 @@ Preview it: letter glyph densities differ, so arbitrary words are not automatica
 
 The public npm `HoverEffect` IDs in 1.2.0 are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
 
-The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, and Off** through an optional studio surface module. Its Caustics, Slow Current, Reveal & Reform, and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
+The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, and Off** through an optional studio surface module. Its six still-image motions—Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, Living Grain—and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
 
 To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). Import `mountHover` from `asciify-engine/hover` (1.2.0+); no separate download is needed. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
 
@@ -136,7 +139,7 @@ Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanlin
 
 For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). The new `/studio` API is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop. Use version 1.4.0 or newer for these APIs after verifying the installed package.
 
-## Current catalogs (4.2)
+## Current catalogs
 
 Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS` and their key types are removed. Do not import them or generate old names such as Katakana, Binary, Waves or Smoke. Use the 18 `STUDIO_STYLES` for render-style selectors and `/studio` rendering. For ASCII-only character ramps use `CHARACTER_SETS` from `/core` or `STUDIO_CHARACTER_SETS` from `/studio`; custom Unicode and user-provided frame arrays remain supported. Core `artStyle` only accepts `classic`; use explicit options instead of preset shortcuts. Despite the requested 4.1.0 version number, migrating these removed APIs is a breaking change.
 

@@ -45,7 +45,7 @@ Start with `normalizeStudioSettings({ ... })`, `DEFAULT_STUDIO_SETTINGS`, or `st
 - `mask`: enable/invert and a list of rectangle, ellipse, or brush shapes. Coordinates are normalized to the output canvas. Masks are bounded to 64 shapes and 2,048 total brush points. Masking affects the artwork; the backdrop remains visible.
 - `lights`: at most four colored radial lights with normalized position, radius, and intensity. This is 2D illumination, not physically based material lighting.
 - `effects`: independent character bloom and whole-composition bloom, prism, grain, dust, scanlines, CRT, vignette, glitch, pixelation, halftone, and Gaussian/directional/radial/progressive blur. Optical effects use an optional WebGL pass. Check `capabilities.gpuFinish` after an effect renders; unavailable GPU effects must not be described as applied.
-- `hover`: Trail, Water, Contour, Dissolve, Silk, Vortex, or none; strength, normalized radius, optional `edgeSafe`. Hover is live interaction; it is not recorded into offline exports.
+- `hover`: Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, or none; strength, normalized radius, optional `edgeSafe`. Hover is live interaction; it is not recorded into offline exports.
 
 `serializeStudioSettings` and `parseStudioSettings` round-trip validated, versioned state. Media URLs/files are excluded. Unknown fields are discarded, values are bounded, future schema versions and oversized imports are rejected. Share source files separately. `restyleStudio` chooses another curated look while preserving crop, ratio, and mask.
 
@@ -109,7 +109,7 @@ Other renderer styles define their own marks, so character controls only apply t
 
 Use `studioGrid(width, height, settings, maxCells, pixelRatio)` to inspect `minimum`, `cell`, `columns`, `rows`, and `limited` at the actual preview resolution. ASCII/tile renderers use `cellSize`; Dither uses `dither.scale`. Respect the returned minimum in a size picker instead of offering a range that the performance budget silently clamps. Use the same budget and reference width for export to retain density.
 
-For PNG/JPEG, pass `time: player.time` to `exportStudio` to save the selected frame. Default time is zero; animation exports start at zero. Snapshot the time/settings/preview size before asynchronous loading. The editor's Export tab separates Image and Animation, shows validated pixel sizes and keeps website code in an expandable section.
+For PNG/JPEG, pass `time: player.time` and `motionTime: player.motionTime` to `exportStudio` to save the selected frame. Default time is zero; animation exports start at zero. Snapshot the time/settings/preview size before asynchronous loading. The editor's Export tab separates Image and Animation, shows validated pixel sizes and keeps website code in an expandable section.
 
 ## Still-image motion (3.0)
 
@@ -129,7 +129,7 @@ For menus shared with a media hero, import the eight `CHARACTER_SETS` from `asci
 
 ## Fine detail and controls (4.2)
 
-- The style catalog adds `hex` (hexagonal tiles), `led` (circular emitters), and `cmyk` (offset cyan/magenta/yellow/black ink dots on white paper). CMYK uses source channel coverage. These remain in the optional `/studio` entry; `/core` does not import them.
+- The style catalog adds `hex` (hexagonal tiles), `led` (circular emitters), and `cmyk` (offset cyan/magenta/yellow/black ink dots on white paper). CMYK derives channel coverage from the selected color mode and tonal hover/motion. These remain in the optional `/studio` entry; `/core` does not import them.
 - Tile styles accept `cellSize: 1`; glyph styles retain a minimum of 3. Dither uses `dither.scale` from 1 to 12, independent of `cellSize`. Values are logical pixels in the reference frame, not device pixels.
 - `studioGrid(width, height, settings, maxCells, pixelRatio)` reports the actual grid, `minimum`, and `limited`. Explain a limit in the UI rather than presenting a requested 1px value as an actual 1px grid.
 - `maxCells` can be explicitly raised to 1,048,576. Defaults remain bounded. For a 960 × 540 reference, `maxCells: 1048576` allows one-pixel dithering. This is a detail option, not a promise of real-time performance at that density. Larger reference frames can still be limited.
@@ -137,7 +137,7 @@ For menus shared with a media hero, import the eight `CHARACTER_SETS` from `asci
 - New dither algorithms: `vertical-lines`, `diagonal-lines`, `radial`. `lines` remains horizontal; `noise` remains deterministic white noise, not blue noise. New palettes: `gray4`, `gray8`, `rgb8`, `cyberpunk`, `pastel`.
 - `dither.colorSpace` is `rgb` (nearest palette color) or `luminance` (nearest perceived brightness); default `rgb`. `dither.direction` is degrees from −180 to 180, with 0 toward positive X and 90 toward positive Y. It controls drift, with `motion: 'drift'` and `speed: 0.1–3`. Radial drift travels through concentric thresholds, so direction does not apply. Diffusion has no ordered matrix to translate; choose an ordered algorithm for drift.
 - `effects.rgbSplit` and `effects.sharpen` are 0–1, default 0. RGB split is uniform channel separation; `prism` remains peripheral separation. Both need WebGL finishing. Do not silently claim unsupported effects were rendered.
-- `motion.amount` is 0–2, default 1. It changes displacement/light/dissolve strength without changing phase or speed. Zero retains the stationary image. Caustics, Slow Current, and Reveal & Reform remain the supported motion types.
+- `motion.amount` is 0–2, default 1. It changes displacement/light/dissolve strength without changing phase or speed. Zero retains the stationary image. Enumerate `STUDIO_MOTIONS` for all supported motion types, including the 4.3 additions below.
 
 ```ts
 const studio = await mountStudio(canvas, file, {
@@ -175,3 +175,7 @@ Base cycles last 12 seconds; speed scales duration. Studio amount scales strengt
 Keep automatic motion off for source video unless requested. Respect reduced motion.
 These are local effects, not AI-generated frames. Frame rate depends on device,
 resolution and other effects; no universal FPS guarantee.
+
+## Performance fixes (4.3.1)
+
+Stationary artwork, masks, lights, backdrops and character bloom are cached while finishing grain/dust/glitch continue. Source/settings/layout edits invalidate the composition; pointer motion redraws until the field settles and restores a clean final frame. Unused dither motion on other styles and zero-strength ambient motion no longer keep a still preview awake. Ordered Bayer threshold tables avoid per-pixel recurrence without changing quantized output. CMYK now honors tonal hover/motion and gray/accent color modes. Still exports accept `motionTime` from the mounted preview to preserve the selected phase after speed edits; animation exports still start at zero.

@@ -54,3 +54,7 @@ Use `CHARACTER_SETS` from root or `/core` for the same eight choices as the edit
 ## 4.1.0 — remove legacy catalogs
 
 This requested minor version contains breaking API removals: `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS`, `CharsetKey`, `CharsetSequenceKey`, and `LivingStylePresetKey`. Search source, saved settings, generated snippets, and documentation before upgrading. Use `/studio`'s 15 `STUDIO_STYLES` for render styles; use `/core`'s curated `CHARACTER_SETS` for ASCII alphabets. Replace old shorthand `artStyle` names with actual Studio rendering or explicit core charset/renderMode/colorMode options. Core only accepts `artStyle: 'classic'`. Custom `charset` and `charsetFrames` remain supported. Fine-dither hover integration uses explicit `fineDither: true`, not the removed terminal preset.
+
+## 4.3 and 4.3.1
+
+4.3 adds Magnetic Pull and Scatter hover (`magnetic`, `scatter`) and Sheen, Tidal Rings and Living Grain motion (`sheen`, `tidal`, `grain`). Old defaults remain. 4.3.1 fixes CMYK tonal interactions and idle-frame work, caches stationary compositions, and accelerates ordered dithering without changing its output. Read [project-integration.md](project-integration.md) for one-owner live integration and independent PNG/video export.

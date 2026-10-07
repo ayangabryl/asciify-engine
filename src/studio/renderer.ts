@@ -1,3 +1,4 @@
+import { hasAmbientMotion, hasPatternMotion } from './activity';
 import { sampleAmbient, scaleMotion } from '../surface/ambient-motion';
 import {
   normalizeStudioSettings,
@@ -5,7 +6,7 @@ import {
   studioGrid,
   type StudioSettings,
 } from "./model";
-import { ditherPixels, noise } from "./dither";
+import { ditherPixels, noise, rgb } from "./dither";
 import { createStudioFinish } from "./finish";
 import { WaterSurface } from "../surface/water-surface";
 import { invertTrailTone } from "../surface/ink-trail";
@@ -67,6 +68,7 @@ export function createStudioRenderer(
     revision = 0,
     prepared = "",
     ditherCacheKey = "",
+    compositionCacheKey = "",
     pixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     motionPixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     cols = 0,
@@ -162,6 +164,7 @@ export function createStudioRenderer(
       sourceIdentity = source;
       prepared = key;
       ditherCacheKey = "";
+      compositionCacheKey = "";
       cols = nextCols;
       rows = nextRows;
       scene.ctx.clearRect(0, 0, w, h);
@@ -196,396 +199,411 @@ export function createStudioRenderer(
         }
       }
     }
-    art.ctx.clearRect(0, 0, w, h);
-    art.ctx.globalAlpha = 1;
-    art.ctx.globalCompositeOperation = "source-over";
-    const phase = motionTime;
-    if (isDither) {
-      const stableDither = !flow.active && state.motion.type === "none" && state.dither.motion === "none";
-      if (!stableDither || ditherCacheKey !== key) {
-      if (motionPixels.length !== pixels.length) motionPixels = new Uint8ClampedArray(pixels.length);
-      const data = motionPixels;
-      data.set(pixels);
-      const motion = state.motion.type;
-      if (flow.active || motion !== "none") {
+    // Post-processing changes time, not the underlying still composition. Reuse
+    // that layer until media, layout, settings or a live field changes it.
+    const stillMotion = hasAmbientMotion(state);
+    const patternMotion = hasPatternMotion(state);
+    const stableComposition = !flow.active && !stillMotion && !patternMotion;
+    const compositionKey = [key, cols, rows, cell, ch, pixelRatio].join(":");
+    if (!stableComposition || compositionCacheKey !== compositionKey) {
+      art.ctx.clearRect(0, 0, w, h);
+      art.ctx.globalAlpha = 1;
+      art.ctx.globalCompositeOperation = "source-over";
+      const phase = motionTime;
+      const motion = stillMotion ? state.motion.type : "none";
+      const anchoredMotion = motion === "none" || motion === "caustics" || motion === "sheen" || motion === "grain";
+      if (isDither) {
+        const stableDither = stableComposition;
+        if (!stableDither || ditherCacheKey !== key) {
+          if (motionPixels.length !== pixels.length) motionPixels = new Uint8ClampedArray(pixels.length);
+          const data = motionPixels;
+          data.set(pixels);
+          if (flow.active || motion !== "none") {
+            for (let y = 0; y < rows; y++)
+              for (let x = 0; x < cols; x++) {
+                const u = x / cols,
+                  v = y / rows;
+                let sx = x,
+                  sy = y,
+                  energy = 0,
+                  gain = 1,
+                  alpha = 1;
+                if (flow.active) {
+                  flow.sample(u, v, field);
+                  sx -= field[0] * cols;
+                  sy -= field[1] * rows;
+                  energy = field[2] / 3;
+                }
+                sampleAmbient(motion, u, v, phase, ambient);
+                scaleMotion(ambient, state.motion.amount ?? 1);
+                sx -= ambient[0] / 960 * cols;
+                sy -= ambient[1] / 960 * rows;
+                gain = 1 + ambient[2];
+                alpha = ambient[3];
+                // Sub-cell advection must interpolate; rounding creates visible stepping.
+                sx = Math.max(0, Math.min(cols - 1, sx));
+                sy = Math.max(0, Math.min(rows - 1, sy));
+                const x0 = Math.floor(sx), y0 = Math.floor(sy);
+                const fx = sx - x0, fy = sy - y0;
+                const i = (y * cols + x) * 4;
+                const j = (y0 * cols + x0) * 4;
+                const right = (y0 * cols + Math.min(cols - 1, x0 + 1)) * 4;
+                const below = (Math.min(rows - 1, y0 + 1) * cols + x0) * 4;
+                const corner = (Math.min(rows - 1, y0 + 1) * cols + Math.min(cols - 1, x0 + 1)) * 4;
+                for (let c = 0; c < 3; c++) {
+                  const tone = ((pixels[j + c] * (1 - fx) + pixels[right + c] * fx) * (1 - fy) +
+                    (pixels[below + c] * (1 - fx) + pixels[corner + c] * fx) * fy) / 255;
+                  let value =
+                    (["trail", "contour"].includes(state.hover.effect)
+                      ? invertTrailTone(tone, energy)
+                      : state.hover.effect === "dissolve"
+                        ? tone * Math.max(0, 1 + energy)
+                        : tone) * gain;
+                  data[i + c] = value * 255;
+                }
+                data[i + 3] = pixels[j + 3] * alpha;
+              }
+          }
+          ditherPixels(data, cols, rows, state.dither, time);
+          sample.ctx.putImageData(new ImageData(data, cols, rows), 0, 0);
+          ditherCacheKey = stableDither ? key : "";
+        }
+        art.ctx.imageSmoothingEnabled = false;
+        art.ctx.drawImage(sample.canvas, 0, 0, w, h);
+      } else {
+        const chars = Array.from(ramps[state.style] ?? state.charset),
+          ac = art.ctx;
+        const accent = rgb(state.ink);
+        const glyphMode = state.style === "ascii" || !!ramps[state.style];
+        const font = Math.max(3, Math.round(ch * 0.92)),
+          aw = Math.ceil(cell + 4),
+          ah = Math.ceil(ch + 4);
+        const akey = [
+          chars.join(""),
+          font,
+          aw,
+          ah,
+          state.ink,
+          state.colorMode,
+        ].join(":");
+        if (glyphMode && akey !== atlasKey) {
+          atlasKey = akey;
+          resize(atlas.canvas, aw * chars.length, ah);
+          atlas.ctx.clearRect(0, 0, atlas.canvas.width, ah);
+          atlas.ctx.font = `${font}px monospace`;
+          atlas.ctx.textBaseline = "middle";
+          atlas.ctx.textAlign = "center";
+          atlas.ctx.fillStyle =
+            state.colorMode === "accent" ? state.ink : "#ffffff";
+          chars.forEach((char, i) =>
+            atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2),
+          );
+        }
+        if (state.style === 'lego' && studSize !== cell) {
+          studSize = cell;
+          resize(stud.canvas, Math.ceil(cell), Math.ceil(ch));
+          const sc = stud.ctx;
+          sc.clearRect(0,0,stud.canvas.width,stud.canvas.height);
+          sc.fillStyle = 'rgba(255,255,255,.2)';
+          sc.strokeStyle = 'rgba(0,0,0,.25)';
+          sc.lineWidth = Math.max(.5, pixelRatio * .6);
+          sc.beginPath(); sc.arc(cell/2,ch/2,cell*.28,0,Math.PI*2); sc.fill(); sc.stroke();
+        }
+        ac.font = `${font}px monospace`;
+        ac.textBaseline = "middle";
+        ac.textAlign = "center";
         for (let y = 0; y < rows; y++)
           for (let x = 0; x < cols; x++) {
-            const u = x / cols,
-              v = y / rows;
             let sx = x,
               sy = y,
-              energy = 0,
-              gain = 1,
-              alpha = 1;
+              energy = 0;
             if (flow.active) {
-              flow.sample(u, v, field);
-              sx -= field[0] * cols;
-              sy -= field[1] * rows;
+              flow.sample(x / cols, y / rows, field);
+              sx = Math.max(0, Math.min(cols - 1, x - field[0] * cols));
+              sy = Math.max(0, Math.min(rows - 1, y - field[1] * rows));
               energy = field[2] / 3;
             }
-            sampleAmbient(motion, u, v, phase, ambient);
+            const i = (Math.floor(sy) * cols + Math.floor(sx)) * 4;
+            if (!pixels[i + 3]) continue;
+            const r = pixels[i],
+              g = pixels[i + 1],
+              b = pixels[i + 2];
+            const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+            let lum = sourceLum;
+            if (["trail", "contour"].includes(state.hover.effect) && energy)
+              lum = invertTrailTone(lum, energy);
+            else if (state.hover.effect === "dissolve")
+              lum *= Math.max(0, 1 + energy);
+            let px = x * cell,
+              py = y * ch,
+              alpha = 1;
+            sampleAmbient(motion, x / cols, y / rows, phase, ambient);
             scaleMotion(ambient, state.motion.amount ?? 1);
-            sx -= ambient[0] / 960 * cols;
-            sy -= ambient[1] / 960 * rows;
-            gain = 1 + ambient[2];
+            px += ambient[0] * w / 960;
+            py += ambient[1] * h / 960;
+            lum = Math.max(0, Math.min(1, lum + ambient[2]));
             alpha = ambient[3];
-            // Sub-cell advection must interpolate; rounding creates visible stepping.
-            sx = Math.max(0, Math.min(cols - 1, sx));
-            sy = Math.max(0, Math.min(rows - 1, sy));
-            const x0 = Math.floor(sx), y0 = Math.floor(sy);
-            const fx = sx - x0, fy = sy - y0;
-            const i = (y * cols + x) * 4;
-            const j = (y0 * cols + x0) * 4;
-            const right = (y0 * cols + Math.min(cols - 1, x0 + 1)) * 4;
-            const below = (Math.min(rows - 1, y0 + 1) * cols + x0) * 4;
-            const corner = (Math.min(rows - 1, y0 + 1) * cols + Math.min(cols - 1, x0 + 1)) * 4;
-            for (let c = 0; c < 3; c++) {
-              const tone = ((pixels[j + c] * (1 - fx) + pixels[right + c] * fx) * (1 - fy) +
-                (pixels[below + c] * (1 - fx) + pixels[corner + c] * fx) * fy) / 255;
-              let value =
-                (["trail", "contour"].includes(state.hover.effect)
-                  ? invertTrailTone(tone, energy)
-                  : state.hover.effect === "dissolve"
-                    ? tone * Math.max(0, 1 + energy)
-                    : tone) * gain;
-              data[i + c] = value * 255;
-            }
-            data[i + 3] = pixels[j + 3] * alpha;
-          }
-      }
-      ditherPixels(data, cols, rows, state.dither, time);
-      sample.ctx.putImageData(new ImageData(data, cols, rows), 0, 0);
-      ditherCacheKey = stableDither ? key : "";
-      }
-      art.ctx.imageSmoothingEnabled = false;
-      art.ctx.drawImage(sample.canvas, 0, 0, w, h);
-    } else {
-      const chars = Array.from(ramps[state.style] ?? state.charset),
-        ac = art.ctx;
-      const glyphMode = state.style === "ascii" || !!ramps[state.style];
-      const font = Math.max(3, Math.round(ch * 0.92)),
-        aw = Math.ceil(cell + 4),
-        ah = Math.ceil(ch + 4);
-      const akey = [
-        chars.join(""),
-        font,
-        aw,
-        ah,
-        state.ink,
-        state.colorMode,
-      ].join(":");
-      if (glyphMode && akey !== atlasKey) {
-        atlasKey = akey;
-        resize(atlas.canvas, aw * chars.length, ah);
-        atlas.ctx.clearRect(0, 0, atlas.canvas.width, ah);
-        atlas.ctx.font = `${font}px monospace`;
-        atlas.ctx.textBaseline = "middle";
-        atlas.ctx.textAlign = "center";
-        atlas.ctx.fillStyle =
-          state.colorMode === "accent" ? state.ink : "#ffffff";
-        chars.forEach((char, i) =>
-          atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2),
-        );
-      }
-      if (state.style === 'lego' && studSize !== cell) {
-        studSize = cell;
-        resize(stud.canvas, Math.ceil(cell), Math.ceil(ch));
-        const sc = stud.ctx;
-        sc.clearRect(0,0,stud.canvas.width,stud.canvas.height);
-        sc.fillStyle = 'rgba(255,255,255,.2)';
-        sc.strokeStyle = 'rgba(0,0,0,.25)';
-        sc.lineWidth = Math.max(.5, pixelRatio * .6);
-        sc.beginPath(); sc.arc(cell/2,ch/2,cell*.28,0,Math.PI*2); sc.fill(); sc.stroke();
-      }
-      ac.font = `${font}px monospace`;
-      ac.textBaseline = "middle";
-      ac.textAlign = "center";
-      for (let y = 0; y < rows; y++)
-        for (let x = 0; x < cols; x++) {
-          let sx = x,
-            sy = y,
-            energy = 0;
-          if (flow.active) {
-            flow.sample(x / cols, y / rows, field);
-            sx = Math.max(0, Math.min(cols - 1, x - field[0] * cols));
-            sy = Math.max(0, Math.min(rows - 1, y - field[1] * rows));
-            energy = field[2] / 3;
-          }
-          const i = (Math.floor(sy) * cols + Math.floor(sx)) * 4;
-          if (!pixels[i + 3]) continue;
-          const r = pixels[i],
-            g = pixels[i + 1],
-            b = pixels[i + 2];
-          const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-          let lum = sourceLum;
-          if (["trail", "contour"].includes(state.hover.effect) && energy)
-            lum = invertTrailTone(lum, energy);
-          else if (state.hover.effect === "dissolve")
-            lum *= Math.max(0, 1 + energy);
-          const motion = state.motion.type;
-          let px = x * cell,
-            py = y * ch,
-            alpha = 1;
-          sampleAmbient(motion, x / cols, y / rows, phase, ambient);
-          scaleMotion(ambient, state.motion.amount ?? 1);
-          px += ambient[0] * w / 960;
-          py += ambient[1] * h / 960;
-          lum = Math.max(0, Math.min(1, lum + ambient[2]));
-          alpha = ambient[3];
-          if (!glyphMode && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
-          ac.globalAlpha = alpha;
-          const toneDelta = (lum - sourceLum) * 255;
-          let ink =
-            state.colorMode === "source"
-              ? `rgb(${r + toneDelta},${g + toneDelta},${b + toneDelta})`
-              : state.colorMode === "gray"
-                ? `rgb(${Math.round(lum * 255)},${Math.round(lum * 255)},${Math.round(lum * 255)})`
-                : state.ink;
-          ac.fillStyle = ink;
-          if (glyphMode) {
-            const index = Math.max(
-              0,
-              Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))),
-            );
-            if (state.colorMode === "accent")
-              ac.drawImage(
-                atlas.canvas,
-                index * aw,
+            if (!glyphMode && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
+            ac.globalAlpha = alpha;
+            const toneDelta = (lum - sourceLum) * 255;
+            const ink =
+              state.colorMode === "source"
+                ? `rgb(${r + toneDelta},${g + toneDelta},${b + toneDelta})`
+                : state.colorMode === "gray"
+                  ? `rgb(${Math.round(lum * 255)},${Math.round(lum * 255)},${Math.round(lum * 255)})`
+                  : state.ink;
+            ac.fillStyle = ink;
+            if (glyphMode) {
+              const index = Math.max(
                 0,
-                aw,
-                ah,
-                motion === 'none' || motion === 'caustics' ? Math.round(px + (cell - aw) / 2) : px + (cell - aw) / 2,
-                motion === 'none' || motion === 'caustics' ? Math.round(py + (ch - ah) / 2) : py + (ch - ah) / 2,
-                aw,
-                ah,
+                Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))),
               );
-            else ac.fillText(chars[index], px + cell / 2, py + ch / 2);
-          } else if (state.style === "dots") {
-            ac.beginPath();
-            ac.arc(
-              px + cell / 2,
-              py + ch / 2,
-              cell * 0.48 * Math.sqrt(lum),
-              0,
-              Math.PI * 2,
-            );
-            ac.fill();
-          } else if (state.style === "led") {
-            // Individual circular emitters, separated by an unlit matrix.
-            ac.beginPath(); ac.arc(px + cell/2, py + ch/2, cell*.39, 0, Math.PI*2); ac.fill();
-            ac.globalAlpha = alpha*.35;
-            ac.fillStyle = "#ffffff";
-            ac.beginPath(); ac.arc(px + cell*.43, py + ch*.4, cell*.11, 0, Math.PI*2); ac.fill();
-          } else if (state.style === "hex") {
-            const cx = px + cell/2, cy = py + ch/2;
-            ac.beginPath();
-            for (let side=0; side<6; side++) {
-              const angle = Math.PI/3*side;
-              const hx = cx + Math.cos(angle)*cell*.49, hy = cy + Math.sin(angle)*ch*.49;
-              if (side===0) ac.moveTo(hx,hy); else ac.lineTo(hx,hy);
-            }
-            ac.closePath(); ac.fill();
-          } else if (state.style === "cmyk") {
-            // Four offset subtractive ink screens on a paper cell.
-            ac.fillStyle = "#ffffff"; ac.fillRect(px, py, cell, ch);
-            const black = 1 - Math.max(r,g,b)/255;
-            const denominator = Math.max(.001,1-black);
-            const inks = [
-              ["#00ffff", (1-r/255-black)/denominator, .36, .36],
-              ["#ff00ff", (1-g/255-black)/denominator, .64, .36],
-              ["#ffff00", (1-b/255-black)/denominator, .5, .66],
-              ["#000000", black, .5, .5],
-            ] as const;
-            ac.globalCompositeOperation = "multiply";
-            for (const [color, density, ox, oy] of inks) {
-              ac.fillStyle = color; ac.beginPath();
-              ac.arc(px+cell*ox, py+ch*oy, cell*.48*Math.sqrt(Math.max(0,density)),0,Math.PI*2); ac.fill();
-            }
-            ac.globalCompositeOperation = "source-over";
-          } else if (state.style === "voxel") {
-            const vx = px + cell / 2,
-              vy = py + ch / 2;
-            ac.beginPath();
-            ac.moveTo(vx, py);
-            ac.lineTo(px + cell, py + ch * 0.25);
-            ac.lineTo(vx, vy);
-            ac.lineTo(px, py + ch * 0.25);
-            ac.closePath();
-            ac.fill();
-            ac.globalAlpha = alpha * 0.72;
-            ac.beginPath();
-            ac.moveTo(px, py + ch * 0.25);
-            ac.lineTo(vx, vy);
-            ac.lineTo(vx, py + ch);
-            ac.lineTo(px, py + ch * 0.75);
-            ac.closePath();
-            ac.fill();
-            ac.globalAlpha = alpha * 0.42;
-            ac.beginPath();
-            ac.moveTo(vx, vy);
-            ac.lineTo(px + cell, py + ch * 0.25);
-            ac.lineTo(px + cell, py + ch * 0.75);
-            ac.lineTo(vx, py + ch);
-            ac.closePath();
-            ac.fill();
-          } else {
-            const gap =
-              state.style === "pixel" ? 0 : Math.max(0.5, cell * 0.06);
-            ac.fillRect(px, py, cell - gap, ch - gap);
-            if (state.style === "lego") {
-              ac.drawImage(stud.canvas, px, py);
-            }
-            if (state.style === "disco") {
-              ac.fillStyle = `rgba(255,255,255,${0.1 + noise(x, y) * 0.25})`;
-              ac.fillRect(px, py, cell - gap, ch * 0.35);
-              ac.fillStyle = "rgba(0,0,0,.25)";
-              ac.fillRect(px, py + ch * 0.65, cell - gap, ch * 0.35 - gap);
+              if (state.colorMode === "accent")
+                ac.drawImage(
+                  atlas.canvas,
+                  index * aw,
+                  0,
+                  aw,
+                  ah,
+                  anchoredMotion ? Math.round(px + (cell - aw) / 2) : px + (cell - aw) / 2,
+                  anchoredMotion ? Math.round(py + (ch - ah) / 2) : py + (ch - ah) / 2,
+                  aw,
+                  ah,
+                );
+              else ac.fillText(chars[index], px + cell / 2, py + ch / 2);
+            } else if (state.style === "dots") {
+              ac.beginPath();
+              ac.arc(
+                px + cell / 2,
+                py + ch / 2,
+                cell * 0.48 * Math.sqrt(lum),
+                0,
+                Math.PI * 2,
+              );
+              ac.fill();
+            } else if (state.style === "led") {
+              // Individual circular emitters, separated by an unlit matrix.
+              ac.beginPath(); ac.arc(px + cell/2, py + ch/2, cell*.39, 0, Math.PI*2); ac.fill();
+              ac.globalAlpha = alpha*.35;
+              ac.fillStyle = "#ffffff";
+              ac.beginPath(); ac.arc(px + cell*.43, py + ch*.4, cell*.11, 0, Math.PI*2); ac.fill();
+            } else if (state.style === "hex") {
+              const cx = px + cell/2, cy = py + ch/2;
+              ac.beginPath();
+              for (let side=0; side<6; side++) {
+                const angle = Math.PI/3*side;
+                const hx = cx + Math.cos(angle)*cell*.49, hy = cy + Math.sin(angle)*ch*.49;
+                if (side===0) ac.moveTo(hx,hy); else ac.lineTo(hx,hy);
+              }
+              ac.closePath(); ac.fill();
+            } else if (state.style === "cmyk") {
+              // Four offset subtractive ink screens on a paper cell.
+              ac.fillStyle = "#ffffff"; ac.fillRect(px, py, cell, ch);
+              // The ink screens must use the same graded, animated tone as other
+              // renderers, rather than bypassing hover and motion with source RGB.
+              const inkChannel = (value: number, accentValue: number) => Math.max(0, Math.min(255,
+                state.colorMode === "source" ? value + toneDelta : state.colorMode === "gray" ? lum * 255 : accentValue * lum));
+              const cr = inkChannel(r, accent[0]), cg = inkChannel(g, accent[1]), cb = inkChannel(b, accent[2]);
+              const black = 1 - Math.max(cr,cg,cb)/255;
+              const denominator = Math.max(.001,1-black);
+              const inks = [
+                ["#00ffff", (1-cr/255-black)/denominator, .36, .36],
+                ["#ff00ff", (1-cg/255-black)/denominator, .64, .36],
+                ["#ffff00", (1-cb/255-black)/denominator, .5, .66],
+                ["#000000", black, .5, .5],
+              ] as const;
+              ac.globalCompositeOperation = "multiply";
+              for (const [color, density, ox, oy] of inks) {
+                ac.fillStyle = color; ac.beginPath();
+                ac.arc(px+cell*ox, py+ch*oy, cell*.48*Math.sqrt(Math.max(0,density)),0,Math.PI*2); ac.fill();
+              }
+              ac.globalCompositeOperation = "source-over";
+            } else if (state.style === "voxel") {
+              const vx = px + cell / 2,
+                vy = py + ch / 2;
+              ac.beginPath();
+              ac.moveTo(vx, py);
+              ac.lineTo(px + cell, py + ch * 0.25);
+              ac.lineTo(vx, vy);
+              ac.lineTo(px, py + ch * 0.25);
+              ac.closePath();
+              ac.fill();
+              ac.globalAlpha = alpha * 0.72;
+              ac.beginPath();
+              ac.moveTo(px, py + ch * 0.25);
+              ac.lineTo(vx, vy);
+              ac.lineTo(vx, py + ch);
+              ac.lineTo(px, py + ch * 0.75);
+              ac.closePath();
+              ac.fill();
+              ac.globalAlpha = alpha * 0.42;
+              ac.beginPath();
+              ac.moveTo(vx, vy);
+              ac.lineTo(px + cell, py + ch * 0.25);
+              ac.lineTo(px + cell, py + ch * 0.75);
+              ac.lineTo(vx, py + ch);
+              ac.closePath();
+              ac.fill();
+            } else {
+              const gap =
+                state.style === "pixel" ? 0 : Math.max(0.5, cell * 0.06);
+              ac.fillRect(px, py, cell - gap, ch - gap);
+              if (state.style === "lego") {
+                ac.drawImage(stud.canvas, px, py);
+              }
+              if (state.style === "disco") {
+                ac.fillStyle = `rgba(255,255,255,${0.1 + noise(x, y) * 0.25})`;
+                ac.fillRect(px, py, cell - gap, ch * 0.35);
+                ac.fillStyle = "rgba(0,0,0,.25)";
+                ac.fillRect(px, py + ch * 0.65, cell - gap, ch * 0.35 - gap);
+              }
             }
           }
-        }
-    }
-    art.ctx.globalAlpha = 1;
-    if (state.color.amount || state.lights.length) {
-      resize(inkMask.canvas, w, h);
-      inkMask.ctx.clearRect(0, 0, w, h);
-      inkMask.ctx.drawImage(art.canvas, 0, 0);
-    }
-    if (state.color.amount) {
-      art.ctx.save();
-      art.ctx.globalCompositeOperation = state.color.blend;
-      art.ctx.globalAlpha = state.color.amount;
-      art.ctx.fillStyle = state.color.tint;
-      art.ctx.fillRect(0, 0, w, h);
-      art.ctx.restore();
-    }
-    for (const l of state.lights) {
-      const r = l.radius * Math.max(w, h),
-        gradient = art.ctx.createRadialGradient(
-          l.x * w,
-          l.y * h,
-          0,
-          l.x * w,
-          l.y * h,
-          r,
-        );
-      gradient.addColorStop(0, l.color);
-      gradient.addColorStop(1, "transparent");
-      art.ctx.save();
-      art.ctx.globalCompositeOperation = "screen";
-      art.ctx.globalAlpha = l.intensity;
-      art.ctx.fillStyle = gradient;
-      art.ctx.fillRect(0, 0, w, h);
-      art.ctx.restore();
-    }
-    if (state.color.amount || state.lights.length) {
-      art.ctx.globalCompositeOperation = "destination-in";
-      art.ctx.drawImage(inkMask.canvas, 0, 0);
-      art.ctx.globalCompositeOperation = "source-over";
-    }
-    if (state.mask.enabled && state.mask.shapes.length) {
-      const mc = mask.ctx;
-      mc.clearRect(0, 0, w, h);
-      mc.fillStyle = "#fff";
-      mc.strokeStyle = "#fff";
-      mc.lineCap = "round";
-      mc.lineJoin = "round";
-      for (const s of state.mask.shapes) {
-        mc.beginPath();
-        if (s.kind === "ellipse")
-          mc.ellipse(
-            (s.x + s.width / 2) * w,
-            (s.y + s.height / 2) * h,
-            (s.width * w) / 2,
-            (s.height * h) / 2,
+      }
+      art.ctx.globalAlpha = 1;
+      if (state.color.amount || state.lights.length) {
+        resize(inkMask.canvas, w, h);
+        inkMask.ctx.clearRect(0, 0, w, h);
+        inkMask.ctx.drawImage(art.canvas, 0, 0);
+      }
+      if (state.color.amount) {
+        art.ctx.save();
+        art.ctx.globalCompositeOperation = state.color.blend;
+        art.ctx.globalAlpha = state.color.amount;
+        art.ctx.fillStyle = state.color.tint;
+        art.ctx.fillRect(0, 0, w, h);
+        art.ctx.restore();
+      }
+      for (const l of state.lights) {
+        const r = l.radius * Math.max(w, h),
+          gradient = art.ctx.createRadialGradient(
+            l.x * w,
+            l.y * h,
             0,
-            0,
-            Math.PI * 2,
+            l.x * w,
+            l.y * h,
+            r,
           );
-        else if (s.kind === "rectangle")
-          mc.rect(s.x * w, s.y * h, s.width * w, s.height * h);
-        else {
-          mc.lineWidth = (s.size ?? 0.05) * w;
-          if (s.points?.length === 1) {
-            mc.arc(
-              s.points[0][0] * w,
-              s.points[0][1] * h,
-              mc.lineWidth / 2,
+        gradient.addColorStop(0, l.color);
+        gradient.addColorStop(1, "transparent");
+        art.ctx.save();
+        art.ctx.globalCompositeOperation = "screen";
+        art.ctx.globalAlpha = l.intensity;
+        art.ctx.fillStyle = gradient;
+        art.ctx.fillRect(0, 0, w, h);
+        art.ctx.restore();
+      }
+      if (state.color.amount || state.lights.length) {
+        art.ctx.globalCompositeOperation = "destination-in";
+        art.ctx.drawImage(inkMask.canvas, 0, 0);
+        art.ctx.globalCompositeOperation = "source-over";
+      }
+      if (state.mask.enabled && state.mask.shapes.length) {
+        const mc = mask.ctx;
+        mc.clearRect(0, 0, w, h);
+        mc.fillStyle = "#fff";
+        mc.strokeStyle = "#fff";
+        mc.lineCap = "round";
+        mc.lineJoin = "round";
+        for (const s of state.mask.shapes) {
+          mc.beginPath();
+          if (s.kind === "ellipse")
+            mc.ellipse(
+              (s.x + s.width / 2) * w,
+              (s.y + s.height / 2) * h,
+              (s.width * w) / 2,
+              (s.height * h) / 2,
+              0,
               0,
               Math.PI * 2,
             );
-            mc.fill();
+          else if (s.kind === "rectangle")
+            mc.rect(s.x * w, s.y * h, s.width * w, s.height * h);
+          else {
+            mc.lineWidth = (s.size ?? 0.05) * w;
+            if (s.points?.length === 1) {
+              mc.arc(
+                s.points[0][0] * w,
+                s.points[0][1] * h,
+                mc.lineWidth / 2,
+                0,
+                Math.PI * 2,
+              );
+              mc.fill();
+              continue;
+            }
+            s.points?.forEach(([x, y], i) =>
+              i ? mc.lineTo(x * w, y * h) : mc.moveTo(x * w, y * h),
+            );
+            mc.stroke();
             continue;
           }
-          s.points?.forEach(([x, y], i) =>
-            i ? mc.lineTo(x * w, y * h) : mc.moveTo(x * w, y * h),
-          );
-          mc.stroke();
-          continue;
+          mc.fill();
         }
-        mc.fill();
+        art.ctx.globalCompositeOperation = state.mask.invert
+          ? "destination-out"
+          : "destination-in";
+        art.ctx.drawImage(mask.canvas, 0, 0);
+        art.ctx.globalCompositeOperation = "source-over";
       }
-      art.ctx.globalCompositeOperation = state.mask.invert
-        ? "destination-out"
-        : "destination-in";
-      art.ctx.drawImage(mask.canvas, 0, 0);
-      art.ctx.globalCompositeOperation = "source-over";
+      const out = composite.ctx;
+      out.clearRect(0, 0, w, h);
+      out.globalAlpha = state.backdrop.opacity;
+      const back = state.backdrop;
+      if (back.mode === "solid") {
+        out.fillStyle = back.color;
+        out.fillRect(0, 0, w, h);
+      }
+      if (back.mode === "gradient") {
+        const g = out.createLinearGradient(0, 0, w, h);
+        g.addColorStop(0, back.color);
+        g.addColorStop(1, back.color2);
+        out.fillStyle = g;
+        out.fillRect(0, 0, w, h);
+      }
+      if (back.mode === "source") out.drawImage(scene.canvas, 0, 0);
+      if (back.mode === "blurred") {
+        const factor = Math.max(1, back.blur);
+        resize(
+          tiny.canvas,
+          Math.max(2, Math.round(w / factor)),
+          Math.max(2, Math.round(h / factor)),
+        );
+        tiny.ctx.drawImage(
+          scene.canvas,
+          0,
+          0,
+          tiny.canvas.width,
+          tiny.canvas.height,
+        );
+        out.imageSmoothingEnabled = true;
+        out.drawImage(tiny.canvas, 0, 0, w, h);
+      }
+      out.globalAlpha = 1;
+      if (state.effects.characterBloom > 0) {
+        resize(
+          glow.canvas,
+          Math.max(2, Math.round(w / 3)),
+          Math.max(2, Math.round(h / 3)),
+        );
+        glow.ctx.clearRect(0, 0, glow.canvas.width, glow.canvas.height);
+        glow.ctx.drawImage(
+          art.canvas,
+          0,
+          0,
+          glow.canvas.width,
+          glow.canvas.height,
+        );
+        out.save();
+        out.globalAlpha = state.effects.characterBloom * 0.8;
+        out.globalCompositeOperation = "screen";
+        out.filter = `blur(${1 + state.effects.characterBloom * 4}px)`;
+        out.drawImage(glow.canvas, 0, 0, w, h);
+        out.restore();
+      }
+      out.drawImage(art.canvas, 0, 0);
+      compositionCacheKey = stableComposition ? compositionKey : "";
     }
-    const out = composite.ctx;
-    out.clearRect(0, 0, w, h);
-    out.globalAlpha = state.backdrop.opacity;
-    const back = state.backdrop;
-    if (back.mode === "solid") {
-      out.fillStyle = back.color;
-      out.fillRect(0, 0, w, h);
-    }
-    if (back.mode === "gradient") {
-      const g = out.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, back.color);
-      g.addColorStop(1, back.color2);
-      out.fillStyle = g;
-      out.fillRect(0, 0, w, h);
-    }
-    if (back.mode === "source") out.drawImage(scene.canvas, 0, 0);
-    if (back.mode === "blurred") {
-      const factor = Math.max(1, back.blur);
-      resize(
-        tiny.canvas,
-        Math.max(2, Math.round(w / factor)),
-        Math.max(2, Math.round(h / factor)),
-      );
-      tiny.ctx.drawImage(
-        scene.canvas,
-        0,
-        0,
-        tiny.canvas.width,
-        tiny.canvas.height,
-      );
-      out.imageSmoothingEnabled = true;
-      out.drawImage(tiny.canvas, 0, 0, w, h);
-    }
-    out.globalAlpha = 1;
-    if (state.effects.characterBloom > 0) {
-      resize(
-        glow.canvas,
-        Math.max(2, Math.round(w / 3)),
-        Math.max(2, Math.round(h / 3)),
-      );
-      glow.ctx.clearRect(0, 0, glow.canvas.width, glow.canvas.height);
-      glow.ctx.drawImage(
-        art.canvas,
-        0,
-        0,
-        glow.canvas.width,
-        glow.canvas.height,
-      );
-      out.save();
-      out.globalAlpha = state.effects.characterBloom * 0.8;
-      out.globalCompositeOperation = "screen";
-      out.filter = `blur(${1 + state.effects.characterBloom * 4}px)`;
-      out.drawImage(glow.canvas, 0, 0, w, h);
-      out.restore();
-    }
-    out.drawImage(art.canvas, 0, 0);
     const hasFinish = Object.entries(state.effects).some(
       ([k, v]) =>
         !["angle", "focus", "blurType", "characterBloom"].includes(k) &&
@@ -617,7 +635,7 @@ export function createStudioRenderer(
     },
     get pixelRatio() { return pixelRatio; },
     setBudget(cells: number) {
-      budgetCells = Math.max(1500, Math.min(maxCells, Math.round(cells)));
+      budgetCells = Math.max(256, Math.min(maxCells, Number.isFinite(cells) ? Math.round(cells) : maxCells));
     },
     get maxCells() {
       return budgetCells;

@@ -541,3 +541,7 @@ The optional `asciify-engine/studio` entry includes 18 render styles, including 
 ### More motion for still images (4.3)
 
 Studio includes six still-image motions plus Off: Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, and Living Grain. Sheen and Living Grain preserve the grid. Motion speed and strength are adjustable. Hover adds Magnetic Pull and Scatter alongside Trail, Water, Contour, Dissolve, Silk, and Vortex. Use `hover.effect` in Studio or `effect` in the optional `/hover` module; configure radius and strength separately. Existing defaults remain unchanged.
+
+### Studio correctness and performance (4.3.1)
+
+Stationary compositions are reused during animated finishing. Hidden dither settings and zero-strength motion no longer keep still previews awake. Ordered dithering uses cached thresholds with byte-identical output; Scatter caches its spatial noise. CMYK now responds to tonal hovers and still motion. For a selected PNG/JPEG frame after changing motion speed, pass `time: player.time` and `motionTime: player.motionTime` to `exportStudio`. See the packaged project-integration skill reference for a live component and independent image/video export.

@@ -10,6 +10,7 @@ export class AfterimageField {
   private offsetX:Float32Array; private offsetY:Float32Array; private edge:Float32Array;
   private previous:{x:number;y:number}|null=null;
   private peak=0;
+  private scatterDirections:Float64Array|null=null;
   private mode:AfterimageMode='dissolve';
   constructor(width:number,height:number) {
     this.width=width;this.height=height;const n=width*height;
@@ -20,7 +21,19 @@ export class AfterimageField {
     this.clear();
   }
   get active(){return this.peak>.0002;}
-  setMode(mode:AfterimageMode){if(mode!==this.mode){this.mode=mode;this.clear();}}
+  setMode(mode:AfterimageMode){
+    if(mode==='scatter'&&!this.scatterDirections){
+      // Spatial noise belongs to the field, not the pointer event. Compute it
+      // once; rapid movement then only combines existing directions.
+      const directions=this.scatterDirections=new Float64Array(this.width*this.height*2);
+      for(let gy=0;gy<this.height;gy++)for(let gx=0;gx<this.width;gx++){
+        const grain=Math.sin(gx*127.1+gy*311.7)*43758.5453;
+        const angle=(grain-Math.floor(grain))*Math.PI*2, i=(gy*this.width+gx)*2;
+        directions[i]=Math.cos(angle)*.7;directions[i+1]=Math.sin(angle)*.7;
+      }
+    }
+    if(mode!==this.mode){this.mode=mode;this.clear();}
+  }
   clear(){
     for(const a of [this.ink,this.targetX,this.targetY,this.offsetX,this.offsetY,this.pixels])a.fill(0);
     this.previous=null;this.peak=0;
@@ -49,10 +62,8 @@ export class AfterimageField {
         else {
           // Silk shears opposite sides of a stroke; Vortex turns around it.
           const fold=(-rx*ty+ry*tx)*k*2.8;
-          const grain=Math.sin(gx*127.1+gy*311.7)*43758.5453;
-          const angle=(grain-Math.floor(grain))*Math.PI*2;
-          const fx=this.mode==='magnetic'?-rx*k*2.5:this.mode==='scatter'?(rx+Math.cos(angle)*.7)*k*2:this.mode==='silk'?tx*fold:-ry*k*2.5;
-          const fy=this.mode==='magnetic'?-ry*k*2.5:this.mode==='scatter'?(ry+Math.sin(angle)*.7)*k*2:this.mode==='silk'?ty*fold:rx*k*2.5;
+          const fx=this.mode==='magnetic'?-rx*k*2.5:this.mode==='scatter'?(rx+this.scatterDirections![i*2])*k*2:this.mode==='silk'?tx*fold:-ry*k*2.5;
+          const fy=this.mode==='magnetic'?-ry*k*2.5:this.mode==='scatter'?(ry+this.scatterDirections![i*2+1])*k*2:this.mode==='silk'?ty*fold:rx*k*2.5;
           this.targetX[i]=Math.max(-1,Math.min(1,this.targetX[i]+fx*gain));
           this.targetY[i]=Math.max(-1,Math.min(1,this.targetY[i]+fy*gain));
         }
