@@ -35,3 +35,11 @@ it('scales displacement and opacity without changing animation phase', () => {
   }
   expect(normalizeStudioSettings({motion:{amount:99}}).motion.amount).toBe(2);
 });
+
+it('preserves all motion choices through saved settings and keeps tonal effects anchored', () => {
+  for (const {mode} of MOTION_STYLES) expect(normalizeStudioSettings({motion:{type:mode}}).motion.type).toBe(mode);
+  for (const mode of ['sheen','grain'] as const) for(let t=0;t<12;t+=.2) {
+    expect(sampleAmbient(mode,.37,.48,t,[]).slice(0,2)).toEqual([0,0]);
+  }
+  for(const effect of ['magnetic','scatter'] as const) expect(normalizeStudioSettings({hover:{effect}}).hover.effect).toBe(effect);
+});

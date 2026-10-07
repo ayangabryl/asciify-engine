@@ -537,3 +537,7 @@ Use `CHARACTER_SETS.standard.chars` (or another curated entry) from root or `/co
 ### Studio detail controls (4.2)
 
 The optional `asciify-engine/studio` entry includes 18 render styles, including hex mosaic, LED matrix and CMYK print. Dither supports pixel scale, custom palettes, RGB/luminance mapping, pattern speed and direction. Use `studioGrid` to report effective density and opt into a larger `maxCells` budget for one-pixel output; defaults stay performance-bounded. Mounts expose `setAdaptive` for an explicit detail/performance choice. Still-image motion has `amount`, and finishing adds `rgbSplit` and `sharpen` (WebGL required). See the [complete controls and export guidance](skills/asciify-engine/references/studio-workspace.md#fine-detail-and-controls-42). No AI service or server upload is introduced.
+
+### More motion for still images (4.3)
+
+Studio includes six still-image motions plus Off: Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, and Living Grain. Sheen and Living Grain preserve the grid. Motion speed and strength are adjustable. Hover adds Magnetic Pull and Scatter alongside Trail, Water, Contour, Dissolve, Silk, and Vortex. Use `hover.effect` in Studio or `effect` in the optional `/hover` module; configure radius and strength separately. Existing defaults remain unchanged.

@@ -3,7 +3,7 @@ import { CHARACTER_SETS } from './studio/characters';
 
 export type ColorMode = 'grayscale' | 'fullcolor' | 'matrix' | 'accent';
 export type RenderMode = 'ascii' | 'dots';
-export type AnimationStyle = 'none' | 'caustics' | 'current' | 'reform';
+export type AnimationStyle = 'none' | 'caustics' | 'current' | 'reform' | 'sheen' | 'tidal' | 'grain';
 /** Core media draws ASCII/dots; use StudioStyle for the 15 render styles. */
 export type ArtStyle = 'classic';
 export type HoverEffect = 'spotlight' | 'magnify' | 'repel' | 'glow' | 'colorShift' | 'attract' | 'shatter' | 'trail' | 'glitchText';

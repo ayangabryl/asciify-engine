@@ -195,7 +195,7 @@ export interface StudioSettings {
   };
   hover: {
     effect:
-      "none" | "trail" | "water" | "contour" | "dissolve" | "silk" | "vortex";
+      "none" | "trail" | "water" | "contour" | "dissolve" | "silk" | "vortex" | "magnetic" | "scatter";
     strength: number;
     radius: number;
     edgeSafe: boolean;
@@ -432,7 +432,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     motion: {
       type: choice(
         a.type,
-        ["none", "caustics", "current", "reform"],
+        ["none", "caustics", "current", "reform", "sheen", "tidal", "grain"],
         "none",
       ),
       speed: n(a.speed, 1, 0.1, 3),
@@ -441,7 +441,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
     hover: {
       effect: choice(
         p.effect,
-        ["none", "trail", "water", "contour", "dissolve", "silk", "vortex"],
+        ["none", "trail", "water", "contour", "dissolve", "silk", "vortex", "magnetic", "scatter"],
         "trail",
       ),
       strength: n(p.strength, 0.55, 0, 1),
