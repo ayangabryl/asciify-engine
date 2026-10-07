@@ -58,3 +58,16 @@ The new CPU benchmark uses the same M4 Pro, Node 25.9.0 and 16-color Pico-8 fixt
 Neutral tonal controls skip the lookup pass. Non-neutral controls build a 256-entry curve only when configuration changes and apply it to sampled source pixels before every style's conversion; the existing static-source cache remains in effect. Tests verify monotonicity across extreme combinations, input endpoint mapping, midtone gamma, independent shadows/highlights, alpha preservation, settings round-trip, and reset/invalidation in every renderer. This is a bounded global tonal curve, not per-channel curve-graph parity.
 
 279 engine unit tests across 21 files pass. Browser appearance, stack combinations and playback remain unverified under the existing inspection restriction.
+
+
+## 4.6 source curves and noise reduction
+
+Four independently editable curves (RGB, red, green, blue) use shape-preserving cubic interpolation and compile to three 256-entry tables. Curves support non-monotone output points intentionally; tests check segment bounds and monotonicity within 160 uneven/inverted fixtures. Defaults and identity curves keep the existing 4.5 tone output byte-exact. The edge-preserving source filter uses a fixed 3×3 neighborhood, RGB difference weighting and alpha-aware sampling; it does not touch alpha or read hidden transparent color. It is off by default.
+
+The renderer applies source filtering once per invalidated source, then reuses it during still-image motion and pointer effects. Tests cover all 18 renderer paths, source/configuration invalidation, detached settings snapshots and forwarding saved curves/noise settings to the independent export renderer. Export codecs and actual pixel readback still require browser acceptance.
+
+CPU measurements: Node v25.9.0, Apple M4 Pro. See [full source-processing report](benchmarks/2026-10-07-source-4.6.0.json). At 320×180 samples, combined full-strength filtering/curves median 1.990 ms, p95 2.245 ms. At 640×360, 7.753 / 7.978 ms. Dense 960×540 sampling costs 18.753 / 19.595 ms, so full-resolution video filtering is not a 60fps guarantee. Default character grids are far smaller; stills reuse this work. Curves alone at 640×360 p95 0.421 ms. Measurements exclude decoding, Canvas, GPU, display and user input latency.
+
+Design references for algorithms: [shape-preserving interpolation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html), [edge-preserving filtering](https://docs.opencv.org/3.4.19/dd/d6a/tutorial_js_filtering.html). No third-party implementation or runtime dependency was copied.
+
+The build keeps all root/core/hover ESM and CJS JavaScript byte-identical to the 4.5.0 preflight artifact. Studio is 76.87 KiB ESM (minified, uncompressed). Site controls extend the accepted inspector with native controls; they do not add another live canvas. Browser visual, input, codec and frame-pacing checks remain blocked by the prior URL-policy rejection. These results do not establish competitor superiority.

@@ -27,7 +27,7 @@ export async function createComposition(
   async function exportComposition(format: StudioExportFormat, cancellation?: AbortSignal) {
     // Snapshot before loading another media instance. Export never seeks the
     // live preview or picks up slider edits made while encoding.
-    const frozen = normalizeStudioSettings(settings);
+    const frozen = player.settings;
     const time = player.time;
     const motionTime = player.motionTime;
     const referenceWidth = canvas.width / player.pixelRatio;

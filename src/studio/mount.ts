@@ -210,6 +210,8 @@ export function mountStudioMedia(
     get time() {
       return video?.currentTime ?? time;
     },
+    /** Independent serializable snapshot; edits must go through update(). */
+    get settings() { return normalizeStudioSettings(settings); },
     /** Ambient phase of the last displayed frame, preserved across speed edits. */
     get motionTime() { return renderedMotionTime; },
     get paused() {

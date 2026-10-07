@@ -1,5 +1,6 @@
 import { samplePixel } from './sample-pixel';
-import { createToneLookup, applyToneLookup } from './tone';
+import { createColorLookups, applyColorLookups } from './tone';
+import { SourceDenoiser } from './denoise';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
 import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
 import {
@@ -83,7 +84,8 @@ export function createStudioRenderer(
   const field = [0, 0, 0];
   const ambient = [0, 0, 0, 1];
   const sampled = [0, 0, 0, 0];
-  let toneLookup = createToneLookup(state.color);
+  let toneLookup = createColorLookups(state.color);
+  const denoiser = new SourceDenoiser(state.color.denoise);
   const maxDimension = Math.max(
       64,
       Math.min(
@@ -188,6 +190,7 @@ export function createStudioRenderer(
       sample.ctx.clearRect(0, 0, cols, rows);
       sample.ctx.drawImage(scene.canvas, 0, 0, cols, rows);
       pixels = sample.ctx.getImageData(0, 0, cols, rows).data;
+      denoiser.apply(pixels, cols, rows);
       const g = state.color;
       for (let i = 0; i < pixels.length; i += 4) {
         const lum =
@@ -202,7 +205,7 @@ export function createStudioRenderer(
             g.brightness * 255;
         }
       }
-      if (toneLookup) applyToneLookup(pixels, toneLookup);
+      if (toneLookup) applyColorLookups(pixels, toneLookup);
     }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
@@ -649,7 +652,8 @@ export function createStudioRenderer(
     },
     configure(input: unknown) {
       state = normalizeStudioSettings(input);
-      toneLookup = createToneLookup(state.color);
+      toneLookup = createColorLookups(state.color);
+      denoiser.configure(state.color.denoise);
       revision++;
     },
     pointer,

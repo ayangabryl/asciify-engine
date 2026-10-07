@@ -4,6 +4,7 @@ import { createStudioRenderer } from './renderer';
 import { STUDIO_STYLES } from './model';
 import { MOTION_STYLES } from '../surface/ambient-motion';
 import { ditherPixels } from './dither';
+import { SourceDenoiser } from './denoise';
 vi.mock('./dither', async importOriginal => {
   const actual = await importOriginal<typeof import('./dither')>();
   return {...actual, ditherPixels: vi.fn(actual.ditherPixels)};
@@ -37,6 +38,29 @@ beforeEach(() => {
   vi.stubGlobal('ImageData', class { constructor(public data:Uint8ClampedArray,public width:number,public height:number) {} });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(STUDIO_STYLES)('applies channel curves before %s and restores them without contaminating the source', style => {
+  const renderer=createStudioRenderer(canvas(),{style,color:{curves:{red:[[0,1],[1,0]]},denoise:1}});
+  const source=canvas(), sample=contexts[2];
+  renderer.render(source,0,32,24);
+  expect([...sample.getImageData.mock.results[0].value.data.slice(0,4)]).toEqual([165,140,190,255]);
+  renderer.configure({style});renderer.render(source,1,32,24);
+  expect([...sample.getImageData.mock.results[1].value.data.slice(0,4)]).toEqual([90,140,190,255]);
+  renderer.destroy();
+});
+it('caches source filtering across lively motion and hover, invalidating only on source/configuration changes', () => {
+  const filtering=vi.spyOn(SourceDenoiser.prototype,'apply');
+  const renderer=createStudioRenderer(canvas(),{color:{denoise:1},motion:{type:'parallax'}});
+  const source=canvas();
+  renderer.render(source,0,32,24);renderer.render(source,.1,32,24);
+  renderer.pointer(.5,.5,120);renderer.render(source,.15,32,24);
+  expect(filtering).toHaveBeenCalledTimes(1);
+  renderer.configure({color:{denoise:.5},motion:{type:'sheen'}});renderer.render(source,.2,32,24);
+  expect(filtering).toHaveBeenCalledTimes(2);
+  renderer.invalidate();renderer.render(source,.3,32,24);
+  expect(filtering).toHaveBeenCalledTimes(3);
+  renderer.destroy();filtering.mockRestore();
+});
 
 it.each(STUDIO_STYLES)('renders %s through the common composition pipeline without an unsupported-style exception', style => {
   const renderer=createStudioRenderer(canvas(),{style, dither:{algorithm:'bayer4'}});

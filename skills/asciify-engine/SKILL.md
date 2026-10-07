@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII images, video, GIFs, text, and interactive heroes with asciify-engine. Use for media conversion, character and color choices, hover integration, layered HTML typography, scroll-synced video, and rendering performance in apps using this package.
 metadata:
-  tested-engine: "4.5.0"
+  tested-engine: "4.6.0"
   updated: "2026-10-07"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.5.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.6.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -149,3 +149,5 @@ Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESE
 Studio adds `hex`, `led`, and `cmyk` render styles, directional/radial dither patterns, additional palettes, luminance mapping, RGB split, sharpening, and adjustable still-image motion strength. Read [studio-workspace.md](references/studio-workspace.md#fine-detail-and-controls-42) for exact options, density budgets and preview/export consistency. These are local Canvas/WebGL effects, not AI generation or a claim of parity with every competing catalog.
 
 From 4.5, `dither.algorithm: 'blue-noise'` uses a precomputed dispersed threshold tile, separate from white `noise`. Studio `color` also accepts `blackPoint`, `whitePoint`, `gamma`, `shadows` and `highlights` to shape detail before conversion. All are neutral by default. Read [tonal detail and blue noise](references/studio-workspace.md#tonal-detail-and-blue-noise-45) before adding these controls; they belong to `/studio`, not core `AsciiOptions`.
+
+From 4.6, Studio adds `color.curves` (RGB, red, green, blue) and optional edge-preserving `color.denoise`. `player.settings` returns a detached snapshot for saving or exporting after updates. Read [channel curves and source noise](references/studio-workspace.md#channel-curves-and-source-noise-46) for point limits, update semantics and the processing budget. Do not turn noise reduction on by default or apply it again to the already-rendered characters.

@@ -566,3 +566,17 @@ All motion choices repeat every `12 / speed` seconds. Still exports preserve the
 Studio adds `dither.algorithm: 'blue-noise'`: a stable precomputed dispersed pattern with no runtime generation or asset download. `noise` remains white noise. Choose the algorithm from `DITHER_ALGORITHMS`; drift and shimmer remain independently controlled.
 
 Recover usable shadow/highlight separation before conversion with `color.gamma`, `shadows`, `highlights`, `blackPoint` and `whitePoint`. All 18 styles share these controls and retain neutral defaults. They are a bounded monotone tonal curve, not arbitrary per-channel curve editing. See [exact ranges, sampling budgets and a live-project example](skills/asciify-engine/references/studio-workspace.md#tonal-detail-and-blue-noise-45).
+
+### Channel curves and source noise reduction (4.6)
+
+Studio adds editable RGB, red, green and blue curves, with up to 16 control points each, plus optional edge-preserving source noise reduction. They apply before every render style and travel with saved settings and exports. Defaults preserve existing output. Curves use small cached lookups; still images reuse filtered pixels while hover/motion run. Dense video filtering is an explicit CPU tradeoff.
+
+```ts
+player.update({color:{
+  denoise:.25,
+  curves:{rgb:[[0,0],[.25,.2],[.75,.8],[1,1]]},
+}});
+const settings = player.settings; // detached snapshot for save/export
+```
+
+See [settings, normalization, processing order and performance guidance](skills/asciify-engine/references/studio-workspace.md#channel-curves-and-source-noise-46). Curves are local source controls, not another art-style alias or AI restoration.

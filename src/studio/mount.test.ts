@@ -26,6 +26,17 @@ beforeEach(()=>{
   vi.stubGlobal('IntersectionObserver',class {observe(){} disconnect(){}});
 });
 afterEach(()=>vi.unstubAllGlobals());
+it('returns a detached current settings snapshot for saving or exporting after incremental updates',()=>{
+  const {canvas,media}=fixture();const player=mountStudioMedia(canvas,media);
+  player.update({color:{curves:{red:[[0,1],[1,0]]}}});
+  player.update({color:{curves:{blue:[[0,0],[1,.7]]},denoise:.4}});
+  const snapshot=player.settings;
+  expect(snapshot.color.curves?.red).toEqual([[0,1],[1,0]]);
+  expect(snapshot.color.denoise).toBe(.4);
+  snapshot.color.curves!.red![0][1]=.2;
+  expect(player.settings.color.curves?.red?.[0][1]).toBe(1);
+  player.destroy();
+});
 it('does not keep scheduling frames for hidden dither controls or zero-strength still motion',()=>{
   const {canvas,media}=fixture();
   const player=mountStudioMedia(canvas,media,{settings:{style:'ascii',dither:{motion:'drift'},motion:{type:'sheen',amount:0}}});
