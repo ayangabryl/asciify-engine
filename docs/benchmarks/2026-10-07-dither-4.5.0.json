@@ -1,0 +1,138 @@
+{
+  "scope": "CPU palette quantization only; not rendering, GPU, interaction latency or browser FPS",
+  "timestamp": "2026-10-07T10:40:35.921Z",
+  "node": "v25.9.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4 Pro",
+  "rows": [
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "bayer4",
+      "palette": "pico8",
+      "medianMs": 2.186,
+      "p95Ms": 2.258
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "bayer16",
+      "palette": "pico8",
+      "medianMs": 2.129,
+      "p95Ms": 2.209
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "floyd-steinberg",
+      "palette": "pico8",
+      "medianMs": 6.493,
+      "p95Ms": 6.573
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "atkinson",
+      "palette": "pico8",
+      "medianMs": 7.764,
+      "p95Ms": 7.857
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "halftone",
+      "palette": "pico8",
+      "medianMs": 3.261,
+      "p95Ms": 3.399
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "noise",
+      "palette": "pico8",
+      "medianMs": 4.102,
+      "p95Ms": 4.207
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "radial",
+      "palette": "pico8",
+      "medianMs": 4.197,
+      "p95Ms": 4.344
+    },
+    {
+      "width": 320,
+      "height": 180,
+      "algorithm": "blue-noise",
+      "palette": "pico8",
+      "medianMs": 3.256,
+      "p95Ms": 3.327
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "bayer4",
+      "palette": "pico8",
+      "medianMs": 10.803,
+      "p95Ms": 11.085
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "bayer16",
+      "palette": "pico8",
+      "medianMs": 10.806,
+      "p95Ms": 11.165
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "floyd-steinberg",
+      "palette": "pico8",
+      "medianMs": 30.14,
+      "p95Ms": 30.352
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "atkinson",
+      "palette": "pico8",
+      "medianMs": 36.866,
+      "p95Ms": 37.296
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "halftone",
+      "palette": "pico8",
+      "medianMs": 13.572,
+      "p95Ms": 13.962
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "noise",
+      "palette": "pico8",
+      "medianMs": 16.281,
+      "p95Ms": 16.521
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "radial",
+      "palette": "pico8",
+      "medianMs": 17.19,
+      "p95Ms": 17.346
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "algorithm": "blue-noise",
+      "palette": "pico8",
+      "medianMs": 12.239,
+      "p95Ms": 12.447
+    }
+  ]
+}

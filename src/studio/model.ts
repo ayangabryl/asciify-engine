@@ -41,6 +41,7 @@ export const DITHER_ALGORITHMS = [
   "vertical-lines",
   "diagonal-lines",
   "radial",
+  "blue-noise",
 ] as const;
 export type DitherAlgorithm = (typeof DITHER_ALGORITHMS)[number];
 export const BLEND_MODES = [
@@ -155,6 +156,11 @@ export interface StudioSettings {
     tint: string;
     amount: number;
     blend: (typeof BLEND_MODES)[number];
+    blackPoint?: number;
+    whitePoint?: number;
+    gamma?: number;
+    shadows?: number;
+    highlights?: number;
   };
   dither: {
     algorithm: DitherAlgorithm;
@@ -226,6 +232,11 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     tint: "#e8b900",
     amount: 0,
     blend: "source-over",
+    blackPoint: 0,
+    whitePoint: 1,
+    gamma: 1,
+    shadows: 0,
+    highlights: 0,
   },
   dither: {
     algorithm: "none",
@@ -360,6 +371,11 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       tint: color(g.tint, d.color.tint),
       amount: n(g.amount, 0, 0, 1),
       blend: choice(g.blend, BLEND_MODES, d.color.blend),
+      blackPoint: n(g.blackPoint, 0, 0, .99),
+      whitePoint: Math.max(n(g.blackPoint, 0, 0, .99) + 1 / 255, n(g.whitePoint, 1, 1 / 255, 1)),
+      gamma: n(g.gamma, 1, .25, 4),
+      shadows: n(g.shadows, 0, -1, 1),
+      highlights: n(g.highlights, 0, -1, 1),
     },
     dither: {
       algorithm: choice(h.algorithm, DITHER_ALGORITHMS, "none"),

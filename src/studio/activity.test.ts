@@ -17,7 +17,7 @@ it('zero motion strength lets a still sleep but keeps selected motion settings',
   }
 });
 it('shimmer animates thresholds while diffusion and zero-amount drift remain stationary', () => {
-  const drift=new Set(['bayer2','bayer4','bayer8','bayer16','halftone','lines','vertical-lines','diagonal-lines','radial','noise']);
+  const drift=new Set(['bayer2','bayer4','bayer8','bayer16','halftone','lines','vertical-lines','diagonal-lines','radial','noise','blue-noise']);
   for(const algorithm of DITHER_ALGORITHMS) {
     expect(hasPatternMotion(normalizeStudioSettings({style:'dither',dither:{algorithm,motion:'drift'}}))).toBe(drift.has(algorithm));
     expect(hasPatternMotion(normalizeStudioSettings({style:'dither',dither:{algorithm,motion:'drift',amount:0}}))).toBe(false);

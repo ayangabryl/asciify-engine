@@ -46,3 +46,15 @@ The maximum-radius/strength benchmark was rerun for all 11 hovers in landscape a
 The suite now covers 18 styles × 12 hover choices × 11 motion choices = 2,376 finite Canvas-command combinations. Additional regressions cover signed CPU/packed-field agreement, spring recoil and 30/60/120 Hz subdivision, edge protection, restoration, source-dependent Contour Light, deterministic cycles and visible dither output under each motion. Spatial hover sampling now interpolates source pixels with premultiplied alpha, avoiding whole-cell jumps and transparent-edge halos. The integer resting-grid path remains allocation-free.
 
 243 unit tests across 19 files and the package build pass. Actual browser appearance, frame pacing and animated export playback remain unverified under the browser-inspection restriction above.
+
+## 4.5.0 source tone and blue-noise quantization
+
+The new `blue-noise` algorithm uses a 64×64 rank tile generated offline by a seeded, toroidal void-and-cluster procedure. Reference: [Ulichney, 1993](https://cv.ulichney.com/papers/1993-void-cluster.pdf). The implementation and generated data are original repository code. The encoded tile decodes to 8 KiB once in the optional Studio entry; it is not included in `/core` or `/hover`, and no network asset or runtime optimizer is involved.
+
+Quantitative tests check unique threshold ranks, low-frequency Fourier power at 10/25/50/75/90% coverage versus a shuffled control, flat black/white tone coverage, palette membership, transparent pixels, deterministic frames, matrix drift and zero-strength behavior. At full strength the monochrome coverage differs from the requested flat tone by less than one pixel per tile. Existing 54 dither regression fixtures retain identical RGBA output.
+
+The new CPU benchmark uses the same M4 Pro, Node 25.9.0 and 16-color Pico-8 fixture as earlier runs. Blue-noise median/p95 quantization is 3.256/3.327 ms at 320×180 and 12.239/12.447 ms at 640×360. White-noise p95 in this run was 4.207 and 16.521 ms respectively. [Full report](benchmarks/2026-10-07-dither-4.5.0.json). These costs exclude sampling, drawing, GPU finishing and presentation. Large grids remain an explicit quality/performance tradeoff; no device FPS guarantee follows from this test.
+
+Neutral tonal controls skip the lookup pass. Non-neutral controls build a 256-entry curve only when configuration changes and apply it to sampled source pixels before every style's conversion; the existing static-source cache remains in effect. Tests verify monotonicity across extreme combinations, input endpoint mapping, midtone gamma, independent shadows/highlights, alpha preservation, settings round-trip, and reset/invalidation in every renderer. This is a bounded global tonal curve, not per-channel curve-graph parity.
+
+279 engine unit tests across 21 files pass. Browser appearance, stack combinations and playback remain unverified under the existing inspection restriction.

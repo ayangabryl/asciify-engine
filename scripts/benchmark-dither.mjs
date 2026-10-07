@@ -21,7 +21,7 @@ try {
       source[i+2]=(x*17+y*29)%256;source[i+3]=(x+y)%37===0?0:255;
     }
     const data=new Uint8ClampedArray(source.length);
-    for(const algorithm of ['bayer4','bayer16','floyd-steinberg','atkinson','halftone','noise','radial']) {
+    for(const algorithm of ['bayer4','bayer16','floyd-steinberg','atkinson','halftone','noise','radial','blue-noise']) {
       const options=normalizeStudioSettings({dither:{algorithm,palette:'pico8'}}).dither;
       const samples=[];
       for(let i=0;i<30;i++) {

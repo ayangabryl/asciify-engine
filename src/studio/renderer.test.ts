@@ -46,6 +46,19 @@ it.each(STUDIO_STYLES)('renders %s through the common composition pipeline witho
   if(style==='led'||style==='cmyk') expect(contexts.some(c=>c.arc.mock.calls.length>0)).toBe(true);
   renderer.destroy();
 });
+it.each(STUDIO_STYLES)('applies tonal detail before %s sampling and restores it when reset', style => {
+  const renderer=createStudioRenderer(canvas(),{style});
+  const source=canvas(), sample=contexts[2];
+  renderer.render(source,0,32,24);
+  expect([...sample.getImageData.mock.results[0].value.data.slice(0,4)]).toEqual([90,140,190,255]);
+  renderer.configure({style,color:{gamma:2}});
+  renderer.render(source,1,32,24);
+  expect([...sample.getImageData.mock.results[1].value.data.slice(0,4)]).toEqual([151,189,220,255]);
+  renderer.configure({style});
+  renderer.render(source,2,32,24);
+  expect([...sample.getImageData.mock.results[2].value.data.slice(0,4)]).toEqual([90,140,190,255]);
+  renderer.destroy();
+});
 it('reuses static dither quantization during post-processing, then invalidates on source/settings changes', () => {
   const renderer=createStudioRenderer(canvas(),{style:'dither',dither:{algorithm:'bayer4'},effects:{grain:.2}});
   const source=canvas();
