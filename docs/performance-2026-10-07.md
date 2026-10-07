@@ -94,3 +94,11 @@ The matrix now covers 24 styles × 12 hover choices × 11 motion choices = 3,168
 The root/core minified ESM entries grow by 73 bytes for catalog IDs; their CJS counterparts grow by 83 bytes. Hover ESM/CJS files are byte-identical to 4.8.0. Actual print code stays in optional Studio, which grows by 4,662 bytes to 100.31 KiB minified ESM. Source assets and background generators were not added to npm.
 
 Browser verification remains blocked by the prior automatic URL-policy rejection. Visual quality, real codec playback and target-device frame pacing are unverified. Site controls extend the accepted inspector rather than redesigning it.
+
+## Interaction expansion — 4.10
+
+CPU-only measurements on the recorded Apple M4 Pro host. Three new hover simulations at maximum radius/strength: Lens wake p95 0.396 ms landscape / 0.371 ms portrait; Smudge 0.392 / 0.363 ms; Ripple rings 0.327 / 0.344 ms. All fourteen active fields settle after pointer leave; the new fields settle within 215 simulated 60 Hz steps. These measurements cover input deposition and field updates, excluding source decoding, sampling/drawing, texture upload, GPU and display.
+
+New ambient sampling at 24,000 cells: Relight p95 0.920 ms, Shimmer 1.510 ms, Breeze 0.614 ms, Unfold 1.483 ms. At 96,000 cells the range is 1.987–3.335 ms before any Canvas/GPU work. These are arithmetic costs, not full-frame rates, mobile measurements or guarantees. Static fields use bounded buffers; Ripple allocates its field only when selected and retains at most eight packets.
+
+Reproduce with `node scripts/benchmark-hover-fields.mjs` and `node scripts/benchmark-lively.mjs`. Raw results: `benchmarks/2026-10-07-hover-fields-4.10.0.json` and `benchmarks/2026-10-07-lively-4.10.0.json`. Browser inspection remains unavailable under the existing URL-policy rejection, so aesthetic quality and real frame pacing remain unverified.

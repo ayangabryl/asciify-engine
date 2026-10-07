@@ -182,7 +182,7 @@ Stationary artwork, masks, lights, backdrops and character bloom are cached whil
 
 ## Expanded motion library (4.4)
 
-Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all eleven hovers and ten still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; new motion IDs are `parallax`, `weave`, `print`, `trace`. `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
+Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all available hovers and still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; new motion IDs are `parallax`, `weave`, `print`, `trace`. `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
 
 Example: `player.update({ motion: { type: 'trace', speed: 1, amount: .7 }, hover: { effect: 'etch', radius: .45, strength: .65 } })`. Tone and character choices remain yours. See [effect behaviors and combinations](studio-effects.md#catalogs-and-useful-combinations-44). Do not run several looping thumbnail canvases just to display this catalog; apply the selected treatment to one shared preview.
 
@@ -247,3 +247,7 @@ const saved = serializeStudioSettings(player.settings);
 ## Print and illustration (4.9)
 
 The catalog adds six print treatments with fine square cells and an optional `print` settings group. See [print-styles.md](print-styles.md) for the mechanisms, controls, polarity, bounded rendering and living-image example. They use the same Studio pipeline, saved settings and exports.
+
+## Animation starting points (4.10)
+
+Fourteen hover responses and fourteen local still-image motions are available through the public catalogs. The editor's Effects panel and layered editor's Motion panel share all choices, independent size/strength/speed controls and six editable starting combinations from `STUDIO_ANIMATION_PRESETS`. See [lively images](studio-effects.md#lively-images-410). Existing defaults stay unchanged; animate a photograph deliberately rather than enabling motion for every upload.

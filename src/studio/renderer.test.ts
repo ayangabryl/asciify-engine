@@ -14,19 +14,30 @@ vi.mock('./dither', async importOriginal => {
 vi.mock('./finish', () => ({createStudioFinish: () => null}));
 
 const contexts: ReturnType<typeof makeContext>[] = [];
+let matrixCapture=false;
+// The large matrix needs command evidence, not Vitest's global spy registry.
+// Keeping >1M independent spies made the harness exhaust the worker heap.
+const captureCommand = ((implementation?: (...args: unknown[]) => unknown) => {
+  const calls:unknown[][]=[],results:{type:'return';value:unknown}[]=[];
+  const command=Object.assign(function(this:unknown,...args:unknown[]){
+    calls.push(args);const value=implementation?.apply(this,args);results.push({type:'return' as const,value});return value;
+  },{mock:{calls,results}});
+  return command;
+}) as typeof vi.fn;
 function makeContext() {
+  const fn=matrixCapture?captureCommand:vi.fn;
   return {
-    clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
-    drawImage: vi.fn(), fillText: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
-    fill: vi.fn(), stroke: vi.fn(function(this:{lineWidth:number}){return this.lineWidth;}), rect: vi.fn(), ellipse: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), closePath: vi.fn(),
-    createLinearGradient: () => ({addColorStop: vi.fn()}),
-    createRadialGradient: () => ({addColorStop: vi.fn()}),
-    getImageData: vi.fn((_x:number,_y:number,w:number,h:number) => {
+    clearRect: fn(), save: fn(), restore: fn(), translate: fn(), rotate: fn(),
+    drawImage: fn(), fillText: fn(), fillRect: fn(), beginPath: fn(), arc: fn(),
+    fill: fn(), stroke: fn(function(this:{lineWidth:number}){return this.lineWidth;}), rect: fn(), ellipse: fn(), moveTo: fn(), lineTo: fn(), closePath: fn(),
+    createLinearGradient: () => ({addColorStop: fn()}),
+    createRadialGradient: () => ({addColorStop: fn()}),
+    getImageData: fn((_x:number,_y:number,w:number,h:number) => {
       const data = new Uint8ClampedArray(w*h*4);
       for(let i=0;i<data.length;i+=4) { data[i]=90;data[i+1]=140;data[i+2]=190;data[i+3]=255; }
       return {data};
     }),
-    putImageData: vi.fn(),
+    putImageData: fn(),
   };
 }
 function canvas() {
@@ -34,6 +45,7 @@ function canvas() {
   return {width:32,height:24,dataset:{},getContext:()=>ctx} as unknown as HTMLCanvasElement;
 }
 beforeEach(() => {
+  matrixCapture=false;
   contexts.length=0;
   vi.clearAllMocks();
   vi.stubGlobal('document', {createElement:canvas});
@@ -232,6 +244,7 @@ it('bounds requested budgets and ignores non-finite values without poisoning the
 // Exercise render-path interactions; this deliberately does not stand in for
 // GPU screenshots, visual acceptance or device frame-pacing measurements.
 it.each(STUDIO_STYLES.flatMap(style=>SURFACE_HOVERS.map(({value},hi)=>({style,hover:value,hi}))))('$style with $hover accepts every ambient motion with finite draw commands', ({style,hi}) => {
+  matrixCapture=true;
   const hovers=SURFACE_HOVERS.map(effect=>effect.value);
   for(let mi=0;mi<MOTION_STYLES.length;mi++) {
     contexts.length=0;
@@ -249,7 +262,7 @@ it.each(STUDIO_STYLES.flatMap(style=>SURFACE_HOVERS.map(({value},hi)=>({style,ho
     const source=canvas();renderer.render(source,0,32,24);
     renderer.pointer(.2,.5,1);renderer.pointer(.8,.4,18);
     renderer.render(source,.03,32,24);
-    expect(contexts[0].drawImage).toHaveBeenCalledTimes(2);
+    expect(contexts[0].drawImage.mock.calls).toHaveLength(2);
     expect(contexts.every(context=>[context.drawImage,context.arc,context.ellipse,context.fillRect,context.lineTo,context.moveTo].every(
       method=>method.mock.calls.every(args=>args.every(value=>typeof value!=='number'||Number.isFinite(value))),
     ))).toBe(true);

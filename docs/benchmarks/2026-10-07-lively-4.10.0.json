@@ -1,0 +1,57 @@
+{
+  "scope": "CPU motion sampling only; not browser FPS",
+  "timestamp": "2026-10-07T14:35:33.536Z",
+  "cpu": "Apple M4 Pro",
+  "node": "v25.9.0",
+  "checksum": 10636983.222637638,
+  "rows": [
+    {
+      "motion": "relight",
+      "cells": 24000,
+      "medianMs": 0.462,
+      "p95Ms": 0.92
+    },
+    {
+      "motion": "shimmer",
+      "cells": 24000,
+      "medianMs": 0.826,
+      "p95Ms": 1.51
+    },
+    {
+      "motion": "breeze",
+      "cells": 24000,
+      "medianMs": 0.563,
+      "p95Ms": 0.614
+    },
+    {
+      "motion": "unfold",
+      "cells": 24000,
+      "medianMs": 0.534,
+      "p95Ms": 1.483
+    },
+    {
+      "motion": "relight",
+      "cells": 96000,
+      "medianMs": 1.753,
+      "p95Ms": 1.987
+    },
+    {
+      "motion": "shimmer",
+      "cells": 96000,
+      "medianMs": 3.259,
+      "p95Ms": 3.335
+    },
+    {
+      "motion": "breeze",
+      "cells": 96000,
+      "medianMs": 2.154,
+      "p95Ms": 2.199
+    },
+    {
+      "motion": "unfold",
+      "cells": 96000,
+      "medianMs": 2.037,
+      "p95Ms": 2.181
+    }
+  ]
+}

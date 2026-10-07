@@ -1,3 +1,4 @@
+import { RippleField } from './ripple-field';
 import { AfterimageField, isAfterimageMode } from './afterimage-field';
 import { surfaceEdgeWeight } from './surface-edge';
 import { ContourField } from './contour-field';
@@ -8,7 +9,7 @@ import type { PointerField } from './fluid-field';
 export type HeroHover = SurfaceHover | 'light' | 'scan';
 const displacementStrength = (mode: HeroHover, amount: number) =>
   mode === 'water' ? 30 * amount / .55 : mode === 'silk' ? 28 * amount : mode === 'vortex' ? 38 * amount :
-  ['magnetic','scatter','elastic','rake'].includes(mode) ? 32 * amount : 0;
+  ['magnetic','scatter','elastic','rake','lens','smudge'].includes(mode) ? 32 * amount : 0;
 
 export { surfaceEdgeWeight } from './surface-edge';
 
@@ -33,6 +34,7 @@ export class WaterSurface implements PointerField {
   private readonly trail: InkTrail;
   private readonly contour: ContourField;
   private readonly afterimage: AfterimageField;
+  private ripple: RippleField | null = null;
   private readonly waterPixels: Uint8Array;
   private readonly heights: Float32Array;
   private readonly velocity: Float32Array;
@@ -73,20 +75,22 @@ export class WaterSurface implements PointerField {
     this.clear();
   }
   get invertsDensity() { return this.mode === 'trail'; }
-  get densityTrail() { return ['trail','contour','dissolve','etch'].includes(this.mode); }
+  get densityTrail() { return ['trail','contour','dissolve','etch','ripple'].includes(this.mode); }
   get hasRefraction() { return this.active || this.lensStrength > .00015; }
-  get active() { if(isAfterimageMode(this.mode))return this.afterimage.active; if(this.mode==='contour') return this.contour.active; if (this.mode === 'trail') return this.trail.active; return this.pending || this.energy > .00015; }
+  get active() { if(this.mode==='ripple')return this.ripple?.active??false; if(isAfterimageMode(this.mode))return this.afterimage.active; if(this.mode==='contour') return this.contour.active; if (this.mode === 'trail') return this.trail.active; return this.pending || this.energy > .00015; }
   setMode(mode: HeroHover) {
     if (mode === this.mode) return;
     this.clear(); this.mode = mode; this.refraction.mode = mode;
     if(isAfterimageMode(mode))this.afterimage.setMode(mode);
-    this.refraction.pixels = mode === 'trail' ? this.trail.pixels : mode === 'contour' ? this.contour.pixels : isAfterimageMode(mode) ? this.afterimage.pixels : this.waterPixels;
+    if(mode==='ripple'&&!this.ripple)this.ripple=new RippleField(this.columns,this.rows);
+    this.refraction.pixels = mode === 'ripple' ? this.ripple!.pixels : mode === 'trail' ? this.trail.pixels : mode === 'contour' ? this.contour.pixels : isAfterimageMode(mode) ? this.afterimage.pixels : this.waterPixels;
     this.refraction.strength = displacementStrength(mode, this.amount);
   }
   configure(mode: HeroHover, amount = .55, radius = .2, edgeSafe = false) {
     this.setMode(mode);
     this.refraction.edgeSafe = edgeSafe;
     this.afterimage.edgeSafe = edgeSafe;
+    if(this.ripple)this.ripple.edgeSafe=edgeSafe;
     this.amount = Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : .55;
     this.radius = Number.isFinite(radius) ? Math.max(.1, Math.min(1, radius)) : .2;
     this.refraction.strength = displacementStrength(mode, this.amount);
@@ -97,6 +101,7 @@ export class WaterSurface implements PointerField {
     if (this.mode === 'none' || this.amount === 0) return;
     if (!Number.isFinite(x + y)) return;
     x = Math.max(0, Math.min(1, x)); y = Math.max(0, Math.min(1, y));
+    if(this.mode==='ripple'){this.ripple!.move(x,y,this.radius,time);return;}
     if(isAfterimageMode(this.mode)){this.afterimage.move(x,y,this.radius);return;}
     if (this.mode === 'contour') { this.contour.move(x,y,this.radius); return; }
     if (this.mode === 'trail') { this.trail.move(x, y, this.radius, time); return; }
@@ -133,9 +138,9 @@ export class WaterSurface implements PointerField {
     }
     this.pending = true;
   }
-  leave() { this.afterimage.leave(); this.contour.leave(); this.trail.leave(); this.previous = null; if (this.mode !== 'water' && this.lensStrength) this.pending = true; }
+  leave() { this.ripple?.leave(); this.afterimage.leave(); this.contour.leave(); this.trail.leave(); this.previous = null; if (this.mode !== 'water' && this.lensStrength) this.pending = true; }
   clear() {
-    this.trail.clear(); this.contour.clear(); this.afterimage.clear();
+    this.trail.clear(); this.contour.clear(); this.afterimage.clear(); this.ripple?.clear();
     this.heights.fill(0); this.velocity.fill(0); this.next.fill(0); this.normals.fill(0);
     this.refraction.focus[2] = 0;
     this.previous = null; this.lensStrength = 0; this.energy = 0; this.pending = false; this.remainder = 0;
@@ -146,6 +151,7 @@ export class WaterSurface implements PointerField {
   }
   step(seconds: number) {
     if (!this.active || !Number.isFinite(seconds)) return;
+    if(this.mode==='ripple'){this.ripple!.step(seconds);return;}
     if(isAfterimageMode(this.mode)){this.afterimage.step(seconds);return;}
     if (this.mode === 'contour') { this.contour.step(seconds); return; }
     if (this.mode === 'trail') { this.trail.step(seconds); return; }
@@ -192,6 +198,7 @@ export class WaterSurface implements PointerField {
     this.refraction.focus = [this.lensX, this.lensY, this.lensStrength * this.amount, this.radius];
   }
   sample(x: number, y: number, out: number[]) {
+    if(this.mode==='ripple'){this.ripple!.sample(x,y,out);out[2]*=this.amount;return;}
     if(isAfterimageMode(this.mode)){this.afterimage.sample(x,y,out);out[0]*=this.amount;out[1]*=this.amount;out[2]*=this.amount;return;}
     if(this.mode==='contour'){out[0]=out[1]=0;out[2]=this.contour.sample(x,y)*this.amount*3;return;}
     if (this.mode === 'trail') { out[0]=out[1]=0; out[2]=this.trail.sample(x,y)*this.amount*3; return; }
