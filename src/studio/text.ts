@@ -29,6 +29,7 @@ export async function createStudioText(
   text: string,
   font: keyof typeof loaders = "Standard",
   ink = "#ffffff",
+  background: string | null = "#080808",
 ) {
   if (!Object.prototype.hasOwnProperty.call(loaders, font))
     throw new Error("Unknown text font.");
@@ -45,8 +46,10 @@ export async function createStudioText(
   canvas.width = Math.ceil(cols * 9 * scale + 32);
   canvas.height = Math.ceil(rows * 15 * scale + 32);
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#080808";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (background !== null) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   ctx.fillStyle = ink;
   ctx.font = `${15 * scale}px monospace`;
   ctx.textBaseline = "top";

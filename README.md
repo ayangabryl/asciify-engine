@@ -594,3 +594,20 @@ player.update({
 ```
 
 The stack is static shaping; motion and pointer hover remain independent. Coordinate maps are cached across video frames, and stills reuse shaped pixels during interaction. Empty stacks are free of additional pixel work. Defaults and root/core/hover behavior remain unchanged. Dither motion also gains alpha-correct interpolation at transparent edges. See [parameters, order, persistence/export and measured CPU tradeoffs](skills/asciify-engine/references/source-shaping.md).
+
+### Layered projects (4.8)
+
+Compose up to eight image, video, GIF or text layers with independent styles, motion, hover, placement, opacity and blend modes. `mountStudioProject` owns one playback loop and a shared cell/raster budget; hidden and unchanged layers skip work. Root/core/hover entry points remain unchanged.
+
+```ts
+import { mountStudioProject } from 'asciify-engine/studio';
+const player = await mountStudioProject(canvas, { layers: [
+  { id: 'photo', source: 'image', settings: { motion: { type: 'parallax' } } },
+  { id: 'title', source: 'text', placement: { width: .8, height: .25 },
+    settings: { ink: '#b3ed82', hover: { effect: 'elastic' } } },
+] }, { image: '/your-photo.webp', text: { text: 'HELLO', font: 'Small' } });
+player.updateLayer('photo', { settings: { hover: { effect: 'water' } } });
+// player.destroy() on unmount
+```
+
+`exportStudioProject` owns independent export media, so it does not disturb the live preview. Save layouts with `serializeStudioProject`, retain/rebind source assets separately, and restore with `parseStudioProject`. See the [layered-project guide](skills/asciify-engine/references/layered-projects.md) and [typed live/export example](examples/layered-composition.ts) for geometry, picking, ownership, cancellation and performance limits. This is an optional local composition API, not a claim of complete competitor-style or FPS parity.
