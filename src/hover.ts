@@ -10,3 +10,6 @@ export { createTextMask } from './surface/text-mask';
 export type { TextMaskFrame } from './surface/text-mask';
 
 export type { SurfaceFilter, SurfaceFinish } from './surface/surface-finish';
+
+export { SURFACE_HOVERS as STUDIO_HOVERS } from './surface/hover-catalog';
+export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';

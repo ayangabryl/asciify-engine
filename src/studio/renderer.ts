@@ -1,5 +1,6 @@
+import { samplePixel } from './sample-pixel';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
-import { sampleAmbient, scaleMotion } from '../surface/ambient-motion';
+import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
 import {
   normalizeStudioSettings,
   studioCrop,
@@ -80,6 +81,7 @@ export function createStudioRenderer(
   let aspect = 0;
   const field = [0, 0, 0];
   const ambient = [0, 0, 0, 1];
+  const sampled = [0, 0, 0, 0];
   const maxDimension = Math.max(
       64,
       Math.min(
@@ -211,7 +213,7 @@ export function createStudioRenderer(
       art.ctx.globalCompositeOperation = "source-over";
       const phase = motionTime;
       const motion = stillMotion ? state.motion.type : "none";
-      const anchoredMotion = motion === "none" || motion === "caustics" || motion === "sheen" || motion === "grain";
+      const anchoredMotion = isAnchoredMotion(motion);
       if (isDither) {
         const stableDither = stableComposition;
         if (!stableDither || ditherCacheKey !== key) {
@@ -234,7 +236,8 @@ export function createStudioRenderer(
                   sy -= field[1] * rows;
                   energy = field[2] / 3;
                 }
-                sampleAmbient(motion, u, v, phase, ambient);
+                const toneIndex = (y * cols + x) * 4;
+                sampleAmbient(motion, u, v, phase, ambient, (pixels[toneIndex]*.299+pixels[toneIndex+1]*.587+pixels[toneIndex+2]*.114)/255);
                 scaleMotion(ambient, state.motion.amount ?? 1);
                 sx -= ambient[0] / 960 * cols;
                 sy -= ambient[1] / 960 * rows;
@@ -256,6 +259,7 @@ export function createStudioRenderer(
                   let value =
                     (["trail", "contour"].includes(state.hover.effect)
                       ? invertTrailTone(tone, energy)
+                      : state.hover.effect === "etch" ? Math.max(0, Math.min(1, tone + energy * .35))
                       : state.hover.effect === "dissolve"
                         ? tone * Math.max(0, 1 + energy)
                         : tone) * gain;
@@ -323,26 +327,26 @@ export function createStudioRenderer(
               sy = Math.max(0, Math.min(rows - 1, y - field[1] * rows));
               energy = field[2] / 3;
             }
-            const i = (Math.floor(sy) * cols + Math.floor(sx)) * 4;
-            if (!pixels[i + 3]) continue;
-            const r = pixels[i],
-              g = pixels[i + 1],
-              b = pixels[i + 2];
+            samplePixel(pixels, cols, rows, sx, sy, sampled);
+            if (!sampled[3]) continue;
+            const r = sampled[0], g = sampled[1], b = sampled[2];
             const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
             let lum = sourceLum;
             if (["trail", "contour"].includes(state.hover.effect) && energy)
               lum = invertTrailTone(lum, energy);
+            else if (state.hover.effect === "etch")
+              lum = Math.max(0, Math.min(1, lum + energy * .35));
             else if (state.hover.effect === "dissolve")
               lum *= Math.max(0, 1 + energy);
             let px = x * cell,
               py = y * ch,
               alpha = 1;
-            sampleAmbient(motion, x / cols, y / rows, phase, ambient);
+            sampleAmbient(motion, x / cols, y / rows, phase, ambient, sourceLum);
             scaleMotion(ambient, state.motion.amount ?? 1);
             px += ambient[0] * w / 960;
             py += ambient[1] * h / 960;
             lum = Math.max(0, Math.min(1, lum + ambient[2]));
-            alpha = ambient[3];
+            alpha = ambient[3] * sampled[3] / 255;
             if (!glyphMode && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
             ac.globalAlpha = alpha;
             const toneDelta = (lum - sourceLum) * 255;

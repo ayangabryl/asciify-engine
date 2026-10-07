@@ -1151,7 +1151,7 @@ function drawFrameToCanvas(
         const intensity = isInverted ? 1 - lum : lum;
         if (intensity < 0.02) continue;
 
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255);
         const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
 
         let hoverMul = 1;
@@ -1315,7 +1315,7 @@ function drawFrameToCanvas(
           : cell.char;
         if (drawChar === ' ') continue;
 
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255);
         const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
         if (animMul < 0.05) continue;
 

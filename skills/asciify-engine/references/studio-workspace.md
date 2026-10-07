@@ -179,3 +179,9 @@ resolution and other effects; no universal FPS guarantee.
 ## Performance fixes (4.3.1)
 
 Stationary artwork, masks, lights, backdrops and character bloom are cached while finishing grain/dust/glitch continue. Source/settings/layout edits invalidate the composition; pointer motion redraws until the field settles and restores a clean final frame. Unused dither motion on other styles and zero-strength ambient motion no longer keep a still preview awake. Ordered Bayer threshold tables avoid per-pixel recurrence without changing quantized output. CMYK now honors tonal hover/motion and gray/accent color modes. Still exports accept `motionTime` from the mounted preview to preserve the selected phase after speed edits; animation exports still start at zero.
+
+## Expanded motion library (4.4)
+
+Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all eleven hovers and ten still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; new motion IDs are `parallax`, `weave`, `print`, `trace`. `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
+
+Example: `player.update({ motion: { type: 'trace', speed: 1, amount: .7 }, hover: { effect: 'etch', radius: .45, strength: .65 } })`. Tone and character choices remain yours. See [effect behaviors and combinations](studio-effects.md#catalogs-and-useful-combinations-44). Do not run several looping thumbnail canvases just to display this catalog; apply the selected treatment to one shared preview.

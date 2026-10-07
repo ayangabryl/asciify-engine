@@ -40,13 +40,16 @@ The positioned host must fit the displayed source canvas. The surface appends a 
 | `vortex` | Local rotational wake. |
 | `magnetic` | Attracts the field toward a stroke, then relaxes. |
 | `scatter` | Spatially varied radial scatter with a decaying wake. |
+| `etch` | Signed light-and-shadow impression; the glyph grid stays fixed. |
+| `elastic` | Directional momentum, damped recoil and a return to rest. |
+| `rake` | Alternating strips shear with the pointer, then align again. |
 | `none` | No hover effect. |
 
 These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEffect` values. For example, passing `hoverEffect: 'water'` to the published engine is invalid.
 
 ## Still-image motion and dither
 
-The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), `reform` (Reveal & Reform), `sheen` (diagonal light sweep), `tidal` (Tidal Rings), and `grain` (Living Grain). Sheen and Living Grain keep the grid anchored. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
+The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), `reform` (Reveal & Reform), `sheen` (diagonal light sweep), `tidal` (Tidal Rings), and `grain` (Living Grain). 4.4 adds `parallax` (shallow drift), `weave` (interlaced flow), `print` (staggered row registration), and `trace` (light that follows source-image tonal contours). Sheen, Living Grain and Contour Light keep the grid anchored. Contour Light uses source luminance; pass `getFrame` for exact source tones when layering a surface over an existing canvas. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
 
 For the website's fine-dither treatment, use the module's `fineDither: true` and `ditherStrength` after matching the backing canvas's character settings. This is separate from the core renderer’s built-in dither behavior. Check a still and a moving scene for flicker before choosing the default.
 
@@ -62,3 +65,13 @@ When using the low-level object-frame API, pass `getFrame: () => currentFrame` t
 ## Hero finish
 
 Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, Prism edge softness (`edgeSoftness`), and fixed-grid fluid Trail. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](hero-finish.md).
+
+## Catalogs and useful combinations (4.4)
+
+Build controls from `STUDIO_HOVERS` and `STUDIO_MOTIONS`, exported by `/studio` and `/hover`. Each entry includes `value`, `label`, `group`, and `description`. Use the `value` as the API ID; “Emboss” is `etch` and “Contour Light” is `trace`. Do not maintain a second hard-coded menu or use the legacy core hover IDs for these interactions.
+
+For a fixed grid, try Contour Light with Emboss. For continuous spatial movement, try Parallax with Elastic. For a fabric-like treatment, try Woven Flow with Rake. These are combinations of two independent settings, not additional art styles. Keep strength restrained until you have checked the source at actual display size.
+
+All ambient modes repeat after `12 / speed` seconds. Looping the motion does not guarantee that a source video, film grain, dust, glitch or animated dither has the same boundary. Exported PNG/JPEG captures one frame; MP4/WebM/GIF carries autonomous motion, not live pointer movement. For complete composition export, use `/studio` rather than capturing the hover overlay.
+
+The pointer simulations have bounded storage. Elastic allocates its two velocity buffers only when first selected; idle effects stop. This is not a device-independent FPS promise. Test dense grids, fast reversal and the actual finish stack on the target device.

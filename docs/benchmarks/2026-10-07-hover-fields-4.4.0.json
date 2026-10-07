@@ -1,0 +1,209 @@
+{
+  "scope": "CPU pointer deposition and simulation only; not browser FPS",
+  "timestamp": "2026-10-07T10:07:49.701Z",
+  "node": "v25.9.0",
+  "cpu": "Apple M4 Pro",
+  "radius": 1,
+  "strength": 1,
+  "edgeSafe": false,
+  "rows": [
+    {
+      "effect": "trail",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 1.057,
+      "p95Ms": 1.323,
+      "settled": true,
+      "settleFrames": 308
+    },
+    {
+      "effect": "water",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.481,
+      "p95Ms": 0.56,
+      "settled": true,
+      "settleFrames": 358
+    },
+    {
+      "effect": "contour",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.916,
+      "p95Ms": 1.009,
+      "settled": true,
+      "settleFrames": 100
+    },
+    {
+      "effect": "dissolve",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.177,
+      "p95Ms": 0.257,
+      "settled": true,
+      "settleFrames": 237
+    },
+    {
+      "effect": "silk",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.306,
+      "p95Ms": 0.404,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "vortex",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.298,
+      "p95Ms": 0.401,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "magnetic",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.302,
+      "p95Ms": 0.406,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "scatter",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.314,
+      "p95Ms": 0.43,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "etch",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.201,
+      "p95Ms": 0.29,
+      "settled": true,
+      "settleFrames": 159
+    },
+    {
+      "effect": "elastic",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.309,
+      "p95Ms": 0.411,
+      "settled": true,
+      "settleFrames": 62
+    },
+    {
+      "effect": "rake",
+      "aspect": "landscape",
+      "field": "128x72",
+      "medianMs": 0.379,
+      "p95Ms": 0.56,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "trail",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.989,
+      "p95Ms": 1.213,
+      "settled": true,
+      "settleFrames": 314
+    },
+    {
+      "effect": "water",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.488,
+      "p95Ms": 0.554,
+      "settled": true,
+      "settleFrames": 354
+    },
+    {
+      "effect": "contour",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.882,
+      "p95Ms": 0.941,
+      "settled": true,
+      "settleFrames": 100
+    },
+    {
+      "effect": "dissolve",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.158,
+      "p95Ms": 0.227,
+      "settled": true,
+      "settleFrames": 237
+    },
+    {
+      "effect": "silk",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.291,
+      "p95Ms": 0.389,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "vortex",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.288,
+      "p95Ms": 0.393,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "magnetic",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.289,
+      "p95Ms": 0.386,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "scatter",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.301,
+      "p95Ms": 0.404,
+      "settled": true,
+      "settleFrames": 162
+    },
+    {
+      "effect": "etch",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.196,
+      "p95Ms": 0.266,
+      "settled": true,
+      "settleFrames": 159
+    },
+    {
+      "effect": "elastic",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.286,
+      "p95Ms": 0.377,
+      "settled": true,
+      "settleFrames": 63
+    },
+    {
+      "effect": "rake",
+      "aspect": "portrait",
+      "field": "72x128",
+      "medianMs": 0.342,
+      "p95Ms": 0.532,
+      "settled": true,
+      "settleFrames": 162
+    }
+  ]
+}

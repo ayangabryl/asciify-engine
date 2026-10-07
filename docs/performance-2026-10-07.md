@@ -36,3 +36,13 @@ Reproduce with `npm run bench:hover -- /tmp/hover.json`. [Full report](benchmark
 ## Remaining gates
 
 Actual mobile/desktop frame pacing, GPU effect combinations, output fidelity across all styles and browser codecs, PNG/animation visual comparisons, landing/editor usability and competitor comparison remain unverified. Finite command tests do not prove visual quality. The broader catalog gaps listed in the site's Studio capability audit remain open.
+
+## 4.4.0 effect expansion
+
+The catalog now has 11 active hovers and 10 active still-image motions, plus independent Off choices. Emboss adds signed light and shadow without shifting the grid; Elastic stores momentum and uses an analytic damped spring; Rake alternates displacement bands along a stroke. New still-image motions are Parallax, Woven Flow, Print Shift and Contour Light. All share the existing runtime, pause lifecycle and bounded fields.
+
+The maximum-radius/strength benchmark was rerun for all 11 hovers in landscape and portrait. New-mode CPU p95 costs were Emboss 0.266–0.290 ms, Elastic 0.377–0.411 ms and Rake 0.532–0.560 ms on the same M4 Pro. Every field settled after pointer exit. [Full 4.4.0 report](benchmarks/2026-10-07-hover-fields-4.4.0.json). These measurements exclude source sampling, glyph rendering, GPU finishing and browser presentation; they are not a frame-rate guarantee.
+
+The suite now covers 18 styles × 12 hover choices × 11 motion choices = 2,376 finite Canvas-command combinations. Additional regressions cover signed CPU/packed-field agreement, spring recoil and 30/60/120 Hz subdivision, edge protection, restoration, source-dependent Contour Light, deterministic cycles and visible dither output under each motion. Spatial hover sampling now interpolates source pixels with premultiplied alpha, avoiding whole-cell jumps and transparent-edge halos. The integer resting-grid path remains allocation-free.
+
+243 unit tests across 19 files and the package build pass. Actual browser appearance, frame pacing and animated export playback remain unverified under the browser-inspection restriction above.

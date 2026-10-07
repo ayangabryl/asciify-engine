@@ -1,6 +1,6 @@
 import { EDGE_FINISH_GLSL, finishSettings, type SurfaceFinish } from './surface-finish';
 import type { TextMaskFrame } from './text-mask';
-import { INK_TRAIL_GLSL, isDensityHover } from './ink-trail';
+import { INK_TRAIL_GLSL, densityHoverKind, isDensityHover } from './ink-trail';
 import type { AsciiFrame, AsciiOptions } from '../types';
 import { SURFACE_LIGHT_GLSL, type SurfaceRefraction } from './water-surface';
 
@@ -393,7 +393,7 @@ export function createGlyphRenderer(canvas: HTMLCanvasElement, onError?: (error:
             surfaceWidth = refraction.width; surfaceHeight = refraction.height;
           } else gpu.texSubImage2D(gpu.TEXTURE_2D, 0, 0, 0, refraction.width, refraction.height, gpu.RGBA, gpu.UNSIGNED_BYTE, refraction.pixels);
         }
-        gpu.uniform1f(locations.trailKind,refraction?.mode==='dissolve'?2:refraction?.mode==='contour'?1:0);
+        gpu.uniform1f(locations.trailKind,densityHoverKind(refraction?.mode ?? 'none'));
         gpu.uniform1f(locations.edgeSafe,refraction?.edgeSafe ? 1 : 0);
         gpu.uniform1f(locations.trailAmount, refraction && isDensityHover(refraction.mode) ? refraction.focus[2] : 0);
         gpu.uniform1f(locations.glyphCount, plan.glyphs.length);
