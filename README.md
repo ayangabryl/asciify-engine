@@ -627,3 +627,21 @@ player.update({ motion: preset.motion, hover: preset.hover });
 ```
 
 Use one Studio player for live rendering, settings persistence and independent animation export. See [the complete interaction guide](skills/asciify-engine/references/studio-effects.md#lively-images-410) and [living-image helper](examples/living-image.ts). CPU simulation is bounded and wakes settle; device frame rates and visual fidelity still require browser measurement. Existing defaults and saved IDs are unchanged.
+
+## 4.11: GPU glyph fields
+
+`asciify-engine/field` renders an image, a video or generated motion as characters entirely on the GPU, with three cursor responses: `trail` (the Asciify Trail, the same ink field as the studio's, now on the GPU), `fluid` (an incompressible ink-in-water wake that curls into eddies) and `lantern` (a soft light with no distortion). Use it for full-bleed heroes and brand fields that must stay smooth while people move over them. Characters are drawn texel for texel from a glyph atlas, so any font and any charset work, including your own name.
+
+```ts
+import { mountGlyphField } from 'asciify-engine/field';
+
+const field = mountGlyphField(canvas, {
+  source: '/media/hero.mp4',
+  charset: ' .,:-+ACME',
+  color: 'ink', ink: '#f3ba32', shade: 1,
+  fluid: { radius: 0.08, refraction: 0.03, glow: 0.6 },
+});
+// field.update({ charset: ' .:ASCIIFY' }); field.destroy();
+```
+
+It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
