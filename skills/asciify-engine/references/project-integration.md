@@ -10,6 +10,10 @@ A downloaded PNG is one output; it is not a substitute for a live component.
 | Multiple media/text layers with independent styles, placement, blends and exports | `/studio` → `mountStudioProject` (4.8+) | One shared loop and budget; see [layered-projects.md](layered-projects.md). |
 | Application-owned render loop | `/studio` → `createStudioRenderer` | Caller passes time, pointer input, invalidation and cleanup. |
 | ASCII text data | Core frame/text conversion | No animation loop needed unless requested. |
+| Full-bleed hero or brand field that must stay smooth under the cursor, or the user's word as the characters | `/field` → `mountGlyphField` (4.11+) | The field owns its wake and drift. Keep a poster and a `/studio` or core fallback for browsers without a GPU; see [glyph-field.md](glyph-field.md). |
+| Ambient background with no media | Downloaded template from asciify.org/backgrounds, or a `/field` generated scene | Templates own their loop; call `destroy()` on unmount. |
+
+Choose colors, fonts and sizes from the project's design tokens before writing settings; [design-matching.md](design-matching.md) maps the user's mood words to values.
 
 ## Small live component
 
@@ -19,7 +23,7 @@ import { mountStudio, normalizeStudioSettings, updateStudioSettings } from 'asci
 const cancellation = new AbortController();
 let settings = normalizeStudioSettings({
   style: 'ascii', cellSize: 6,
-  ink: '#b3ed82', backdrop: { mode: 'solid', color: '#0c1711' },
+  ink: tokens.accent, backdrop: { mode: 'solid', color: tokens.background }, // from the project's design tokens
   hover: { effect: 'trail', radius: .45, strength: .55 },
 });
 const player = await mountStudio(canvas, '/portrait.jpg', {

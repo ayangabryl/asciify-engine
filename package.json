@@ -1,7 +1,7 @@
 {
   "name": "asciify-engine",
-  "version": "4.10.0",
-  "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas.",
+  "version": "4.11.0",
+  "description": "Framework-agnostic ASCII art engine. Convert images, videos, and GIFs into ASCII art rendered on canvas, or run full-bleed GPU character fields with a fluid cursor wake.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -46,6 +46,16 @@
         "types": "./dist/studio.d.cts",
         "default": "./dist/studio.cjs"
       }
+    },
+    "./field": {
+      "import": {
+        "types": "./dist/field.d.ts",
+        "default": "./dist/field.js"
+      },
+      "require": {
+        "types": "./dist/field.d.cts",
+        "default": "./dist/field.cjs"
+      }
     }
   },
   "files": [
@@ -60,7 +70,8 @@
     "examples/print-composition.ts",
     "THIRD_PARTY.md",
     "licenses",
-    "examples/living-image.ts"
+    "examples/living-image.ts",
+    "examples/glyph-field.ts"
   ],
   "scripts": {
     "build": "tsup",
@@ -137,7 +148,11 @@
     "ascii-hero",
     "landing-page-background",
     "website-background",
-    "ascii-particles"
+    "ascii-particles",
+    "webgl",
+    "webgl2",
+    "gpu",
+    "ascii-shader"
   ],
   "author": "ayangabryl",
   "license": "MIT",
