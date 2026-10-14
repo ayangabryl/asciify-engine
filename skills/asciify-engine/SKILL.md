@@ -2,8 +2,8 @@
 name: asciify-engine
 description: Build and tune browser ASCII art with asciify-engine so it fits the user's request, preferences and the project's design. Use for photo, video and GIF conversion, interactive heroes, GPU character fields with the user's own words, ambient backgrounds, text banners, art styles and export, hover and motion choices, layered HTML typography, and rendering performance.
 metadata:
-  tested-engine: "4.11.0"
-  updated: "2026-10-09"
+  tested-engine: "4.11.1"
+  updated: "2026-10-14"
 ---
 
 # Asciify Engine
@@ -196,3 +196,7 @@ From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risogr
 ### GPU glyph fields (4.11)
 
 `asciify-engine/field` adds `mountGlyphField`, `isGlyphFieldSupported` and `glyphFieldTier`. Older installs do not have this entry; upgrade before using it.
+
+## Scenario prompts
+
+Use [scenario-prompts.md](references/scenario-prompts.md) for copyable briefs covering images, heroes, characters, all styles, dither, backgrounds, video/GIF, scroll, layers, text, export, frameworks, procedural trails, reference matching, troubleshooting, upgrades, saved looks and accessibility. Adapt the prompt to the user’s intent; do not add unrelated features. Use the published renderer’s native Trail; do not add a separate tonal ribbon overlay.
