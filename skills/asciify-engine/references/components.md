@@ -903,80 +903,64 @@ refreshButton.addEventListener('click', () => void refresh());
 Category: Components
 
 Prompt:
-“Frame [our deploy status card] in a ring of Asciify characters with a coloured beam orbiting it: gradient along its travel, bright head, fading tail, soft glow. Offer Mono, Aurora and Brand colours; hover speeds it up.”
+“Give [our deploy card] an Asciify border beam: a short comet of characters along its rounded edge, dense head, thinning tail, soft glow beneath. Idle: occasional pass. Deploying: steady loop. Success: lights the whole edge, dissolves. Error: stalls red, scatters.”
 
 ```ts
-// The canvas fills a frame 22px larger than the card on every side (overflow: hidden, pointer-events: none); the card is cut out of the band.
-// color: 'source' keeps each painted colour's hue and takes glyph density from its brightness; contrast 2.2 lets full-value violet reach '@'.
-// On light pages give the canvas filter: brightness(.68) saturate(1.35) while coloured, so full-value colours read as ink.
-const TINTS = { mono: ['#ffffff'], aurora: ['#2ee6c8', '#9d7bff', '#ff6fb5'], brand: ['#ffc933'] }; // tail → head
-let tint: keyof typeof TINTS = 'aurora';
-const ring = asciiField(canvas, {
-  mark: 'glyph', scene: 'none', drift: 0.5, charset: ' .:-=+*#%@', cellSize: 9, cellAspect: 0.62, levels: 'none', fit: 'cover', hover: 'none',
-  color: 'source', saturation: 1.5, contrast: 2.2, brightness: 0.6, label: 'A ring of characters with a coloured beam circling it',
-}, '--ascii-ink-strong');
-const W = canvas.clientWidth, H = canvas.clientHeight, R = 22, art = Object.assign(document.createElement('canvas'), { width: W, height: H }), pen = art.getContext('2d')!;
-const band = new Path2D(); band.roundRect(1, 1, W - 2, H - 2, 18); band.roundRect(R, R, W - 2 * R, H - 2 * R, 10); // frame minus card
-const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
-const toned = (c: number[], tone: number, a = 1) => { // a colour at glyph density `tone`: full-value hue, luminance × 2.2 = tone
-  const m = Math.max(...c), h = c.map(v => v / m), k = Math.min(1, tone / 2.2 / (0.2126 * h[0] + 0.7152 * h[1] + 0.0722 * h[2]));
-  return `rgb(${h.map(v => Math.round(v * k * 255)).join(' ')} / ${a})`;
-};
-const mix = (stops: number[][], u: number) => { if (stops.length < 2) return stops[0];
-  const x = u * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(x)), f = x - i; return stops[i].map((v, c) => v + (stops[i + 1][c] - v) * f); };
-const along = (s: number) => { // the ring's midline, 11px in, s from 0 to 1 clockwise
-  const w = W - R, h = H - R, d = (((s % 1) + 1) % 1) * 2 * (w + h);
-  const [x, y] = d < w ? [d, 0] : d < w + h ? [w, d - w] : d < 2 * w + h ? [2 * w + h - d, h] : [0, 2 * (w + h) - d];
-  return { x: x + R / 2, y: y + R / 2 };
-};
-let s = 0.62, lap = 3800, then = performance.now();
+// canvas sits over the card, 22px larger each side (pointer-events: none); glow, the same size, sits under it with filter: blur(14px) saturate(1.6).
+const F = 22, W = canvas.clientWidth, H = canvas.clientHeight, P = 2 * (W + H - 4 * F) - (8 - 2 * Math.PI) * 10; // the edge's length
+const beam = asciiField(canvas, { mark: 'glyph', scene: 'none', drift: 0, charset: ' .:-=+*#%@', cellSize: 9, cellAspect: 0.62, levels: 'none', fit: 'cover',
+  hover: 'none', color: 'source', saturation: 1.4, contrast: 2.2, brightness: 0.6, label: 'A comet of characters along the card edge' });
+const art = Object.assign(document.createElement('canvas'), { width: W, height: H }), pen = art.getContext('2d')!, halo = glow.getContext('2d')!;
+const edge = new Path2D(); edge.roundRect(F, F, W - 2 * F, H - 2 * F, 10); // the card's own edge, clockwise from the top-left corner
+const AURORA = [[46, 230, 200], [157, 123, 255], [255, 111, 181]], RED = [255, 70, 70];
+// A colour whose luminance x 2.2 is the glyph density: 0 is blank, 1 is '@'.
+const toned = (c: number[], t: number) => `rgb(${c.map(v => v * Math.min(1, t / 2.2 / ((0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255)))})`;
+let state: 'idle' | 'deploying' | 'live' | 'failed' = 'idle', s = 0, len = 0.15, then = performance.now();
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function frame(now: number) {
-  s += (now - then) / lap; then = now;
-  const stops = TINTS[tint].map(rgb);
-  pen.fillStyle = '#000'; pen.fillRect(0, 0, W, H);
-  pen.save(); pen.clip(band, 'evenodd');
-  pen.fillStyle = 'rgb(38 38 38)'; pen.fillRect(0, 0, W, H); // the band: one even, sparse tone (a fine grain helps)
-  pen.lineWidth = R - 2; pen.lineCap = 'round';
-  for (let i = 1, p = along(s - 0.3); i <= 56; i++) { // tail to head: colour along the gradient, tone and opacity rising, white-hot head
-    const u = i / 56, q = along(s - 0.3 * (1 - u)), c = mix(stops, u).map(v => v + (1 - v) * Math.max(0, (u - 0.88) / 0.12) * 0.3);
-    pen.strokeStyle = toned(c, 0.4 + 0.6 * u ** 1.6, Math.min(1, u * 1.6));
-    pen.beginPath(); pen.moveTo(p.x, p.y); pen.lineTo(q.x, q.y); pen.stroke(); p = q;
+  const dt = Math.min(48, now - then); then = now;
+  if (state !== 'failed' && !still) s += (dt * P) / (state === 'idle' ? 5200 : 1700) * (card.matches(':hover') ? 1.8 : 1);
+  len += ((state === 'live' ? 1 : 0.15) - len) * (still ? 1 : dt / 600); // on success the tail grows round the whole edge
+  pen.fillStyle = '#000'; pen.fillRect(0, 0, W, H); pen.lineCap = 'round';
+  for (let i = 1; i <= 32; i++) { // tail to head, one dash of the edge per step: '.' thickening to '@'
+    const u = i / 32, at = s - len * P * (1 - u), c = state === 'failed' ? RED : AURORA[Math.floor((((at / P) % 1) + 1) % 1 * 3)];
+    const dash = (len * P) / 32 + 1; pen.setLineDash([dash, P - dash]); pen.lineDashOffset = -at; pen.lineWidth = 5 + 10 * u;
+    pen.strokeStyle = toned(c, state === 'live' ? 0.7 : 0.1 + 0.9 * u ** 1.6); pen.stroke(edge);
   }
-  const head = along(s), c = stops[stops.length - 1], glow = pen.createRadialGradient(head.x, head.y, 0, head.x, head.y, 46);
-  glow.addColorStop(0, toned(c, 0.7, 0.85)); glow.addColorStop(1, toned(c, 0.36, 0)); // the glow, in sparse coloured glyphs
-  pen.fillStyle = glow; pen.fillRect(0, 0, W, H); pen.restore();
-  void ring?.field.setSource(art);
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(frame);
+  void beam?.field.setSource(art);
+  halo.clearRect(0, 0, W, H); halo.drawImage(art, 0, 0); // the glow is the beam itself, blurred under the card
+  if (!still) requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-card.addEventListener('pointerenter', () => (lap = 1400));
-card.addEventListener('pointerleave', () => (lap = 3800));
-card.addEventListener('click', e => { const b = canvas.getBoundingClientRect(); ring?.field.pulse({ x: e.clientX - b.left, y: e.clientY - b.top, strength: 1 }); });
-tintPicker.addEventListener('change', () => { tint = tintPicker.value as typeof tint; ring?.field.update({ color: tint === 'mono' ? 'ink' : 'source' }); });
+deployButton.addEventListener('click', () => { state = 'deploying'; if (still) frame(performance.now()); }); // then 'live' or 'failed' from your deploy
 ```
 
 ## glyph-odometer: Glyph odometer
 Category: Text
 
 Prompt:
-“Make [our monthly revenue figure] an Asciify odometer: draw the digits in the field, and on [Refresh] roll each changed column through glyphs onto the new digit, leftmost first, in under 600ms. Keep the real value in an aria-live region.”
+“Show [our monthly revenue figure] as normal text, an Asciify odometer: on [Refresh] only changed digits hand over to the field, roll through glyphs leftmost first in under 600ms, and land back on the crisp digit. Keep an aria-live value.”
 
 ```ts
+// figure: the value as visible text (inline-flex, one span per character); canvas covers it (pointer-events: none) and draws only rolling columns.
 const odo = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 3, cellAspect: 0.66, levels: 'none', fit: 'cover', hover: 'none' }, '--ascii-ink-strong');
 const art = document.createElement('canvas'), pen = art.getContext('2d')!, noise = '#%*+=-:';
-const money = (n: number) => `$${n.toLocaleString('en-US')}`, ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 4;
+const money = (n: number) => `$${n.toLocaleString('en-US')}`, ease = (t: number) => 1 - (1 - t) ** 4, fade = (a: number, b: number, t: number) => Math.min(1, Math.max(0, (t - a) / (b - a)));
 let from = money(48290), to = from, t0 = -1e4;
-// canvas covers the figure; figure holds one hidden span per character, so each column is drawn where the text would be.
 async function frame(now: number) {
   const box = canvas.getBoundingClientRect(), first = [...to].findIndex((ch, i) => ch !== from[i]);
   art.width = box.width * 2; art.height = box.height * 2; pen.scale(2, 2); pen.fillRect(0, 0, box.width, box.height);
-  let moving = false; Object.assign(pen, { font: getComputedStyle(figure).font, textAlign: 'center', textBaseline: 'middle', fillStyle: '#fff' });
-  [...figure.children].forEach((cell, i) => {
-    const b = cell.getBoundingClientRect(), x = b.left - box.left + b.width / 2, top = b.top - box.top, order = i - first;
-    const k = first < 0 || order < 0 ? 1 : ease((now - t0) / (360 + order * 60)), strip = [from[i], ...noise.slice(0, 4 + order), to[i]];
-    if (k >= 1) return pen.fillText(to[i], x, top + b.height / 2);
-    moving = true; pen.save(); pen.beginPath(); pen.rect(x - b.width, top, b.width * 2, b.height); pen.clip(); // the column rolls inside its slot
-    strip.forEach((ch, j) => pen.fillText(ch, x, top + b.height / 2 + (j - k * (strip.length - 1)) * b.height)); pen.restore();
+  Object.assign(pen, { font: getComputedStyle(figure).font, textAlign: 'center', textBaseline: 'alphabetic', fillStyle: '#fff' });
+  const m = pen.measureText('0'), ascent = m.fontBoundingBoxAscent, content = ascent + m.fontBoundingBoxDescent; let moving = false; // CSS centres the content area in the line box
+  [...figure.children].forEach((el, i) => {
+    const cell = el as HTMLElement, b = cell.getBoundingClientRect(), x = b.left - box.left + b.width / 2, base = b.top - box.top + (b.height - content) / 2 + ascent;
+    const t = first < 0 || i < first || !/\d/.test(to[i]) ? 1 : Math.min(1, (now - t0) / (360 + (i - first) * 60)), k = ease(t);
+    cell.style.opacity = t < 1 ? String(fade(0.72, 1, t)) : ''; // the text steps aside at once and fades back in once the column settles
+    if (t >= 1) return;
+    moving = true; pen.save(); pen.globalAlpha = 1 - fade(0.72, 1, t);
+    pen.beginPath(); pen.rect(x - b.width, b.top - box.top, b.width * 2, b.height); pen.clip(); // the column rolls inside its slot
+    const strip = [from[i], ...noise.slice(0, 4 + i - first), to[i]];
+    strip.forEach((ch, j) => pen.fillText(ch, x, base + (j - k * (strip.length - 1)) * b.height)); pen.restore();
   });
   await odo?.field.setSource(await createImageBitmap(art));
   if (moving) requestAnimationFrame(frame);
@@ -986,7 +970,6 @@ refresh.addEventListener('click', async () => {
   figure.replaceChildren(...[...to].map(ch => Object.assign(document.createElement('span'), { textContent: ch })));
   t0 = matchMedia('(prefers-reduced-motion: reduce)').matches ? -1e4 : performance.now(); requestAnimationFrame(frame);
 });
-requestAnimationFrame(frame);
 ```
 
 ## sign-in: Sign-in page
