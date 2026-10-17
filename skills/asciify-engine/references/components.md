@@ -181,34 +181,33 @@ button.addEventListener('click', async () => { // min-width holds the widest lab
 Category: Components
 
 Prompt:
-“Make [our status badges] Asciify pills: each fill drawn in characters in its tone (green, amber, red or neutral), shimmering while Live or Syncing. A New pill sparkles once on hover, and count pills roll through glyphs on change.”
+“Make [our status badges] Asciify pills: tinted pills whose live state is a three-character indicator that breathes, a New pill with a gradient glyph sheen on hover, and a count that rolls through glyphs. Clip every character inside its pill.”
 
 ```ts
-// The canvas covers the list under the pill text (canvas z-index 1, pointer-events: none; text z-index 2). Each .pill has
-// data-tone (green, amber, red, neutral or new) and real text; CSS gives each tone a tint and full-contrast text colour.
-const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 6, cellAspect: 0.62, color: 'source', levels: 'none', hover: 'none' });
-const TONE: Record<string, number[]> = { green: [40, 168, 96], amber: [214, 150, 20], red: [222, 72, 72], neutral: [150, 150, 142], new: [120, 96, 230] };
-const art = document.createElement('canvas'), pen = art.getContext('2d')!, still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-let sparkAt = -1e4, rollAt = -1e4;
-function frame(now: number) { // a texel's hue colours its glyph and its brightness picks it: dim is '.', bright is '#'
-  const f = canvas.getBoundingClientRect(); art.width = f.width; art.height = f.height; pen.fillRect(0, 0, f.width, f.height); let busy = false;
+// The canvas covers the list (z-index 1, pointer-events: none) under the pill text. Each .pill has data-tone and real text;
+// status pills lead with a 15x8px .dot. CSS gives each tone a soft tint and hairline ring. Dark surfaces: tops of 0.9, charset '   .:+*####'.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: '  .:+*' + '#'.repeat(15), cellSize: 8, cellAspect: 0.6, color: 'source', levels: 'none', hover: 'none', maxPixelRatio: 2 });
+const HUE: Record<string, number[]> = { green: [22, 150, 82], amber: [200, 128, 10], red: [214, 52, 52], neutral: [120, 120, 114], new: [205, 175, 255] };
+const art = document.createElement('canvas'), pen = art.getContext('2d')!, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pr = Math.min(2, devicePixelRatio), ch = Math.round(8 * pr) / pr, cw = Math.round(8 * pr * 0.6) / pr; // cells tile from the top-left in whole device pixels
+const tone = (c: number[], t: number) => { const m = Math.max(...c), n = c.map(v => (v / m) * 255), lum = 0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2]; return `rgb(${n.map(v => v * Math.min(1, (t * 255) / lum))})`; };
+let sheenAt = -1e4, rollAt = -1e4;
+function frame(now: number) { // a texel's luminance picks its glyph and its hue colours it
+  const f = canvas.getBoundingClientRect(); art.width = f.width; art.height = f.height; pen.fillRect(0, 0, f.width, f.height); let clip = '';
   for (const pill of list.querySelectorAll<HTMLElement>('.pill')) {
-    const b = pill.getBoundingClientRect(), x = b.left - f.left + 1, y = b.top - f.top + 1.5, w = b.width - 2, h = b.height - 3, c = TONE[pill.dataset.tone ?? 'neutral'];
-    const live = !still() && /Live|Syncing/.test(pill.textContent ?? ''), crest = ((now % 2400) / 2400) * (w + 80) - 40, spark = !still() && pill === newPill && now - sparkAt < 280;
-    const roll = !still() && pill === countPill && now - rollAt < 280; busy ||= live || spark || roll;
-    pen.save(); pen.beginPath(); pen.roundRect(x, y, w, h, h / 2); pen.clip(); // inset a pixel so cells on the edge stay empty
-    for (let i = 0; i < w; i += 2) { // denser toward the ends, a crest sweeping across while live, glyphs flaring on a sparkle
-      const k = 0.28 + 0.3 * Math.max(0, 1 - Math.min(i, w - i) / 14) + (live ? 0.5 * Math.exp(-(((i - crest) / 14) ** 2)) : 0) + (spark && Math.random() < 0.3 ? 0.6 : 0);
-      pen.fillStyle = `rgb(${c.map(v => Math.min(255, v * k))})`; pen.fillRect(x + i, y, 2, h);
-    }
-    if (roll) { pen.fillStyle = '#fff'; pen.fillRect(x, y - 12 + ((now - rollAt) / 280) * (h + 12), w, 10); } pen.restore(); // a crest of glyphs rolls down the digits
+    const b = pill.getBoundingClientRect(), y = Math.round((b.top - f.top + b.height / 2) / ch - 0.5) * ch, c = HUE[pill.dataset.tone ?? 'neutral'];
+    const x = Math.ceil((b.left - f.left + 5) / cw) * cw, w = Math.floor((b.right - f.left - 5) / cw) * cw - x; // one lane of whole cells per pill
+    clip += `M${x} ${y}h${w}v${ch}h${-w}Z`;
+    const dot = pill.querySelector('.dot')?.getBoundingClientRect(), live = !still && /Live|Syncing/.test(pill.textContent ?? '');
+    if (dot) { const d = Math.round((dot.left - f.left + dot.width / 2) / cw - 0.5) * cw, k = live ? 0.5 - 0.5 * Math.cos(now / 290) : 0.6; // '.#.' breathes to '*#*'
+      pen.fillStyle = tone(c, 0.32 * (0.4 + 0.4 * k)); pen.fillRect(d - cw, y, cw * 3, ch); pen.fillStyle = tone(c, 0.32); pen.fillRect(d, y, cw, ch); }
+    const p = pill === newPill ? (now - sheenAt) / 900 : pill === countPill ? (now - rollAt) / 460 : 1, sheen = pill === newPill; // sheen, or glyphs rolling up the ramp
+    if (p < 1 && !still) { pen.fillStyle = tone(c, sheen ? 0.9 : 0.1 + 0.25 * ((p * 2.6) % 1)); pen.fillRect(sheen ? x - 20 + p * (w + 20) : x, y, sheen ? 20 : w, ch); }
   }
-  void fx?.field.setSource(art); if (busy) requestAnimationFrame(frame);
+  canvas.style.clipPath = `path("${clip}")`; void fx?.field.setSource(art); requestAnimationFrame(frame); // nothing escapes its lane
 }
-newPill.addEventListener('pointerenter', () => { sparkAt = performance.now(); requestAnimationFrame(frame); });
-function setCount(n: number) { // the digits step aside while the glyphs roll, then land as the new number
-  digits.textContent = String(n); digits.animate([{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }], { duration: still() ? 0 : 280 }); rollAt = performance.now(); requestAnimationFrame(frame);
-}
+newPill.addEventListener('pointerenter', () => { sheenAt = performance.now(); });
+function setCount(n: number) { digits.textContent = String(n); digits.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: still ? 0 : 460 }); rollAt = performance.now(); }
 requestAnimationFrame(frame);
 ```
 
@@ -903,32 +902,57 @@ refreshButton.addEventListener('click', () => void refresh());
 Category: Components
 
 Prompt:
-“Give [our card] an Asciify border beam: two rainbow arcs, bright heads with long fading tails, rotating round its border as fine halftone dots that shrink inward like glow. Keep the hairline border. Faster on hover; still under reduced motion.”
+“Give [our card] an Asciify border beam: rainbow halftone dots inside its rounded border. Rotate or pulse; on deploy, a progress ring that flashes then fades green on success, or cracks red on error. Static under reduced motion.”
 
 ```ts
-// canvas: over the card, 7px (two cells) larger each side, pointer-events: none; card keeps a 1px hairline. Light theme: canvas opacity .72, brightness(1.45).
-const W = canvas.clientWidth, H = canvas.clientHeight, CELL = 3.5, OUT = 7, R = 10, GAIN = 2.4, KNEE = 0.12;
+// canvas: exactly over the card (position: absolute; inset: 0; pointer-events: none), clipped to the card's own radius so no dot passes a corner.
+// The card keeps its 1px hairline. Light theme: canvas opacity .72, filter brightness(1.45).
+type Phase = 'idle' | 'running' | 'live' | 'failed';
+const style = getComputedStyle(card), R = parseFloat(style.borderTopLeftRadius) || 0, DEEP = Math.min(18, parseFloat(style.paddingTop) - 2);
+canvas.style.clipPath = `inset(0 round ${R}px)`;
+const W = canvas.clientWidth, H = canvas.clientHeight, CELL = 3.5, GAIN = 2.4, KNEE = 0.12, DOT = 0.82 * CELL / 2;
 const beam = asciiField(canvas, { mark: 'dot', cellSize: CELL, cellAspect: 1, dotScale: 0.82, scene: 'none', drift: 0, color: 'source', saturation: 1.25,
-  contrast: GAIN, brightness: GAIN / 2 - 0.5 - KNEE, levels: 'none', fit: 'cover', hover: 'none', label: 'Light turning round the card border' });
-const COLORFUL = ['#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#f43f5e', '#f59e0b'].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
+  contrast: GAIN, brightness: GAIN / 2 - 0.5 - KNEE, levels: 'none', fit: 'cover', hover: 'none', label: 'Light round the card border' });
+const rgb = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const PALETTE = ['#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#f43f5e', '#f59e0b'].map(rgb), GREEN = rgb('#2fd67b'), RED = rgb('#ff4a4a');
 const art = Object.assign(document.createElement('canvas'), { width: W, height: H }), pen = art.getContext('2d')!;
-const cells: { x: number; y: number; k: number; turn: number }[] = []; // each cell near the edge: its depth weight and angle
-for (let y = CELL / 2; y < H; y += CELL) for (let x = CELL / 2; x < W; x += CELL) {
-  const hw = W / 2 - OUT, hh = H / 2 - OUT, qx = Math.abs(x - W / 2) - hw + R, qy = Math.abs(y - H / 2) - hh + R;
-  const d = R - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0); // depth inside the rounded edge
-  const k = d >= 0 ? Math.max(0, 1 - d / 16) ** 1.7 : 0.22 * Math.max(0, 1 + d / OUT) ** 2; // a halftone: large dots on the edge, specks 16px in
-  if (k > 0.03) cells.push({ x: x - CELL / 2, y: y - CELL / 2, k, turn: Math.atan2((y - H / 2) / hh, (x - W / 2) / hw) / (2 * Math.PI) });
+const hash = (a: number) => { const s = Math.sin(a * 127.1) * 43758.5453; return s - Math.floor(s); };
+const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const cells: { x: number; y: number; k: number; turn: number; crack: number }[] = [];
+for (let y = CELL / 2; y < H; y += CELL) for (let x = CELL / 2; x < W; x += CELL) { // depth inside the rounded rect: big dots on the edge, specks DEEP px in
+  const qx = Math.abs(x - W / 2) - W / 2 + R, qy = Math.abs(y - H / 2) - H / 2 + R;
+  const d = R - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0);
+  const k = d > 0 ? Math.min(Math.max(0, 1 - d / DEEP) ** 1.7, d / DOT) : 0; // a dot where the corner curves through is held inside the curve
+  const u = Math.atan2((y - H / 2) / (H / 2), (x - W / 2) / (W / 2)) / (2 * Math.PI) + 0.25, turn = u - Math.floor(u); // 0 at the top, clockwise
+  if (k > 0.03) cells.push({ x: x - CELL / 2, y: y - CELL / 2, k, turn, crack: 0.78 * hash(Math.floor(turn * 46)) + 0.22 * hash(x * 7 + y) });
 }
-// A bright head with a soft front and a tail `len` turns long behind it.
 const arc = (f: number, len: number) => { const u = ((-f % 1) + 1) % 1; return Math.max(u < len ? (1 - u / len) ** 2.2 : 0, u > 0.97 ? ((u - 0.97) / 0.03) ** 2 : 0); };
-let rot = 0, then = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ring = (t: number, p: number) => (t <= p ? 0.42 + 0.4 * (t / Math.max(p, 1e-3)) ** 1.6 + 0.38 * Math.exp(-(((p - t) / 0.03) ** 2)) : t - p < 0.014 ? 1.2 * (1 - (t - p) / 0.014) ** 2 : 0);
+const mix = (a: number[], b: number[], k: number) => a.map((v, i) => v + (b[i] - v) * k);
+// Call setPhase from the app: mode 'deploy' shows progress (0..1) as a ring; 'rotate' and 'pulse' stay decorative. Success and error play in every mode.
+let mode: 'rotate' | 'pulse' | 'deploy' = 'deploy', phase: Phase = 'idle', progress = 0, since = 0, rot = 0, clock = 0, then = performance.now();
+export function setPhase(next: Phase, p = progress) { if (next !== phase) since = performance.now(); phase = next; progress = p; }
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function frame(now: number) {
-  rot += still ? 0 : (now - then) / (card.matches(':hover') ? 1900 : 2600); then = now;
+  const dt = now - then, s = still ? 2000 : now - since, failed = phase === 'failed'; then = now;
+  if (!failed && !still) { rot += dt / (phase === 'running' ? 1400 : mode === 'pulse' ? 9000 : 2600); clock += dt; }
+  const base = (t: number) => mode === 'deploy' ? (phase === 'idle' ? 0.05 + 0.1 * (0.5 - 0.5 * Math.cos(clock / 830)) : ring(t, progress))
+    : still ? 0.55 : mode === 'pulse' && phase === 'idle' ? 0.6 + 0.4 * Math.sin(clock / 380) : Math.max(arc(t - rot, 0.3), 0.75 * arc(t - rot - 0.5, 0.22));
+  const close = sm(0, 260, s), settle = sm(780, 1000, s), fade = sm(1350, 2450, s), head = Math.min(1, (s - 240) / 620), passing = 1 - sm(860, 1060, s);
+  const flick = s < 90 || (s >= 170 && s < 260) || s >= 340 ? 1 : 0.1, k = sm(380, 1150, s), dim = 1 - 0.5 * sm(700, 1500, s);
   pen.fillStyle = '#000'; pen.fillRect(0, 0, W, H);
-  for (const c of cells) { // two arcs half a turn apart; each cell's colour is scaled so luminance x GAIN is its dot size
-    const f = c.turn - rot, lit = still ? 0.6 : Math.max(arc(f, 0.3), 0.75 * arc(f - 0.5, 0.22));
-    const rgb = COLORFUL[Math.floor((((c.turn % 1) + 1) % 1) * 6)], tone = c.k * lit, lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    if (tone > 0.03) { pen.fillStyle = `rgb(${rgb.map(v => v * Math.min(1, (tone + KNEE) / GAIN / lum) * 255)})`; pen.fillRect(c.x, c.y, CELL, CELL); }
+  for (const c of cells) {
+    let lit = base(c.turn), colour = PALETTE[Math.floor(c.turn * PALETTE.length)], white = 0;
+    if (phase === 'live') { // close into a full ring, one white flash round it from the top, a soft green that fades in about a second
+      const d = head - c.turn, flash = s < 240 || still ? 0 : passing * (d >= 0 ? (d < 0.2 ? (1 - d / 0.2) ** 2 : 0) : d > -0.02 ? (1 + d / 0.02) ** 2 : 0);
+      lit = Math.max(lit * (1 - close), 0.86 * close * (1 - settle) + 0.62 * settle * (1 - fade), 1.3 * flash);
+      colour = mix(colour, GREEN, 0.9 * settle * (1 - fade)); white = Math.min(1, flash * 0.8);
+    } else if (failed) { // stop dead, flicker red twice, crack into fragments along the border, rest dim red
+      lit *= flick * dim * Math.min(1, Math.max(0, (c.crack - 0.68 * k) / 0.07)); colour = mix(colour, RED, 0.9);
+    }
+    colour = mix(colour, [1, 1, 1], white);
+    const tone = Math.min(1, c.k * lit), lum = 0.2126 * colour[0] + 0.7152 * colour[1] + 0.0722 * colour[2];
+    if (tone > 0.03) { pen.fillStyle = `rgb(${colour.map(v => v * Math.min(1, (tone + KNEE) / GAIN / lum) * 255).join(' ')})`; pen.fillRect(c.x, c.y, CELL, CELL); }
   }
   void beam?.field.setSource(art);
   if (!still) requestAnimationFrame(frame);
