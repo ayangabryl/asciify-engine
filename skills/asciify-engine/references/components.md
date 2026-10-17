@@ -903,36 +903,37 @@ refreshButton.addEventListener('click', () => void refresh());
 Category: Components
 
 Prompt:
-“Give [our deploy card] an Asciify border beam: a short comet of characters along its rounded edge, dense head, thinning tail, soft glow beneath. Idle: occasional pass. Deploying: steady loop. Success: lights the whole edge, dissolves. Error: stalls red, scatters.”
+“Give [our card] an Asciify border beam: two rainbow arcs, bright heads with long fading tails, rotating round its border as fine halftone dots that shrink inward like glow. Keep the hairline border. Faster on hover; still under reduced motion.”
 
 ```ts
-// canvas sits over the card, 22px larger each side (pointer-events: none); glow, the same size, sits under it with filter: blur(14px) saturate(1.6).
-const F = 22, W = canvas.clientWidth, H = canvas.clientHeight, P = 2 * (W + H - 4 * F) - (8 - 2 * Math.PI) * 10; // the edge's length
-const beam = asciiField(canvas, { mark: 'glyph', scene: 'none', drift: 0, charset: ' .:-=+*#%@', cellSize: 9, cellAspect: 0.62, levels: 'none', fit: 'cover',
-  hover: 'none', color: 'source', saturation: 1.4, contrast: 2.2, brightness: 0.6, label: 'A comet of characters along the card edge' });
-const art = Object.assign(document.createElement('canvas'), { width: W, height: H }), pen = art.getContext('2d')!, halo = glow.getContext('2d')!;
-const edge = new Path2D(); edge.roundRect(F, F, W - 2 * F, H - 2 * F, 10); // the card's own edge, clockwise from the top-left corner
-const AURORA = [[46, 230, 200], [157, 123, 255], [255, 111, 181]], RED = [255, 70, 70];
-// A colour whose luminance x 2.2 is the glyph density: 0 is blank, 1 is '@'.
-const toned = (c: number[], t: number) => `rgb(${c.map(v => v * Math.min(1, t / 2.2 / ((0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255)))})`;
-let state: 'idle' | 'deploying' | 'live' | 'failed' = 'idle', s = 0, len = 0.15, then = performance.now();
-const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// canvas: over the card, 7px (two cells) larger each side, pointer-events: none; card keeps a 1px hairline. Light theme: canvas opacity .72, brightness(1.45).
+const W = canvas.clientWidth, H = canvas.clientHeight, CELL = 3.5, OUT = 7, R = 10, GAIN = 2.4, KNEE = 0.12;
+const beam = asciiField(canvas, { mark: 'dot', cellSize: CELL, cellAspect: 1, dotScale: 0.82, scene: 'none', drift: 0, color: 'source', saturation: 1.25,
+  contrast: GAIN, brightness: GAIN / 2 - 0.5 - KNEE, levels: 'none', fit: 'cover', hover: 'none', label: 'Light turning round the card border' });
+const COLORFUL = ['#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#f43f5e', '#f59e0b'].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
+const art = Object.assign(document.createElement('canvas'), { width: W, height: H }), pen = art.getContext('2d')!;
+const cells: { x: number; y: number; k: number; turn: number }[] = []; // each cell near the edge: its depth weight and angle
+for (let y = CELL / 2; y < H; y += CELL) for (let x = CELL / 2; x < W; x += CELL) {
+  const hw = W / 2 - OUT, hh = H / 2 - OUT, qx = Math.abs(x - W / 2) - hw + R, qy = Math.abs(y - H / 2) - hh + R;
+  const d = R - Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - Math.min(Math.max(qx, qy), 0); // depth inside the rounded edge
+  const k = d >= 0 ? Math.max(0, 1 - d / 16) ** 1.7 : 0.22 * Math.max(0, 1 + d / OUT) ** 2; // a halftone: large dots on the edge, specks 16px in
+  if (k > 0.03) cells.push({ x: x - CELL / 2, y: y - CELL / 2, k, turn: Math.atan2((y - H / 2) / hh, (x - W / 2) / hw) / (2 * Math.PI) });
+}
+// A bright head with a soft front and a tail `len` turns long behind it.
+const arc = (f: number, len: number) => { const u = ((-f % 1) + 1) % 1; return Math.max(u < len ? (1 - u / len) ** 2.2 : 0, u > 0.97 ? ((u - 0.97) / 0.03) ** 2 : 0); };
+let rot = 0, then = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function frame(now: number) {
-  const dt = Math.min(48, now - then); then = now;
-  if (state !== 'failed' && !still) s += (dt * P) / (state === 'idle' ? 5200 : 1700) * (card.matches(':hover') ? 1.8 : 1);
-  len += ((state === 'live' ? 1 : 0.15) - len) * (still ? 1 : dt / 600); // on success the tail grows round the whole edge
-  pen.fillStyle = '#000'; pen.fillRect(0, 0, W, H); pen.lineCap = 'round';
-  for (let i = 1; i <= 32; i++) { // tail to head, one dash of the edge per step: '.' thickening to '@'
-    const u = i / 32, at = s - len * P * (1 - u), c = state === 'failed' ? RED : AURORA[Math.floor((((at / P) % 1) + 1) % 1 * 3)];
-    const dash = (len * P) / 32 + 1; pen.setLineDash([dash, P - dash]); pen.lineDashOffset = -at; pen.lineWidth = 5 + 10 * u;
-    pen.strokeStyle = toned(c, state === 'live' ? 0.7 : 0.1 + 0.9 * u ** 1.6); pen.stroke(edge);
+  rot += still ? 0 : (now - then) / (card.matches(':hover') ? 1900 : 2600); then = now;
+  pen.fillStyle = '#000'; pen.fillRect(0, 0, W, H);
+  for (const c of cells) { // two arcs half a turn apart; each cell's colour is scaled so luminance x GAIN is its dot size
+    const f = c.turn - rot, lit = still ? 0.6 : Math.max(arc(f, 0.3), 0.75 * arc(f - 0.5, 0.22));
+    const rgb = COLORFUL[Math.floor((((c.turn % 1) + 1) % 1) * 6)], tone = c.k * lit, lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    if (tone > 0.03) { pen.fillStyle = `rgb(${rgb.map(v => v * Math.min(1, (tone + KNEE) / GAIN / lum) * 255)})`; pen.fillRect(c.x, c.y, CELL, CELL); }
   }
   void beam?.field.setSource(art);
-  halo.clearRect(0, 0, W, H); halo.drawImage(art, 0, 0); // the glow is the beam itself, blurred under the card
   if (!still) requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-deployButton.addEventListener('click', () => { state = 'deploying'; if (still) frame(performance.now()); }); // then 'live' or 'failed' from your deploy
 ```
 
 ## glyph-odometer: Glyph odometer
