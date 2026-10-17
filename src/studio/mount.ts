@@ -59,7 +59,18 @@ export function mountStudioMedia(
   let adaptive = options.adaptive !== false;
   let samples = 0,
     costAverage = 0,
-    overBudget = 0;
+    overBudget = 0,
+    underBudget = 0;
+  // The resolution the caller asked for. Adaptive quality may lower the live budget while the device is
+  // actually missing frames, but it always climbs back, and a still frame is always drawn at this budget.
+  let targetCells = renderer.maxCells;
+  const restore = () => {
+    if (renderer.maxCells >= targetCells) return false;
+    renderer.setBudget(targetCells);
+    options.onQualityChange?.(renderer.maxCells);
+    overBudget = underBudget = costAverage = samples = 0;
+    return true;
+  };
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   const video = media.source instanceof HTMLVideoElement ? media.source : null;
   const wake = () => {
@@ -111,11 +122,19 @@ export function mountStudioMedia(
         options.onFrame?.(video?.currentTime ?? time, cost);
         costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
         if (++samples > 20 && adaptive && (animated || renderer.active)) {
-          overBudget = costAverage > 13 ? overBudget + 1 : 0;
-          if (overBudget >= 12 && renderer.maxCells > 3000) {
+          // Only a sustained miss of the frame budget counts as struggling; a busy frame or two does not.
+          const frameBudget = 1000 / Math.max(1, Math.min(60, options.fps ?? 60));
+          overBudget = costAverage > frameBudget * 1.1 ? overBudget + 1 : 0;
+          underBudget = costAverage < frameBudget * 0.5 ? underBudget + 1 : 0;
+          if (overBudget >= 20 && renderer.maxCells > 3000) {
             renderer.setBudget(Math.max(3000, renderer.maxCells * 0.8));
             options.onQualityChange?.(renderer.maxCells);
             overBudget = 0;
+            costAverage = 0;
+          } else if (underBudget >= 30 && renderer.maxCells < targetCells) {
+            renderer.setBudget(Math.min(targetCells, renderer.maxCells * 1.25));
+            options.onQualityChange?.(renderer.maxCells);
+            underBudget = 0;
             costAverage = 0;
           }
         }
@@ -130,6 +149,11 @@ export function mountStudioMedia(
       videoFrame = decoded;
     }
     if (moving && (animated || renderer.active)) wake();
+    // Motion has settled: draw the still again at the full requested resolution.
+    else if (!animated && !renderer.active && restore()) {
+      dirty = true;
+      wake();
+    }
   }
   const move = (e: PointerEvent) => {
     if (!shouldPlay()) return;
@@ -223,6 +247,8 @@ export function mountStudioMedia(
     },
     setBudget(cells: number) {
       renderer.setBudget(cells);
+      targetCells = renderer.maxCells;
+      overBudget = underBudget = costAverage = samples = 0;
       options.onQualityChange?.(renderer.maxCells);
       dirty = true;
       wake();

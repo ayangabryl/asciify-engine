@@ -3,7 +3,14 @@
 export type FieldColor = 'ink' | 'source';
 export type FieldFit = 'cover' | 'contain';
 /** Generated motion used when there is no media source. */
-export type FieldScene = 'none' | 'flow' | 'orb';
+export type FieldScene = 'none' | 'flow' | 'orb' | 'drift';
+/** `glyph` draws characters from the atlas; `dot` draws a halftone: one circle per cell, its area following the tone. */
+export type FieldMark = 'glyph' | 'dot';
+/**
+ * An area the field keeps quiet, so content above it stays readable. Coordinates are fractions of the field,
+ * from the top left; `feather` is the soft edge, as a fraction of the field's shorter side.
+ */
+export interface FieldClearZone { x: number; y: number; width: number; height: number; feather: number; shape: 'ellipse' | 'rect' }
 /**
  * How the field answers the pointer.
  * - `fluid`: an incompressible fluid that bends the image and swirls the characters. Bold, liquid.
@@ -68,6 +75,9 @@ export interface GlyphFieldSettings {
   fontWeight: number;
   /** Glyph height relative to the cell. */
   glyphScale: number;
+  mark: FieldMark;
+  /** Largest dot as a fraction of the cell, for `mark: 'dot'`. */
+  dotScale: number;
   color: FieldColor;
   ink: string;
   /** Color the wake lifts characters toward. 'auto' brightens each character's own color, so the wake never turns white. */
@@ -93,6 +103,9 @@ export interface GlyphFieldSettings {
   /** Slow ambient sampling drift that keeps a still image alive. 0 is still. */
   drift: number;
   scene: FieldScene;
+  /** Size of generated scenes' features; higher is finer. */
+  scale: number;
+  clear: FieldClearZone | false;
   /** Speed of generated scenes and drift. */
   speed: number;
   /** Which pointer response runs. */
@@ -125,6 +138,8 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   font: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontWeight: 500,
   glyphScale: 0.8,
+  mark: 'glyph',
+  dotScale: 0.9,
   color: 'ink',
   ink: '#f3ba32',
   highlight: 'auto',
@@ -142,6 +157,8 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   vignette: 0,
   drift: 0,
   scene: 'flow',
+  scale: 1,
+  clear: false,
   speed: 1,
   hover: 'fluid',
   fluid: DEFAULT_FIELD_FLUID,
@@ -151,7 +168,8 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   respectReducedMotion: true,
 };
 
-export type GlyphFieldInput = Partial<Omit<GlyphFieldSettings, 'fluid' | 'focus' | 'lantern' | 'trail'>> & {
+export type GlyphFieldInput = Partial<Omit<GlyphFieldSettings, 'fluid' | 'focus' | 'lantern' | 'trail' | 'clear'>> & {
+  clear?: Partial<FieldClearZone> | false;
   trail?: Partial<FieldTrailOptions>;
   fluid?: Partial<FieldFluidOptions> | boolean;
   lantern?: Partial<FieldLanternOptions>;
@@ -172,7 +190,9 @@ export function fieldGlyphs(charset: string): string[] {
   return glyphs.filter(glyph => glyph !== '\n' && glyph !== '\r' && glyph !== '\t').slice(0, 256);
 }
 
-export function normalizeFieldSettings(input: GlyphFieldInput = {}, base: GlyphFieldSettings = DEFAULT_FIELD_SETTINGS): GlyphFieldSettings {
+/** Mount options may carry an element-based clear zone; normalizing ignores it, since only a mounted field can measure it. */
+type ClearElementLike = { element: unknown } | { nodeType: number };
+export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & { clear?: GlyphFieldInput['clear'] | ClearElementLike } = {}, base: GlyphFieldSettings = DEFAULT_FIELD_SETTINGS): GlyphFieldSettings {
   const charset = typeof input.charset === 'string' && fieldGlyphs(input.charset).length >= 2 ? input.charset : base.charset;
   const fluidBase = base.fluid || DEFAULT_FIELD_FLUID;
   const fluidInput = input.fluid === undefined ? base.fluid : input.fluid;
@@ -188,7 +208,17 @@ export function normalizeFieldSettings(input: GlyphFieldInput = {}, base: GlyphF
       curl: clamp(next.curl, 0, 80, DEFAULT_FIELD_FLUID.curl),
     };
   })();
-  const scene = input.scene === 'none' || input.scene === 'flow' || input.scene === 'orb' ? input.scene : base.scene;
+  const scene = input.scene === 'none' || input.scene === 'flow' || input.scene === 'orb' || input.scene === 'drift' ? input.scene : base.scene;
+  const elementLike = !!input.clear && typeof input.clear === 'object' && ('element' in input.clear || 'nodeType' in input.clear);
+  const clearInput = input.clear === undefined || elementLike ? base.clear : input.clear as Partial<FieldClearZone> | false;
+  const clear: FieldClearZone | false = !clearInput ? false : {
+    x: clamp(clearInput.x, -0.5, 1.5, 0.25),
+    y: clamp(clearInput.y, -0.5, 1.5, 0.3),
+    width: clamp(clearInput.width, 0, 2, 0.5),
+    height: clamp(clearInput.height, 0, 2, 0.4),
+    feather: clamp(clearInput.feather, 0.005, 1, 0.12),
+    shape: clearInput.shape === 'rect' ? 'rect' : 'ellipse',
+  };
   return {
     charset,
     cellSize: clamp(input.cellSize, 3, 96, base.cellSize),
@@ -196,6 +226,8 @@ export function normalizeFieldSettings(input: GlyphFieldInput = {}, base: GlyphF
     font: typeof input.font === 'string' && input.font.trim() ? input.font : base.font,
     fontWeight: Math.round(clamp(input.fontWeight, 100, 900, base.fontWeight)),
     glyphScale: clamp(input.glyphScale, 0.3, 1.6, base.glyphScale),
+    mark: input.mark === 'dot' || input.mark === 'glyph' ? input.mark : base.mark,
+    dotScale: clamp(input.dotScale, 0.1, 1.4, base.dotScale),
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),
     highlight: input.highlight === 'auto' ? 'auto' : hex(input.highlight, base.highlight),
@@ -216,6 +248,8 @@ export function normalizeFieldSettings(input: GlyphFieldInput = {}, base: GlyphF
     vignette: clamp(input.vignette, 0, 1, base.vignette),
     drift: clamp(input.drift, 0, 2, base.drift),
     scene,
+    scale: clamp(input.scale, 0.2, 6, base.scale),
+    clear,
     speed: clamp(input.speed, 0, 5, base.speed),
     hover: input.hover === 'fluid' || input.hover === 'lantern' || input.hover === 'trail' || input.hover === 'none' ? input.hover : base.hover,
     fluid,
@@ -246,6 +280,18 @@ export function fieldSourceRect(fieldWidth: number, fieldHeight: number, sourceW
     ? [(1 - scale[0]) * focus.x, (1 - scale[1]) * focus.y]
     : [(1 - scale[0]) * 0.5, (1 - scale[1]) * 0.5];
   return { scale, offset };
+}
+
+/**
+ * The share of an image's resolution worth uploading to a field `width` × `height` device pixels with `cellHeight`-pixel
+ * cells: at least `texelsPerCell` source texels per cell, in halving steps so the texture's mip levels sit on the
+ * original's and the sampled cells stay the same. 1 keeps the image as it is, as does an unknown field size.
+ */
+export function fieldSourceScale(naturalWidth: number, naturalHeight: number, width: number, height: number, cellHeight: number, fit: FieldFit, texelsPerCell = 8) {
+  if (!(width >= 16 && height >= 16 && naturalWidth > 0 && naturalHeight > 0 && cellHeight > 0)) return 1;
+  const density = fit === 'cover' ? Math.min(naturalWidth / width, naturalHeight / height) : Math.max(naturalWidth / width, naturalHeight / height);
+  const needed = texelsPerCell / cellHeight / density;
+  return needed > 0.5 ? 1 : 2 ** -Math.floor(Math.log2(1 / needed));
 }
 
 /** Device-pixel cell and atlas layout. Cells are whole pixels so glyphs are sampled texel for texel. */
@@ -291,3 +337,15 @@ export function fieldLevels(pixels: Uint8ClampedArray | Uint8Array): [number, nu
 /** The hover that actually runs: fluid needs its settings, and anything is off without a pointer response. */
 export const activeFieldHover = (settings: GlyphFieldSettings): FieldHover =>
   settings.hover === 'fluid' && !settings.fluid ? 'none' : settings.hover;
+
+/** The clear zone around an element, in field fractions; `padding` is CSS pixels added on every side. */
+export function fieldClearFromRects(field: { left: number; top: number; width: number; height: number }, element: { left: number; top: number; width: number; height: number }, padding = 24, feather = 0.12, shape: FieldClearZone['shape'] = 'ellipse'): FieldClearZone | false {
+  if (!(field.width > 0 && field.height > 0)) return false;
+  return {
+    x: (element.left - padding - field.left) / field.width,
+    y: (element.top - padding - field.top) / field.height,
+    width: (element.width + padding * 2) / field.width,
+    height: (element.height + padding * 2) / field.height,
+    feather, shape,
+  };
+}

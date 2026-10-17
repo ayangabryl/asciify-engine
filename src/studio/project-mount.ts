@@ -23,7 +23,9 @@ export function mountStudioProjectMedia(canvas:HTMLCanvasElement,input:StudioPro
   const owned=[...new Set(media.values())],videos=owned.filter(m=>m.source instanceof HTMLVideoElement).map(m=>m.source as HTMLVideoElement);
   const clocks=new Map<string,AmbientTimeline>();
   let phases:Record<string,number>={},time=0,last=0,painted=0,raf=0,dirty=true,paused=false,visible=true,disposed=false;
-  let adaptive=options.adaptive!==false,samples=0,average=0,over=0,width=project.width,height=project.height,seekGeneration=0,seeking=false;
+  let adaptive=options.adaptive!==false,samples=0,average=0,over=0,under=0,width=project.width,height=project.height,seekGeneration=0,seeking=false;
+  // The budget the caller asked for; adaptive quality may dip below it only while frames are missed.
+  let targetCells=renderer.maxCells;
   let seekController:AbortController|undefined;
   const videoRequests=new WeakSet<HTMLVideoElement>();
   const fps=Math.max(1,Math.min(60,Number.isFinite(options.fps)?options.fps!:60));
@@ -69,13 +71,19 @@ export function mountStudioProjectMedia(canvas:HTMLCanvasElement,input:StudioPro
         const cost=performance.now()-start;options.onFrame?.(time,cost);
         average=average?average*.9+cost*.1:cost;
         if(++samples>20&&adaptive&&moving&&(animated||renderer.active)) {
-          over=average>13?over+1:0;
-          if(over>=12&&renderer.maxCells>2048){renderer.setBudget(Math.max(2048,renderer.maxCells*.8));options.onQualityChange?.(renderer.maxCells);average=over=0;dirty=true;}
+          // Only a sustained miss of the frame budget counts as struggling; headroom climbs back toward the request.
+          const frameBudget=1000/fps;
+          over=average>frameBudget*1.1?over+1:0;
+          under=average<frameBudget*.5?under+1:0;
+          if(over>=20&&renderer.maxCells>2048){renderer.setBudget(Math.max(2048,renderer.maxCells*.8));options.onQualityChange?.(renderer.maxCells);average=over=0;dirty=true;}
+          else if(under>=30&&renderer.maxCells<targetCells){renderer.setBudget(Math.min(targetCells,renderer.maxCells*1.25));options.onQualityChange?.(renderer.maxCells);average=under=0;dirty=true;}
         }
       } catch(error){paused=true;syncPlayback();options.onError?.(error instanceof Error?error:new Error(String(error)));}
       dirty=false;painted=now;
     }
     if(moving&&(animated||renderer.active))wake();
+    // Motion has settled: draw the still again at the full requested resolution.
+    else if(!animated&&!renderer.active&&renderer.maxCells<targetCells){renderer.setBudget(targetCells);options.onQualityChange?.(renderer.maxCells);samples=over=under=average=0;dirty=true;wake();}
   }
   const move=(e:PointerEvent)=>{if(!shouldPlay())return;const r=canvas.getBoundingClientRect();if(!r.width||!r.height)return;renderer.pointer((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height,e.timeStamp);wake();};
   const leave=()=>{renderer.leave();wake();};
@@ -116,7 +124,7 @@ export function mountStudioProjectMedia(canvas:HTMLCanvasElement,input:StudioPro
       } finally {if(!disposed&&generation===seekGeneration){seeking=false;motion();}}
     },
     redraw(){assertLive();renderer.invalidate();dirty=true;wake();},
-    setBudget(value:number){assertLive();renderer.setBudget(value);options.onQualityChange?.(renderer.maxCells);dirty=true;wake();},
-    setAdaptive(value:boolean){adaptive=value;samples=over=average=0;},destroy,
+    setBudget(value:number){assertLive();renderer.setBudget(value);targetCells=renderer.maxCells;samples=over=under=average=0;options.onQualityChange?.(renderer.maxCells);dirty=true;wake();},
+    setAdaptive(value:boolean){adaptive=value;samples=over=under=average=0;},destroy,
   };
 }

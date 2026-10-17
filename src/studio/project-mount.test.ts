@@ -74,8 +74,9 @@ it('keeps invalid fps finite and reduces one shared budget after sustained rende
   let stamp=0;const timer=vi.spyOn(performance,'now').mockImplementation(()=>stamp+=20);
   renderer.setBudget.mockImplementation(value=>{renderer.maxCells=value;});const changed=vi.fn();
   const player=mountStudioProjectMedia(canvas(),{layers:[{id:'a',source:'s',settings:{motion:{type:'parallax'}}}]},new Map([['s',asset()]]),{fps:NaN,onQualityChange:changed});
-  for(let i=0;i<35;i++)advance();
-  expect(renderer.render.mock.calls.length).toBe(35);expect(renderer.setBudget).toHaveBeenCalledWith(19200);
+  // A sustained miss of the frame budget (20 ms against 16.7 ms) for 20 sampled frames lowers it once.
+  for(let i=0;i<45;i++)advance();
+  expect(renderer.render.mock.calls.length).toBe(45);expect(renderer.setBudget).toHaveBeenCalledWith(19200);
   expect(changed).toHaveBeenCalledWith(19200);player.destroy();timer.mockRestore();
 });
 it('rejects too many supplied assets before taking ownership',()=>{

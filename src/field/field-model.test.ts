@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FIELD_SETTINGS, activeFieldHover, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, normalizeFieldSettings, parseFieldColor } from './field-model';
+import { DEFAULT_FIELD_SETTINGS, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
 
 describe('glyph field settings', () => {
   it('keeps words and multi-code-point glyphs as single cells', () => {
@@ -79,5 +79,48 @@ describe('glyph field hovers', () => {
     expect(normalizeFieldSettings({ hover: 'nope' as never }).hover).toBe('fluid');
     expect(activeFieldHover(normalizeFieldSettings({ hover: 'trail', fluid: false }))).toBe('trail');
     expect(normalizeFieldSettings({ hover: 'trail', trail: { strength: 2, radius: 0 } }).trail).toEqual({ strength: 1, radius: 0.1 });
+  });
+});
+
+describe('glyph field halftone and clear zones', () => {
+  it('normalizes the dot mark, drift scene and clear zone', () => {
+    const settings = normalizeFieldSettings({ mark: 'dot', scene: 'drift', dotScale: 9, scale: 0, clear: { x: 0.2, width: 0.5, shape: 'rect' } });
+    expect([settings.mark, settings.scene, settings.dotScale, settings.scale]).toEqual(['dot', 'drift', 1.4, 0.2]);
+    expect(settings.clear).toMatchObject({ x: 0.2, y: 0.3, width: 0.5, height: 0.4, shape: 'rect' });
+    expect(normalizeFieldSettings({ clear: false }, settings).clear).toBe(false);
+  });
+  it('keeps the current zone when given an element, which only a mounted field can measure', () => {
+    const base = normalizeFieldSettings({ clear: { x: 0.1 } });
+    expect(normalizeFieldSettings({ clear: { element: {} } }, base).clear).toEqual(base.clear);
+  });
+  it('maps an element rectangle into field fractions with padding', () => {
+    const zone = fieldClearFromRects({ left: 100, top: 50, width: 1000, height: 500 }, { left: 300, top: 250, width: 400, height: 100 }, 20, 0.1, 'rect');
+    expect(zone).toEqual({ x: 0.18, y: 0.36, width: 0.44, height: 0.28, feather: 0.1, shape: 'rect' });
+    expect(fieldClearFromRects({ left: 0, top: 0, width: 0, height: 0 }, { left: 0, top: 0, width: 1, height: 1 })).toBe(false);
+  });
+});
+
+describe('glyph field source resolution', () => {
+  it('keeps about eight texels per cell, in halving steps', () => {
+    // A 1280 × 1600 photo in a 440 × 550 card with 12 px cells: 34 texels per cell, a quarter is still 8.7.
+    expect(fieldSourceScale(1280, 1600, 440, 550, 12, 'cover')).toBe(0.25);
+    expect(fieldSourceScale(640, 640, 336, 336, 10, 'cover')).toBe(0.5);
+    // A wide photo in a wider frame is cropped, so its height sets the density.
+    expect(fieldSourceScale(1800, 1200, 2400, 1000, 18, 'cover')).toBe(1);
+    expect(fieldSourceScale(4000, 1000, 400, 400, 10, 'contain')).toBe(0.125);
+    expect(fieldSourceScale(4000, 1000, 400, 400, 10, 'cover')).toBe(0.5);
+  });
+  it('never scales up, and leaves images alone while the field size is unknown', () => {
+    expect(fieldSourceScale(200, 200, 2000, 2000, 10, 'cover')).toBe(1);
+    expect(fieldSourceScale(4000, 4000, 1, 1, 10, 'cover')).toBe(1);
+    expect(fieldSourceScale(0, 0, 400, 400, 10, 'cover')).toBe(1);
+  });
+  it('always keeps at least the texels the cells sample', () => {
+    for (const [w, h, fw, fh, cell] of [[3000, 2000, 500, 300, 9], [1024, 4096, 300, 900, 14], [5000, 5000, 100, 100, 4]]) {
+      const scale = fieldSourceScale(w, h, fw, fh, cell, 'cover');
+      const density = Math.min(w / fw, h / fh) * scale;
+      expect(density * cell).toBeGreaterThanOrEqual(8);
+      expect(density * cell).toBeLessThan(16);
+    }
   });
 });

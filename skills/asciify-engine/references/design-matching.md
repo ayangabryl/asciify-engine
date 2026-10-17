@@ -37,6 +37,7 @@ Never introduce a new brand color, a black canvas on a light site, or a second a
 | --- | --- | --- |
 | A photo, video or GIF converted on their page, with optional hover | `asciify`, `asciifyVideo`, `asciifyGif` (+ `mountHover` from `/hover`) | Lightest path. Disable core hover and motion when `/hover` owns them. |
 | A full-bleed hero or brand field that must feel smooth under the cursor, their name or word as the characters, an Unseen-style look | `mountGlyphField` from `/field` | WebGL2 on a GPU, 120 fps class. Glyph ramps only. Keep a poster and a fallback. See [glyph-field.md](glyph-field.md). |
+| A calm background for a product page, docs, pricing or SaaS hero, in light or dark | `mountGlyphField` with `mark: 'dot'`, `scene: 'drift'` and `clear` around the copy | The halftone. Muted ink, transparent background, `pulse()` on real events. See [glyph-field.md](glyph-field.md#halftone-for-interfaces-412). |
 | Art styles (halftone, dither, braille, print, mosaic, LED…), saved looks, backdrops, masks, effects, PNG/MP4/GIF export | `mountStudio` from `/studio` | Studio owns motion, hover and finish. Start from `studioLook(id)` when one of the 12 looks matches the mood. |
 | Several media and text layers in one artwork | `mountStudioProject` from `/studio` | One loop and budget for up to eight layers. See [layered-projects.md](layered-projects.md). |
 | An ambient animated background with no media (rain, stars, waves, aurora…) | A background template from asciify.org/backgrounds | Downloaded files, not npm exports. Or a `/field` generated scene (`flow`, `orb`) for a GPU field. |
@@ -54,6 +55,7 @@ Never introduce a new brand color, a black canvas on a light site, or a second a
 | Techy, data, futuristic | Braille, blocks, dots, LED, hex | Source color with saturation 1.1–1.3, or a cool brand ink | 5–9px | Silk, Contour, Lens; field with `orb` or `flow` |
 | Playful | Emoji or custom glyphs, mosaic, bricks, voxels | Source color | 9–14px | Elastic, Scatter, Ripple rings |
 | Brand, identity, "our name in the art" | The brand word after a quiet ramp: `' .,:-+' + WORD` | One ink (`color: 'ink'`, `shade: 1`) so density and brightness carry the image | 10–14px; `cellAspect` 0.75–0.85 for display fonts | Field `hover: 'fluid'` (Unseen-like) or `'lantern'` (quieter); video or generated scene underneath |
+| Product UI, SaaS, docs | Halftone dots (`mark: 'dot'`) | Muted text token, never the accent; light and dark both | 12–16px dot spacing, `dotScale` ~0.6, `clear` around the copy | Lantern or none; `pulse()` on saves and messages |
 | Behind body text | Light ramp, no dense glyphs | Ink at low contrast against the background; opacity 0.15–0.35 | 10–14px | Ambient only, or none; never strong refraction behind reading text |
 
 Hover choice by intent:
