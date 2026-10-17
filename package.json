@@ -56,6 +56,16 @@
         "types": "./dist/field.d.cts",
         "default": "./dist/field.cjs"
       }
+    },
+    "./kit": {
+      "import": {
+        "types": "./dist/kit.d.ts",
+        "default": "./dist/kit.js"
+      },
+      "require": {
+        "types": "./dist/kit.d.cts",
+        "default": "./dist/kit.cjs"
+      }
     }
   },
   "files": [
