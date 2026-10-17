@@ -134,7 +134,7 @@ export function codeInput(element: HTMLElement, options: CodeInputOptions = {}):
     host: element,
     outset: 16,
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,

@@ -84,7 +84,7 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
     cellSize: 4, cellAspect: 0.62, glyphScale: 0.94, ...state.current.look,
   });
-  const neutral = (dark: boolean) => resolveColor(state.current.ink ?? '--ascii-ink-strong', track, dark ? '#d8d6cf' : '#1d1d1b')!;
+  const neutral = (dark: boolean) => (resolveColor(state.current.ink ?? '--ascii-ink-strong', track) ?? resolveColor(getComputedStyle(track).color, track) ?? (dark ? '#d8d6cf' : '#1d1d1b'));
   const success = (dark: boolean) => resolveColor(state.current.color ?? '--ascii-success', track, dark ? '#3ccf7e' : '#17844a')!;
 
   surface = mountSurface({

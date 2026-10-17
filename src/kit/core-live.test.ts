@@ -6,7 +6,7 @@ vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyph
 import { beam } from './beam';
 import { statusOrb } from './status-orb';
 import { fieldBackground } from './field-background';
-import { getFieldBudget, getGlobalLook, setFieldBudget, setGlobalLook, subscribeGlobalLook } from './core-live';
+import { balanceCharset, getFieldBudget, getGlobalLook, inkWeight, setFieldBudget, setGlobalLook, subscribeGlobalLook } from './core-live';
 import { FakeElement, FakeStyle, fakeField, useFakeDom } from './fake-dom-2a';
 
 const { env, advance, flush, element, as, canvases } = useFakeDom(mount, support);
@@ -226,6 +226,29 @@ describe('posters', () => {
   });
 });
 
+describe('charset balance', () => {
+  const weigh = (max: number, mean: number) => vi.spyOn(document, 'createElement').mockImplementationOnce(() => {
+    // A 2D pen whose coverage reads `max`x the reference for the densest glyph; `mean` scales the ramp.
+    let glyph = '';
+    const cover = (g: string) => (g === '@' ? 30 : g === 'D' ? 30 * max : 30 * mean);
+    return { getContext: () => ({ font: '', textAlign: '', textBaseline: '', fillStyle: '', clearRect() {}, fillText(g: string) { glyph = g; }, getImageData: () => ({ data: Object.assign(new Uint8ClampedArray(4), { 3: 255 * cover(glyph) / 100 }) }) }) } as unknown as HTMLElement;
+  });
+
+  it('leaves ASCII-weight sets as they are, and every set as it is without a 2D canvas', () => {
+    expect(balanceCharset(' .:-=+*#%@', { glyphScale: 0.9 })).toEqual({ glyphScale: 0.9, gamma: 1, fontWeight: 500 });
+    const plain = inkWeight(' x');
+    expect([plain.max, plain.mean].map(v => +v.toFixed(3))).toEqual([1, 1]);
+  });
+
+  it('shrinks heavy glyphs and enlarges and bolds faint ones, never touching tone', () => {
+    weigh(2.6, 1); const heavy = balanceCharset(' D', { glyphScale: 0.8 }), faint = (weigh(0.4, 1), balanceCharset(' D ', { glyphScale: 0.8 }));
+    expect(heavy.glyphScale).toBeLessThan(0.8);
+    expect(faint.glyphScale).toBeGreaterThan(0.8);
+    expect(faint.fontWeight).toBe(700);
+    expect([heavy.gamma, faint.gamma]).toEqual([1, 1]);
+  });
+});
+
 describe('global look', () => {
   it('re-skins live glyph fields, skips dots, letters and opt-outs, and gives each its own charset back', () => {
     const seen: unknown[] = [];
@@ -235,8 +258,8 @@ describe('global look', () => {
     setGlobalLook({ charset: ' .oO@' });
     expect(getGlobalLook()).toEqual({ charset: ' .oO@' });
     expect(seen).toEqual([{ charset: ' .oO@' }]);
-    expect(fields[0].update).toHaveBeenCalledWith({ charset: ' .oO@' });
-    for (const f of fields.slice(1)) expect(f.update).not.toHaveBeenCalledWith({ charset: ' .oO@' });
+    expect(fields[0].update).toHaveBeenCalledWith(expect.objectContaining({ charset: ' .oO@' }));
+    for (const f of fields.slice(1)) expect(f.update).not.toHaveBeenCalledWith(expect.objectContaining({ charset: ' .oO@' }));
 
     // The component's own updates keep the global characters; a new field mounts with them.
     orb.update({ look: { charset: ' -+' } });
@@ -245,8 +268,8 @@ describe('global look', () => {
     expect(optionsOf(4)).toMatchObject({ charset: ' .oO@' });
 
     setGlobalLook(null);
-    expect(fields[0].update).toHaveBeenLastCalledWith({ charset: ' -+' });
-    expect(fields[4].update).toHaveBeenLastCalledWith({ charset: ' .:-=+*#%@' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ charset: ' -+' }));
+    expect(fields[4].update).toHaveBeenLastCalledWith(expect.objectContaining({ charset: ' .:-=+*#%@' }));
     off();
     setGlobalLook({ charset: ' 01' });
     expect(seen).toHaveLength(2);
@@ -281,7 +304,7 @@ describe('global look', () => {
 
     env.reduced = true;
     setGlobalLook({ charset: ' .oO@' });
-    expect(fields[0].update).toHaveBeenLastCalledWith({ charset: ' .oO@' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ charset: ' .oO@' }));
     expect(sweeps()).toHaveLength(0);
     env.reduced = false;
     orb.destroy();

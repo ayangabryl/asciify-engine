@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.15: every charset at the same weight, inks from your tokens
+
+- `setGlobalLook({ charset })` measures the set's ink against classic ASCII and balances it: block and solid sets draw smaller glyphs and keep their detail, sets without light glyphs ease off, and faint sets draw larger, bolder glyphs. Tones are untouched.
+- Kit inks default to `--ascii-ink-strong`, and with that unset, to the element's own text colour, so components follow the page's tokens instead of a fixed grey.
+- `skeleton` reads its blocks' shapes from CSS (an image's radius; one bar per line of text, as wide as the words) and its shimmer is a continuous wave until `resolve()`.
+- A hidden (`display: none`) field gives its WebGL context to fields on screen.
+
 ## 4.14: backgrounds in the kit, site-quality components
 
 - **`background(el, { preset })`** brings all 26 asciify.org backgrounds into the kit: drift, halftone, wordField and fluid on the GPU field, and 22 canvas presets (caustics, contour, facet, etch, moire, weave, veil, dune, wave, aurora, noise, silk, rain, stars, pulse, grid, voidWell, morph, fire, dna, terrain, circuit). Presets are separate imports, so a page pays only for the ones it uses, and each matches the /backgrounds page's rendering.

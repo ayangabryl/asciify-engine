@@ -104,7 +104,7 @@ export function likeBurst(button: HTMLElement, options: LikeBurstOptions = {}): 
     outset: state.current.outset,
     layer: state.current.layer,
     look,
-    ink: dark => state.current.ink ?? (state.current.kind === 'heart' ? `var(--ascii-like, ${dark ? '#ff6b70' : '#e5484d'})` : (dark ? '#d8d6cf' : '#1d1d1b')),
+    ink: dark => state.current.ink ?? (state.current.kind === 'heart' ? `var(--ascii-like, ${dark ? '#ff6b70' : '#e5484d'})` : '--ascii-ink-strong'),
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; },

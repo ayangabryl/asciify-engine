@@ -64,7 +64,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     host: panel,
     // Over the content: the marker sits in the gutter on top of the row's own highlight, and flights draw while the content is hidden.
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,

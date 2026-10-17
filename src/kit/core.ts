@@ -254,7 +254,8 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   };
 
   let dark = isDark(host);
-  const ink = () => resolveColor(config.ink(dark), host, dark ? '#d8d6cf' : '#1d1d1b') ?? '#888888';
+  // An unset token falls back to the host's own text colour, which already follows the page's design tokens.
+  const ink = () => resolveColor(config.ink(dark), host) ?? resolveColor(getComputedStyle(host).color, host) ?? (dark ? '#d8d6cf' : '#1d1d1b');
   let raf = 0, paused = false, visible = true, destroyed = false;
   const live = liveField({
     host, canvas: first, kit, place,

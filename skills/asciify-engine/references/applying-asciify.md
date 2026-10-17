@@ -36,26 +36,25 @@ copyButton.addEventListener('click', () => bg.pulse(copyButton));
 
 ## 2. Ink: quiet by default, colour only for meaning
 
-Inks come from theme tokens, defined for both schemes. The kit re-reads them when `prefers-color-scheme` changes and when `class` or `data-theme` changes on `<html>` or `<body>`, so define the dark values under both selectors. These are the engine's own fallbacks and the site's graphite:
+Inks come from the app's own design tokens, never from hex values you pick. Find the app's text, muted-text, background and status tokens first (CSS variables, a Tailwind theme, a tokens file) and derive the Asciify inks from them, so they follow every theme the app already has:
 
 ```css
 :root {
-  --ascii-ink: #76746e;        /* grounds, rings, quiet strokes */
-  --ascii-ink-strong: #1d1d1b; /* a component that is the focus */
-  --ascii-success: #17844a; --ascii-warning: #9a6700; --ascii-error: #c93636;
+  /* Map to the app's tokens; the names on the right are examples. */
+  --ascii-ink-strong: color-mix(in oklab, var(--foreground) 92%, var(--background)); /* a component that is the focus */
+  --ascii-ink: color-mix(in oklab, var(--foreground) 50%, var(--background));        /* grounds, rings, quiet strokes */
+  --ascii-success: var(--success); --ascii-warning: var(--warning); --ascii-error: var(--destructive);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --ascii-ink: #7a7872; --ascii-ink-strong: #d8d6cf; --ascii-success: #3ccf7e; --ascii-warning: #f5b83d; --ascii-error: #ff6b6b; }
-}
-:root[data-theme="dark"] { --ascii-ink: #7a7872; --ascii-ink-strong: #d8d6cf; --ascii-success: #3ccf7e; --ascii-warning: #f5b83d; --ascii-error: #ff6b6b; }
 ```
+
+Because these derive from tokens the app already switches per theme, they need no dark-mode block of their own. The kit re-reads them when `prefers-color-scheme` changes and when `class` or `data-theme` changes on `<html>` or `<body>`. Left undefined, `--ascii-ink-strong` falls back to the component element's own text colour, and the status inks to the engine's greens, ambers and reds; define them anyway so nothing is guessed. Only when an app truly has no tokens, use the site's graphite: `#1d1d1b` and `#76746e` on light, `#d8d6cf` and `#7a7872` on dark.
 
 Rules:
 
 - **Default to graphite.** Leave `ink` unset: components pick `--ascii-ink` or `--ascii-ink-strong` and background presets use their graphite. On another brand, map these tokens to its muted text colour, never to its accent.
 - **Colour means something.** Green, amber and red are for outcomes only, and come from `--ascii-success`, `--ascii-warning` and `--ascii-error`. The site's phosphor marks live states only and is never a button or text.
 - **Palettes are deliberate.** `beam` `colorful`, `voiceOrb` `aurora` and `fieldBackground` `brand` are chosen palettes for one moment the user asked for, not a page default.
-- **Never a new colour.** No hex that is not a token, no black canvas on a light page, no white glow on a coloured image.
+- **Never a new colour.** No hex that is not a token (map to the app's tokens as above), no black canvas on a light page, no white glow on a coloured image.
 
 ```ts
 import { background, halftone, statusOrb, beam } from 'asciify-engine/kit';

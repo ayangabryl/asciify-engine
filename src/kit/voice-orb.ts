@@ -114,7 +114,7 @@ export function voiceOrb(element: HTMLElement, options: VoiceOrbOptions = {}): V
     host: element,
     outset: Math.round((element.offsetWidth || 0) * 0.08),
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onTheme: () => surface && canvasStyle(surface),

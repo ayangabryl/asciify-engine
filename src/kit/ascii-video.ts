@@ -43,7 +43,7 @@ export function asciiVideo(element: HTMLElement, options: AsciiVideoOptions = {}
     host: element,
     layer: 'over',
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     source: src,
     label: state.current.label ?? 'Video, drawn in characters',
     kit: state,
