@@ -52,57 +52,961 @@ export function AsciiField({ options, onField, className }: { options: GlyphFiel
 }
 ```
 
-## image-card: ASCII image card
-Category: Components
+## voice-field: Voice orb
+Category: AI
 
 Prompt:
-“Make a card whose image is drawn in characters with Asciify. Use [image]. Characters trail behind the cursor, the title, details and a save button stay as HTML under the image, and the ink follows our light and dark theme.”
+“Add a voice input orb to [our assistant]: an Asciify sphere of characters that swells and brightens with loudness, through Listening, Thinking and Done. Demo it with a sample voice; ask for the microphone only when someone clicks Use microphone.”
 
 ```ts
-const image = asciiField(canvas, {
-  source: '/images/statue.jpg', fit: 'cover', focus: { x: 0.5, y: 0.35 },
-  charset: ' .:-=+*#%@', cellSize: 6, contrast: 1.25,
-  hover: 'trail', label: 'A marble statue drawn in characters',
+const orb = asciiField(canvas, {
+  mark: 'glyph', scene: 'orb', charset: ' .:-=+*#%@', cellSize: 6, cellAspect: 0.62,
+  scale: 0.92, speed: 0.5, hover: 'none', label: 'An orb of characters that follows the voice',
 }, '--ascii-ink-strong');
-```
-
-## hero-background: Hero background
-Category: Backgrounds
-
-Prompt:
-“Put a calm ASCII background behind our hero with Asciify. Characters drift slowly, clear around the headline and buttons so they stay readable, and follow our light and dark theme.”
-
-```ts
-const hero = asciiField(canvas, {
-  mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 12,
-  clear: { element: heroText, padding: 24, feather: 0.32, shape: 'ellipse' },
-  hover: 'trail',
+let level = 0;
+function follow(read: () => number, ms: number) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const end = performance.now() + ms;
+  requestAnimationFrame(function frame(now) {
+    const raw = read(); level += (raw - level) * (raw > level ? 0.45 : 0.12); // read() is loudness 0–1: fast attack, slow release
+    orb?.field.update({ scale: 0.92 - 0.16 * level, brightness: -0.14 + 0.46 * level, speed: 0.5 + 2.4 * level });
+    if (now < end) requestAnimationFrame(frame);
+  });
+}
+const sampleVoice = (start = performance.now()) => follow(() => { const t = performance.now() - start; return Math.abs(Math.sin(t / 54)) ** 0.6 * (Math.sin(t / 700) > -0.4 ? 0.9 : 0.05); }, 2800);
+micButton.addEventListener('click', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }), audio = new AudioContext(), analyser = audio.createAnalyser(), data = new Uint8Array(1024);
+    audio.createMediaStreamSource(stream).connect(analyser);
+    follow(() => { analyser.getByteTimeDomainData(data); return Math.sqrt(data.reduce((sum, v) => sum + ((v - 128) / 128) ** 2, 0) / data.length) * 5; }, 8000);
+  } catch { sampleVoice(); } // denied: say so, and play the sample voice instead
 });
 ```
 
-## cli-banner: CLI banner
+## command-palette: Command palette
+Category: AI
+
+Prompt:
+“Build [our ⌘K command palette] with Asciify: it condenses out of characters at the search trigger, results filter as you type, the selected row gets a crisp highlight behind its text with a short column of characters in its left gutter that glides between rows with the arrow keys and brightens under the pointer, and Enter pulses. Characters never sit on the text.”
+
+```ts
+// The canvas fills the palette behind its rows (z-index 0). The selected row's highlight is CSS, translucent
+// (color-mix(in oklab, var(--ink) 6%, transparent)) so the gutter marker shows through; rows get 18px of left padding for it.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, levels: 'none', hover: 'none' }, '--ascii-ink-strong');
+const art = document.createElement('canvas'), ctx = art.getContext('2d')!;
+let selected = 0, markY: number | null = null, glow = 0, hovering = false;
+function glide() {
+  const frame = canvas.getBoundingClientRect(), row = list.children[selected].getBoundingClientRect(), y = row.top - frame.top, x = row.left - frame.left;
+  const from = markY ?? y, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  markY = from + (y - from) * (still ? 1 : 0.3); glow += ((hovering ? 1 : 0) - glow) * (still ? 1 : 0.25);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, (art.width = frame.width), (art.height = frame.height));
+  if (Math.abs(from - markY) > 0.5) { ctx.fillStyle = '#525252'; ctx.fillRect(x + 4, Math.min(from, markY) + 7, 6, Math.abs(from - markY) + row.height - 14); } // the wake
+  const v = 255 * (0.7 + 0.3 * glow); ctx.fillStyle = `rgb(${[v, v, v]})`;
+  ctx.beginPath(); ctx.roundRect(x + 4, markY + 7, 6, row.height - 14, 3); ctx.fill(); // the marker: two columns of glyphs, in the gutter only
+  void fx?.field.setSource(art);
+  if (Math.abs(y - markY) > 0.5 || Math.abs((hovering ? 1 : 0) - glow) > 0.01) requestAnimationFrame(glide);
+}
+const select = (i: number) => { selected = (i + list.children.length) % list.children.length; input.setAttribute('aria-activedescendant', list.children[selected].id); glide(); };
+input.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); hovering = false; select(selected + (e.key === 'ArrowDown' ? 1 : -1)); }
+  if (e.key === 'Enter') { fx?.field.pulse({ element: list.children[selected], strength: 0.6 }); runCommand(selected); }
+});
+list.addEventListener('pointerover', e => { const row = (e.target as Element).closest('[role="option"]'); if (row) { hovering = true; select([...list.children].indexOf(row)); } });
+list.addEventListener('pointerleave', () => { hovering = false; glide(); });
+input.addEventListener('input', () => { renderResults(input.value); select(0); }); // the matches, then an “Ask AI” row
+// To open, animate the palette's clip-path from the trigger's rect while a shot of its rows flies out of the trigger in blocks.
+```
+
+## button-loading: Button loading
+Category: Components
+
+Prompt:
+“Make [our Deploy button] show loading with Asciify: while the request runs, a wave cycles each letter of ‘Deploying’ through .:-=+*#%@, then resolves to ‘Deployed’ with a check, or ‘Retry’ with a short shake. Its width never changes.”
+
+```ts
+// The canvas lies exactly over the label: one square cell per letter (mono label, letter-spaced to one cell).
+const word = 'Deploying', fx = asciiField(canvas, { scene: 'none', charset: ' .:-=+*#%@', cellSize: 12, cellAspect: 1, glyphScale: 1.2, levels: 'none', hover: 'none' }, '--btn-text');
+const src = Object.assign(document.createElement('canvas'), { width: word.length, height: 1 }), ctx = src.getContext('2d')!; // a texel per letter
+let start = 0, raf = 0;
+function paint(now: number) { // the crest passes each letter through the ramp and back; black texels draw nothing
+  [...label.children].forEach((letter, i) => { // label: one aria-hidden <span> per letter
+    const p = ((now - start) / 1250 - i * 0.07 + 9) % 1, g = p < 0.3 ? Math.round(1 + 8 * Math.sin((Math.PI * p) / 0.3)) : 0, v = Math.round((g / 9) * 255);
+    (letter as HTMLElement).style.visibility = g ? 'hidden' : 'visible';
+    ctx.fillStyle = `rgb(${v} ${v} ${v})`; ctx.fillRect(i, 0, 1, 1); // tone g/9 is glyph g of the charset
+  });
+  void fx?.field.setSource(src);
+  if (start) raf = requestAnimationFrame(paint);
+}
+const show = (text: string) => label.replaceChildren(...[...text].map(c => Object.assign(document.createElement('span'), { textContent: c })));
+button.addEventListener('click', async () => { // min-width holds the widest label, so the button never resizes
+  button.setAttribute('aria-busy', 'true'); show(word); statusLine.textContent = 'Deploying…'; // status: an aria-live region
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { start = performance.now(); raf = requestAnimationFrame(paint); }
+  const ok = await deploy().then(() => true, () => false);
+  start = 0; cancelAnimationFrame(raf); paint(0); button.setAttribute('aria-busy', 'false');
+  show(ok ? 'Deployed' : 'Retry'); button.classList.toggle('done', ok); // .done shows the check
+  statusLine.textContent = ok ? 'Deployed' : 'Deploy failed. Retry.';
+  if (!ok) button.animate([{ translate: '0' }, { translate: '-4px' }, { translate: '4px' }, { translate: '0' }], { duration: 280 });
+});
+```
+
+## slide-to-confirm: Slide to confirm
+Category: Components
+
+Prompt:
+“Add a slide to confirm to [our checkout]: ‘Slide to pay [$48]’. Asciify characters fill behind the thumb, drain when it springs back, then condense into a green check in a ring as the label becomes ‘Paid · [$48.00]’.”
+
+```ts
+const art = asciiField(canvas, { scene: 'none', levels: 'none', charset: ' .:-=+*#%@', cellSize: 4, hover: 'none' }, '--ascii-ink-strong');
+const src = document.createElement('canvas'), ctx = src.getContext('2d')!; // black is no character, white the densest
+let x = 0, v = 0, from = 0, done = false; // thumb: role="slider" with touch-action: none, inside the pill track
+const max = () => track.clientWidth - thumb.offsetWidth - 8, ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
+function paint(t = 0) { // t: 0→1 over 720ms. The fill condenses into a disc (to 0.5), opens into a ring, the check draws in.
+  const h = Object.assign(src, { width: track.clientWidth, height: track.clientHeight }).height, head = 4 + x + thumb.offsetWidth / 2;
+  const c = ease(t * 2), r = 22, cx = mark.offsetLeft + r, cy = h / 2, k = (a: number, b: number) => a + (b - a) * c; // mark: the 44px slot left of 'Paid'
+  const fill = ctx.createLinearGradient(k(0, cx - r), 0, k(head, cx + r), 0);
+  fill.addColorStop(0, `rgba(255,255,255,${k(0.14, 1)})`); fill.addColorStop(1, '#fff'); // densest right behind the thumb
+  ctx.fillStyle = fill; ctx.globalAlpha = 1 - 0.28 * ease((t - 0.36) / 0.3); // the ring settles lighter than the check
+  ctx.beginPath(); ctx.roundRect(k(0, cx - r), k(0, cy - r), k(head, cx + r) - k(0, cx - r), k(h, cy + r) - k(0, cy - r), k(0, r)); ctx.fill();
+  ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, (r - 5) * ease((t - 0.36) / 0.3), 0, 7); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 4.5; ctx.lineCap = ctx.lineJoin = 'round'; ctx.setLineDash([40 * ease((t - 0.46) / 0.4), 40]);
+  ctx.beginPath(); ctx.moveTo(cx - 10, cy + 1); ctx.lineTo(cx - 3, cy + 8); ctx.lineTo(cx + 11, cy - 6); ctx.stroke(); ctx.setLineDash([]);
+  thumb.style.translate = `${x}px 0`; thumb.setAttribute('aria-valuenow', String(Math.round((x / max()) * 100)));
+  void art?.field.setSource(src);
+}
+const frames = (step: () => boolean) => requestAnimationFrame(function next() { if (step()) requestAnimationFrame(next); });
+function complete() { // the ink eases to the success green while the fill condenses; .paid crossfades the label in
+  done = true; x = max(); track.classList.add('paid'); const t0 = performance.now(), ink = getComputedStyle(track).getPropertyValue('--success').trim();
+  frames(() => { const t = Math.min(1, (performance.now() - t0) / 720); if (t > 0.3) art?.field.update({ ink }); paint(t); return t < 1; }); onPay();
+}
+function release() { // short of the end, a spring carries the thumb home and drains the characters with it
+  if (x >= max() * 0.9) return complete();
+  frames(() => { v = v * 0.72 - x * 0.09; x = Math.max(0, x + v); paint(); return x > 0.5 || Math.abs(v) > 0.5; });
+}
+thumb.addEventListener('pointerdown', e => { thumb.setPointerCapture(e.pointerId); from = e.clientX - x; });
+thumb.addEventListener('pointermove', e => { if (done || !thumb.hasPointerCapture(e.pointerId)) return; x = Math.min(max(), Math.max(0, e.clientX - from)); paint(); if (x >= max()) complete(); });
+thumb.addEventListener('pointerup', () => { if (!done) release(); });
+thumb.addEventListener('keydown', e => { if (!done && (e.key === 'Enter' || e.key === 'End')) { e.preventDefault(); complete(); } });
+```
+
+## like-burst: Like burst
+Category: Components
+
+Prompt:
+“Make [our Like button] burst in Asciify characters: on press the heart springs up large around the button, a ring rolls out and glyph sparks fly wide and low, then it condenses back into the icon in 720ms while the count rolls. The burst never covers the post text; at rest the heart is drawn faintly in characters around the icon. Unlike thins out softly; reduced motion just toggles.”
+
+```ts
+// The canvas covers the post and 60px around it, behind the post's text (pointer-events: none). Light in the art becomes glyphs.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, levels: 'none', hover: 'none' }, '--like-ink');
+const art = document.createElement('canvas'), ctx = art.getContext('2d')!, heart = new Path2D('M12 20.2s-7.6-4.6-9.2-9.4C1.6 7.2 4 4 7.4 4c2 0 3.6 1.1 4.6 2.6C13 5.1 14.6 4 16.6 4 20 4 22.4 7.2 21.2 10.8 19.6 15.6 12 20.2 12 20.2z');
+let likes = 128;
+const at = (el: Element) => { const f = canvas.getBoundingClientRect(), b = el.getBoundingClientRect(); return { x: b.left - f.left + b.width / 2, y: b.top - f.top + b.height / 2, bottom: b.bottom - f.top }; };
+const drawHeart = (x: number, y: number, s: number, fill: boolean) => { // the 24px icon path scaled to s px
+  ctx.setTransform(s / 24, 0, 0, s / 24, x - s / 2, y - s / 2); if (fill) ctx.fill(heart); else { ctx.lineWidth = 2.5 * 24 / s; ctx.stroke(heart); } ctx.resetTransform();
+};
+function paint(now: number, start: number | null) {
+  const f = canvas.getBoundingClientRect(), { x, y } = at(icon), top = at(body).bottom; // the post's text ends at `top`; the actions row is 14px below
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, (art.width = f.width), (art.height = f.height));
+  const t = start === null ? 1 : Math.min(1, (now - start) / 720);
+  if (t >= 1) { ctx.strokeStyle = likeButton.ariaPressed === 'true' ? '#6b6b6b' : '#4d4d4d'; drawHeart(x, y, 33, false); } // rest: a faint heart of characters
+  else {
+    const peak = Math.min(58, (y - top) * 2 - 6), grow = t < 0.34 ? 1 - Math.exp(-15 * t) * Math.cos(26 * t) : 1, land = Math.min(1, Math.max(0, (t - 0.52) / 0.4));
+    const rt = Math.min(1, t / 0.5), out = 1 - (1 - rt) ** 3;
+    ctx.strokeStyle = `rgb(${[191, 191, 191].map(v => v * (1 - rt))})`; ctx.lineWidth = 5 - 3 * rt;
+    ctx.beginPath(); ctx.ellipse(x, y, 18 + 62 * out, 14 + 40 * out, 0, 0, 7); ctx.stroke(); // the ring
+    ctx.fillStyle = '#fff'; ctx.globalAlpha = 1 - t;
+    for (let i = 0; i < 22; i++) { // sparks: wide sideways, shallow upward, deeper downward
+      const a = (i / 22) * Math.PI * 2, d = 22 + 70 * out, up = Math.sin(a) < 0;
+      ctx.beginPath(); ctx.arc(x + Math.cos(a) * d * 1.25, y + Math.sin(a) * d * (up ? 0.5 : 0.75), 4 * (1 - t), 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1 - Math.max(0, (t - 0.86) / 0.14); drawHeart(x, y, 10 + (peak - 10) * grow * (1 - land) + 20 * land, true); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, f.width, top); // nothing above the text line (fade the last 12px in practice)
+    requestAnimationFrame(next => paint(next, start));
+  }
+  if (t >= 1) icon.classList.remove('bursting'); // .bursting hides the SVG icon while the characters stand in for it
+  void fx?.field.setSource(art);
+}
+likeButton.addEventListener('click', () => {
+  const on = likeButton.getAttribute('aria-pressed') !== 'true';
+  likeButton.setAttribute('aria-pressed', String(on)); count.textContent = String((likes += on ? 1 : -1)); // the count rolls in CSS
+  if (on && !matchMedia('(prefers-reduced-motion: reduce)').matches) { icon.classList.add('bursting'); paint(performance.now(), performance.now()); } else paint(0, null);
+});
+paint(0, null);
+```
+
+## loading-states: Status orb
+Category: Components
+
+Prompt:
+“Give [our Publish button] an Asciify status orb: characters orbit while it runs, then the ring closes around a check, ‘!’ or X, tinting characters and label green, amber or red. Offer bare-mark and neutral options. Keep the label live.”
+
+```ts
+const orb = asciiField(canvas, { mark: 'glyph', scene: 'none', fit: 'contain', levels: 'none', cellSize: 6, cellAspect: 0.62, shade: 0.5, hover: 'none' },
+  '--ascii-ink-strong'); // a source drawn white on black, so white is the densest glyph
+const art = Object.assign(document.createElement('canvas'), { width: 240, height: 240 }), pen = art.getContext('2d')!;
+const marks = { success: new Path2D('M86 122 110 146 156 96'), warning: new Path2D('M120 80V124M120 152v1'), error: new Path2D('M92 92 148 148M148 92 92 148') };
+type State = 'loading' | keyof typeof marks; const still = matchMedia('(prefers-reduced-motion: reduce)').matches; let frame = 0, ink = '';
+function paint(state: State, t: number, k: number) { // k closes the ring (or fades it, with Ring off) and strokes the mark
+  const tail = pen.createConicGradient(t / 167 - 3.4, 120, 120), end = ring.checked ? 0.54 + 0.46 * k : 0.54; // a comet whose tail sweeps round
+  [[0, ring.checked ? 0.72 * k : 0], [end, ring.checked ? 1 - 0.28 * k : 1 - k], [Math.min(1, end + 0.001), 0]].forEach(([at, a]) => tail.addColorStop(at, `rgb(255 255 255 / ${a})`));
+  Object.assign(pen, { fillStyle: '#000', strokeStyle: tail, lineCap: 'round', lineJoin: 'round', lineWidth: 14 }).fillRect(0, 0, 240, 240);
+  pen.setLineDash([]); pen.beginPath(); pen.arc(120, 120, 74 + Math.sin(t / 255) * 5 * (1 - k), 0, Math.PI * 2); pen.stroke();
+  if (state !== 'loading') { Object.assign(pen, { strokeStyle: '#fff', lineWidth: 22 }).setLineDash([110 * k, 400]); pen.stroke(marks[state]); }
+}
+function show(state: State, ms = 280, start = performance.now()) { // a fresh source each frame; the ink eases to the state's hex token (--st-success…)
+  const from = ink, to = (ink = getComputedStyle(canvas).getPropertyValue(state === 'loading' || !colour.checked ? '--ascii-ink-strong' : `--st-${state}`).trim());
+  const mix = (k: number) => '#' + [1, 3, 5].map(i => Math.round(+`0x${(from || to).slice(i, i + 2)}` * (1 - k) + +`0x${to.slice(i, i + 2)}` * k).toString(16).padStart(2, '0')).join('');
+  cancelAnimationFrame(frame); frame = requestAnimationFrame(function step(now) {
+    const k = state === 'loading' ? 0 : still ? 1 : Math.min(1, (now - start) / ms); paint(state, still ? 0 : now, 1 - (1 - k) ** 4);
+    orb?.field.update({ ink: mix(Math.min(1, (now - start) / (still ? 1 : 200))) }); void orb?.field.setSource(art);
+    if (state === 'loading' ? !still : k < 1) frame = requestAnimationFrame(step); else orb?.field.pulse({ element: canvas });
+  });
+}
+button.addEventListener('click', async () => { // statusLine is role="status"; canvas is aria-hidden; colour and ring are switches
+  show('loading'); statusLine.textContent = 'Publishing…'; const end: State = await save().then(r => (r.warnings ? 'warning' : 'success'), () => 'error');
+  show(end); statusLine.textContent = { loading: '', success: 'Published', warning: 'Published with warnings. Review?', error: 'Couldn’t publish. Retry?' }[end];
+  if (end === 'error') canvas.animate({ translate: ['0', '-5px 0', '4px 0', '-2px 0', '0'] }, { duration: 260, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+});
+```
+
+## text-decode: Decode headline
 Category: Text
 
 Prompt:
-“Greet people in ASCII when our CLI starts, using asciifyText from Asciify with [word].”
+“Make [our hero headline] condense out of a drifting Asciify field: a soft cloud of characters drifts, then the words resolve left to right through a flickering band, with nothing left behind. Keep the real headline in the HTML.”
 
 ```ts
-import { asciifyText } from 'asciify-engine';
-
-console.log(asciifyText('Hey', { char: '#' }));
+const head = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, levels: 'none', fit: 'cover', hover: 'trail', label: '' }, '--ascii-ink-strong');
+const w = canvas.clientWidth * 2, h = canvas.clientHeight * 2, make = (cw = w, ch = h) => Object.assign(document.createElement('canvas'), { width: cw, height: ch });
+const art = make(), work = make(), cloud = make(Math.ceil(w / 20), Math.ceil(h / 20)), pen = art.getContext('2d')!, out = work.getContext('2d')!;
+const size = Math.min(h * 0.4, w * 0.16);
+pen.fillRect(0, 0, w, h); // the headline at the canvas's own size, white on black, so nothing is letterboxed
+Object.assign(pen, { fillStyle: '#fff', textAlign: 'center', textBaseline: 'middle', font: `600 ${size}px Geist, sans-serif` });
+lines.forEach((line, i) => pen.fillText(line, w / 2, h / 2 + (i - 0.5) * size * 1.12));
+function drift(t: number) { // a feathered cloud of soft noise, low in tone so it reads as a quiet ground
+  const c = cloud.getContext('2d')!, img = c.createImageData(cloud.width, cloud.height);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const x = (i / 4) % cloud.width, y = Math.floor(i / 4 / cloud.width), edge = Math.max(0, 1 - Math.hypot(x / cloud.width - 0.5, y / cloud.height - 0.5) * 1.6);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.max(0, Math.sin(x * 0.7 + t * 2.4) * Math.cos(y * 0.9 - t * 1.6) - 0.2) * 180 * edge; img.data[i + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+}
+async function decode(ms = 900) {
+  if (!head || matchMedia('(prefers-reduced-motion: reduce)').matches) return void head?.field.setSource(art);
+  for (let start = performance.now(), p = 0; p < 1; ) {
+    p = Math.min(1, (performance.now() - start) / ms); const edge = (p * 1.3 - 0.15) * w; drift(p); // the first ~150ms is drift alone
+    out.drawImage(cloud, 0, 0, w, h); if (edge > 0) out.drawImage(art, 0, 0, edge, h, 0, 0, edge, h);
+    for (let x = Math.max(0, edge); x < edge + w * 0.14; x += 6) for (let y = 0; y < h; y += 10) if (Math.random() > (x - edge) / (w * 0.14)) { out.fillRect(x, y, 6, 10); out.drawImage(art, x, y, 6, 10, x, y, 6, 10); }
+    await head.field.setSource(await createImageBitmap(work)); await new Promise(requestAnimationFrame);
+  }
+  await head.field.setSource(art); // the last frame is the headline itself, so no fragment is left over
+}
+new IntersectionObserver(([entry]) => { if (entry.isIntersecting) void decode(); }, { threshold: 0.5 }).observe(canvas);
 ```
 
-## cursor-field: Cursor field
-Category: Backgrounds
+## ascii-chart: Block chart
+Category: Components
 
 Prompt:
-“Add a halftone dot field to [section] with Asciify that drifts, clears around the content, and answers the cursor with [trail, fluid or lantern].”
+“Build [our visitors analytics card] with bars drawn in Asciify characters: paint them offscreen and stream each frame to the field, so they grow in left to right, grow again on a 7d/30d toggle, and brighten under a hover readout.”
 
 ```ts
-const dots = asciiField(canvas, {
-  mark: 'dot', scene: 'drift', dotScale: 0.72, cellSize: 8,
-  clear: { element: content, padding: 40, shape: 'rect' },
-  hover: 'fluid',
+const chart = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 7, cellAspect: 0.6, levels: 'none', fit: 'cover', hover: 'none' }, '--ascii-ink-strong');
+const art = document.createElement('canvas'), ctx = art.getContext('2d')!, ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 4;
+let values: number[] = [], active = -1, t0 = 0;
+
+// Bars are painted white on black, brightest for the hovered column or today, and each frame becomes the field's source.
+async function frame(now: number) {
+  const w = (art.width = plot.clientWidth), h = (art.height = plot.clientHeight), slot = w / values.length, max = Math.max(...values) * 1.04;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+  values.forEach((v, i) => {
+    const k = ease((now - t0 - i * (450 / values.length)) / 520), top = h - (v / max) * h * k, tone = i === (active < 0 ? values.length - 1 : active) ? 255 : 130;
+    const grad = ctx.createLinearGradient(0, top, 0, h); grad.addColorStop(0, `rgb(${tone} ${tone} ${tone})`); grad.addColorStop(1, `rgb(${tone / 2} ${tone / 2} ${tone / 2})`);
+    ctx.fillStyle = grad; ctx.fillRect(slot * (i + 0.2), top, slot * 0.6, h - top);
+  });
+  await chart?.field.setSource(await createImageBitmap(art));
+  if (now - t0 < 1000) requestAnimationFrame(frame);
+}
+const show = (range: string) => { values = series[range]; t0 = matchMedia('(prefers-reduced-motion: reduce)').matches ? -1e4 : performance.now(); requestAnimationFrame(frame); };
+rangeButtons.forEach(button => button.addEventListener('click', () => show(button.value)));
+plot.addEventListener('pointermove', e => { active = Math.min(values.length - 1, Math.floor((e.offsetX / plot.clientWidth) * values.length)); readout.textContent = `${labels[active]} · ${values[active].toLocaleString()}`; requestAnimationFrame(frame); });
+plot.addEventListener('pointerleave', () => { active = -1; readout.textContent = ''; requestAnimationFrame(frame); });
+show('7d');
+```
+
+## route-transition: Page transition
+Category: Transitions
+
+Prompt:
+“When someone switches [tabs] in [our app], break the view into its own Asciify characters from the clicked tab, swap it, and condense the next view out of characters in about 400ms. At rest, keep [its chart] in characters.”
+
+```ts
+const chars = asciiField(canvas, { mark: 'glyph', scene: 'none', fit: 'cover', levels: 'none', charset: ' .:-=+*#%@',
+  cellSize: 8, cellAspect: 0.6, shade: 0.55, hover: 'none' }, '--ascii-ink-strong');
+// layer: the aria-hidden canvas over the view, opacity 0 at rest. draw(view) paints the view's own elements at layer size, white on black.
+const noise = (a: number, b: number) => Math.abs(Math.sin(a * 127.1 + b * 311.7) * 43758.5) % 1;
+function blocks(art: HTMLCanvasElement, out: HTMLCanvasElement, p: number, x: number, y: number, pen = out.getContext('2d')!) {
+  const crest: number[][] = []; pen.fillRect(0, 0, out.width, out.height);
+  for (let by = 0; by < art.height; by += 8) for (let bx = 0; bx < art.width; bx += 5) { // cell-sized blocks, nearest the tab first
+    const order = Math.hypot(bx - x, by - y) / Math.hypot(art.width, art.height) * 0.72 + noise(bx, by) * 0.28;
+    if (order > p) { pen.drawImage(art, bx, by, 5, 8, bx, by, 5, 8); if (order < p + 0.07) crest.push([bx, by]); }
+  }
+  pen.globalCompositeOperation = 'lighter'; // the front glows like a pulse running out from the tab
+  crest.forEach(([bx, by]) => pen.drawImage(art, bx, by, 5, 8, bx, by, 5, 8)); pen.globalCompositeOperation = 'source-over';
+}
+async function navigate(tab: HTMLElement, swap: () => void) {
+  const field = chars?.field; if (!field || matchMedia('(prefers-reduced-motion: reduce)').matches) return swap();
+  const b = layer.getBoundingClientRect(), t = tab.getBoundingClientRect(), x = t.left + t.width / 2 - b.left, y = t.top + t.height / 2 - b.top;
+  const from = draw(view), out = Object.assign(document.createElement('canvas'), { width: from.width, height: from.height });
+  const step = async (art: HTMLCanvasElement, p: number) => { blocks(art, out, p, x, y); field.update({ brightness: -0.22 * p });
+    await field.setSource(await createImageBitmap(out)); await new Promise(requestAnimationFrame); };
+  layer.style.maskImage = 'none'; layer.style.opacity = '1'; view.style.opacity = '0'; // 80ms opacity transitions, cubic-bezier(.16, 1, .3, 1)
+  for (let i = 0; i <= 8; i++) await step(from, i / 8 * 1.1); // about 140ms
+  swap(); const to = draw(view); for (let i = 8; i >= 0; i--) await step(to, i / 8); // about 160ms
+  view.style.opacity = '1'; rest(); // 120ms
+}
+const rest = (chart = view.querySelector<HTMLElement>('.chart'), b = layer.getBoundingClientRect()) => { // at rest only the chart stays, in characters, over its hidden HTML bars
+  layer.style.opacity = chart ? '1' : '0'; if (chart) chart.style.visibility = 'hidden'; layer.style.maskImage = `linear-gradient(to top, #000 ${b.bottom - (chart?.getBoundingClientRect().top ?? b.bottom)}px, transparent 0)`; };
+```
+
+## swipe-card: Swipe cards
+Category: Components
+
+Prompt:
+“Make a swipeable card stack for [our stays] with Asciify: each [photo] drawn in characters. A swiped card dissolves into characters along the swipe while the next resolves; Pass and Save buttons and arrow keys do the same.”
+
+```ts
+const art = asciiField(canvas, { scene: 'none', levels: 'none', charset: ' .:-=+*#%@', cellSize: 4, contrast: 1.3, hover: 'trail' }, '--ascii-ink-strong'); // canvas covers the stack area
+const src = document.createElement('canvas'), ctx = src.getContext('2d')!; // cards: high-contrast photos (one subject on a plain ground) in grey, levels stretched, inverted in light themes, cut to 160×200
+let i = 0, dx = 0, from = 0;
+function paint(k = 0, dir = 1) {
+  Object.assign(src, { width: canvas.clientWidth, height: canvas.clientHeight }); const cx = src.width / 2, cy = src.height / 2;
+  ctx.globalAlpha = 0.45 + 0.55 * k; ctx.drawImage(cards[(i + 1) % cards.length], cx - 80, cy - 100 + 12 * (1 - k)); // the next card resolves
+  ctx.save(); ctx.translate(cx + dx, cy); ctx.rotate(dx * 0.0015);
+  for (let y = 0; y < 200; y += 6) { // the top card leaves as rows of characters streaming along the swipe, ragged ones first
+    const r = Math.abs(Math.sin(y * 91.7)), t = Math.max(0, Math.min(1, k * 1.5 - r * 0.5));
+    const lead = cx + dx + dir * (t * t * 200 * (0.5 + r) + 100), room = dir > 0 ? src.width - lead : lead; // rows fade out before the field's edge
+    if (t < 1) { ctx.globalAlpha = (1 - t) * Math.min(1, Math.max(0, room / 56)); ctx.drawImage(cards[i % cards.length], 0, y, 160, 6, -80 + dir * t * t * 200 * (0.5 + r), y - 100, 160, 6); }
+  }
+  ctx.restore(); void art?.field.setSource(src);
+}
+function fling(dir: number) {
+  let k = 0;
+  requestAnimationFrame(function step() { k = Math.min(1, k + 0.03); dx += dir * 9; paint(k, dir); if (k < 1) requestAnimationFrame(step); else { i++; dx = 0; paint(); } });
+}
+card.addEventListener('pointerdown', e => { card.setPointerCapture(e.pointerId); from = e.clientX; }); // card: touch-action: pan-y
+card.addEventListener('pointermove', e => { if (card.hasPointerCapture(e.pointerId)) { dx = e.clientX - from; paint(); } });
+card.addEventListener('pointerup', () => { if (Math.abs(dx) > 64) fling(Math.sign(dx)); else { dx = 0; paint(); } });
+card.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') fling(e.key === 'ArrowRight' ? 1 : -1); });
+passButton.onclick = () => fling(-1); saveButton.onclick = () => fling(1);
+```
+
+## otp-input: Verification code
+Category: Components
+
+Prompt:
+“Build [our 6-digit sign-in code] input with Asciify: the cells stay clean, the active one holds a faint caret of characters that breathes slowly, typed or pasted digits resolve in scattered blocks of glyphs, a wrong code shakes and crumbles back to characters, and the right one condenses into a check.”
+
+```ts
+// One real input (inputMode numeric, autocomplete one-time-code, maxLength 6) lies transparent over six cells; the canvas covers the cells.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 4, cellAspect: 0.62, levels: 'none', hover: 'none' }, '--ascii-ink-strong');
+const art = document.createElement('canvas'), ctx = art.getContext('2d')!, born: number[] = [];
+const hash = (a: number, b: number) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+// Empty cells are empty: no static. A new digit arrives in 3×4 blocks over 300ms, then the cell's crisp HTML digit takes over.
+function paint(now: number) {
+  const frame = canvas.getBoundingClientRect(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, (art.width = frame.width), (art.height = frame.height));
+  let moving = false;
+  cells.forEach((cell, i) => {
+    const b = cell.getBoundingClientRect(), x = b.left - frame.left, y = b.top - frame.top, ch = input.value[i], k = ch ? Math.min(1, (now - born[i]) / 300) : 0;
+    cell.toggleAttribute('data-shown', k >= 0.7);
+    if (ch && k < 1) { // the digit drawn once, copied in blocks whose turn has come
+      moving = true; ctx.save(); ctx.beginPath();
+      for (let by = 0; by < b.height; by += 4) for (let bx = 0; bx < b.width; bx += 3) if (hash(bx + i * 31, by) < k * 1.3 - 0.12) ctx.rect(x + bx, y + by, 3, 4);
+      ctx.clip(); ctx.fillStyle = '#fff'; ctx.font = `600 ${b.height * 0.6}px Geist`; ctx.textAlign = 'center'; ctx.fillText(ch, x + b.width / 2, y + b.height * 0.7); ctx.restore();
+    }
+    if (!ch && i === input.value.length && document.activeElement === input) { // the caret: a 3×22 column, tone 0.2–0.46 over 1.6s
+      const breath = still ? 0.6 : 0.5 - 0.5 * Math.cos(now / 1600 * Math.PI * 2), v = 255 * (0.2 + 0.26 * breath);
+      ctx.fillStyle = `rgb(${[v, v, v]})`; ctx.fillRect(x + b.width / 2 - 1.5, y + b.height / 2 - 11, 3, 22); moving = !still;
+    }
+  });
+  void fx?.field.setSource(art);
+  if (moving) requestAnimationFrame(paint); // idle and unfocused, nothing is drawn and nothing runs
+}
+input.addEventListener('input', () => {
+  input.value = input.value.replace(/\D/g, '').slice(0, 6); born[input.value.length - 1] = performance.now(); // a paste fills all six at once
+  requestAnimationFrame(paint);
+  if (input.value.length === 6) void verify(input.value).then(ok => (ok ? showCheck() : shakeAndClear())); // a check stroke, or digits back to characters
+});
+input.addEventListener('focus', () => requestAnimationFrame(paint)); input.addEventListener('blur', () => requestAnimationFrame(paint));
+```
+
+## toast-stack: Toast stack
+Category: Components
+
+Prompt:
+“Give [our app's toasts] Asciify entrances: each toast's content gathers out of scattered characters while its surface fades in, the stack sits close under the page with depth and fans out on hover, dismissing or Undo breaks the content back into drifting glyphs, and the newest toast keeps a slow glint of characters running around its edge. Reduced motion shows and hides them plainly.”
+
+```ts
+// The canvas covers the stack at its fanned height, above the toasts (pointer-events: none). Toasts sit at --depth; hover fans them.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, levels: 'none', hover: 'none' }, '--ascii-ink-strong');
+const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// shot(): only the toast's content as tone at its place, title bright and meta dim. No outline: a glyph outline left over a crisp
+// toast reads as a dashed box. The surface itself fades in CSS (200ms in, 180ms out) while the characters carry the content.
+function shot(toast: HTMLElement) {
+  const art = document.createElement('canvas'), ctx = art.getContext('2d')!, f = canvas.getBoundingClientRect();
+  ctx.fillRect(0, 0, (art.width = f.width), (art.height = f.height));
+  for (const [el, tone] of [[toast.querySelector('b')!, '#fff'], [toast.querySelector('small')!, '#888']] as const) {
+    const r = el.getBoundingClientRect(); ctx.fillStyle = tone; ctx.font = getComputedStyle(el).font; ctx.fillText(el.textContent ?? '', r.left - f.left, r.bottom - f.top - 4);
+  }
+  return art;
+}
+// Blocks of the shot gather from scattered places (in, 340ms) or drift off to the right (out, 440ms); at rest the newest toast's
+// border carries a comet of light 4px outside it, once round in 2.4s every 4.2s, on the card around the toast and never over its text.
+let glintFrom = performance.now();
+function frame(now: number, scatter?: { art: HTMLCanvasElement; into: boolean; start: number; done: () => void }) {
+  const work = Object.assign(document.createElement('canvas'), { width: canvas.width, height: canvas.height }), ctx = work.getContext('2d')!;
+  ctx.fillRect(0, 0, work.width, work.height);
+  const front = stack.lastElementChild as HTMLElement | null, f = canvas.getBoundingClientRect();
+  if (front && !scatter && !still()) {
+    const b = front.getBoundingClientRect(), t = ((now - glintFrom) % 4200) / 2400, o = 4, w = b.width + o * 2, h = b.height + o * 2, per = 2 * (w + h);
+    for (const [len, tone] of [[150, 87], [80, 168], [30, 255]]) if (t < 1) {
+      ctx.strokeStyle = `rgb(${[tone, tone, tone]})`; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.setLineDash([len, per + len]); ctx.lineDashOffset = len - t * (per + 150);
+      ctx.beginPath(); ctx.roundRect(b.left - f.left - o, b.top - f.top - o, w, h, 17); ctx.stroke();
+    }
+  }
+  if (scatter) {
+    const t = Math.min(1, (now - scatter.start) / (scatter.into ? 340 : 440)), p = scatter.into ? 1 - (1 - t) ** 3 : 1 - t;
+    for (let y = 0; y < scatter.art.height; y += 6) for (let x = 0; x < scatter.art.width; x += 4) ctx.drawImage(scatter.art, x, y, 4, 6, x + Math.max(0, Math.abs(Math.sin(x * 12.9 + y * 78.2)) - p) * 60, y, 4, 6);
+    if (t >= 1) { scatter.done(); scatter = undefined; }
+  }
+  void fx?.field.setSource(work);
+  requestAnimationFrame(next => frame(next, scatter)); // pause this loop while the stack is off screen
+}
+export const showToast = (toast: HTMLElement) => { stack.append(toast); glintFrom = performance.now() + 700; if (!still()) { toast.dataset.forming = ''; frame(performance.now(), { art: shot(toast), into: true, start: performance.now(), done: () => delete toast.dataset.forming }); } };
+export const dismissToast = (toast: HTMLElement) => { if (still()) return toast.remove(); const art = shot(toast); toast.dataset.gone = ''; setTimeout(() => toast.remove(), 150); frame(performance.now(), { art, into: false, start: performance.now(), done: () => {} }); };
+```
+
+## skeleton-loader: Skeleton loader
+Category: Components
+
+Prompt:
+“Make [our post card]’s loading skeleton with Asciify: placeholder blocks drawn in characters with a shimmer sweeping through, then each block resolves into its real content in turn, the photo developing from characters. While the card is in view it loads again a few seconds after landing, silently, so it rests on the skeleton. Reduced motion shows the final card.”
+
+```ts
+// The canvas covers the card (z-index 1, pointer-events: none). Blocks are the card's [data-block] elements, photo last; text stays HTML.
+const fx = asciiField(canvas, { mark: 'glyph', scene: 'none', levels: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, hover: 'none' });
+const art = document.createElement('canvas'), pen = art.getContext('2d')!, blocks = [...card.querySelectorAll<HTMLElement>('[data-block]')];
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function paint(now: number, since: number) { // white is dense; `since` is negative until the data lands, while the shimmer sweeps
+  const box = card.getBoundingClientRect(), x0 = (still ? 0.3 : (now / 1250) % 1) * box.width * 1.7 - box.width * 0.35;
+  Object.assign(art, { width: box.width, height: box.height }); pen.fillRect(0, 0, box.width, box.height);
+  const band = pen.createLinearGradient(x0 - 90, 0, x0 + 90, 60); [0, 0.5, 1].forEach(at => band.addColorStop(at, at === 0.5 ? '#ccc' : '#4c4c4c'));
+  blocks.forEach((el, i) => { // 60ms apart: text wipes away left to right; images cross-fade, the photo first developing in characters
+    const r = el.getBoundingClientRect(), x = r.left - box.left, y = r.top - box.top, p = Math.min(1, Math.max(0, (since - 80 - i * 60) / 240));
+    const text = el.dataset.block === 'text'; el.style.clipPath = text ? `inset(0 ${100 - p * 100}% 0 0)` : '';
+    el.style.opacity = since < 0 ? '0' : text ? '1' : `${p}`; Object.assign(pen, { fillStyle: band, globalAlpha: text ? 1 : 1 - p }).beginPath();
+    if (text) pen.roundRect(x + r.width * p, y + r.height * 0.2, r.width * (1 - p), r.height * 0.6, 6); else pen.roundRect(x, y, r.width, r.height, 10);
+    pen.fill(); if (!(el instanceof HTMLImageElement) || since < 0) return;
+    const s = Math.min(el.naturalWidth / r.width, el.naturalHeight / r.height); pen.globalAlpha *= Math.min(1, since / 560); // cover crop
+    pen.drawImage(el, (el.naturalWidth - r.width * s) / 2, (el.naturalHeight - r.height * s) / 2, r.width * s, r.height * s, x, y, r.width, r.height);
+  }); pen.globalAlpha = 1; void fx?.field.setSource(art);
+}
+function load() { // Reload calls this too; statusLine is role="status"
+  let arrived = Infinity; statusLine.textContent = 'Loading post…'; void fetchPost().then(() => { arrived = performance.now() - (still ? 9e3 : 0); });
+  requestAnimationFrame(function step(now) { // under reduced motion the data lands straight on the final state
+    paint(now, now - arrived); if (now - arrived < 900) requestAnimationFrame(step); else statusLine.textContent = 'Post loaded'; });
+}
+reload.addEventListener('click', load); // a looping run plays no sounds and keeps the statusLine region aria-live="off"
+// While the card is in view, load again 2.6s after each landing; IntersectionObserver pauses the loop off screen.
+new IntersectionObserver(([e]) => { if (e.isIntersecting) load(); }, { threshold: 0.5 }).observe(card);
+```
+
+## thinking: Thinking state
+Category: AI
+
+Prompt:
+“Show [our assistant]'s thinking state with Asciify: dot lines shimmer where the answer will appear under a Thinking… label, then the answer streams in word by word and the dots settle into a dotted rule beneath it.”
+
+```ts
+import { play } from 'cuelume';
+
+const dots = asciiField(canvas, { mark: 'dot', scene: 'drift', cellSize: 5, dotScale: 0.86, scale: 3, speed: 2.4, hover: 'none' });
+
+// The canvas fills the answer area plus a 14px gap below it. While thinking, CSS masks it to line-shaped bands; at rest only its bottom 5px shows: a dotted rule.
+async function regenerate(ask: () => Promise<string>) {
+  play('loading', { emphasis: 'subtle' });
+  reply.dataset.phase = 'thinking';
+  dots?.field.update({ brightness: 0 });
+  dots?.field.play();
+  const beat = setInterval(() => dots?.field.pulse({ x: Math.random() * canvas.clientWidth, y: canvas.clientHeight / 2, strength: 0.7 }), 640);
+  const answer = await ask().finally(() => clearInterval(beat));
+  answerText.replaceChildren(...answer.split(' ').map((word, i) => {
+    const span = Object.assign(document.createElement('span'), { className: 'word', textContent: `${word} ` });
+    span.style.setProperty('--i', String(i));
+    return span;
+  }));
+  reply.dataset.phase = 'done';
+  dots?.field.update({ brightness: 0.3 }); // denser dots for the resting rule, then held still
+  setTimeout(() => dots?.field.pause(), 420);
+  play('ready', { emphasis: 'subtle' });
+}
+```
+
+## stream-text: Streamed reply
+Category: AI
+
+Prompt:
+“Stream [our assistant]’s reply with an Asciify write head: an aria-hidden field over the text draws the caret and each token’s unresolved characters as flickering glyphs that settle into letters. Show reasoning lines, Stop and Regenerate.”
+
+```ts
+import { play } from 'cuelume';
+const head = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: '   :-=+*#%@', cellSize: 12, cellAspect: 7 / 12, levels: 'none', fit: 'cover', hover: 'none' }, '--ascii-ink-strong');
+const art = document.createElement('canvas'), pen = art.getContext('2d')!, pending = new Map<HTMLElement, number>(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let stopped = false; // canvas covers answerText (line-height 24px) and 6px above and below it: each line's middle row of 12px cells sits on its letters.
+function paint(caret: number) {
+  const box = answerText.getBoundingClientRect(), cell = (r: DOMRect, x: number, w: number, tone: number) => { // one 7×12 cell per character, on its line's middle row
+    pen.fillStyle = `rgb(${tone * 255} ${tone * 255} ${tone * 255})`; pen.fillRect(Math.round(x / 7) * 7, Math.floor((r.top + r.height / 2 - box.top) / 24) * 24 + 12, Math.max(7, Math.round(w / 7) * 7), 12); };
+  art.width = canvas.clientWidth * 2; art.height = canvas.clientHeight * 2; pen.scale(2, 2);
+  pending.forEach((until, ch) => { const r = ch.getBoundingClientRect(); if (performance.now() < until) cell(r, r.left - box.left, r.width, 0.55 + Math.random() * 0.45);
+    else { pending.delete(ch); ch.style.color = ''; } });
+  const last = answerText.lastElementChild?.getBoundingClientRect(); if (last) cell(last, last.right - box.left + 5, 7, caret); // the caret, one glyph after the write head
+  void head?.field.setSource(art);
+}
+async function streamReply({ tokens, reasoning }: { tokens: AsyncIterable<string>; reasoning: AsyncIterable<string> }) {
+  reply.dataset.phase = 'reasoning'; answerText.replaceChildren(); thoughts.replaceChildren(); stopped = false;
+  void (async () => { for await (const line of reasoning) if (!stopped) thoughts.append(Object.assign(document.createElement('li'), { textContent: line })); })();
+  const tick = setInterval(() => paint(1), 48); // ~20 fps is enough for the flicker
+  for await (const token of tokens) {
+    if (stopped) break; reply.dataset.phase = 'streaming'; // a resolving character is transparent in the HTML while the field draws it as a glyph
+    [...token].forEach((ch, j) => { const span = answerText.appendChild(Object.assign(document.createElement('span'), { textContent: ch }));
+      if (ch.trim() && !still) { span.style.color = 'transparent'; pending.set(span, performance.now() + 60 + j * 18); } });
+  }
+  clearInterval(tick); pending.forEach((_, ch) => (ch.style.color = '')); pending.clear(); paint(0.7); // a quiet caret stays at rest
+  reply.dataset.phase = stopped ? 'stopped' : 'done'; if (!stopped) play('ready', { emphasis: 'subtle' });
+}
+stopButton.addEventListener('click', () => (stopped = true)); regenerate.addEventListener('click', () => void streamReply(ask()));
+```
+
+## image-generation: Image generation
+Category: AI
+
+Prompt:
+“While [our image model] generates [prompt], show a drifting Asciify field beside a progress label that develops into the image itself in characters, sharpening from a blur, then crossfade to the photo. Generate again dissolves it back first.”
+
+```ts
+const art = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 7, contrast: 1.4, levels: 'none', fit: 'cover', drift: 0.5 }, '--ascii-ink-strong');
+const work = Object.assign(document.createElement('canvas'), { width: 480, height: 270 }), pen = work.getContext('2d')!;
+const got: { img?: HTMLImageElement } = {};
+// ground(pen, t) paints the drifting noise, as in text-decode. The image is cropped 16:9, like the photo's object-fit.
+function frame(img: HTMLImageElement | undefined, k: number, t: number) {
+  pen.filter = 'none'; pen.globalAlpha = 1; pen.fillStyle = '#000'; pen.fillRect(0, 0, 480, 270);
+  pen.globalAlpha = 1 - k; ground(pen, t);
+  if (!img || k <= 0) return;
+  const sh = img.naturalWidth * 9 / 16;
+  pen.globalAlpha = Math.min(1, k * 1.25); pen.filter = `brightness(1.3) blur(${(1 - k) * 14}px)`; // the characters sharpen as k reaches 1
+  pen.drawImage(img, 0, (img.naturalHeight - sh) * 0.45, img.naturalWidth, sh, 0, 0, 480, 270);
+}
+async function develop(from: number, to: number, ms: number, onProgress = (_: number) => {}) {
+  const field = art?.field, start = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (let t = still ? 1 : 0; field; t = Math.min(1, (performance.now() - start) / ms)) {
+    frame(got.img, from + (to - from) * t * t * (3 - 2 * t), (performance.now() - start) / 1000); onProgress(t);
+    await field.setSource(await createImageBitmap(work)); if (t >= 1) break; await new Promise(requestAnimationFrame);
+  }
+}
+generate.addEventListener('click', async () => {
+  if ('done' in imageFrame.dataset) { delete imageFrame.dataset.done; await develop(1, 0, 320); } // the photo fades back to characters, which dissolve
+  got.img = undefined; void createImage(promptInput.value).then(async url => { const img = new Image(); img.src = url; await img.decode(); got.img = img; photo.src = url; });
+  while (!got.img) await develop(0, 0, 400); // drift until the image arrives
+  await develop(0, 1, 1900, t => (progress.textContent = `${Math.round(t * 100)}%`));
+  imageFrame.dataset.done = ''; // CSS crossfades the photo in: opacity, 600ms, cubic-bezier(.45, 0, .25, 1)
+});
+```
+
+## ascii-compare: Before and after
+Category: Media
+
+Prompt:
+“Add a before and after slider to [our gallery]: [photo] on one side, the same photo drawn in its own colors in Asciify characters on the other. Drag the handle, or use the arrow keys in 5% steps.”
+
+```ts
+const art = asciiField(canvas, {
+  source: '/images/kingfisher.jpg', fit: 'cover', charset: ' .:-=+*#%@', cellSize: 6, color: 'source', // in the photo's colors,
+  saturation: 1.3, contrast: 1.45, gamma: 0.85, brightness: 0.14, fontWeight: 600, glyphScale: 0.96, // crisp on the dark frame
+  hover: 'trail', label: 'The photo, drawn in characters', // the frame is #0e0e0d in both themes
+});
+// The divider (2px, #fff with a soft dark shadow) and the round handle (#fff, dark icon) are white in both themes, as in a photo editor;
+// a theme surface colour would vanish into the dark frame. The Photo and ASCII chips are dark glass: rgb(14 14 13 / .62) + blur.
+
+// The photo lies over the canvas, clipped by inset(0 calc(100% - var(--pos)) 0 0); the handle (role="slider") sits at left: var(--pos).
+function set(pos: number) {
+  const value = Math.round(Math.min(100, Math.max(0, pos)));
+  frame.style.setProperty('--pos', `${value}%`);
+  handle.setAttribute('aria-valuenow', String(value));
+}
+const at = (x: number) => { const box = frame.getBoundingClientRect(); return ((x - box.left) / box.width) * 100; };
+frame.addEventListener('pointerdown', event => { frame.setPointerCapture(event.pointerId); set(at(event.clientX)); handle.focus(); });
+frame.addEventListener('pointermove', event => { if (frame.hasPointerCapture(event.pointerId)) set(at(event.clientX)); });
+handle.addEventListener('keydown', event => {
+  const step = ({ ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 } as Record<string, number>)[event.key];
+  if (step === undefined) return;
+  event.preventDefault();
+  set(Number(handle.getAttribute('aria-valuenow')) + step);
+});
+```
+
+## image-accordion: Image accordion
+Category: Media
+
+Prompt:
+“Build an image accordion for [our prints]: [five photos] as panels drawn in Asciify characters. The hovered or focused panel widens and its characters give way to the full photo in 280ms, with a caption.”
+
+```ts
+const art = asciiField(canvas, { scene: 'none', levels: 'none', charset: ' .:-=+*#%@', cellSize: 6, hover: 'trail' }, '--ascii-ink-strong'); // canvas behind the panels
+const src = document.createElement('canvas'), ctx = src.getContext('2d')!;
+// panels: <button aria-expanded> with flex-grow 1, 4.2 when open (transition 280ms); each holds its <img> and caption, shown only when open.
+const shown = panels.map(() => 0); // tones: each photo in grey, inverted in light themes
+function paint() {
+  const box = strip.getBoundingClientRect(); Object.assign(src, { width: box.width, height: box.height });
+  panels.forEach((panel, i) => {
+    const r = panel.getBoundingClientRect(), img = tones[i], s = Math.max(r.width / img.width, r.height / img.height);
+    ctx.globalAlpha = 1 - shown[i]; // the open panel's characters give way to its photo
+    ctx.drawImage(img, (img.width - r.width / s) / 2, (img.height - r.height / s) / 2, r.width / s, r.height / s, r.left - box.left, r.top - box.top, r.width, r.height);
+  });
+  void art?.field.setSource(src);
+}
+function open(index: number) {
+  panels.forEach((panel, i) => panel.setAttribute('aria-expanded', String(i === index)));
+  const start = performance.now();
+  requestAnimationFrame(function step(now) {
+    const t = Math.min(1, (now - start) / 280);
+    panels.forEach((_, i) => { shown[i] = i === index ? Math.max(shown[i], t) : Math.min(shown[i], 1 - t); });
+    paint(); if (t < 1) requestAnimationFrame(step);
+  });
+}
+panels.forEach((panel, i) => { panel.addEventListener('pointerenter', () => open(i)); panel.addEventListener('focus', () => open(i)); });
+```
+
+## ascii-dropzone: Image dropzone
+Category: Media
+
+Prompt:
+“Make an image dropzone for [our upload form]: its border is an even ring of Asciify characters that thickens and breathes while a file is dragged over it, around ‘Drop an image’. A dropped or chosen image develops in characters, then shows its file name, Replace and Download PNG.”
+
+```ts
+// The ring is drawn on the field's own grid: square cells, 2 × 2 source texels each, so the mip levels the field samples stay
+// inside one cell and every side gets exactly one even row. The canvas is trimmed to whole cells (and whole CSS pixels) and centred.
+const CELL = 6, art = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:+*#', cellSize: CELL, cellAspect: 1, levels: 'none', contrast: 1, hover: 'none', label: 'Your image in characters' }, '--ascii-ink');
+const ring = document.createElement('canvas');
+function drawRing(tone: number, inner: number) { // tone 0.56 rests on '+'; a drag lifts it and adds a dimmer row inside
+  const ratio = Math.min(2, devicePixelRatio), cell = Math.round(CELL * ratio) / ratio, box = zone.getBoundingClientRect();
+  const cols = Math.floor(box.width / cell), rows = Math.floor(box.height / cell);
+  Object.assign(canvas.style, { width: `${cols * cell}px`, height: `${rows * cell}px` });
+  const ctx = Object.assign(ring, { width: cols * 2, height: rows * 2 }).getContext('2d')!, r = 2.6; // corner radius in cells
+  ctx.fillRect(0, 0, ring.width, ring.height);
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const qx = Math.max(1 + r - x, 0, x - (cols - 2 - r)), qy = Math.max(1 + r - y, 0, y - (rows - 2 - r));
+    const d = qx && qy ? Math.hypot(qx, qy) - r : -Math.min(x - 1, cols - 2 - x, y - 1, rows - 2 - y); // distance to the ring in cells
+    const t = Math.abs(d) < 0.5 ? tone : d < -0.5 && d > -1.5 ? tone * 0.55 * inner : 0;
+    ctx.fillStyle = `rgb(${[t * 255, t * 255, t * 255]})`; ctx.fillRect(x * 2, y * 2, 2, 2);
+  }
+  void art?.field.setSource(ring);
+}
+let over = 0, raf = 0;
+const breathe = (now: number) => { const b = 0.5 - 0.5 * Math.cos(now / 1300 * Math.PI * 2); drawRing(0.7 + 0.28 * b, 0.4 + 0.6 * b); if (over) raf = requestAnimationFrame(breathe); };
+zone.addEventListener('dragenter', () => { if (!over++) raf = requestAnimationFrame(breathe); });
+zone.addEventListener('dragleave', () => { if (!--over) { cancelAnimationFrame(raf); drawRing(0.56, 0); } });
+const ease = (ms: number, step: (k: number) => void) => new Promise<void>(done => {
+  const start = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  requestAnimationFrame(function frame(now) { const t = still ? 1 : Math.min(1, (now - start) / ms); step(1 - (1 - t) ** 4); if (t < 1) requestAnimationFrame(frame); else done(); });
+});
+async function accept(file?: File) {
+  const field = art?.field; if (!field || !file?.type.startsWith('image/')) return;
+  await ease(160, k => field.update({ brightness: -k }));
+  field.update({ charset: ' .:-=+*#%@', cellAspect: 0.8, color: 'source' }); zone.style.background = '#0e0e0d';
+  await field.setSource(URL.createObjectURL(file)); field.pulse();
+  await ease(720, k => field.update({ brightness: k - 1 }));
+  fileName.textContent = file.name; // the bar with the name, Replace and Download PNG appears; Remove draws the ring again
+}
+zone.addEventListener('dragover', event => event.preventDefault());
+zone.addEventListener('drop', event => { event.preventDefault(); over = 0; void accept(event.dataTransfer?.files[0]); });
+input.addEventListener('change', () => void accept(input.files?.[0])); // <input type="file" accept="image/*">, opened by Choose file and Replace
+drawRing(0.56, 0); // the dashed CSS border stays only as the no-WebGL fallback
+```
+
+## ascii-disintegrate: Delete into characters
+Category: Transitions
+
+Prompt:
+“When someone deletes a [file or notification] row in [our list], turn it into Asciify characters that thin out and drift up in about 620ms while the rows below close the gap in 260ms. Show an Undo toast.”
+
+```ts
+// The list keeps min-height: 3 rows, so a delete only moves the rows below it up: the card never shrinks or re-centres.
+const dust = asciiField(canvas, { // over the list, one row tall, visibility: hidden at rest
+  mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 5, cellAspect: 0.62, levels: 'none', drift: 5, hover: 'none',
+}, '--ascii-ink-strong');
+async function remove(row: HTMLElement, name: HTMLElement) {
+  showUndoToast('Moved to trash', () => list.insertBefore(row, row.nextSibling));
+  const field = dust?.field, box = row.getBoundingClientRect();
+  if (!field || matchMedia('(prefers-reduced-motion: reduce)').matches) return row.remove();
+  const shot = Object.assign(document.createElement('canvas'), { width: box.width * 2, height: box.height * 2 }), ctx = shot.getContext('2d')!;
+  ctx.scale(2, 2); ctx.fillRect(0, 0, box.width, box.height); ctx.fillStyle = '#fff'; // white text on black: only the text becomes glyphs
+  ctx.font = getComputedStyle(name).font; ctx.fillText(name.textContent ?? '', name.offsetLeft, name.offsetTop + name.offsetHeight * 0.75);
+  await field.setSource(shot);
+  Object.assign(canvas.style, { top: `${row.offsetTop}px`, visibility: 'visible' });
+  row.style.opacity = '0'; field.pulse();
+  setTimeout(() => row.animate({ height: [`${box.height}px`, '0px'] }, { duration: 260, easing: 'cubic-bezier(.16, 1, .3, 1)' }).finished.then(() => row.remove()), 300);
+  const start = performance.now();
+  requestAnimationFrame(function frame(now) {
+    const k = Math.min(1, (now - start) / 620);
+    field.update({ brightness: -0.9 * k });
+    Object.assign(canvas.style, { translate: `${8 * k}px ${-14 * k}px`, opacity: String(Math.min(1, (1 - k) * 2.2)) });
+    if (k < 1) requestAnimationFrame(frame); else canvas.style.visibility = 'hidden';
+  });
+}
+```
+
+## pull-refresh: Pull to refresh
+Category: Components
+
+Prompt:
+“Add pull to refresh to [our feed]: pulling reveals an Asciify character orb that densifies with distance. Past the threshold it spins while refreshing, condenses into a check, and new [posts] resolve in from characters. Include a Refresh button.”
+
+```ts
+const art = asciiField(canvas, { scene: 'none', levels: 'none', charset: ' .:-=+*#%@', cellSize: 5, hover: 'none' }, '--ascii-ink-strong'); // over the feed, pointer-events: none
+const src = document.createElement('canvas'), ctx = src.getContext('2d')!;
+let pull = 0, from = 0, spin = -1;
+function paint(check = false) {
+  Object.assign(src, { width: canvas.clientWidth, height: canvas.clientHeight });
+  const q = Math.min(1, pull / 88), x = src.width / 2, y = pull / 2; // an 88px pull leaves room for a 56px orb
+  ctx.strokeStyle = ctx.fillStyle = '#fff'; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath();
+  if (spin < 0) { ctx.globalAlpha = 0.3 + 0.7 * q; ctx.arc(x, y, 8 + 20 * q, 0, 7); ctx.fill(); } // the orb densifies with the pull
+  else if (!check) { ctx.arc(x, y, 28, spin, spin + 4.7); ctx.stroke(); } // spinning while it refreshes
+  else { ctx.moveTo(x - 18, y); ctx.lineTo(x - 6, y + 12); ctx.lineTo(x + 19, y - 13); ctx.stroke(); } // then a check
+  feed.style.translate = `0 ${pull}px`; void art?.field.setSource(src);
+}
+async function refresh() {
+  pull = 88; const start = performance.now();
+  await new Promise<void>(done => requestAnimationFrame(function step(now) { spin = (now - start) / 140; paint(); if (now - start < 1000) requestAnimationFrame(step); else done(); }));
+  paint(true); await loadNewPosts(); // new rows arrive as characters: paint their thumbnails and text bars, then fade the HTML in
+  spin = -1; pull = 0; paint();
+}
+feed.addEventListener('pointerdown', e => { feed.setPointerCapture(e.pointerId); from = e.clientY; }); // screen: touch-action: none
+feed.addEventListener('pointermove', e => { if (feed.hasPointerCapture(e.pointerId)) { pull = 128 * (1 - Math.exp(-Math.max(0, e.clientY - from) / 128)); paint(); } });
+feed.addEventListener('pointerup', () => { if (pull >= 88) void refresh(); else { pull = 0; paint(); } });
+refreshButton.addEventListener('click', () => void refresh());
+```
+
+## border-beam: Border beam
+Category: Components
+
+Prompt:
+“Frame [our deploy status card] in an even ring of Asciify characters, with a bright band orbiting it and a fading trail. Hover speeds it up, a press sends a pulse through the ring, and reduced motion holds it still.”
+
+```ts
+// The canvas fills a frame 22px larger than the card on every side (overflow: hidden, pointer-events: none); the card is cleared out of it.
+const ring = asciiField(canvas, {
+  mark: 'glyph', scene: 'none', drift: 0.5, charset: ' .:-=+*#%@', cellSize: 9, cellAspect: 0.62, levels: 'none', fit: 'cover',
+  hover: 'lantern', lantern: { radius: 0.13, strength: 1, trail: 1.2, follow: 18 }, interactionTarget: canvas, label: 'A ring of characters around the card',
+}, '--ascii-ink-strong');
+// The ring is painted as one even tone with a fine grain, so every side and corner carries the same density.
+const band = Object.assign(document.createElement('canvas'), { width: canvas.clientWidth, height: canvas.clientHeight }), pen = band.getContext('2d')!;
+for (let y = 0; y < band.height; y += 4) for (let x = 0; x < band.width; x += 4) { const v = 92 + Math.random() * 76; pen.fillStyle = `rgb(${v} ${v} ${v})`; pen.fillRect(x, y, 4, 4); }
+pen.fillStyle = '#000'; pen.beginPath(); pen.roundRect(22, 22, band.width - 44, band.height - 44, 10); pen.fill(); // the card's own box and radius
+void ring?.field.setSource(band);
+let s = 0, lap = 3800, then = performance.now();
+
+// The beam is the lantern, walked round the ring's midline 11px in from the frame's edge.
+function orbit(now: number) {
+  const w = canvas.clientWidth - 22, h = canvas.clientHeight - 22, d = ((s += (now - then) / lap) % 1) * 2 * (w + h);
+  then = now;
+  const [x, y] = d < w ? [d, 0] : d < w + h ? [w, d - w] : d < 2 * w + h ? [2 * w + h - d, h] : [0, 2 * (w + h) - d];
+  ring?.field.pointer(x + 11, y + 11);
+  requestAnimationFrame(orbit);
+}
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(orbit);
+card.addEventListener('pointerenter', () => (lap = 1400));
+card.addEventListener('pointerleave', () => (lap = 3800));
+card.addEventListener('click', e => { const b = canvas.getBoundingClientRect(); ring?.field.pulse({ x: e.clientX - b.left, y: e.clientY - b.top, strength: 1 }); });
+```
+
+## glyph-odometer: Glyph odometer
+Category: Text
+
+Prompt:
+“Make [our monthly revenue figure] an Asciify odometer: draw the digits in the field, and on [Refresh] roll each changed column through glyphs onto the new digit, leftmost first, in under 600ms. Keep the real value in an aria-live region.”
+
+```ts
+const odo = asciiField(canvas, { mark: 'glyph', scene: 'none', charset: ' .:-=+*#%@', cellSize: 3, cellAspect: 0.66, levels: 'none', fit: 'cover', hover: 'none' }, '--ascii-ink-strong');
+const art = document.createElement('canvas'), pen = art.getContext('2d')!, noise = '#%*+=-:';
+const money = (n: number) => `$${n.toLocaleString('en-US')}`, ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 4;
+let from = money(48290), to = from, t0 = -1e4;
+// canvas covers the figure; figure holds one hidden span per character, so each column is drawn where the text would be.
+async function frame(now: number) {
+  const box = canvas.getBoundingClientRect(), first = [...to].findIndex((ch, i) => ch !== from[i]);
+  art.width = box.width * 2; art.height = box.height * 2; pen.scale(2, 2); pen.fillRect(0, 0, box.width, box.height);
+  let moving = false; Object.assign(pen, { font: getComputedStyle(figure).font, textAlign: 'center', textBaseline: 'middle', fillStyle: '#fff' });
+  [...figure.children].forEach((cell, i) => {
+    const b = cell.getBoundingClientRect(), x = b.left - box.left + b.width / 2, top = b.top - box.top, order = i - first;
+    const k = first < 0 || order < 0 ? 1 : ease((now - t0) / (360 + order * 60)), strip = [from[i], ...noise.slice(0, 4 + order), to[i]];
+    if (k >= 1) return pen.fillText(to[i], x, top + b.height / 2);
+    moving = true; pen.save(); pen.beginPath(); pen.rect(x - b.width, top, b.width * 2, b.height); pen.clip(); // the column rolls inside its slot
+    strip.forEach((ch, j) => pen.fillText(ch, x, top + b.height / 2 + (j - k * (strip.length - 1)) * b.height)); pen.restore();
+  });
+  await odo?.field.setSource(await createImageBitmap(art));
+  if (moving) requestAnimationFrame(frame);
+}
+refresh.addEventListener('click', async () => {
+  from = to; to = money(await fetchMrr()); live.textContent = to; // live: a visually hidden aria-live="polite" span
+  figure.replaceChildren(...[...to].map(ch => Object.assign(document.createElement('span'), { textContent: ch })));
+  t0 = matchMedia('(prefers-reduced-motion: reduce)').matches ? -1e4 : performance.now(); requestAnimationFrame(frame);
+});
+requestAnimationFrame(frame);
+```
+
+## sign-in: Sign-in page
+Category: Pages
+
+Prompt:
+“Make a split sign-in page with Asciify: [image] in characters in an inset, rounded panel on the left, trailing under the cursor, and an email field, Continue and a quiet Continue with GitHub on the right. Continue sends a pulse through the art, and while the link sends, a lit band shimmers across the characters.”
+
+```ts
+const art = asciiField(artCanvas, {
+  source: '/images/wing.jpg', fit: 'cover', focus: { x: 0.5, y: 0.4 },
+  charset: ' .:-=+*#%@', cellSize: 6, contrast: 1.3,
+  hover: 'trail', label: 'A carved wing drawn in characters',
+}, '--ascii-ink-strong');
+
+const image = new Image(); image.src = '/images/wing.jpg';
+const work = document.createElement('canvas'), pen = work.getContext('2d')!;
+let sending = false;
+
+async function shimmer() {
+  if (!art || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  await image.decode();
+  work.width = image.naturalWidth; work.height = image.naturalHeight;
+  const w = work.width, h = work.height, start = performance.now();
+  while (sending) {
+    const x = -0.4 * w + (((performance.now() - start) / 1100) % 1) * 1.8 * w;
+    pen.globalCompositeOperation = 'source-over'; pen.drawImage(image, 0, 0);
+    const band = pen.createLinearGradient(x - w * 0.22, x * 0.3, x + w * 0.22, x * 0.3 + h * 0.3);
+    band.addColorStop(0, 'rgb(0 0 0 / 0)'); band.addColorStop(0.5, 'rgb(255 255 255 / .42)'); band.addColorStop(1, 'rgb(0 0 0 / 0)');
+    pen.globalCompositeOperation = 'lighter'; pen.fillStyle = band; pen.fillRect(0, 0, w, h);
+    await art.field.setSource(await createImageBitmap(work));
+    await new Promise(done => setTimeout(done, 48));
+  }
+  await art.field.setSource(image); // same pixels as the rest state, so nothing jumps
+}
+
+signInForm.addEventListener('submit', event => {
+  event.preventDefault();
+  continueButton.setAttribute('aria-busy', 'true');
+  // The ring starts at the art's inner edge, level with the button, and runs through the picture.
+  const box = artCanvas.getBoundingClientRect(), button = continueButton.getBoundingClientRect();
+  art?.field.pulse({ x: box.width, y: button.top + button.height / 2 - box.top, strength: 1.8 });
+  sending = true; void shimmer();
+  sendLink().finally(() => { sending = false; });
+});
+```
+
+```css
+.sign-in { display: grid; grid-template-columns: 41% 1fr; padding: 14px; }
+.sign-in-art { position: relative; border-radius: 18px; overflow: hidden; background: var(--surface); }
+```
+
+## pricing: Pricing highlight
+Category: Pages
+
+Prompt:
+“Make a two-plan pricing section with a monthly and yearly toggle, using Asciify. The recommended plan, [plan], carries a halftone field: switching billing sends a lit sweep across it and the yearly saving re-forms in dots, the cursor lights it softly, and its button sends a pulse.”
+
+```ts
+// The card's own source: a soft light from the top corner, plus the saving on yearly. Sized to the card, so cover maps 1:1.
+function planArt(saving: boolean) {
+  const w = featuredCard.offsetWidth * 2, h = featuredCard.offsetHeight * 2;
+  const art = Object.assign(document.createElement('canvas'), { width: w, height: h }), pen = art.getContext('2d')!;
+  const light = pen.createRadialGradient(w, 0, 0, w, 0, Math.hypot(w, h) * 0.52);
+  light.addColorStop(0, 'rgb(150 150 150)'); light.addColorStop(0.4, 'rgb(64 64 64)'); light.addColorStop(1, '#000');
+  pen.fillStyle = light; pen.fillRect(0, 0, w, h);
+  if (saving) { // in the open space between the plan's copy and its price, with a dark halo so it reads in dots
+    const size = h * 0.18, x = w * 0.93, y = h * 0.42;
+    Object.assign(pen, { font: `600 ${size}px Geist, sans-serif`, textAlign: 'right', textBaseline: 'middle', lineJoin: 'round', lineWidth: size * 0.28, strokeStyle: 'rgb(0 0 0 / .85)', fillStyle: '#fff' });
+    pen.strokeText('−25%', x, y); pen.fillText('−25%', x, y);
+  }
+  return art;
+}
+
+let shown = planArt(false);
+const featured = asciiField(canvas, {
+  source: shown, fit: 'cover', mark: 'dot', cellSize: 4, dotScale: 0.92, levels: 'none', drift: 0.5,
+  interactionTarget: featuredCard, hover: 'lantern', lantern: { radius: 0.26, strength: 0.4 },
+});
+
+// A lit band crosses the card: the old halftone ahead of it, the new one behind it. About 400ms.
+async function sweep(to: HTMLCanvasElement) {
+  const from = shown; shown = to;
+  if (!featured || matchMedia('(prefers-reduced-motion: reduce)').matches) return void featured?.field.setSource(to);
+  const work = Object.assign(document.createElement('canvas'), { width: to.width, height: to.height }), pen = work.getContext('2d')!;
+  const w = work.width, h = work.height, band = w * 0.34;
+  for (let i = 1; i <= 9 && shown === to; i++) {
+    const x = -band + (i / 9) * (w + band * 2), edge = Math.max(0, Math.min(w, x));
+    pen.drawImage(from, 0, 0); if (edge > 0) pen.drawImage(to, 0, 0, edge, h, 0, 0, edge, h);
+    const light = pen.createLinearGradient(x - band, 0, x + band * 0.4, 0);
+    light.addColorStop(0, 'rgb(0 0 0 / 0)'); light.addColorStop(0.72, 'rgb(255 255 255 / .5)'); light.addColorStop(1, 'rgb(0 0 0 / 0)');
+    pen.globalCompositeOperation = 'lighter'; pen.fillStyle = light; pen.fillRect(0, 0, w, h); pen.globalCompositeOperation = 'source-over';
+    await featured.field.setSource(await createImageBitmap(work));
+    await new Promise(done => setTimeout(done, 44));
+  }
+  if (shown === to) await featured.field.setSource(to);
+}
+
+billingToggle.addEventListener('change', () => void sweep(planArt(billingToggle.value === 'yearly')));
+trialButton.addEventListener('click', () => featured?.field.pulse({ element: trialButton, strength: 1.6 }));
+```
+
+## not-found: 404 page
+Category: Pages
+
+Prompt:
+“Make our 404 page with Asciify: draw the number 404 itself large in characters, scattering under the cursor, and when someone presses Go home the characters break apart and re-form. Keep the Page not found line and the button in HTML, readable in light and dark.”
+
+```ts
+// "404" on a canvas sized to the numerals, so `contain` sets it as large as the space allows.
+const art = document.createElement('canvas'), pen = art.getContext('2d')!;
+pen.font = '600 440px Geist, sans-serif';
+art.width = Math.ceil(pen.measureText('404').width) + 160; art.height = 560;
+pen.fillRect(0, 0, art.width, art.height);
+Object.assign(pen, { fillStyle: '#fff', textAlign: 'center', textBaseline: 'middle', font: '600 440px Geist, sans-serif' });
+pen.fillText('404', art.width / 2, art.height / 2 + 16);
+
+const lost = asciiField(canvas, {
+  source: art, fit: 'contain', charset: ' .:-=+*#%@', cellSize: 7, contrast: 1.4, drift: 0.8,
+  hover: 'trail', trail: { strength: 1, radius: 0.42 }, label: '404', interactionTarget: page,
+}, '--ascii-ink-strong');
+
+// Lit 28px tiles of the art, each with its own direction.
+const T = 28, data = pen.getImageData(0, 0, art.width, art.height).data, tiles = [];
+for (let y = 0; y < art.height; y += T) for (let x = 0; x < art.width; x += T) {
+  if (data[((y + T / 2) * art.width + x + T / 2) * 4] < 40) continue;
+  const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 420;
+  tiles.push({ x, y, dx: Math.cos(a) * r + (x - art.width / 2) * 0.5, dy: Math.sin(a) * r * 0.6 });
+}
+const work = Object.assign(document.createElement('canvas'), { width: art.width, height: art.height }), out = work.getContext('2d')!;
+const wait = (ms: number) => new Promise(done => setTimeout(done, ms));
+
+homeLink.addEventListener('click', async () => {
+  lost?.field.pulse({ element: homeLink, strength: 1.2 });
+  if (!lost || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const out10 = Array.from({ length: 10 }, (_, i) => (i + 1) / 10), back = Array.from({ length: 14 }, (_, i) => 1 - (i + 1) / 14);
+  for (const k of [...out10, 1, 1, 1, ...back]) { // scatter, hold a beat, settle back
+    const e = k * k * (3 - 2 * k);
+    out.globalAlpha = 1; out.fillStyle = '#000'; out.fillRect(0, 0, work.width, work.height);
+    out.globalAlpha = 1 - e * 0.72;
+    for (const t of tiles) out.drawImage(art, t.x, t.y, T, T, t.x + t.dx * e, t.y + t.dy * e, T, T);
+    await lost.field.setSource(await createImageBitmap(work));
+    await wait(44);
+  }
+  await lost.field.setSource(art);
 });
 ```
 
@@ -123,7 +1027,8 @@ ctx.fillText('asciify', word.width / 2, word.height / 2 + 20);
 
 const wordmark = asciiField(canvas, {
   source: word, fit: 'contain', charset: ' .:-=+*#%@', cellSize: 9,
-  hover: 'trail', label: 'asciify, drawn in characters',
+  hover: 'trail', trail: { strength: 0.62, radius: 0.22 }, // a short wake that settles cleanly
+  label: 'asciify, drawn in characters',
 }, '--ascii-ink-strong');
 ```
 
@@ -146,315 +1051,41 @@ playButton.addEventListener('click', () => {
 });
 ```
 
-## not-found: 404 page
-Category: Pages
-
-Prompt:
-“Make our 404 page with Asciify: a calm field of characters that clears around the message, trails under the cursor, and pulses when someone presses Go home.”
-
-```ts
-const lost = asciiField(canvas, {
-  mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 12, hover: 'trail',
-  clear: { element: message, padding: 28, feather: 0.3, shape: 'ellipse' },
-});
-
-homeLink.addEventListener('click', () => lost?.field.pulse({ element: homeLink }));
-```
-
-## avatar: ASCII avatar
-Category: Components
-
-Prompt:
-“Draw [person]'s avatar in characters with Asciify, inside our round avatar frame. Characters trail under the cursor, and the name, role and follow button stay as HTML.”
-
-```ts
-const avatar = asciiField(canvas, {
-  source: '/images/portrait.jpg', fit: 'cover',
-  charset: ' .:-=+*#%@', cellSize: 5, contrast: 1.1,
-  hover: 'trail', label: 'Portrait of Elias Varga',
-}, '--ascii-ink-strong');
-```
-
-## empty-state: Empty state
-Category: Components
-
-Prompt:
-“Give our empty state a quiet ASCII field with Asciify. Keep the icon, message and primary action readable, and send a pulse through the field from the button when it is pressed.”
-
-```ts
-const empty = asciiField(canvas, {
-  scene: 'flow', charset: ' .:-=+*#', cellSize: 11, hover: 'none',
-  clear: { element: emptyMessage, padding: 24, shape: 'rect' },
-});
-
-primaryButton.addEventListener('click', () => empty?.field.pulse({ element: primaryButton }));
-```
-
-## loading: Loading state
-Category: Components
-
-Prompt:
-“Show [upload or sync] progress with Asciify: a small character field above the file name and progress bar that sends a soft pulse each second while it runs, and stops when it settles.”
-
-```ts
-const loading = asciiField(canvas, { mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 9, hover: 'none' });
-const beat = setInterval(() => loading?.field.pulse({ strength: 0.8 }), 1000);
-request.finally(() => clearInterval(beat));
-```
-
-## copy-pulse: Copy feedback
-Category: Components
-
-Prompt:
-“When someone copies [the coupon code], answer with Asciify: a pulse travels through a halftone field from the copy button.”
-
-```ts
-const ground = asciiField(canvas, { mark: 'dot', scene: 'drift', cellSize: 7, dotScale: 0.8, hover: 'none' });
-
-copyButton.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(code);
-  ground?.field.pulse({ element: copyButton });
-});
-```
-
-## brand-field: Brand color field
+## hero-background: Hero background
 Category: Backgrounds
 
 Prompt:
-“Make an ASCII field in our brand color with Asciify, drifting slower than the default, for [section].”
+“Put a calm ASCII background behind our hero with Asciify. Characters drift slowly and reach toward the headline, softening under a frosted veil so the copy stays readable; the cursor ripples the field and the main button sends a strong pulse. Follow our light and dark theme.”
 
 ```ts
-const brand = asciiField(canvas, {
-  mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 10,
-  speed: 0.5, hover: 'none',
-}, '--brand');
-```
-
-## coming-soon: Coming soon page
-Category: Pages
-
-Prompt:
-“Make a coming-soon page for [product] with Asciify: our mark and name, one headline, and an email field with a Join waitlist button. A drifting field of characters clears around the form, and pulses from the button when someone joins.”
-
-```ts
-const waitlist = asciiField(canvas, {
-  mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 10, hover: 'trail',
-  clear: { element: form, padding: 14, feather: 0.24, shape: 'ellipse' },
+const hero = asciiField(canvas, {
+  mark: 'glyph', scene: 'drift', charset: ' .:+*#', cellSize: 10, scale: 1.9, brightness: 0.26, contrast: 1.15,
+  clear: { element: heroText, padding: -14, feather: 0.22, shape: 'ellipse' }, // small feather: the field reaches the words
+  hover: 'trail', interactionTarget: heroSection,
 });
 
-form.addEventListener('submit', event => {
-  event.preventDefault();
-  waitlist?.field.pulse({ element: joinButton });
-  form.dataset.state = 'joined';
+// A soft ring every half second while the cursor travels, so the ground answers movement.
+let last = { x: 0, y: 0, at: 0 }, hold = 0;
+heroSection.addEventListener('pointermove', event => {
+  const now = performance.now(), box = canvas.getBoundingClientRect();
+  const x = event.clientX - box.left, y = event.clientY - box.top;
+  if (!hero || now < hold || now - last.at < 520 || Math.hypot(x - last.x, y - last.y) < 36) return;
+  last = { x, y, at: now };
+  hero.field.pulse({ x, y, strength: 0.65 });
+});
+subscribeButton.addEventListener('click', () => {
+  hold = performance.now() + 1400; // keep ripples from replacing the big ring (four rings live at once)
+  hero?.field.pulse({ element: subscribeButton, strength: 1.4 });
 });
 ```
 
-## sign-in: Sign-in page
-Category: Pages
-
-Prompt:
-“Make a split sign-in page with Asciify: [image] in characters on the left, trailing under the cursor, and an email field, Continue and a quiet Continue with GitHub on the right. Continue shows a loading state and pulses the art.”
-
-```ts
-const art = asciiField(artCanvas, {
-  source: '/images/wing.jpg', fit: 'cover', focus: { x: 0.5, y: 0.4 },
-  charset: ' .:-=+*#%@', cellSize: 6, contrast: 1.3,
-  hover: 'trail', label: 'A carved wing drawn in characters',
-}, '--ascii-ink-strong');
-
-signInForm.addEventListener('submit', event => {
-  event.preventDefault();
-  continueButton.setAttribute('aria-busy', 'true');
-  art?.field.pulse({ element: continueButton });
-});
-```
-
-## pricing: Pricing highlight
-Category: Pages
-
-Prompt:
-“Make a two-plan pricing section with a monthly and yearly toggle, using Asciify. The recommended plan, [plan], gets a halftone field that lights up under the cursor and pulses from its button.”
-
-```ts
-const featured = asciiField(canvas, {
-  mark: 'dot', scene: 'drift', cellSize: 7, dotScale: 0.86, speed: 0.7,
-  interactionTarget: featuredCard, hover: 'lantern',
-  lantern: { radius: 0.3, strength: 0.75 },
-});
-
-trialButton.addEventListener('click', () => featured?.field.pulse({ element: trialButton }));
-```
-
-## text-decode: Decode headline
-Category: Text
-
-Prompt:
-“Make [our hero headline] decode into place through ASCII characters when it scrolls into view and on hover, left to right in about 900ms, without moving the layout. Screen readers get the real words, and reduced motion shows them at once.”
-
-```ts
-const words = headline.textContent ?? '', ramp = '.:-=+*#%@abcdefghijklmnopqrstuvwxyz', cells = [...words].map(ch => Object.assign(document.createElement('span'), { textContent: ch }));
-const layer = Object.assign(document.createElement('span'), { ariaHidden: 'true', style: 'position:absolute;inset:0;pointer-events:none;color:var(--ink-3)' });
-headline.setAttribute('aria-label', words);
-headline.replaceChildren(layer, ...cells); // the headline is position: relative
-
-function decode(duration = 900, hold = 380) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches || layer.childElementCount) return;
-  const stagger = (duration - hold) / Math.max(1, cells.length - 1), start = performance.now();
-  const glyphs = cells.map(({ offsetLeft: x, offsetTop: y, offsetWidth: w }) => layer.appendChild(Object.assign(document.createElement('span'), { style: `position:absolute;left:${x}px;top:${y}px;width:${w}px;display:flex;justify-content:center;line-height:normal` })));
-  requestAnimationFrame(function frame(now) {
-    cells.forEach((cell, i) => {
-      const t = (now - start - i * stagger) / hold, busy = t >= 0 && t < 1 && words[i] !== ' ';
-      cell.style.color = busy ? 'transparent' : '';
-      if (!busy || Math.random() < 0.4) glyphs[i].textContent = busy ? ramp[Math.floor(Math.random() * (t < 0.56 ? 9 : ramp.length))] : '';
-    });
-    if (now - start < duration) requestAnimationFrame(frame); else layer.replaceChildren();
-  });
+```css
+/* The veil: characters blur and fade toward the words instead of stopping at a box edge. */
+.hero-text { position: relative; isolation: isolate; }
+.hero-text::before {
+  content: ""; position: absolute; z-index: -1; inset: -24px -40px; pointer-events: none;
+  background: color-mix(in oklab, var(--bg) 58%, transparent);
+  backdrop-filter: blur(9px);
+  mask-image: radial-gradient(closest-side, #000 52%, rgb(0 0 0 / .6) 74%, transparent);
 }
-new IntersectionObserver(([entry]) => { if (entry.isIntersecting) decode(); }, { threshold: 0.5 }).observe(headline);
-headline.addEventListener('pointerenter', () => decode());
-```
-
-## image-reveal: Photo from characters
-Category: Transitions
-
-Prompt:
-“Show [photo] drawn in characters with Asciify. On hover or focus the real photo grows out of the characters in a soft circle from the cursor, and on leave it closes back with a pulse where the pointer left.”
-
-```ts
-const art = asciiField(canvas, {
-  source: '/images/egret.jpg', fit: 'cover', charset: ' .:-=+*#%@', cellSize: 6,
-  contrast: 1.3, hover: 'trail', label: 'A great egret, drawn in characters',
-}, '--ascii-ink-strong');
-
-// The photo lies over the canvas, masked by radial-gradient(circle at var(--x) var(--y), #000 calc(var(--r) - 56px), transparent var(--r)),
-// with --r registered as a <length> through @property so it can transition.
-function reveal(open: boolean, x = frame.clientWidth / 2, y = frame.clientHeight / 2) {
-  const ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : open ? 520 : 440;
-  if (open) photo.style.cssText += `--x:${x}px;--y:${y}px`;
-  else art?.field.pulse({ x, y });
-  photo.style.transition = `--r ${ms}ms cubic-bezier(.16, 1, .3, 1)`;
-  photo.style.setProperty('--r', open ? `${Math.hypot(frame.clientWidth, frame.clientHeight) + 56}px` : '0px');
-}
-frame.addEventListener('pointerenter', event => reveal(true, event.offsetX, event.offsetY));
-frame.addEventListener('pointerleave', event => reveal(false, event.offsetX, event.offsetY));
-frame.addEventListener('focus', () => reveal(true));
-frame.addEventListener('blur', () => reveal(false));
-```
-
-## route-transition: Page transition
-Category: Transitions
-
-Prompt:
-“When someone switches [tabs or pages] in [our app], sweep a dense Asciify character field out from the clicked tab, swap the page underneath, and sweep it away, all in about half a second. Swap instantly under reduced motion.”
-
-```ts
-const veil = asciiField(canvas, {
-  mark: 'glyph', scene: 'flow', charset: ' .:-=+*#%@', cellSize: 10, scale: 2.4,
-  speed: 1.6, contrast: 1.4, brightness: 0.34, hover: 'none',
-});
-veil?.field.pause();
-
-// cover holds the canvas on background: var(--surface), visibility: hidden at rest, masked by radial-gradient(circle at var(--x) var(--y),
-// transparent var(--hole), #000 calc(var(--hole) + 36px), #000 var(--front), transparent calc(var(--front) + 36px)); --hole and --front are @property lengths.
-async function navigate(tab: HTMLElement, swap: () => void) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return swap();
-  const box = cover.getBoundingClientRect(), t = tab.getBoundingClientRect(), ease = 'cubic-bezier(.16, 1, .3, 1)';
-  const x = t.left + t.width / 2 - box.left, y = t.top + t.height / 2 - box.top, reach = `${Math.hypot(box.width, box.height) + 36}px`;
-  cover.style.cssText += `--x:${x}px;--y:${y}px;visibility:visible`;
-  veil?.field.play();
-  veil?.field.pulse({ x, y });
-  await cover.animate({ '--hole': ['-72px', '-72px'], '--front': ['-36px', reach] }, { duration: 180, easing: ease, fill: 'forwards' }).finished;
-  swap();
-  await cover.animate({ '--hole': ['-72px', reach], '--front': [reach, reach] }, { duration: 320, easing: ease }).finished;
-  cover.style.visibility = 'hidden';
-  veil?.field.pause();
-}
-```
-
-## scramble-button: Scramble button
-Category: Transitions
-
-Prompt:
-“Make [our primary button]'s label scramble through ASCII characters on hover and focus without changing width, with a small Asciify dot halo behind it that follows the cursor and pulses on press.”
-
-```ts
-const halo = asciiField(canvas, {
-  mark: 'dot', scene: 'drift', cellSize: 6, dotScale: 0.8, scale: 2.2, hover: 'lantern',
-  clear: { element: button, padding: 4, feather: 0.12, shape: 'rect' },
-});
-button.addEventListener('click', () => halo?.field.pulse({ element: button }));
-
-const text = label.textContent ?? '', ramp = '.:-=+*#%@abcdefghijklmnopqrstuvwxyz';
-const live = Object.assign(document.createElement('span'), { ariaHidden: 'true', textContent: text, style: 'position:absolute;inset:0;white-space:nowrap' });
-button.setAttribute('aria-label', text);
-label.replaceChildren(Object.assign(document.createElement('span'), { textContent: text, style: 'visibility:hidden;white-space:nowrap' }), live); // label is position: relative; the hidden copy holds the width
-function scramble() {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const start = performance.now();
-  requestAnimationFrame(function frame(now) {
-    const settled = Math.floor((now - start - 120) / 28);
-    live.textContent = [...text].map((ch, i) => (i < settled || ch === ' ' ? ch : ramp[Math.floor(Math.random() * ramp.length)])).join('');
-    if (settled < text.length) requestAnimationFrame(frame);
-  });
-}
-button.addEventListener('pointerenter', scramble);
-button.addEventListener('focus', () => { if (button.matches(':focus-visible')) scramble(); });
-```
-
-## thinking: Thinking state
-Category: AI
-
-Prompt:
-“Show [our assistant]'s thinking state with Asciify: dot lines shimmer where the answer will appear under a Thinking… label, then the answer streams in word by word as the dots fade. Regenerate runs it again.”
-
-```ts
-import { play } from 'cuelume';
-
-const dots = asciiField(canvas, { mark: 'dot', scene: 'drift', cellSize: 5, dotScale: 0.86, scale: 3, speed: 2.4, hover: 'none' });
-
-// The canvas fills the answer area under line-shaped mask bands; CSS fades it out, and each .word in 38ms apart, once data-phase leaves "thinking".
-async function regenerate(ask: () => Promise<string>) {
-  play('loading', { emphasis: 'subtle' });
-  reply.dataset.phase = 'thinking';
-  dots?.field.play();
-  const beat = setInterval(() => dots?.field.pulse({ x: Math.random() * canvas.clientWidth, y: canvas.clientHeight / 2, strength: 0.7 }), 640);
-  const answer = await ask().finally(() => clearInterval(beat));
-  answerText.replaceChildren(...answer.split(' ').map((word, i) => {
-    const span = Object.assign(document.createElement('span'), { className: 'word', textContent: `${word} ` });
-    span.style.setProperty('--i', String(i));
-    return span;
-  }));
-  reply.dataset.phase = 'done';
-  setTimeout(() => dots?.field.pause(), 420);
-  play('ready', { emphasis: 'subtle' });
-}
-```
-
-## image-generation: Image generation
-Category: AI
-
-Prompt:
-“While [our image model] generates [prompt], fill the frame with drifting Asciify characters that pulse beside a progress label. When the image arrives, develop it in characters, then fade to the photo from blur to sharp.”
-
-```ts
-const art = asciiField(canvas, {
-  mark: 'glyph', scene: 'flow', charset: ' .:-=+*#%@', cellSize: 7, scale: 2.6, speed: 1.4, contrast: 1.3, hover: 'trail',
-}, '--ascii-ink-strong');
-const ease = (ms: number, step: (k: number) => void) => new Promise<void>(done => {
-  const start = performance.now(), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  requestAnimationFrame(function frame(now) { const t = still ? 1 : Math.min(1, (now - start) / ms); step(1 - (1 - t) ** 4); if (t < 1) requestAnimationFrame(frame); else done(); });
-});
-
-generate.addEventListener('click', async () => {
-  const field = art?.field;
-  if (!field) return;
-  const beat = setInterval(() => field.pulse({ strength: 0.8 }), 640);
-  const url = await createImage(promptInput.value).finally(() => clearInterval(beat));
-  await ease(200, k => field.update({ brightness: -k }));
-  await field.setSource(url);
-  field.pulse();
-  await ease(900, k => field.update({ brightness: k - 1 }));
-  photo.src = url;
-  imageFrame.dataset.done = ''; // CSS fades the photo in from opacity 0 and blur(14px), 760ms on cubic-bezier(.16, 1, .3, 1)
-});
 ```

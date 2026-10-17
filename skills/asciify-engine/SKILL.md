@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII art with asciify-engine so it fits the user's request, preferences and the project's design. Use for photo, video and GIF conversion, interactive heroes, GPU character fields with the user's own words, ambient backgrounds, text banners, art styles and export, hover and motion choices, layered HTML typography, and rendering performance.
 metadata:
-  tested-engine: "4.12.0"
+  tested-engine: "4.12.1"
   updated: "2026-10-14"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.12.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.12.1**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -31,7 +31,7 @@ Most requests are a feeling ("make the hero feel alive", "retro", "subtle behind
 4. **Decide living or still.** A still photo can be made to feel alive (field `drift`, studio `motion`), but some users want it still. Follow their words; keep art behind text, in grids and in data views still; reduced motion always gets a still. See [living or still](references/design-matching.md#living-or-still).
 5. **Say what you chose in one line** and offer one alternative. Ask only when the media is missing or motion would be new to a site that has none.
 
-[references/components.md](references/components.md) has 21 ready-made components with a shared theme-aware helper: interface pieces (image card, avatar, empty state, loading state, copy feedback), backgrounds (hero, cursor field, brand field), text (CLI banner, wordmark, decode headline), transitions (photo from characters, page transition, scramble button), pages (404, coming soon, sign-in, pricing), AI states (thinking, image generation) and video in characters, each with the prompt a person gives and the reference code. Start there when the request matches one.
+[references/components.md](references/components.md) has 29 ready-made components with a shared theme-aware helper: controls (button loading, slide to confirm, like burst, verification code, command palette), feedback (loading states, skeleton loader, toast stack, pull to refresh), AI (voice orb, thinking, streaming text, image generation), transitions (page transition, delete into characters), data (chart, odometer, border beam), media (before and after, dropzone, accordion, swipe cards, video), text (decode headline, wordmark) and pages (sign-in, pricing, 404, hero background), each with the prompt a person gives and the reference code. Start there when the request matches one.
 
 [references/design-matching.md](references/design-matching.md) maps mood words to settings, explains light themes, contrast and fonts, and gives tested recipes for the common requests. Read it whenever the user describes a look rather than an option.
 
