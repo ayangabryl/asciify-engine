@@ -380,7 +380,7 @@ A toast is `{ title, body?, icon?, action?, duration? }`; `icon` is a node (such
 
 ### thinking
 
-An assistant reply's thinking state: line-shaped bands of drifting dots while the model thinks, then the answer fades in word by word as the dots give way, leaving a quiet dotted rule under it.
+An assistant reply's thinking state. While the model thinks, a wave runs through the status label: each letter in turn rolls up through glyphs and lands back on itself, in the label's own font, like the odometer. When the answer starts, every letter rolls once more into `Thought for 2s`, and the answer fades in word by word.
 
 ```ts
 const reply = thinking(answer, { label: status }); // status reads "Thinking…", then "Thought for 2s"
@@ -388,7 +388,7 @@ await reply.stream(await ask(question));            // or an async iterable of c
 regenerate.onclick = () => reply.think();
 ```
 
-Options: `lines` (bands while thinking, default 3; the element is held at that many lines high), `label` (an element for the status), `labels` (`{ thinking, done(seconds) }`), `start` (default true; false waits for `think()`), `stagger` (ms between words, default 38), `rule` (default true), `onState(state, seconds)` (for a status you render yourself). Methods: `think()`, `stream(text | chunks)` (resolves once the last word has faded in; a partial word is held until it is whole); getter `state` (`thinking`, `streaming`, `done`). Sets `aria-busy` while thinking; with border-box sizing the held height adds the element's padding, so bottom padding makes room for the rule. Ink defaults to `--ascii-ink`, else a quiet graphite; the dots sit under the text.
+Options: `label` (the status element; the field rolls its characters, and a visually hidden live copy announces each status), `labels` (`{ thinking, done(seconds) }`), `start` (default true; false waits for `think()`), `stagger` (ms between words, default 38), `roll` (ms one letter rolls, default 520), `wave` (ms between neighbouring letters, default 55), `glyphs` (default `#%*+=-:`), `onState(state, seconds)` (for a status you render yourself). `lines` and `rule` are ignored since 4.17. Methods: `think()`, `stream(text | chunks)` (resolves once the last word has faded in; a partial word is held until it is whole); getter `state` (`thinking`, `streaming`, `done`). Sets `aria-busy` while thinking. The answer element is empty while thinking: open it with the reply (for example a `grid-template-rows` transition from `0fr` to `1fr` keyed on the state) rather than holding an empty box. Ink defaults to the label's text colour.
 
 ### streamText
 

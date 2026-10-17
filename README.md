@@ -646,6 +646,10 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.17: a thinking label that rolls
+
+- `thinking` drops the dot bands and the dotted rule. A wave runs through the status label instead, each letter rolling up through glyphs and back in the label's own font; when the answer starts, the label rolls into `Thought for 2s`. New options `roll`, `wave` and `glyphs`; `lines` and `rule` are ignored.
+
 ## 4.16: smooth shading in every charset, rolling streamed text
 
 - Glyph fields gain `blend` (default `'auto'`): with nine or fewer characters, a photo or video mixes neighbouring characters in a fixed 4x4 pattern for the shades between them, so binary, dots and block sets shade like a full ramp. Drawn interface shapes stay crisp. It costs one comparison per cell and never shimmers.

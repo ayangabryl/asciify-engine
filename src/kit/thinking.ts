@@ -1,136 +1,153 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, easeOut, handle, hash, mountSurface, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
-import { driftNoise } from './decode';
+import { clamp, handle, hash, house, mountSurface, prefersReduced, smoothstep, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 export type ThinkingState = 'thinking' | 'streaming' | 'done';
 
 export interface ThinkingOptions extends KitOptions {
-  /** Line-shaped bands of drifting dots shown while thinking. Default 3. */
-  lines?: number;
-  /** An element to write the status into: `Thinking…`, then `Thought for 2s`. */
+  /** The status element: `Thinking…` while a wave of rolling characters runs through it, then `Thought for 2s`. */
   label?: HTMLElement | null;
   /** The status texts. */
   labels?: { thinking?: string; done?: (seconds: number) => string };
   /** Start thinking at once. Default true; false waits for `think()`. */
   start?: boolean;
-  /** Ms between one word and the next fading in. Default 38. */
+  /** Ms between one word of the answer and the next fading in. Default 38. */
   stagger?: number;
-  /** A dotted rule under the finished answer. Default true. */
-  rule?: boolean;
+  /** Ms one character of the label takes to roll through its glyphs and back. Default 520. */
+  roll?: number;
+  /** Ms between neighbouring characters as the wave runs across the label. Default 55. */
+  wave?: number;
+  /** Glyphs the label rolls through. Default `#%*+=-:`. */
+  glyphs?: string;
   /** Called on each state change; `seconds` is how long it thought, once known. For a status you render yourself. */
   onState?: (state: ThinkingState, seconds: number) => void;
+  /** @deprecated The dot bands were removed in 4.17; ignored. */
+  lines?: number;
+  /** @deprecated The dotted rule was removed in 4.17; ignored. */
+  rule?: boolean;
 }
 
 export interface ThinkingHandle extends KitHandle<ThinkingOptions> {
   /** Clears the answer and thinks again, as for Regenerate. */
   think(): void;
-  /** Writes the answer, word by word, as the dots give way. Pass a string or an async iterable of chunks. Resolves when it has settled. */
+  /** Writes the answer, word by word, as the label settles. Pass a string or an async iterable of chunks. Resolves when it has settled. */
   stream(text: string | AsyncIterable<string>): Promise<void>;
   readonly state: ThinkingState;
 }
 
-const DEFAULTS = { lines: 3, start: true, stagger: 38, rule: true };
-const FADE_MS = 420, RULE_DELAY = 280, WORD_MS = 260;
+const DEFAULTS = { start: true, stagger: 38, roll: 520, wave: 55, glyphs: '#%*+=-:' };
+const WORD_MS = 260, REST_MS = 420;
 const thinkingLabel = 'Thinking…';
 const doneLabel = (s: number) => `Thought for ${s}s`;
 
 /**
- * The thinking state of an assistant reply: line-shaped bands of drifting dots while the model thinks, then the answer
- * fades in word by word as the dots give way, leaving a quiet dotted rule under it.
+ * The thinking state of an assistant reply. While the model thinks, a wave runs through the status label: each letter in
+ * turn rolls up through glyphs and lands back on itself, in the label's own font. When the answer starts, every letter rolls
+ * once more into `Thought for 2s`, and the answer fades in word by word.
  */
 export function thinking(element: HTMLElement, options: ThinkingOptions = {}): ThinkingHandle {
   const state = { current: { ...DEFAULTS, ...options } };
   const styles = styleKeeper();
   const original = [...element.childNodes];
-  let phase: ThinkingState = 'done', took = 0, started = 0, answered = -1e9, settled = -1e9, run = 0, written = '';
+  const host = state.current.label ?? null;
+  const labelOriginal = host ? [...host.childNodes] : [];
+  let phase: ThinkingState = 'done', took = 0, started = 0, settledAt = -1e9, run = 0, written = '';
   let surface: Surface | null = null;
-  const look = (): GlyphFieldOptions => ({ mark: 'dot', cellSize: 5, cellAspect: 1, dotScale: 0.86, contrast: 1.2, ...state.current.look });
-  const noise = document.createElement('canvas');
-  const lineHeight = () => {
-    const style = getComputedStyle(element), lh = parseFloat(style.lineHeight);
-    return Number.isFinite(lh) && lh > 0 ? lh : (parseFloat(style.fontSize) || 15) * 1.45;
-  };
-  const label = (text: string) => { if (state.current.label) state.current.label.textContent = text; };
-
-  surface = mountSurface({
-    host: element,
-    layer: 'under',
-    look,
-    // Graphite by default: the dots are texture under the text, not ink.
-    ink: dark => state.current.ink ?? `var(--ascii-ink, ${dark ? '#7a7872' : '#76746e'})`,
-    kit: state,
-    reducedMotion: () => state.current.reducedMotion,
-    onFail: () => { surface = null; },
-    paint: ({ pen, w, h, now, still }) => {
-      const o = state.current, lh = lineHeight();
-      const bands = phase === 'thinking' ? 1 : still ? 0 : 1 - easeOut((now - answered) / FADE_MS);
-      const rule = phase !== 'done' || !o.rule ? 0 : still ? 0.7 : 0.7 * easeOut((now - settled - RULE_DELAY) / FADE_MS);
-      const t = still ? 0 : (now - started) / 1000;
-      if (bands > 0) {
-        const nw = Math.max(2, Math.round(w / 12)), nh = Math.max(2, Math.round(h / 7));
-        if (noise.width !== nw || noise.height !== nh) { noise.width = nw; noise.height = nh; }
-        driftNoise(noise, 1.7 + t * 0.8, 0.15);
-        pen.save();
-        pen.beginPath();
-        for (let i = 0; i < o.lines; i++) {
-          const width = i === o.lines - 1 && o.lines > 1 ? 0.62 : 0.92 - 0.06 * hash(i, 2);
-          pen.rect(0, i * lh + lh * 0.22, w * width, lh * 0.56);
-        }
-        pen.clip();
-        pen.globalAlpha = bands;
-        pen.imageSmoothingEnabled = true;
-        // The noise is faint by design; laid on three times its peaks swell into the largest dots and its troughs stay open.
-        pen.globalCompositeOperation = 'lighter';
-        pen.drawImage(noise, 0, 0, w, h);
-        pen.drawImage(noise, 0, 0, w, h);
-        pen.drawImage(noise, 0, 0, w, h);
-        // A low floor: the quietest stretch still reads as a line of fine dots.
-        pen.fillStyle = 'rgb(14 14 14)';
-        pen.fillRect(0, 0, w, h);
-        pen.restore();
-      }
-      if (rule > 0) {
-        pen.globalAlpha = rule;
-        pen.fillStyle = '#fff';
-        pen.fillRect(0, h - 5, w, 4);
-        pen.globalAlpha = 1;
-      }
-      if (bands > 0 || rule > 0) {
-        // Both fade out to the right, so the band never ends on a hard edge.
-        const fade = pen.createLinearGradient(w * 0.6, 0, w * 0.98, 0);
-        fade.addColorStop(0, '#fff'); fade.addColorStop(1, '#000');
-        pen.globalCompositeOperation = 'multiply';
-        pen.fillStyle = fade;
-        pen.fillRect(0, 0, w, h);
-        pen.globalCompositeOperation = 'source-over';
-      }
-      return phase === 'thinking' || (!still && (now - answered < FADE_MS || (phase === 'done' && now - settled < RULE_DELAY + FADE_MS)));
-    },
+  // The label: a live copy for screen readers, and one span per character the field rolls.
+  const live = host ? srOnly('', true) : null;
+  const chars = document.createElement('span');
+  let text = '', previous = '';
+  const look = (): GlyphFieldOptions => ({
+    mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
+    cellSize: 2, cellAspect: 0.66, glyphScale: 1, shade: 0.2, contrast: 1.1, ...state.current.look,
   });
+  const quiet = () => state.current.reducedMotion ?? prefersReduced();
+  const setLabel = (next: string, settle: boolean) => {
+    previous = text; text = next;
+    if (!host) return;
+    if (live) live.textContent = next;
+    if (!surface) { host.textContent = next; return; }
+    chars.replaceChildren(...[...next].map(ch => Object.assign(document.createElement('span'), { textContent: ch })));
+    settledAt = settle ? performance.now() : -1e9;
+    surface.kick();
+  };
+
+  if (host) {
+    surface = mountSurface({
+      host,
+      look,
+      ink: () => state.current.ink ?? getComputedStyle(host).color,
+      kit: state,
+      reducedMotion: () => state.current.reducedMotion,
+      resolution: 2,
+      onFail: () => { surface = null; host.textContent = text; styles.restore(); },
+      paint: ({ pen, now, still, box, scale }) => {
+        const style = getComputedStyle(chars), size = parseFloat(style.fontSize) || 14;
+        const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        pen.setTransform(scale, 0, 0, scale, 0, 0);
+        pen.textAlign = 'center'; pen.textBaseline = 'alphabetic'; pen.font = font;
+        const metric = pen.measureText('x'), ascent = metric.fontBoundingBoxAscent || size * 0.8, descent = metric.fontBoundingBoxDescent || size * 0.2;
+        const o = state.current, cells = [...chars.children] as HTMLElement[];
+        // While thinking the wave loops: it crosses the label, rests, and crosses again. Settling rolls every letter once.
+        const settling = now - settledAt < o.roll + cells.length * o.wave;
+        const period = cells.length * o.wave + o.roll + REST_MS;
+        let moving = false;
+        cells.forEach((cell, i) => {
+          let p = 1;
+          if (!still && settling) p = clamp((now - settledAt - i * o.wave) / o.roll);
+          else if (!still && phase === 'thinking') { const local = ((now - started) % period) - i * o.wave; p = local < 0 || local > o.roll ? 1 : local / o.roll; }
+          const opacity = p < 1 ? smoothstep(0.7, 1, p).toFixed(3) : '';
+          if (cell.style.opacity !== opacity) cell.style.opacity = opacity;
+          if (p >= 1 || !cell.textContent?.trim()) return;
+          moving = true;
+          const b = box(cell), mid = b.y + (b.h - ascent - descent) / 2 + ascent, x = b.x + b.w / 2;
+          // Settling runs from the old letter to the new one; the wave runs from a letter back to itself.
+          const from = settling ? (previous[i] ?? ' ') : cell.textContent, to = cell.textContent;
+          const column = [from, ...Array.from({ length: 3 }, (_, j) => o.glyphs[Math.floor(hash(j + i * 7, Math.floor(started)) * o.glyphs.length)] ?? ''), to];
+          const offset = house(p) * (column.length - 1) * b.h;
+          pen.save();
+          pen.beginPath(); pen.rect(b.x - 2, b.y, b.w + 4, b.h); pen.clip();
+          pen.globalAlpha = 1 - smoothstep(0.7, 1, p);
+          column.forEach((glyph, j) => {
+            const y = mid + j * b.h - offset;
+            if (y < b.y - b.h || y > b.y + b.h * 2) return;
+            const letter = j === 0 || j === column.length - 1;
+            pen.font = letter ? font : `600 ${size * 0.86}px "Geist Mono", ui-monospace, monospace`;
+            pen.fillStyle = letter ? '#fff' : '#d0d0d0';
+            pen.fillText(glyph, x, y);
+          });
+          pen.restore();
+        });
+        pen.globalAlpha = 1;
+        return moving || (!still && (phase === 'thinking' || settling));
+      },
+    });
+    if (surface && live) {
+      styles.set(chars, 'display', 'inline-flex');
+      styles.set(chars, 'white-space', 'pre');
+      chars.setAttribute('aria-hidden', 'true');
+      host.replaceChildren(live, chars, surface.canvas);
+    }
+  }
+
   const words = document.createElement('span');
   const think = () => {
     run++;
     phase = 'thinking';
     started = performance.now();
-    answered = settled = -1e9;
     written = '';
     words.replaceChildren();
     element.replaceChildren(words);
-    if (surface) element.appendChild(surface.canvas);
-    // The bands fill the content box; with border-box sizing the padding (room for the rule) is added on top.
-    const box = getComputedStyle(element), pad = box.boxSizing === 'border-box' ? (parseFloat(box.paddingTop) || 0) + (parseFloat(box.paddingBottom) || 0) : 0;
-    styles.set(element, 'min-height', `${Math.round(state.current.lines * lineHeight() + pad)}px`);
     element.setAttribute('aria-busy', 'true');
-    label(state.current.labels?.thinking ?? thinkingLabel);
+    setLabel(state.current.labels?.thinking ?? thinkingLabel, false);
     state.current.onState?.('thinking', 0);
     surface?.kick();
   };
 
   /** Adds whole words as spans that fade in one after another. */
   let shown = 0, firstAt = 0;
-  const addWords = (text: string) => {
-    const fade = !!surface && !surface.still();
-    for (const part of text.match(/\s+|\S+/g) ?? []) {
+  const addWords = (chunk: string) => {
+    const fade = !quiet() && !(surface?.still() ?? false);
+    for (const part of chunk.match(/\s+|\S+/g) ?? []) {
       if (/^\s/.test(part)) { words.append(part); continue; }
       const span = document.createElement('span');
       span.textContent = part;
@@ -145,7 +162,7 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     }
   };
 
-  const stream = async (text: string | AsyncIterable<string>) => {
+  const stream = async (input: string | AsyncIterable<string>) => {
     if (phase !== 'thinking') think();
     const id = run;
     shown = 0;
@@ -153,12 +170,10 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     const begin = () => {
       if (phase !== 'thinking') return;
       phase = 'streaming';
-      answered = firstAt = performance.now();
-      styles.set(element, 'min-height', '');
-      took = Math.max(1, Math.round((answered - started) / 1000));
-      label((state.current.labels?.done ?? doneLabel)(took));
+      firstAt = performance.now();
+      took = Math.max(1, Math.round((firstAt - started) / 1000));
+      setLabel((state.current.labels?.done ?? doneLabel)(took), true);
       state.current.onState?.('streaming', took);
-      surface?.kick();
     };
     const feed = (chunk: string, last: boolean) => {
       pending += chunk;
@@ -169,19 +184,17 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
       addWords(pending.slice(0, cut));
       pending = pending.slice(cut);
     };
-    if (typeof text === 'string') feed(text, true);
+    if (typeof input === 'string') feed(input, true);
     else {
-      for await (const chunk of text) { if (id !== run) return; feed(chunk, false); }
+      for await (const chunk of input) { if (id !== run) return; feed(chunk, false); }
       if (id !== run) return;
       feed('', true);
     }
     begin();
-    const still = !surface || surface.still();
-    const left = still ? 0 : Math.max(0, shown * state.current.stagger - (performance.now() - firstAt)) + WORD_MS;
+    const left = quiet() ? 0 : Math.max(0, shown * state.current.stagger - (performance.now() - firstAt)) + WORD_MS;
     await new Promise(resolve => setTimeout(resolve, left));
     if (id !== run) return;
     phase = 'done';
-    settled = performance.now();
     element.setAttribute('aria-busy', 'false');
     state.current.onState?.('done', took);
     surface?.kick();
@@ -199,6 +212,7 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     element.removeAttribute('aria-busy');
     if (written) element.textContent = written;
     else element.replaceChildren(...original);
+    if (host) { if (text) host.textContent = text; else host.replaceChildren(...labelOriginal); }
   });
 }
 

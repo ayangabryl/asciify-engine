@@ -243,12 +243,12 @@ reloadButton.onclick = async () => { s.reset(); renderPost(await fetchPost()); a
 Category: AI
 
 Prompt:
-“Show [our assistant]'s thinking state with Asciify: dot lines shimmer where the answer will appear under a Thinking… label, then the answer streams in word by word and the dots settle into a dotted rule beneath it.”
+“Show [our assistant]'s thinking state with Asciify: a wave runs through the Thinking… label, each letter rolling up through glyphs and back like an odometer; when the answer starts the label rolls into Thought for 2s and the answer opens beneath it, word by word.”
 
 ```ts
 import { thinking } from 'asciify-engine/kit';
 
-const reply = thinking(answer, { label: statusLabel, lines: 3 }); // "Thinking…", then "Thought for 2s"
+const reply = thinking(answer, { label: statusLabel }); // "Thinking…" with a rolling wave, then "Thought for 2s"
 await reply.stream(await ask(question)); // or an async iterable of chunks
 regenerate.onclick = async () => { reply.think(); await reply.stream(await ask(question)); };
 ```
