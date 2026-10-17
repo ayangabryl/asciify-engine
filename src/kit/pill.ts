@@ -115,6 +115,7 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
     layer: single ? 'under' : 'over',
     look,
     ink: () => state.current.ink,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; restore(); },
     onTheme: () => surface?.field.update({ charset: RAMP[theme()].charset }),
@@ -221,7 +222,6 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
         el.prepend(dot);
         undo.push(() => dot.remove());
       }
-      if (what === 'new') el.addEventListener('pointerenter', enter);
       // A shared field lies over the container, so each label rises above it; bare text is wrapped to be lifted.
       if (!single) {
         for (const node of [...el.childNodes]) {
@@ -236,6 +236,8 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
       }
     }
     if (counts.size) void document.fonts?.ready.then(() => surface?.kick());
+    host!.addEventListener('pointermove', over);
+    host!.addEventListener('pointerleave', out);
   }
   function lift(el: HTMLElement) {
     if (getComputedStyle(el).position === 'static') styles.set(el, 'position', 'relative');
@@ -247,7 +249,15 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
     for (const p of el ? [el] : pills.filter(p => kind(p) === 'new')) sheens.set(p, now);
     surface?.kick();
   }
-  function enter(event: Event) { if (state.current.sheen) sheen(event.currentTarget as HTMLElement); }
+  // The pill under the pointer, from moves on the host, so a pointer already inside or a scripted one that only sends moves still runs the sheen.
+  let under: HTMLElement | null = null;
+  function over(event: Event) {
+    const target = event.target as Node | null, now = pills.find(p => target && p.contains(target)) ?? null;
+    if (now === under) return;
+    under = now;
+    if (now && kind(now) === 'new' && state.current.sheen) sheen(now);
+  }
+  function out() { under = null; }
   const count = (value: number | string, el?: HTMLElement) => {
     const target = el ?? pills.find(p => kind(p) === 'count');
     if (!target) return;
@@ -265,7 +275,8 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
   const refresh = () => { read(performance.now()); surface?.kick(); };
 
   return handle(() => surface, state, () => { read(performance.now()); surface?.refresh(); }, { sheen, count, refresh }, () => {
-    for (const el of pills) el.removeEventListener('pointerenter', enter);
+    host?.removeEventListener('pointermove', over);
+    host?.removeEventListener('pointerleave', out);
     restore();
   });
 }

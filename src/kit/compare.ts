@@ -7,7 +7,7 @@ export interface CompareOptions extends KitOptions {
   image: string | HTMLImageElement;
   /** Share of the frame showing the photo, from the left, 0–100. Default 50. */
   position?: number;
-  /** The handle's accessible name. Default `Photo and ASCII split`. */
+  /** The handle's accessible name. Default `Photo and ASCII split`, or your own handle's `aria-label`. */
   label?: string;
   /** Called as the split moves. */
   onChange?: (position: number) => void;
@@ -33,7 +33,7 @@ const ARROWS = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stro
  * on the right. Drag anywhere, or use the arrow keys, Page Up and Down, Home and End on the handle.
  */
 export function compare(element: HTMLElement, options: CompareOptions): CompareHandle {
-  const state = { current: { position: 50, label: 'Photo and ASCII split', ...options } };
+  const state = { current: { position: 50, ...options } };
   const styles = styleKeeper();
   let position = clamp(state.current.position, 0, 100), pic: Picture | null = null, surface: Surface | null = null;
   let glide = { from: position, to: position, at: -1e9 }, raf = 0, dragging = false;
@@ -41,7 +41,7 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
   let optionPosition = state.current.position;
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 600, cellSize: 6, cellAspect: 0.8, glyphScale: 0.96,
-    color: 'source', saturation: 1.3, contrast: 1.45, gamma: 0.85, brightness: 0.14, hover: 'trail', trail: { strength: 0.7, radius: 0.3 }, ...state.current.look,
+    color: 'source', levels: 'auto', saturation: 1.3, contrast: 1.45, gamma: 0.85, brightness: 0.14, hover: 'trail', trail: { strength: 0.7, radius: 0.3 }, ...state.current.look,
   });
 
   surface = mountSurface({
@@ -49,18 +49,25 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
     layer: 'under',
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
-    resolution: (w, h) => { const W = Math.min(640, Math.max(2, Math.round(w))); return [W, Math.max(2, Math.round((W * h) / Math.max(1, w)))]; },
+    // Two source pixels per CSS pixel (up to 1600 wide), downscaled smoothly, so fine detail survives into the cells as it does from the photo itself.
+    resolution: (w, h) => { const W = Math.min(1600, Math.max(2, Math.round(w * 2))); return [W, Math.max(2, Math.round((W * h) / Math.max(1, w)))]; },
     onFail: () => { surface = null; },
     paint: ({ pen, width, height }) => {
+      pen.imageSmoothingQuality = 'high';
       if (pic) drawCover(pen, pic, 0, 0, width, height);
       return false;
     },
   });
 
   const photo = typeof state.current.image === 'string' ? imageFor(state.current.image) : state.current.image;
-  const handleEl = document.createElement('div');
-  const line = document.createElement('span');
+  // Your own handle (any `[role="slider"]`) and divider (`[data-compare-line]`) inside the frame are used in place.
+  const ownHandle = element.querySelector<HTMLElement>('[role="slider"]'), ownLine = element.querySelector<HTMLElement>('[data-compare-line]');
+  const handleEl = ownHandle ?? document.createElement('div');
+  const line = ownLine ?? document.createElement('span');
+  /** Your own handle keeps its name unless `label` is given. */
+  const nameHandle = (label?: string) => { if (label !== undefined || !handleEl.hasAttribute('aria-label')) handleEl.setAttribute('aria-label', label ?? 'Photo and ASCII split'); };
   const apply = () => {
     const value = Math.round(position);
     styles.set(element, '--ascii-pos', `${position}%`);
@@ -94,12 +101,13 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
     if (event.button !== 0) return;
     (element as HTMLElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
     dragging = true;
+    element.dataset.dragging = '';
     const next = at(event.clientX);
     set(next, Math.abs(next - position) > 3);
     handleEl.focus({ preventScroll: true });
   };
   const moveTo = (event: PointerEvent) => { if (dragging) set(at(event.clientX)); };
-  const up = () => { dragging = false; };
+  const up = () => { dragging = false; delete element.dataset.dragging; };
   const keys = (event: KeyboardEvent) => {
     const step = ({ ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -20, PageUp: 20 } as Record<string, number>)[event.key];
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? 100 : step !== undefined ? Math.round(position / 5) * 5 + step : null;
@@ -123,13 +131,14 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
     photo.className = `${own.className ? `${own.className} ` : ''}ascii-compare-photo`;
     photo.setAttribute('aria-hidden', 'true');
     photo.draggable = false;
-    line.className = 'ascii-compare-line';
-    line.setAttribute('aria-hidden', 'true');
-    handleEl.className = 'ascii-compare-handle';
-    handleEl.innerHTML = ARROWS;
-    handleEl.setAttribute('role', 'slider');
-    handleEl.tabIndex = 0;
-    handleEl.setAttribute('aria-label', state.current.label);
+    if (!ownLine) { line.className = 'ascii-compare-line'; line.setAttribute('aria-hidden', 'true'); }
+    if (!ownHandle) {
+      handleEl.className = 'ascii-compare-handle';
+      handleEl.innerHTML = ARROWS;
+      handleEl.setAttribute('role', 'slider');
+      handleEl.tabIndex = 0;
+    }
+    nameHandle(state.current.label);
     handleEl.setAttribute('aria-valuemin', '0');
     handleEl.setAttribute('aria-valuemax', '100');
     handleEl.setAttribute('aria-orientation', 'horizontal');
@@ -150,7 +159,7 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
   }
 
   return handle(() => surface, state, next => {
-    handleEl.setAttribute('aria-label', next.label);
+    nameHandle(next.label);
     if (next.position !== optionPosition) { optionPosition = next.position; set(next.position, true); }
     surface?.refresh();
   }, {
@@ -163,6 +172,7 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
     element.removeEventListener('pointerup', up);
     element.removeEventListener('pointercancel', up);
     handleEl.removeEventListener('keydown', keys);
+    delete element.dataset.dragging;
     added.forEach(el => el.remove());
     restorePhoto();
     styles.restore();

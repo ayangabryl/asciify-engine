@@ -26,7 +26,7 @@ describe('compare', () => {
     dom.advance();
     const call = dom.pen().drawImage.mock.calls[0];
     expect(call[0] === photo).toBe(true);
-    expect(call.slice(5)).toEqual([0, 0, 200, 40]);
+    expect(call.slice(5)).toEqual([0, 0, 400, 80]);
     expect(dom.frames.size).toBe(0);
     c.destroy();
     expect(frame.children).toHaveLength(0);

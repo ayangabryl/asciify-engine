@@ -72,7 +72,7 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
   const label = () => track.querySelector<HTMLElement>(state.current.label);
   const reduced = () => !!(state.current.reducedMotion ?? prefersReduced());
   let x = spring(0, 520, 0.8), heat = spring(0, 150, 1), held = false, grab = 0, done = false, doneAt = 0, resetAt = 0, samples: [number, number][] = [];
-  let raf = 0, last = 0, timer = 0, inkShown = '', surface: Surface | null = null;
+  let raf = 0, last = 0, timer = 0, inkShown = '', pointer = -1, surface: Surface | null = null;
 
   const geom = () => {
     if (!thumb) return null;
@@ -85,13 +85,14 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
     cellSize: 4, cellAspect: 0.62, glyphScale: 0.94, ...state.current.look,
   });
   const neutral = (dark: boolean) => resolveColor(state.current.ink ?? '--ascii-ink-strong', track, dark ? '#d8d6cf' : '#1d1d1b')!;
-  const success = (dark: boolean) => resolveColor(state.current.color ?? '--ascii-success', track, dark ? '#5ad08e' : '#1c8a4f')!;
+  const success = (dark: boolean) => resolveColor(state.current.color ?? '--ascii-success', track, dark ? '#3ccf7e' : '#17844a')!;
 
   surface = mountSurface({
     host: track,
     layer: 'under',
     look,
     ink: neutral,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; },
     onTheme: () => { inkShown = ''; },
@@ -190,13 +191,15 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
     timer = 0;
     if (!done) { x.to = 0; heat.to = 0; kick(); return; }
     resetAt = performance.now();
+    // Leaving: the done text can fade with the fill.
+    track.dataset.state = 'resetting';
     thumb?.removeAttribute('aria-valuetext');
     kick();
   }
 
-  const release = () => {
+  const release = (event?: Event) => {
     const g = geom();
-    if (!held || !g) return;
+    if (!held || !g || (event !== undefined && (event as PointerEvent).pointerId !== undefined && (event as PointerEvent).pointerId !== pointer)) return;
     held = false;
     const v = velocity(samples, performance.now());
     if (x.x >= g.max * state.current.threshold || (v > 900 && x.x > g.max * 0.5)) { confirm(); return; }
@@ -208,7 +211,9 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
   const onDown = (event: PointerEvent) => {
     if (event.button !== 0 || done || !thumb) return;
     if (thumb.contains(event.target as Node)) {
-      thumb.setPointerCapture?.(event.pointerId);
+      // A pointer that is no longer active (or a scripted one) cannot be captured; the drag still follows it.
+      try { thumb.setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
+      pointer = event.pointerId;
       held = true; grab = event.clientX - x.x * scale(); heat.to = 1; samples = [];
       track.dataset.state = 'dragging';
       kick();
@@ -220,7 +225,8 @@ export function slideToConfirm(track: HTMLElement, options: SlideToConfirmOption
   };
   const onMove = (event: PointerEvent) => {
     const g = geom();
-    if (!held || !g) return;
+    // Only the pointer that took the thumb drags it: a second finger or a stray mouse never steals it.
+    if (!held || !g || event.pointerId !== pointer) return;
     x.x = x.to = clamp((event.clientX - grab) / scale(), 0, g.max);
     x.v = 0;
     samples.push([x.x, performance.now()]);

@@ -24,8 +24,8 @@ describe('dropzone', () => {
     expect(input.type).toBe('file');
     zone.dispatch('click', { target: zone.querySelector('[data-dropzone="pick"]') });
     expect(input.click).toHaveBeenCalled();
-    dom.advance();
-    expect(dom.pen().stroke).toHaveBeenCalled();
+    dom.advance(); dom.advance();
+    expect(dom.pen().putImageData).toHaveBeenCalled();
     expect(dom.frames.size).toBe(0);
     const enter = zone.dispatch('dragenter');
     expect(enter.preventDefault).toHaveBeenCalled();

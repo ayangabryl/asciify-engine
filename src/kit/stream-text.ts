@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, handle, hash, mountSurface, prefersReduced, type KitHandle, type KitOptions, type Surface } from './core';
+import { handle, hash, mountSurface, prefersReduced, type KitHandle, type KitOptions, type Surface } from './core';
 import { injectStyle } from './capture';
 
 export type StreamState = 'idle' | 'streaming' | 'done' | 'stopped';
@@ -46,6 +46,8 @@ const REST_TONE = 0.7, FLICKER_MS = 48;
 
 interface Char { span: HTMLElement; at: number; seed: number }
 
+/** The kit's poster, which the element keeps when its own children are replaced. */
+const posterOf = (element: HTMLElement) => [...element.children].filter(c => c.tagName === 'IMG' && (c as HTMLElement).dataset?.asciiPoster !== undefined);
 /**
  * Streamed text with a glyph write head: each token lands as flickering character cells that resolve into letters left
  * to right, with a block caret after the last one. The real text is in the DOM all along, for selection and screen readers.
@@ -58,14 +60,16 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
   let surface: Surface | null = null;
   const metrics = () => {
     const style = getComputedStyle(element), size = parseFloat(style.fontSize) || 15, lh = parseFloat(style.lineHeight);
-    return { size, line: Number.isFinite(lh) && lh > 0 ? lh : size * 1.5 };
+    const line = Number.isFinite(lh) && lh > 0 ? lh : size * 1.5;
+    // Cells are half a line tall and about a letter wide; the field starts a quarter line above the text, so each line's middle
+    // row of cells sits on its lowercase letters and a glyph reads like a typed character rather than a block over the line.
+    return { size, line, ch: line / 2, cw: Math.max(2, Math.round(size * 0.44)) };
   };
-  // One cell per line and about one per character, so each glyph sits in the line like a typed letter.
   const look = (): GlyphFieldOptions => {
-    const { size, line } = metrics();
+    const { ch, cw } = metrics();
     return {
       mark: 'glyph', charset: '   :-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
-      cellSize: line, cellAspect: (size * 0.6) / line, glyphScale: clamp((size * 1.05) / line, 0.4, 1), shade: 0.6, ...state.current.look,
+      cellSize: ch, cellAspect: cw / ch, glyphScale: 1, shade: 0.6, ...state.current.look,
     };
   };
   // The reasoning tail: a short list above the reply whose newest lines stay in view; it collapses when the reply ends.
@@ -92,9 +96,15 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     const still = state.current.reducedMotion ?? prefersReduced();
     if (!still) item.setAttribute('data-new', '');
     list.appendChild(item);
-    tail.style.setProperty('--ascii-reasoning-shift', String(Math.max(0, list.children.length - lines)));
-    // A frame later, so the new line fades in rather than appearing.
-    if (!still) requestAnimationFrame(() => item.removeAttribute('data-new'));
+    // A frame later, so the new line fades in and every line, the new one too, slides up together rather than the new one landing
+    // in place while the others are still moving.
+    const box = tail, shift = String(Math.max(0, list.children.length - lines));
+    if (still) box.style.setProperty('--ascii-reasoning-shift', shift);
+    else {
+      // The new line's starting place has to be computed before the shift changes, or it would start where it ends.
+      void getComputedStyle(item).translate;
+      requestAnimationFrame(() => { item.removeAttribute('data-new'); box.style.setProperty('--ascii-reasoning-shift', shift); });
+    }
   };
   const collapse = () => { tail?.setAttribute('data-collapsed', ''); tail?.setAttribute('aria-hidden', 'true'); };
 
@@ -117,14 +127,16 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     host: element,
     look,
     ink: () => state.current.ink ?? getComputedStyle(element).color,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; settleAll(); },
     paint: ({ pen, now, still, box }) => {
-      const { line } = metrics(), step = Math.floor(now / FLICKER_MS);
+      const { line, ch, cw, size } = metrics(), step = Math.floor(now / FLICKER_MS), lead = line / 4;
+      // Boxes come in canvas pixels, whose top is a quarter line above the text: each covers whole cells on its line's middle row.
       const cell = (b: { x: number; y: number; w: number; h: number }, tone: number) => {
-        const row = Math.floor((b.y + b.h / 2) / line) * line, v = Math.round(255 * tone);
+        const row = Math.floor((b.y - lead + b.h / 2) / line) * line + lead + (line - ch) / 2, col = Math.round(b.x / cw), v = Math.round(255 * tone);
         pen.fillStyle = `rgb(${v} ${v} ${v})`;
-        pen.fillRect(b.x, row, Math.max(1, b.w), line);
+        pen.fillRect(col * cw, row, Math.max(1, Math.round((b.x + b.w) / cw) - col) * cw, ch);
       };
       if (still) { pending.forEach(land); pending = []; }
       pending = pending.filter(char => {
@@ -133,24 +145,25 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
         return true;
       });
       if (!pending.length && finish) settleAll();
-      if (state.current.caret && phase !== 'idle') {
-        const { size } = metrics(), b = last ? box(last) : { x: 0, y: 0, w: 0, h: line };
-        cell({ x: b.x + b.w + size * 0.3, y: b.y, w: size * 0.6, h: b.h }, phase === 'streaming' ? 1 : REST_TONE);
+      if (state.current.caret && phase !== 'idle' && (last || phase === 'streaming')) {
+        const b = last ? box(last) : { x: 0, y: lead, w: 0, h: line }, x = Math.round((b.x + b.w + size * 0.3) / cw) * cw;
+        cell({ x, y: b.y, w: cw, h: b.h }, phase === 'streaming' ? 1 : REST_TONE);
       }
       return pending.length > 0;
     },
   });
   if (surface) {
-    // The field covers the content box, so its rows of cells line up with the lines of text.
-    const style = getComputedStyle(element), css = surface.canvas.style, px = (v: string | undefined) => parseFloat(v ?? '') || 0;
-    const top = px(style.paddingTop), right = px(style.paddingRight), bottom = px(style.paddingBottom), left = px(style.paddingLeft);
+    // The field covers the content box from a quarter line above the text to a quarter line below, so its rows line up with
+    // the lines, and runs half a line past the right edge so a caret after the last word of a full line still shows.
+    const style = getComputedStyle(element), css = surface.canvas.style, px = (v: string | undefined) => parseFloat(v ?? '') || 0, { line } = metrics();
+    const top = px(style.paddingTop) - line / 4, right = px(style.paddingRight) - line / 2, bottom = px(style.paddingBottom) - line / 4, left = px(style.paddingLeft);
     css.top = `${top}px`; css.left = `${left}px`;
     css.width = `calc(100% - ${left + right}px)`; css.height = `calc(100% - ${top + bottom}px)`;
   }
 
   const begin = () => {
     if (phase === 'streaming') return;
-    if (phase === 'idle') { element.replaceChildren(); if (surface) element.appendChild(surface.canvas); }
+    if (phase === 'idle') { element.replaceChildren(...posterOf(element)); if (surface) element.appendChild(surface.canvas); }
     finished = null;
     move('streaming');
   };
@@ -189,6 +202,8 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     write,
     done,
     stop() {
+      // Stopped while still reasoning: the tail folds away and nothing was written.
+      if (phase === 'idle' && tail) { finished = null; move('stopped'); surface?.kick(); return; }
       if (phase !== 'streaming') return;
       pending.forEach(land); pending = [];
       move('stopped');
@@ -200,7 +215,7 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
       pending = []; text = ''; last = null; tokens = 0;
       tail?.remove(); tail = list = null;
       finish?.(); finish = null; finished = null;
-      element.replaceChildren();
+      element.replaceChildren(...posterOf(element));
       if (surface) element.appendChild(surface.canvas);
       move('idle');
       surface?.kick();

@@ -84,6 +84,7 @@ export function pricingGlow(element: HTMLElement, options: PricingGlowOptions = 
     // The dots read against the card's own ground: lighter on a dark card, darker on a light one.
     ink: dark => state.current.ink ?? (dark ? '#aeaca5' : '#5c5a55'),
     source: (shown = draw()),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { page = null; resize?.disconnect(); },
   });

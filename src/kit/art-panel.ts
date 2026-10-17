@@ -45,6 +45,7 @@ export function artPanel(element: HTMLElement, options: ArtPanelOptions = {}): A
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
     source: image,
     label: state.current.label ?? (image instanceof HTMLImageElement ? image.alt || undefined : undefined),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { page = null; styles.restore(); },
   });

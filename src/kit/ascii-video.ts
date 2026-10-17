@@ -38,7 +38,7 @@ export function asciiVideo(element: HTMLElement, options: AsciiVideoOptions = {}
     ...state.current.look,
   });
 
-  let page: PageField | null = null;
+  let page: PageField | null = null, mounts = 0;
   page = !src ? null : mountPageField({
     host: element,
     layer: 'over',
@@ -46,8 +46,17 @@ export function asciiVideo(element: HTMLElement, options: AsciiVideoOptions = {}
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
     source: src,
     label: state.current.label ?? 'Video, drawn in characters',
+    kit: state,
+    ownPoster: true,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { page = null; styles.restore(); fallback(); },
+    // Released far off screen: the video rests and the poster holds the frame until the field draws again.
+    onRelease: () => { drawn = false; syncPoster(); if (src instanceof HTMLVideoElement) src.pause?.(); },
+    onMount: () => {
+      if (!mounts++) return;
+      void page?.field.ready.then(() => { drawn = true; syncPoster(); });
+      if (playing && src instanceof HTMLVideoElement) void src.play?.()?.catch?.(() => {});
+    },
   });
   if (page && src instanceof HTMLVideoElement) {
     if (element.contains(src)) styles.set(src, 'opacity', '0');
@@ -97,7 +106,11 @@ export function asciiVideo(element: HTMLElement, options: AsciiVideoOptions = {}
     syncPoster();
   }
 
-  const h = pageHandle(() => page, state, () => {}, {
+  const h = pageHandle(() => page, state, next => {
+    // A new poster, such as the other theme's, swaps in place.
+    if (poster && next.poster && poster.getAttribute('src') !== next.poster) poster.src = next.poster;
+    if (plain && next.poster) plain.poster = next.poster;
+  }, {
     toggle(): boolean { if (playing) h.pause(); else h.play(); return playing; },
     get playing() { return playing; },
   }, () => { added.forEach(el => el.remove()); styles.restore(); });

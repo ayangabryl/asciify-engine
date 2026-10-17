@@ -13,7 +13,7 @@ describe('streamText', () => {
   it('lands each token as glyph cells that resolve left to right', async () => {
     const reply = dom.element('P'), states: string[] = [];
     const s = streamText(asElement(reply), { onState: next => states.push(next) });
-    expect(mount.mock.calls[0][1]).toMatchObject({ mark: 'glyph', cellSize: 24 });
+    expect(mount.mock.calls[0][1]).toMatchObject({ mark: 'glyph', cellSize: 12, cellAspect: 7 / 12 });
     s.write('Hi ');
     s.write('you');
     expect(s.state).toBe('streaming');
@@ -56,13 +56,14 @@ describe('streamText', () => {
     expect(chars(reply)).toHaveLength(0);
   });
 
-  it('fits the field to the content box and skips the flicker under reduced motion', () => {
+  it('fits the field to the content box, a quarter line above and below, and skips the flicker under reduced motion', () => {
     const reply = dom.element('P');
     dom.styles.set(reply, { paddingTop: '10px', paddingLeft: '12px', paddingRight: '12px', paddingBottom: '6px' });
     const s = streamText(asElement(reply), { reducedMotion: true });
     const [canvas] = dom.canvases(reply);
-    expect(canvas.style.top).toBe('10px');
-    expect(canvas.style.width).toBe('calc(100% - 24px)');
+    expect(canvas.style.top).toBe('4px');
+    expect(canvas.style.width).toBe('calc(100% - 12px)');
+    expect(canvas.style.height).toBe('calc(100% - 4px)');
     s.write('Now');
     expect(chars(reply).every(c => c.style.getPropertyValue('color') === '')).toBe(true);
     expect(STREAM_TEXT_DEFAULTS).toMatchObject({ settle: 60, stagger: 18 });
@@ -97,6 +98,9 @@ describe('streamText', () => {
     s.reasoning('Splitting the funnel by browser');
     s.reasoning('Safari 18.1 stalls at payment');
     expect(items()).toHaveLength(3);
+    // The shift waits a frame, so every line slides up together with the new one.
+    expect(tail.style.getPropertyValue('--ascii-reasoning-shift')).toBe('0');
+    dom.advance();
     expect(tail.style.getPropertyValue('--ascii-reasoning-shift')).toBe('1');
     expect(tail.style.getPropertyValue('--ascii-reasoning-lines')).toBe('2');
     s.write('Conversion fell.');
@@ -124,5 +128,15 @@ describe('streamText', () => {
     s.stop();
     expect(box.children[0].attributes.has('data-collapsed')).toBe(true);
     s.destroy();
+  });
+
+  it('folds the reasoning away when stopped before any text', () => {
+    const box = dom.element(), reply = dom.element('P');
+    box.appendChild(reply);
+    const s = streamText(asElement(reply));
+    s.reasoning('Reading checkout events');
+    s.stop();
+    expect(s.state).toBe('stopped');
+    expect(box.children[0].attributes.has('data-collapsed')).toBe(true);
   });
 });

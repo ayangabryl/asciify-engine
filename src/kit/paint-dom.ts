@@ -1,4 +1,4 @@
-import { hash, type Box } from './core';
+import { hash, settledSource, type Box } from './core';
 
 /* Shared by commandPalette and pageDissolve: a piece of interface drawn as tone, and moved in blocks. */
 
@@ -15,14 +15,22 @@ const MEDIA = /^(IMG|PICTURE|VIDEO|CANVAS|SVG|svg)$/;
 /**
  * Paints `root` white on black into `pen`, in `box`'s CSS pixels: the root as an outline, filled elements as faint tiles,
  * borders as lines, media as mid-tone blocks (never their pixels, so a cross-origin image cannot taint the source), and each
- * word of text in its own font where the browser laid it out. Kit canvases are skipped.
+ * word of text in its own font where the browser laid it out. Kit canvases are skipped, unless `nested` is set: then each one
+ * but `nested.skip` (the caller's own) is drawn as its component's settled frame, so a chart inside a page dissolves as a chart.
  */
-export function paintTree(pen: CanvasRenderingContext2D, root: HTMLElement, box: (element: Element) => Box) {
+export function paintTree(pen: CanvasRenderingContext2D, root: HTMLElement, box: (element: Element) => Box, nested?: { skip?: Element | null }) {
   const radius = (style: CSSStyleDeclaration, b: Box) => Math.max(0, Math.min(parseFloat(style.borderTopLeftRadius) || 0, b.w / 2, b.h / 2));
   const elements = [root, ...root.querySelectorAll<HTMLElement>('*')];
   pen.save();
   for (const el of elements) {
-    if (el.tagName === 'CANVAS' && el.dataset?.asciiKit !== undefined) continue;
+    if (el.tagName === 'CANVAS' && el.dataset?.asciiKit !== undefined) {
+      if (!nested || el === nested.skip) continue;
+      const b = box(el), frame = b.w > 0 && b.h > 0 ? settledSource(el as HTMLCanvasElement) : null;
+      if (frame) { pen.globalCompositeOperation = 'lighter'; pen.drawImage(frame, b.x, b.y, b.w, b.h); pen.globalCompositeOperation = 'source-over'; }
+      continue;
+    }
+    // A kit poster stands in for a field; it is not part of the view.
+    if (el.dataset?.asciiPoster !== undefined) continue;
     const b = box(el);
     if (b.w <= 0 || b.h <= 0) continue;
     const style = getComputedStyle(el);
@@ -61,6 +69,15 @@ function word(pen: CanvasRenderingContext2D, text: string, x: number, y: number,
   pen.shadowBlur = 0;
 }
 
+/** Inside a visually hidden box (the 1px, overflow-hidden screen-reader pattern): read aloud, never drawn. */
+function clipped(el: Element | null, root: Element) {
+  for (; el && el !== root; el = el.parentElement) {
+    const box = el as HTMLElement;
+    if (box.offsetWidth <= 1 && box.offsetHeight <= 1 && getComputedStyle(box).overflow === 'hidden') return true;
+  }
+  return false;
+}
+
 function paintText(pen: CanvasRenderingContext2D, root: HTMLElement, box: (element: Element) => Box) {
   if (typeof document.createTreeWalker !== 'function') return;
   const walker = document.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */), range = document.createRange();
@@ -70,7 +87,7 @@ function paintText(pen: CanvasRenderingContext2D, root: HTMLElement, box: (eleme
     const parent = node.parentElement;
     if (!parent) continue;
     const style = getComputedStyle(parent);
-    if (style.visibility === 'hidden') continue;
+    if (style.visibility === 'hidden' || clipped(parent, root)) continue;
     const tone = (parseFloat(style.fontWeight) || 400) >= 600 || /^H[1-6]$/.test(parent.tagName) ? 1 : 0.8;
     for (const match of node.data.matchAll(/\S+/g)) {
       range.setStart(node, match.index!);
@@ -85,14 +102,14 @@ function paintText(pen: CanvasRenderingContext2D, root: HTMLElement, box: (eleme
 }
 
 /** A snapshot canvas of `root`, `scale` source pixels per CSS pixel, `w` by `h` CSS pixels. */
-export function snapshot(root: HTMLElement, box: (element: Element) => Box, w: number, h: number, scale = 2) {
+export function snapshot(root: HTMLElement, box: (element: Element) => Box, w: number, h: number, scale = 2, nested?: { skip?: Element | null }) {
   const snap = document.createElement('canvas');
   snap.width = Math.max(2, Math.round(w * scale)); snap.height = Math.max(2, Math.round(h * scale));
   const pen = snap.getContext('2d', { willReadFrequently: true } as CanvasRenderingContext2DSettings);
   if (!pen) return snap;
   pen.setTransform(scale, 0, 0, scale, 0, 0);
   pen.fillStyle = '#000'; pen.fillRect(0, 0, w, h);
-  paintTree(pen, root, box);
+  paintTree(pen, root, box, nested);
   return snap;
 }
 

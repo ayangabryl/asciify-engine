@@ -51,7 +51,7 @@ describe('slideToConfirm', () => {
     expect(track.dataset.state).toBe('confirmed');
     run(1100);
     expect(track.dataset.confirmed).toBe('');
-    expect(env.field.update).toHaveBeenLastCalledWith({ ink: '#1c8a4f' });
+    expect(env.field.update).toHaveBeenLastCalledWith({ ink: '#17844a' });
     expect(env.frames.size).toBe(0);
     s.reset();
     run(400);
@@ -83,6 +83,24 @@ describe('slideToConfirm', () => {
     s.confirm();
     run(1400);
     expect(s.confirmed).toBe(false);
+    s.destroy();
+  });
+  it('marks the reset while it fades, and ignores a second pointer mid-drag', () => {
+    const { track, thumb } = slider();
+    const s = slideToConfirm(as(track), { resetAfter: 1000 });
+    thumb.dispatch('pointerdown', { clientX: 20, pointerId: 9 });
+    thumb.dispatch('pointermove', { clientX: 80, pointerId: 9 });
+    thumb.dispatch('pointermove', { clientX: 400, pointerId: 1 });
+    run(32);
+    expect(parseFloat(String(thumb.style.getPropertyValue('translate')))).toBeCloseTo(60, 0);
+    thumb.dispatch('pointerup', { pointerId: 1 });
+    expect(track.dataset.state).toBe('dragging');
+    thumb.dispatch('pointerup', { pointerId: 9 });
+    s.confirm();
+    run(1016);
+    expect(track.dataset.state).toBe('resetting');
+    run(400);
+    expect(track.dataset.state).toBe('idle');
     s.destroy();
   });
   it('still slides and confirms without WebGL2', () => {

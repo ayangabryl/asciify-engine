@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, handle, hash, house, mountSurface, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, hash, hexRgb, house, isDark, mountSurface, resolveColor, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 import { blocksOf, drawBlocks, injectStyle, snapshot, type Block } from './capture';
 
 export interface Toast {
@@ -22,6 +22,8 @@ export interface ToastStackOptions extends KitOptions {
   render?: (toast: Toast, id: number) => HTMLElement;
   /** Accessible name of the list. Default `Notifications`. */
   label?: string;
+  /** At rest a comet of characters runs round the newest toast's edge every few seconds, outside its text. Default true. */
+  glint?: boolean;
 }
 
 export interface ToastStackHandle extends KitHandle<ToastStackOptions> {
@@ -35,8 +37,10 @@ export interface ToastStackHandle extends KitHandle<ToastStackOptions> {
   readonly toasts: number[];
 }
 
-const DEFAULTS = { max: 3, duration: 6000, label: 'Notifications' };
+const DEFAULTS = { max: 3, duration: 6000, label: 'Notifications', glint: true };
 const FORM_MS = 340, DISSOLVE_MS = 440, HOLD_MS = 150;
+/** The glint: one pass round the newest toast takes GLINT_MS, once every GLINT_EVERY ms, starting GLINT_DELAY ms after it arrives. */
+const GLINT_MS = 2400, GLINT_EVERY = 4200, GLINT_DELAY = 700;
 const EASE = 'cubic-bezier(.16, 1, .3, 1)';
 const CSS = `
 :where(.ascii-toasts){position:relative;margin:0;padding:0;list-style:none;min-height:52px}
@@ -61,7 +65,40 @@ const CSS = `
 `;
 
 interface Effect { start: number; ms: number; snap: HTMLCanvasElement; blocks: Block[]; order: Float32Array; form: boolean; node: HTMLElement }
-interface Item { id: number; node: HTMLElement; timer: ReturnType<typeof setTimeout> | 0; left: number; since: number }
+interface Item { id: number; node: HTMLElement; timer: ReturnType<typeof setTimeout> | 0; left: number; since: number; born: number }
+
+const tone = (t: number) => { const v = Math.round(clamp(t) * 255); return `rgb(${v} ${v} ${v})`; };
+const inOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+/**
+ * A comet of light just outside a toast's border, `t` (0–1) of the way round from its top-left corner: a full row of
+ * characters at the head thinning into its tail, on the ground around the toast and never over its text.
+ */
+function glintFrame(pen: CanvasRenderingContext2D, b: { x: number; y: number; w: number; h: number }, radius: number, t: number) {
+  const o = 4, r = Math.min(radius, b.h / 2) + o, w = b.w + o * 2, h = b.h + o * 2, per = 2 * (w + h) - (8 - 2 * Math.PI) * r, head = t * (per + 150);
+  pen.save();
+  pen.lineCap = 'round';
+  for (const [len, level] of [[150, 0.34], [80, 0.66], [30, 1]]) {
+    pen.strokeStyle = tone(level); pen.lineWidth = 5;
+    pen.setLineDash([len, per + len]); pen.lineDashOffset = len - head;
+    pen.beginPath(); pen.roundRect(b.x - o, b.y - o, w, h, Math.max(0, r)); pen.stroke();
+  }
+  pen.restore();
+}
+
+const luminance = (hex: string) => {
+  const [r, g, b] = hexRgb(hex).map(v => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** True when a toast's own fill is too close to the characters' ink for them to read on it, as with an inverted pill. */
+export function hidesInk(fill: string, ink: string) {
+  const rgba = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?/i.exec(fill.trim());
+  if (!rgba) return false;
+  const alpha = rgba[4] === undefined ? 1 : rgba[4].endsWith('%') ? parseFloat(rgba[4]) / 100 : parseFloat(rgba[4]);
+  if (!(alpha >= 0.5)) return false;
+  const hex = `#${[rgba[1], rgba[2], rgba[3]].map(v => Math.round(clamp(+v, 0, 255)).toString(16).padStart(2, '0')).join('')}`;
+  const [hi, lo] = [luminance(hex), luminance(ink)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05) < 3;
+}
 
 function defaultToast(toast: Toast, dismiss: () => void) {
   const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, paint?: string) => {
@@ -109,7 +146,7 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
   const live = srOnly('', false);
   live.setAttribute('role', 'status');
   let items: Item[] = [], effects: Effect[] = [], seq = 0, held = false, hover = false, focused = false, destroyed = false;
-  let surface: Surface | null = null;
+  let surface: Surface | null = null, glintTimer: ReturnType<typeof setTimeout> | 0 = 0;
   const holds: ReturnType<typeof setTimeout>[] = [];
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
@@ -121,19 +158,53 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
   list.setAttribute('aria-label', state.current.label);
   container.append(list, live);
 
+  // An inverted toast (a dark pill on a light page) would hide the characters gathering over it in the page's ink, so its fill and
+  // shadow stay clear until the text lands, and the characters read against the page.
+  const cleared = new WeakSet<HTMLElement>();
+  const clearFill = (node: HTMLElement) => {
+    const ink = resolveColor(state.current.ink ?? '--ascii-ink-strong', container, isDark(container) ? '#d8d6cf' : '#1d1d1b');
+    if (!ink || !hidesInk(getComputedStyle(node).backgroundColor, ink)) return;
+    cleared.add(node);
+    // Without a transition, so the fill is clear from the first frame rather than fading out of a measured one.
+    node.style.setProperty('transition', 'none', 'important');
+    node.style.setProperty('background-color', 'transparent', 'important');
+    node.style.setProperty('box-shadow', 'none', 'important');
+  };
+  const formed = (node: HTMLElement) => {
+    delete node.dataset.forming;
+    if (!cleared.delete(node)) return;
+    node.style.removeProperty('transition');
+    node.style.removeProperty('background-color');
+    node.style.removeProperty('box-shadow');
+  };
   surface = mountSurface({
     host: container,
     look,
     outset: 24,
     resolution: 2,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
-    onFail: () => { surface = null; effects = []; for (const item of items) { delete item.node.dataset.forming; } },
-    paint: ({ pen, now, scale }) => {
+    onFail: () => { surface = null; effects = []; for (const item of items) formed(item.node); },
+    paint: ({ pen, now, scale, still, box }) => {
       pen.setTransform(scale, 0, 0, scale, 0, 0);
+      let glinting = false;
+      const front = items[items.length - 1];
+      if (state.current.glint && !still && front && front.node.dataset.forming === undefined && front.node.dataset.gone === undefined) {
+        const since = now - front.born - GLINT_DELAY, t = since > 0 ? (since % GLINT_EVERY) / GLINT_MS : -1;
+        if (t >= 0 && t < 1) {
+          glintFrame(pen, box(front.node), parseFloat(getComputedStyle(front.node).borderTopLeftRadius) || 13, inOut(t));
+          glinting = true;
+        } else {
+          // Between passes nothing moves: wake for the next one instead of drawing empty frames.
+          if (glintTimer) clearTimeout(glintTimer);
+          const wait = since > 0 ? GLINT_EVERY - (since % GLINT_EVERY) : -since;
+          glintTimer = setTimeout(() => { glintTimer = 0; surface?.kick(); }, Math.max(16, wait));
+        }
+      }
       effects = effects.filter(fx => {
         const t = (now - fx.start) / fx.ms;
-        if (fx.form && t >= 0.62) delete fx.node.dataset.forming;
+        if (fx.form && t >= 0.62) formed(fx.node);
         if (t >= 1) return false;
         if (fx.form) {
           drawBlocks(pen, fx.snap, fx.blocks, fx.order, house(t) * 1.04, (b, away) => [(b.seed - 0.5) * 70 * away, (14 + hash(b.x, b.y) * 26) * away], 1 - clamp((t - 0.62) / 0.28));
@@ -142,11 +213,15 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
         }
         return true;
       });
-      return effects.length > 0;
+      return effects.length > 0 || glinting;
     },
   });
 
-  const motion = () => !!surface && !surface.still();
+  // Above every toast (they stack at z-index 10 and below), so the glint and the gathering characters are never hidden behind one tucked away.
+  if (surface) surface.canvas.style.zIndex = '11';
+
+  // Only a field that is drawing can gather a toast; a released or not yet mounted one shows it as it is.
+  const motion = () => !!surface && surface.live && !surface.still();
   const relayout = () => {
     items.forEach((item, i) => {
       const depth = items.length - 1 - i;
@@ -199,11 +274,12 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
       effects = effects.filter(fx => fx.node !== item.node);
       item.node.remove();
       relayout();
+      surface?.kick();
       if (!items.length) { hover = focused = false; sync(); }
     };
     const front = items[items.length - 1] === item;
     if (motion() && (front || held)) {
-      delete item.node.dataset.forming;
+      formed(item.node);
       effect(item.node, false);
       item.node.dataset.gone = '';
       // Its place is held a beat, so the characters drift clear before the stack closes up.
@@ -219,12 +295,12 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
     if (over > 0) shown.slice(0, over).forEach(old => dismiss(old.id));
     const node = state.current.render ? state.current.render(toast, id) : defaultToast(toast, () => dismiss(id));
     node.dataset.toast = String(id);
-    const item: Item = { id, node, timer: 0, left: toast.duration ?? state.current.duration, since: 0 };
+    const item: Item = { id, node, timer: 0, left: toast.duration ?? state.current.duration, since: 0, born: performance.now() };
     items.push(item);
     list.appendChild(node);
     relayout();
     live.textContent = toast.body ? `${toast.title}. ${toast.body}` : toast.title;
-    if (motion()) { node.dataset.forming = ''; effect(node, true); }
+    if (motion()) { node.dataset.forming = ''; clearFill(node); effect(node, true); } else surface?.kick();
     schedule(item);
     return id;
   };
@@ -236,6 +312,7 @@ export function toastStack(container: HTMLElement, options: ToastStackOptions = 
     get toasts() { return items.filter(item => item.node.dataset.gone === undefined).map(item => item.id); },
   }, () => {
     destroyed = true;
+    if (glintTimer) clearTimeout(glintTimer);
     for (const item of items) if (item.timer) clearTimeout(item.timer);
     holds.forEach(clearTimeout);
     list.removeEventListener('pointerenter', onEnter);

@@ -124,3 +124,17 @@ describe('glyph field source resolution', () => {
     }
   });
 });
+
+describe('fieldCellPitch', () => {
+  it('keeps the whole-pixel cell for pixel, and stretches a whole number of cells across the canvas for fill', async () => {
+    const { fieldCellPitch, fieldCellLayout, normalizeFieldSettings } = await import('./field-model');
+    const cell = fieldCellLayout(7 / 0.58, 0.58, 2, 15);
+    expect(fieldCellPitch('pixel', 7 / 0.58, 0.58, 2, 2880, 1392, cell)).toEqual([cell.width, cell.height]);
+    const [x, y] = fieldCellPitch('fill', 7 / 0.58, 0.58, 2, 2880, 1392, cell);
+    // The site's hero: floor(1440 / 7) columns and floor(696 / 12.07) rows, filling the stage exactly.
+    expect(2880 / x).toBeCloseTo(Math.floor(1440 / 7), 6);
+    expect(1392 / y).toBeCloseTo(Math.floor(696 / (7 / 0.58)), 6);
+    expect(normalizeFieldSettings({ cellFit: 'fill' }).cellFit).toBe('fill');
+    expect(normalizeFieldSettings({ cellFit: 'nope' as 'fill' }).cellFit).toBe('pixel');
+  });
+});

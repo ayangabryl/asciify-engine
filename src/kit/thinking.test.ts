@@ -72,4 +72,13 @@ describe('thinking', () => {
     expect(words(reply)[0].style.getPropertyValue('opacity')).toBe('');
     t.destroy();
   });
+
+  it('reports each state with how long it thought, for a status rendered elsewhere', async () => {
+    const reply = dom.element(), seen: [string, number][] = [];
+    const t = thinking(asElement(reply), { reducedMotion: true, onState: (state, seconds) => seen.push([state, seconds]) });
+    await t.stream('Done.');
+    expect(seen.map(([state]) => state)).toEqual(['thinking', 'streaming', 'done']);
+    expect(seen[2][1]).toBeGreaterThanOrEqual(1);
+    t.destroy();
+  });
 });

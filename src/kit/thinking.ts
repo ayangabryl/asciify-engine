@@ -17,6 +17,8 @@ export interface ThinkingOptions extends KitOptions {
   stagger?: number;
   /** A dotted rule under the finished answer. Default true. */
   rule?: boolean;
+  /** Called on each state change; `seconds` is how long it thought, once known. For a status you render yourself. */
+  onState?: (state: ThinkingState, seconds: number) => void;
 }
 
 export interface ThinkingHandle extends KitHandle<ThinkingOptions> {
@@ -40,7 +42,7 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
   const state = { current: { ...DEFAULTS, ...options } };
   const styles = styleKeeper();
   const original = [...element.childNodes];
-  let phase: ThinkingState = 'done', started = 0, answered = -1e9, settled = -1e9, run = 0, written = '';
+  let phase: ThinkingState = 'done', took = 0, started = 0, answered = -1e9, settled = -1e9, run = 0, written = '';
   let surface: Surface | null = null;
   const look = (): GlyphFieldOptions => ({ mark: 'dot', cellSize: 5, cellAspect: 1, dotScale: 0.86, contrast: 1.2, ...state.current.look });
   const noise = document.createElement('canvas');
@@ -54,7 +56,9 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     host: element,
     layer: 'under',
     look,
-    ink: () => state.current.ink ?? '--ascii-ink',
+    // Graphite by default: the dots are texture under the text, not ink.
+    ink: dark => state.current.ink ?? `var(--ascii-ink, ${dark ? '#7a7872' : '#76746e'})`,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; },
     paint: ({ pen, w, h, now, still }) => {
@@ -63,9 +67,9 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
       const rule = phase !== 'done' || !o.rule ? 0 : still ? 0.7 : 0.7 * easeOut((now - settled - RULE_DELAY) / FADE_MS);
       const t = still ? 0 : (now - started) / 1000;
       if (bands > 0) {
-        const nw = Math.max(2, Math.round(w / 10)), nh = Math.max(2, Math.round(h / 10));
+        const nw = Math.max(2, Math.round(w / 12)), nh = Math.max(2, Math.round(h / 7));
         if (noise.width !== nw || noise.height !== nh) { noise.width = nw; noise.height = nh; }
-        driftNoise(noise, 1.7 + t * 0.45, 0.15);
+        driftNoise(noise, 1.7 + t * 0.8, 0.15);
         pen.save();
         pen.beginPath();
         for (let i = 0; i < o.lines; i++) {
@@ -75,12 +79,13 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
         pen.clip();
         pen.globalAlpha = bands;
         pen.imageSmoothingEnabled = true;
-        // The noise is faint by design; laid on twice, its peaks reach the larger dots.
+        // The noise is faint by design; laid on three times its peaks swell into the largest dots and its troughs stay open.
         pen.globalCompositeOperation = 'lighter';
         pen.drawImage(noise, 0, 0, w, h);
         pen.drawImage(noise, 0, 0, w, h);
-        // A floor, so every band reads as a line of dots even where the noise is quiet.
-        pen.fillStyle = 'rgb(46 46 46)';
+        pen.drawImage(noise, 0, 0, w, h);
+        // A low floor: the quietest stretch still reads as a line of fine dots.
+        pen.fillStyle = 'rgb(14 14 14)';
         pen.fillRect(0, 0, w, h);
         pen.restore();
       }
@@ -112,9 +117,12 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     words.replaceChildren();
     element.replaceChildren(words);
     if (surface) element.appendChild(surface.canvas);
-    styles.set(element, 'min-height', `${Math.round(state.current.lines * lineHeight())}px`);
+    // The bands fill the content box; with border-box sizing the padding (room for the rule) is added on top.
+    const box = getComputedStyle(element), pad = box.boxSizing === 'border-box' ? (parseFloat(box.paddingTop) || 0) + (parseFloat(box.paddingBottom) || 0) : 0;
+    styles.set(element, 'min-height', `${Math.round(state.current.lines * lineHeight() + pad)}px`);
     element.setAttribute('aria-busy', 'true');
     label(state.current.labels?.thinking ?? thinkingLabel);
+    state.current.onState?.('thinking', 0);
     surface?.kick();
   };
 
@@ -147,7 +155,9 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
       phase = 'streaming';
       answered = firstAt = performance.now();
       styles.set(element, 'min-height', '');
-      label((state.current.labels?.done ?? doneLabel)(Math.max(1, Math.round((answered - started) / 1000))));
+      took = Math.max(1, Math.round((answered - started) / 1000));
+      label((state.current.labels?.done ?? doneLabel)(took));
+      state.current.onState?.('streaming', took);
       surface?.kick();
     };
     const feed = (chunk: string, last: boolean) => {
@@ -173,6 +183,7 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
     phase = 'done';
     settled = performance.now();
     element.setAttribute('aria-busy', 'false');
+    state.current.onState?.('done', took);
     surface?.kick();
   };
 

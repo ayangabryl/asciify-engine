@@ -28,7 +28,7 @@ Preserve the existing framework, design and chosen media. Use one renderer owner
 
 ## 6. Ambient background
 
-“Build [pattern] behind [content] using a template from asciify.org/backgrounds. Templates are local downloads, not npm exports. For any Studio style, use the downloaded studio-background.js helper and its STUDIO.md instructions. Keep HTML readable, preserve the chosen look, pause offscreen and destroy on unmount.”
+“Build [pattern] behind [content] with `background()` from asciify-engine/kit and the [pattern] preset, imported by name. Keep the copy clear with `clear` and a frosted veil, ink from our theme tokens, pause offscreen and destroy on unmount. For a Studio render style on a background, use the downloaded studio-background.js helper and its STUDIO.md instructions.”
 
 The website's Studio background helper renders a continuous procedural source through /studio; it supports the site's 24 styles and 12 looks. Its original template mode uses its own character/dither controls. Never imply every control applies to every renderer.
 

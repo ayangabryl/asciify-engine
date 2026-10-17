@@ -49,6 +49,7 @@ export function tabs(tablist: HTMLElement, options: TabsOptions = {}): TabsHandl
     layer: 'under',
     look,
     ink: dark => state.current.ink ?? (dark ? '#7a7872' : '#76746e'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; },
     paint: ({ pen, now, still, box }) => {

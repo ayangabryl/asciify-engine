@@ -13,6 +13,8 @@ export interface SwipeDeckOptions extends KitOptions {
   radius?: number;
   /** CSS pixels the field reaches past the deck for the stack and the fling. Default 56; set at mount. */
   outset?: number;
+  /** The element that receives `--ascii-lean`, such as the row holding your pass and keep buttons. Default the deck. */
+  leanTarget?: HTMLElement | null;
   /** Called after a card leaves: `dir` is 1 for right (keep), -1 for left (pass). */
   onSwipe?: (dir: 1 | -1, index: number, card: HTMLElement) => void;
 }
@@ -73,7 +75,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
   const reduced = () => !!(state.current.reducedMotion ?? prefersReduced());
   const cards = () => [...deck.querySelectorAll<HTMLElement>(state.current.cards)];
   let i = 0, dx = spring(0, 380, 0.72), dy = spring(0, 380, 0.8), promote = spring(0, 260, 0.9), held = false, gx = 0, gy = 0;
-  let fly: null | { dir: 1 | -1; start: number; x0: number; y0: number } = null, samples: [number, number][] = [], raf = 0, last = 0;
+  let fly: null | { dir: 1 | -1; start: number; x0: number; y0: number } = null, samples: [number, number][] = [], raf = 0, last = 0, pointer = -1;
   let cut = new Map<HTMLElement, { key: string; canvas: HTMLCanvasElement }>(), grainCanvas: HTMLCanvasElement | null = null, surface: Surface | null = null;
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
@@ -126,6 +128,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
     outset: state.current.outset,
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; styles.restore(); hideRest(); },
     onTheme: () => { cut = new Map(); },
@@ -177,7 +180,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
     deck.setAttribute('aria-label', el ? `${el.getAttribute('aria-label') || el.querySelector('img')?.alt || el.textContent?.trim() || 'Card'}. Left arrow to pass, right arrow to keep.` : 'No more cards');
   }
   const apply = () => {
-    deck.style.setProperty('--ascii-lean', String(fly ? 0 : clamp(dx.x / (width() * 0.4), -1, 1)));
+    (state.current.leanTarget ?? deck).style.setProperty('--ascii-lean', String(fly ? 0 : clamp(dx.x / (width() * 0.4), -1, 1)));
     // Without the field the HTML card itself follows the drag.
     const el = at(i);
     if (!surface && el) styles.set(el, 'transform', `translate(${dx.x}px, ${dy.x}px) rotate(${clamp(dx.x / width(), -1.6, 1.6) * 0.22}rad)`);
@@ -209,8 +212,8 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
     state.current.onSwipe?.(dir, index, leaving);
     return true;
   };
-  const release = () => {
-    if (!held) return;
+  const release = (event?: Event) => {
+    if (!held || (event !== undefined && (event as PointerEvent).pointerId !== undefined && (event as PointerEvent).pointerId !== pointer)) return;
     held = false;
     const v = velocity(samples, performance.now()), W = width();
     if (Math.abs(dx.x) > W * state.current.threshold || (Math.abs(v) > 650 && Math.sign(v) === Math.sign(dx.x) && Math.abs(dx.x) > 16)) { next(dx.x < 0 ? -1 : 1); return; }
@@ -222,13 +225,16 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
   const scale = () => deck.getBoundingClientRect().width / (deck.clientWidth || 1) || 1;
   const onDown = (event: PointerEvent) => {
     if (event.button !== 0 || fly) return;
-    deck.setPointerCapture?.(event.pointerId);
+    // A pointer that is no longer active (or a scripted one) cannot be captured; the drag still follows it.
+    try { deck.setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
+    pointer = event.pointerId;
     const s = scale();
     held = true; gx = event.clientX - dx.x * s; gy = event.clientY - (dy.x / 0.3) * s; samples = [];
     kick();
   };
   const onMove = (event: PointerEvent) => {
-    if (!held) return;
+    // Only the pointer that took the card drags it.
+    if (!held || event.pointerId !== pointer) return;
     const s = scale();
     dx.x = dx.to = (event.clientX - gx) / s;
     dy.x = dy.to = ((event.clientY - gy) / s) * 0.3;
@@ -269,7 +275,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
     raf = 0;
     styles.restore();
     cards().forEach(el => { el.hidden = false; el.removeAttribute('aria-hidden'); });
-    deck.style.removeProperty('--ascii-lean');
+    (state.current.leanTarget ?? deck).style.removeProperty('--ascii-lean');
     deck.removeAttribute('aria-roledescription');
     deck.removeEventListener('pointerdown', onDown);
     deck.removeEventListener('pointermove', onMove);

@@ -64,6 +64,7 @@ export function pageDissolve(container: HTMLElement, options: PageDissolveOption
     host: container,
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,
     onFail: () => { surface = null; const r = run; run = null; hidden.restore(); r?.done(); },
@@ -89,7 +90,7 @@ export function pageDissolve(container: HTMLElement, options: PageDissolveOption
     run = { art, from, to, start: performance.now(), ms: Math.max(1, ms), at, done: resolve };
     s.kick();
   });
-  const picture = (s: Surface) => snapshot(container, s.box, container.offsetWidth, container.offsetHeight, SCALE);
+  const picture = (s: Surface) => snapshot(container, s.box, container.offsetWidth, container.offsetHeight, SCALE, { skip: s.canvas });
 
   const once = async (render: () => void | Promise<void>, origin: PageDissolveOptions['origin']) => {
     const s = surface;

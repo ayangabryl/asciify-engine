@@ -9,6 +9,10 @@ export interface WordmarkOptions extends KitOptions {
   font?: string;
   /** Default 600. */
   fontWeight?: number;
+  /** Height of the 1800 px wide canvas the word is set on. A shorter one sets the word larger in a wide element. Default 520. */
+  artHeight?: number;
+  /** The canvas's accessible name when the word is not the element's own text. Default the word. */
+  label?: string;
 }
 
 export interface WordmarkHandle extends KitHandle<WordmarkOptions> {
@@ -19,9 +23,9 @@ export interface WordmarkHandle extends KitHandle<WordmarkOptions> {
 
 const DEFAULTS = { font: 'Georgia, "Times New Roman", serif', fontWeight: 600 };
 
-/** The word on an 1800 x 520 canvas, as large as fits, so the field sets it in characters. */
-export function wordArt(word: string, font = DEFAULTS.font, weight = DEFAULTS.fontWeight) {
-  const { canvas, pen } = blank(1800, 520);
+/** The word on an 1800 x 520 canvas (or `height`), as large as fits, so the field sets it in characters. */
+export function wordArt(word: string, font = DEFAULTS.font, weight = DEFAULTS.fontWeight, height = 520) {
+  const { canvas, pen } = blank(1800, Math.max(1, Math.round(height)));
   const size = Math.min(400, 1700 / Math.max(3, [...word].length * 0.56));
   pen.fillStyle = '#fff'; pen.textAlign = 'center'; pen.textBaseline = 'middle';
   pen.font = `${weight} ${size}px ${font}`;
@@ -40,7 +44,7 @@ export function wordmark(element: HTMLElement, options: WordmarkOptions = {}): W
     color: 'ink', shade: 0, contrast: 1.3, levels: 'auto', fit: 'contain', focus: { x: 0.5, y: 0.5 }, hover: 'trail', trail: { strength: 0.62, radius: 0.22 },
     ...state.current.look,
   });
-  const draw = () => wordArt(text, state.current.font, state.current.fontWeight);
+  const draw = () => wordArt(text, state.current.font, state.current.fontWeight, state.current.artHeight);
   // When the word is the element's own text, that text is the accessible name; otherwise the canvas carries it.
   const labelled = !own;
 
@@ -51,7 +55,8 @@ export function wordmark(element: HTMLElement, options: WordmarkOptions = {}): W
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
     source: draw(),
-    label: labelled ? text : undefined,
+    label: labelled ? state.current.label ?? text : undefined,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { page = null; styles.restore(); },
   });
@@ -61,9 +66,11 @@ export function wordmark(element: HTMLElement, options: WordmarkOptions = {}): W
   const setText = (next: string) => {
     if (next === text) return;
     text = next;
+    // The word set here is the word from now on, so a later `update()` (a new ink, say) keeps it.
+    if (state.current.text !== undefined) state.current = { ...state.current, text };
     if (!page) { if (own) element.textContent = text; return; }
     void page.field.setSource(draw());
-    if (labelled) page.field.update({ label: text || ' ' });
+    if (labelled) page.field.update({ label: state.current.label ?? (text || ' ') });
     else {
       for (const node of [...element.childNodes]) if (node !== page.canvas) node.remove();
       element.prepend(document.createTextNode(text));

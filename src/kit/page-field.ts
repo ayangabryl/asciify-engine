@@ -1,5 +1,6 @@
-import { isGlyphFieldSupported, mountGlyphField, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
-import { BASE_LOOK, isDark, prefersReduced, resolveColor, styleKeeper } from './core';
+import { isGlyphFieldSupported, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
+import { BASE_LOOK, isDark, mergeOptions, prefersReduced, resolveColor, styleKeeper, type KitOptions } from './core';
+import { disposeKit, liveField, poster, setPosterSource } from './core-live';
 
 /**
  * A field that lies over or under a whole element and draws its own source or scene. Unlike `mountSurface`, nothing is painted per
@@ -7,6 +8,14 @@ import { BASE_LOOK, isDark, prefersReduced, resolveColor, styleKeeper } from './
  */
 export interface PageFieldConfig {
   host: HTMLElement;
+  /** The component's options, for `lazy`, `poster` and `globalLook`. Pass the same object to `pageHandle()`. */
+  kit?: { current: KitOptions };
+  /** The component draws a poster of its own, so `kit.current.poster` is left to it. */
+  ownPoster?: boolean;
+  /** After each mount, the first included. */
+  onMount?: () => void;
+  /** After the field is released off screen or past the context budget. */
+  onRelease?: () => void;
   look: (dark: boolean) => GlyphFieldOptions;
   ink: (dark: boolean) => string | undefined;
   /** `under` sits above the element's background but below its content; `over` above everything. Default `under`. */
@@ -20,8 +29,12 @@ export interface PageFieldConfig {
 }
 
 export interface PageField {
+  /** The same object across release and remount; the source and settings set meanwhile apply when it mounts again. */
   readonly field: GlyphField;
+  /** The current canvas. */
   readonly canvas: HTMLCanvasElement;
+  /** True while the field holds a WebGL context. */
+  readonly live: boolean;
   dark(): boolean;
   still(): boolean;
   /** Re-reads the look and ink. */
@@ -32,14 +45,19 @@ export interface PageField {
 export const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 export function mountPageField(config: PageFieldConfig): PageField | null {
-  const { host, layer = 'under' } = config;
-  if (typeof document === 'undefined' || !isGlyphFieldSupported()) return null;
+  const { host, layer = 'under', kit } = config;
+  if (typeof document === 'undefined') return null;
+  const place = `position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:inherit;z-index:${layer === 'under' ? -1 : 'auto'}`;
+  if (!isGlyphFieldSupported()) {
+    if (kit?.current.poster && !config.ownPoster) poster(host, kit.current.poster, place, kit);
+    return null;
+  }
   const styles = styleKeeper();
   const canvas = document.createElement('canvas');
   if (getComputedStyle(host).position === 'static') styles.set(host, 'position', 'relative');
   if (layer === 'under') styles.set(host, 'isolation', 'isolate');
   canvas.dataset.asciiKit = '';
-  canvas.setAttribute('style', `position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:inherit;z-index:${layer === 'under' ? -1 : 'auto'}`);
+  canvas.setAttribute('style', place);
   host.appendChild(canvas);
 
   let dark = isDark(host), destroyed = false;
@@ -49,21 +67,20 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
     return forced === true ? { speed: 0, drift: 0, respectReducedMotion: true } : { respectReducedMotion: forced !== false };
   };
   const ink = () => resolveColor(config.ink(dark), host, dark ? '#d8d6cf' : '#1d1d1b') ?? '#888888';
-  let field: GlyphField;
-  try {
-    field = mountGlyphField(canvas, {
-      ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink(), source: config.source ?? null, interactionTarget: host, label: config.label ?? '',
-      onError: () => { if (!destroyed) { teardown(); config.onFail?.(); } },
-    });
-  } catch {
-    canvas.remove();
-    styles.restore();
-    return null;
-  }
-  if (!config.label) { canvas.removeAttribute('role'); canvas.removeAttribute('aria-label'); canvas.setAttribute('aria-hidden', 'true'); }
+  const live = liveField({
+    host, canvas, kit, place, ownPoster: config.ownPoster, source: config.source ?? null,
+    options: () => ({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink(), interactionTarget: host, label: config.label ?? '' }),
+    onMount: (_, mounted) => {
+      if (!config.label) { mounted.removeAttribute('role'); mounted.removeAttribute('aria-label'); mounted.setAttribute('aria-hidden', 'true'); }
+      config.onMount?.();
+    },
+    onRelease: config.onRelease,
+    onFail: () => { teardown(); config.onFail?.(); },
+  });
+  const field = live.field;
 
   let themeFrame = 0;
-  const refresh = () => { if (destroyed) return; dark = isDark(host); field.update({ ...config.look(dark), ...motion(), ink: ink() }); };
+  const refresh = () => { if (destroyed) return; dark = isDark(host); field.update({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink() }); };
   const retheme = () => {
     if (themeFrame || destroyed) return;
     themeFrame = requestAnimationFrame(() => { themeFrame = 0; refresh(); });
@@ -80,13 +97,13 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
     if (themeFrame) cancelAnimationFrame(themeFrame);
     themes?.disconnect();
     scheme?.removeEventListener?.('change', retheme);
-    field.destroy();
-    try { (canvas.getContext('webgl2') as WebGL2RenderingContext | null)?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* already gone */ }
-    canvas.remove();
+    live.destroy();
     styles.restore();
   }
 
-  return { get field() { return field; }, canvas, dark: () => dark, still, refresh, destroy: teardown };
+  live.start();
+  if (live.failed) { teardown(); return null; }
+  return { field, get canvas() { return live.canvas; }, get live() { return live.live; }, dark: () => dark, still, refresh, destroy: teardown };
 }
 
 /** The handle shape the page helpers share, matching `KitHandle`. */
@@ -97,7 +114,9 @@ export function pageHandle<O, X extends object>(page: () => PageField | null, op
     get field() { return destroyed ? null : page()?.field ?? null; },
     update(next: Partial<O>) {
       if (destroyed) return;
-      options.current = { ...options.current, ...next };
+      options.current = mergeOptions(options.current, next);
+      const still = (next as { poster?: string }).poster;
+      if (still) setPosterSource(options, still);
       apply(options.current);
       page()?.refresh();
     },
@@ -108,6 +127,7 @@ export function pageHandle<O, X extends object>(page: () => PageField | null, op
       destroyed = true;
       cleanup();
       page()?.destroy();
+      disposeKit(options);
     },
   };
   return Object.defineProperties(extra, Object.getOwnPropertyDescriptors(base)) as typeof base & X;

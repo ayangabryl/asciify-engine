@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.14: backgrounds in the kit, site-quality components
+
+- **`background(el, { preset })`** brings all 26 asciify.org backgrounds into the kit: drift, halftone, wordField and fluid on the GPU field, and 22 canvas presets (caustics, contour, facet, etch, moire, weave, veil, dune, wave, aurora, noise, silk, rain, stars, pulse, grid, voidWell, morph, fire, dna, terrain, circuit). Presets are separate imports, so a page pays only for the ones it uses, and each matches the /backgrounds page's rendering.
+- **The site now runs on the kit.** Every component demo on asciify.org is the kit itself, so what you see is what you install. Where the kit was weaker than the hand-built demos, the kit was raised to match.
+- **Performance and integration:** fields mount lazily near the viewport and release far from it, a page-wide budget keeps at most 12 WebGL contexts live, `poster` shows a still for first paint and as the no-GPU fallback, `setGlobalLook({ charset })` re-skins every glyph field at once with a short sweep, and `update({ ink, look })` merges per instance.
+- **New guide:** [applying-asciify.md](skills/asciify-engine/references/applying-asciify.md) teaches agents the house design: which component or background to use, text over fields, ink, radius, motion, performance and a finishing checklist.
+
 ## 4.13: the kit — interface components in one call
 
 `asciify-engine/kit` turns Asciify's interface components into short, customisable calls on the GPU field. Each one follows its element's size and border radius, takes ink from your CSS variables in light and dark, honours reduced motion, pauses off screen, leaves your HTML working without WebGL2, and cleans up with `destroy()`.

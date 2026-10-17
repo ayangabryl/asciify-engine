@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { easeOut, handle, isDark, mountSurface, srOnly, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, house, isDark, mountSurface, srOnly, type KitHandle, type KitOptions, type Surface } from './core';
 import { drawCover, imageFor, imageReady, injectStyle, type Picture } from './capture';
 
 export type DropState = 'empty' | 'developing' | 'done';
@@ -17,6 +17,8 @@ export interface DropzoneOptions extends KitOptions {
   develop?: number;
   /** File name for `download()`. Default `<name>-ascii.png`. */
   filename?: string;
+  /** Called on every state change (`empty`, `developing`, `done`) with the image's name, or '' when empty. */
+  onState?: (state: DropState, name: string) => void;
 }
 
 export interface DropzoneHandle extends KitHandle<DropzoneOptions> {
@@ -61,6 +63,45 @@ function defaultContent() {
 }
 
 const PHOTO_GROUND = '#0b0b0a';
+const RING_ASPECT = 1;
+
+/**
+ * The field's cell grid for a box, in the engine's own rounding: whole device pixels per cell, counted from the bottom left.
+ * The ring's frame is trimmed to whole cells (and whole CSS pixels), so a source of 2 × 2 texels per cell lands on the grid exactly.
+ */
+export function ringGrid(w: number, h: number, ratio = Math.min(2, typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1)) {
+  const chD = Math.max(2, Math.round(CELL * ratio)), cwD = Math.max(2, Math.round(chD * RING_ASPECT));
+  const fit = (size: number, cell: number) => {
+    const most = Math.floor((size * ratio) / cell);
+    for (let n = most; n > 1; n--) { const css = (n * cell) / ratio; if (Math.abs(css - Math.round(css)) < 0.01 || n < most - 8) return { n, css: Math.round(css) }; }
+    return { n: 1, css: Math.round(cell / ratio) };
+  };
+  const x = fit(w, cwD), y = fit(h, chD);
+  return { cols: x.n, rows: y.n, w: x.css, h: y.css, cw: cwD / ratio, ch: chD / ratio };
+}
+
+/**
+ * The idle ring, one texel block per cell: every side gets exactly one even row of characters, a cell in from the frame,
+ * with corners rounded to `radius` CSS px. `inner` (0–1) adds a dimmer row inside it, the breath that answers a drag.
+ */
+export function paintRing(pen: CanvasRenderingContext2D, grid: ReturnType<typeof ringGrid>, radius: number, tone: number, inner: number) {
+  const { cols, rows } = grid, image = pen.createImageData(cols * 2, rows * 2), data = image.data;
+  const rx = Math.max(1, radius / grid.cw), ry = Math.max(1, radius / grid.ch);
+  const x0 = 1, x1 = cols - 2, y0 = 1, y1 = rows - 2;
+  for (let row = 0; row < rows; row++) {
+    for (let c = 0; c < cols; c++) {
+      // Signed distance in cells to the rounded rectangle: straight sides exactly, corners along the ray from their centre.
+      const qx = Math.max(x0 + rx - c, 0, c - (x1 - rx)), qy = Math.max(y0 + ry - row, 0, row - (y1 - ry));
+      let d;
+      if (qx > 0 && qy > 0) { const e = Math.hypot(qx / rx, qy / ry); d = Math.hypot(qx, qy) * (1 - 1 / e); }
+      else d = -Math.min(c - x0, x1 - c, row - y0, y1 - row);
+      const t = Math.abs(d) < 0.5 ? tone : inner > 0 && d < -0.5 && d > -1.5 ? tone * 0.55 * inner : 0;
+      const v = Math.round(Math.min(1, t) * 255);
+      for (let k = 0; k < 4; k++) { const i = ((row * 2 + (k >> 1)) * cols * 2 + c * 2 + (k & 1)) * 4; data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255; }
+    }
+  }
+  pen.putImageData(image, 0, 0);
+}
 
 /**
  * An image dropzone whose border is a quiet ring of characters that thickens and breathes while a file is dragged over.
@@ -71,8 +112,23 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
   const state = { current: { ...DEFAULTS, ...options } };
   let phase: DropState = 'empty', pic: Picture | null = null, src = '', objectUrl = '', name = 'image', since = 0, request = 0;
   let over = false, depth = 0, glow = 0, then = 0, lastFile: File | null = null;
-  let surface: Surface | null = null;
+  let surface: Surface | null = null, ring: ReturnType<typeof ringGrid> | null = null;
   const live = srOnly('', true);
+  const FRAME = ['left', 'top', 'width', 'height'] as const;
+  /** Fits the canvas to whole cells, centred, for the ring; the image gets the whole zone back. */
+  const trim = () => {
+    const canvas = surface?.canvas;
+    if (!canvas || !element.offsetWidth) return null;
+    const grid = phase === 'empty' ? ringGrid(element.offsetWidth, element.offsetHeight) : null;
+    const box = grid
+      ? [`${Math.round((element.offsetWidth - grid.w) / 2)}px`, `${Math.round((element.offsetHeight - grid.h) / 2)}px`, `${grid.w}px`, `${grid.h}px`]
+      : ['0px', '0px', '100%', '100%'];
+    let moved = false;
+    FRAME.forEach((key, i) => { if (canvas.style[key] !== box[i]) { canvas.style[key] = box[i]; moved = true; } });
+    ring = grid;
+    if (moved) { surface?.field.resize(); surface?.kick(); return null; }
+    return grid;
+  };
   const input = document.createElement('input');
   const added: Element[] = [live, input];
   let fallbackImg: HTMLImageElement | null = null;
@@ -82,25 +138,27 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     : { mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 500, cellSize: CELL, cellAspect: 0.8, glyphScale: 0.8,
       // Characters in the photo's own colours read only on a dark ground: on a light zone the shadows would vanish into it.
       background: isDark(element) ? 'transparent' : PHOTO_GROUND,
-      color: 'source', saturation: 1.15, contrast: 1.15, hover: 'trail', trail: { strength: 0.6, radius: 0.3 }, ...state.current.look });
+      color: 'source', saturation: 1.15, contrast: 1.15, levels: 'auto', brightness: phase === 'developing' ? -1 : REST, hover: 'trail', trail: { strength: 0.6, radius: 0.3 }, ...state.current.look });
 
   surface = mountSurface({
     host: element,
     layer: 'under',
     look,
-    ink: () => state.current.ink ?? '--ascii-ink',
+    // The ring is a quiet border: mid graphite unless the page sets `--ascii-ink`.
+    ink: dark => state.current.ink ?? `var(--ascii-ink, ${dark ? '#7a7872' : '#76746e'})`,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
+    // The ring draws 2 × 2 texels per cell; the image, one texel per CSS pixel.
+    resolution: (w, h) => (phase === 'empty' && ring ? [ring.cols * 2, ring.rows * 2] : [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))]),
     onFail: () => { surface = null; if (src) showFallback(src); },
     paint: ({ pen, w, h, now, still }) => {
       if (phase !== 'empty') {
         if (!pic) return false;
-        const k = still ? 1 : easeOut((now - since) / state.current.develop, 3);
+        const k = still ? 1 : house(clamp((now - since) / state.current.develop));
         drawCover(pen, pic, 0, 0, w, h);
-        // The image develops out of the dark: a veil of black lifts until only a touch of lift remains.
-        pen.fillStyle = '#000';
-        pen.globalAlpha = Math.max(0, 1 - k * (1 + REST));
-        pen.fillRect(0, 0, w, h);
-        pen.globalAlpha = 1;
+        // The image develops out of the dark, after its levels are set, until only a touch of lift remains.
+        const rest = state.current.look?.brightness ?? REST;
+        if (phase === 'developing') surface?.field.update({ brightness: -1 + k * (1 + rest) });
         if (k >= 1 && phase === 'developing') settle();
         return k < 1;
       }
@@ -111,17 +169,8 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
       glow = still ? to : glow + (to - glow) * (1 - Math.exp(-dt / 70));
       const breath = still ? 0.5 : 0.5 - 0.5 * Math.cos((now / BREATHE_MS) * Math.PI * 2);
       const radius = Math.max(4, (parseFloat(getComputedStyle(element).borderTopLeftRadius) || 16) - CELL);
-      const ring = (inset: number, tone: number) => {
-        if (tone <= 0) return;
-        const v = Math.round(Math.min(1, tone) * 255);
-        pen.strokeStyle = `rgb(${v} ${v} ${v})`;
-        pen.lineWidth = CELL;
-        pen.beginPath();
-        pen.roundRect(inset + CELL / 2, inset + CELL / 2, w - inset * 2 - CELL, h - inset * 2 - CELL, Math.max(0, radius - inset + CELL));
-        pen.stroke();
-      };
-      ring(CELL, 0.56 + glow * (0.14 + 0.28 * breath));
-      ring(CELL * 2, (0.56 + glow * 0.42) * 0.55 * glow * (0.4 + 0.6 * breath));
+      const grid = trim();
+      if (grid) paintRing(pen, grid, radius, 0.56 + glow * (0.14 + 0.28 * breath), glow * (0.4 + 0.6 * breath));
       const moving = over || Math.abs(to - glow) > 0.004;
       if (!moving) then = 0;
       return moving;
@@ -132,7 +181,8 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     const was = phase;
     phase = next;
     element.dataset.state = next;
-    if ((was === 'empty') !== (next === 'empty')) surface?.refresh();
+    if ((was === 'empty') !== (next === 'empty')) { trim(); surface?.refresh(); }
+    if (was !== next) state.current.onState?.(next, next === 'empty' ? '' : name);
   };
   const settle = () => {
     setState('done');
