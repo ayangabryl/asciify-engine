@@ -170,7 +170,7 @@ dark.addEventListener('change', event => ground.update({ poster: still(event.mat
 
 - **Canvases are decoration.** Kit fields are `aria-hidden` and ignore the pointer. Only the canvases that are the content take a `label`: `fieldBackground` `notFound`, `asciiVideo`, `artPanel`.
 - **Real text stays in the DOM.** `decode`, `wordmark` and `streamText` keep the actual words selectable and readable; `odometer` and `pill` counts add a hidden copy; `blockChart` adds a hidden table. Do not replace text with a field.
-- **Status is announced.** Pass a live region to `buttonLoading` (`announce`) and `thinking` (`label`), write `statusOrb` outcomes to one yourself, and give `pullRefresh` its `messages`. `toastStack` adds its own `role="status"` region.
+- **Status is announced.** Pass a live region to `buttonLoading` (`announce`), give `thinking` its `label` (it adds a hidden live copy, so the label itself needs no role), write `statusOrb` outcomes to one yourself, and give `pullRefresh` its `messages`. `toastStack` adds its own `role="status"` region.
 - **Keyboard and focus.** The kit wires keys for `tabs`, `commandPalette`, `slideToConfirm`, `compare`, `accordion`, `swipeDeck` and `codeInput`; keep them (`manage` stays true). Keep a Refresh button beside pull to refresh. A field never covers a focus ring: `beam` draws inside the border, so a 2px outline at 3px offset stays clear.
 
 ```ts
