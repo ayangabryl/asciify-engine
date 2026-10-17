@@ -158,6 +158,20 @@ describe('context budget', () => {
     hb.destroy(); hc.destroy();
   });
 
+  it('gives a hidden field\'s context to one on screen', () => {
+    setFieldBudget(1);
+    const hidden = at(0);
+    const handle = beam(as(hidden));
+    expect(mount).toHaveBeenCalledTimes(1);
+    // display: none reports a zero box at the origin and no client rects.
+    Object.assign(hidden, { getClientRects: () => [] });
+    scroll([hidden, 0]);
+    beam(as(at(100)));
+    expect(fields[0].destroy).toHaveBeenCalledOnce();
+    expect(mount).toHaveBeenCalledTimes(2);
+    handle.destroy();
+  });
+
   it('lets a lazy: false field displace the farthest live one', () => {
     setFieldBudget(1);
     beam(as(at(0)));
