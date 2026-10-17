@@ -1,4 +1,5 @@
-import { isGlyphFieldSupported, mountGlyphField, type GlyphField, type GlyphFieldOptions } from '../field';
+import { isGlyphFieldSupported, type GlyphField, type GlyphFieldOptions } from '../field';
+import { disposeKit, liveField, poster, setPosterSource } from './core-live';
 
 /** Options every kit component takes. */
 export interface KitOptions {
@@ -8,15 +9,27 @@ export interface KitOptions {
   look?: GlyphFieldOptions;
   /** `true` or `false` overrides the visitor's `prefers-reduced-motion`; leave it unset to follow it. */
   reducedMotion?: boolean;
+  /**
+   * Mount the field only once the element comes within half a viewport of the screen, and release it (freeing its WebGL context)
+   * beyond one. The handle keeps working while released. `false` mounts at once, wherever the element is. Default true.
+   */
+  lazy?: boolean;
+  /** A still image under the field: shown until the first GPU frame, while the field is released, and in its place without WebGL. */
+  poster?: string;
+  /** `false` keeps this field's own characters when `setGlobalLook` re-skins the page. Default true. */
+  globalLook?: boolean;
 }
 
 /** The handle every kit component returns. Component handles add their own methods. */
 export interface KitHandle<O> {
   /** False when WebGL2 is missing (or the field failed): the HTML is left as it was and drawing methods do nothing. */
   readonly supported: boolean;
-  /** The underlying GPU field, for anything the kit does not cover. `null` in the fallback. */
+  /**
+   * The underlying GPU field, for anything the kit does not cover. `null` in the fallback. It stays the same object while the
+   * field is released off screen; `update`, `setSource`, `play` and `pause` made meanwhile apply when it mounts again.
+   */
   readonly field: GlyphField | null;
-  /** Merges options; the next frame draws with them. */
+  /** Merges options (`look` key by key); the next frame draws with them. */
   update(options: Partial<O>): void;
   /** Resumes motion after `pause()`. */
   play(): void;
@@ -49,6 +62,8 @@ export interface PaintFrame {
 
 export interface SurfaceConfig {
   host: HTMLElement;
+  /** The component's options, for `lazy`, `poster` and `globalLook`. Pass the same object to `handle()`. */
+  kit?: { current: KitOptions };
   /** The field look; ink comes from `ink`, so leave it out here. */
   look: () => GlyphFieldOptions;
   /** CSS colour or custom property for the field ink, given whether the ground is dark. */
@@ -69,8 +84,12 @@ export interface SurfaceConfig {
 }
 
 export interface Surface {
+  /** The same object across release and remount. */
   readonly field: GlyphField;
+  /** The current canvas. A remount swaps in a copy of it, with its attributes and inline styles, in the same place. */
   readonly canvas: HTMLCanvasElement;
+  /** True while the field holds a WebGL context. */
+  readonly live: boolean;
   /** Starts the frame loop if it is not running. */
   kick(): void;
   /** Re-reads the look and ink, then kicks. */
@@ -184,15 +203,34 @@ export function boxIn(root: Element, element: Element): Box {
   return { x: (b.left - r.left) / s, y: (b.top - r.top) / s, w: b.width / s, h: b.height / s };
 }
 
+/** Merges kit options; `look` merges key by key, so tuning one setting keeps the others. A look key set to `undefined` is removed. */
+export function mergeOptions<O>(current: O, next: Partial<O>): O {
+  const out = { ...current, ...next } as O & { look?: GlyphFieldOptions };
+  const was = (current as { look?: GlyphFieldOptions }).look, add = (next as { look?: GlyphFieldOptions }).look;
+  if (add) out.look = Object.fromEntries(Object.entries({ ...was, ...add }).filter(([, value]) => value !== undefined)) as GlyphFieldOptions;
+  return out;
+}
+
+const settledSources = new WeakMap<HTMLCanvasElement, () => HTMLCanvasElement | null>();
+/** A kit canvas's settled frame, white on black at the canvas's own place, or null for any other canvas. */
+export const settledSource = (canvas: HTMLCanvasElement) => settledSources.get(canvas)?.() ?? null;
+
 /**
  * Mounts a field over or inside `host` and feeds it a canvas painted each frame. Returns null without WebGL2 or when
- * mounting fails, having changed nothing, so the caller can keep its HTML as the fallback.
+ * mounting fails, having changed nothing (but a `poster`), so the caller can keep its HTML as the fallback. The field mounts near
+ * the viewport and is released far from it (see `KitOptions.lazy`); every frame paints the component's current state, so a remount
+ * picks up where the component is.
  */
 export function mountSurface(config: SurfaceConfig): Surface | null {
-  const { host, layer = 'over', outset = 0 } = config;
-  if (typeof document === 'undefined' || !isGlyphFieldSupported()) return null;
+  const { host, layer = 'over', outset = 0, kit } = config;
+  if (typeof document === 'undefined') return null;
+  const place = `position:absolute;left:${-outset}px;top:${-outset}px;width:calc(100% + ${outset * 2}px);height:calc(100% + ${outset * 2}px);pointer-events:none;z-index:${layer === 'under' ? -1 : 'auto'}`;
+  if (!isGlyphFieldSupported()) {
+    if (kit?.current.poster) poster(host, kit.current.poster, place, kit);
+    return null;
+  }
   const styles = styleKeeper();
-  const canvas = document.createElement('canvas');
+  const first = document.createElement('canvas');
   const art = document.createElement('canvas');
   const pen = art.getContext('2d');
   if (!pen) return null;
@@ -200,43 +238,44 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   const computed = getComputedStyle(host);
   if (computed.position === 'static') styles.set(host, 'position', 'relative');
   if (layer === 'under') styles.set(host, 'isolation', 'isolate');
-  canvas.setAttribute('aria-hidden', 'true');
-  canvas.dataset.asciiKit = '';
-  const css = canvas.style;
+  first.setAttribute('aria-hidden', 'true');
+  first.dataset.asciiKit = '';
+  const css = first.style;
   css.position = 'absolute';
   css.left = css.top = `${-outset}px`;
   css.width = css.height = `calc(100% + ${outset * 2}px)`;
   css.pointerEvents = 'none';
   css.zIndex = layer === 'under' ? '-1' : '';
+  host.appendChild(first);
   const followRadius = () => {
     const style = getComputedStyle(host);
     const radius = (value: string) => (outset && /^[\d.]+px$/.test(value) ? `${parseFloat(value) + outset}px` : value);
-    css.borderRadius = [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(radius).join(' ');
+    live.canvas.style.borderRadius = [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(radius).join(' ');
   };
-  followRadius();
-  host.appendChild(canvas);
 
   let dark = isDark(host);
   const ink = () => resolveColor(config.ink(dark), host, dark ? '#d8d6cf' : '#1d1d1b') ?? '#888888';
-  let field: GlyphField;
-  let failed = false;
-  try {
-    field = mountGlyphField(canvas, {
-      ...BASE_LOOK, ...config.look(), ink: ink(), interactionTarget: host, label: '',
-      onError: () => { if (!failed) { failed = true; teardown(); config.onFail?.(); } },
-    });
-  } catch {
-    canvas.remove();
-    styles.restore();
-    return null;
-  }
-  canvas.removeAttribute('role');
-  canvas.removeAttribute('aria-label');
-
   let raf = 0, paused = false, visible = true, destroyed = false;
+  const live = liveField({
+    host, canvas: first, kit, place,
+    options: () => ({ ...BASE_LOOK, ...config.look(), ink: ink(), interactionTarget: host, label: '' }),
+    onMount: (mounted, canvas) => {
+      settledSources.set(canvas, settled);
+      canvas.removeAttribute('role');
+      canvas.removeAttribute('aria-label');
+      void mounted.ready.then(kick, () => {});
+      kick();
+    },
+    onRelease: () => { if (raf) cancelAnimationFrame(raf); raf = 0; },
+    onFail: () => { teardown(); config.onFail?.(); },
+  });
+  const field = live.field;
+  followRadius();
+
   const still = () => !!(config.reducedMotion() ?? prefersReduced());
-  const box = (element: Element) => boxIn(canvas, element);
+  const box = (element: Element) => boxIn(live.canvas, element);
   const paintNow = (now: number) => {
+    const canvas = live.canvas;
     const w = Math.max(1, canvas.clientWidth || host.clientWidth + outset * 2), h = Math.max(1, canvas.clientHeight || host.clientHeight + outset * 2);
     const res = config.resolution ?? 1;
     const [sw, sh] = typeof res === 'function' ? res(w, h) : [Math.max(1, Math.round(w * res)), Math.max(1, Math.round(h * res))];
@@ -255,15 +294,35 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     void field.setSource(art).then(() => { if (!destroyed) field.redraw(); });
     return more;
   };
+  /** The component's settled frame as a fresh source canvas, for a parent that draws this field into its own (pageDissolve). */
+  function settled() {
+    const canvas = live.canvas;
+    const w = Math.max(1, canvas.clientWidth || host.clientWidth + outset * 2), h = Math.max(1, canvas.clientHeight || host.clientHeight + outset * 2);
+    const res = config.resolution ?? 1;
+    const [sw, sh] = typeof res === 'function' ? res(w, h) : [Math.max(1, Math.round(w * res)), Math.max(1, Math.round(h * res))];
+    const out = document.createElement('canvas');
+    out.width = sw; out.height = sh;
+    const p = out.getContext('2d');
+    if (!p) return null;
+    p.fillStyle = '#000'; p.fillRect(0, 0, sw, sh);
+    try { config.paint({ pen: p, width: sw, height: sh, w, h, scale: sw / w, now: performance.now(), still: true, dark, box }); } catch { return null; }
+    return out;
+  }
+  settledSources.set(first, settled);
   const step = (now: number) => {
     raf = 0;
-    if (destroyed || paused) return;
+    if (destroyed || paused || !live.live) return;
     const more = paintNow(now);
     if (more && !still() && visible && !(typeof document !== 'undefined' && document.hidden)) raf = requestAnimationFrame(step);
   };
-  const kick = () => { if (!raf && !destroyed && !paused) raf = requestAnimationFrame(step); };
+  function kick() { if (!raf && !destroyed && !paused && live.live) raf = requestAnimationFrame(step); }
 
-  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { followRadius(); field.resize(); kick(); }) : null;
+  // A resize clears the canvas; repaint in the same frame so a size change (a label growing) never shows a blank frame.
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+    followRadius(); field.resize();
+    if (live.live && !destroyed && !paused) paintNow(performance.now());
+    kick();
+  }) : null;
   resize?.observe(host);
   const view = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
@@ -292,7 +351,6 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   // Class or attribute themes (`.dark`, `data-theme`) change no media query, so watch the root for them.
   const themes = typeof MutationObserver === 'function' ? new MutationObserver(retheme) : null;
   for (const root of [document.documentElement, document.body]) if (root) themes?.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'style'] });
-  void field.ready.then(kick);
 
   function teardown() {
     if (destroyed) return;
@@ -306,20 +364,19 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     document.removeEventListener('visibilitychange', onVisibility);
     scheme?.removeEventListener?.('change', retheme);
     motion?.removeEventListener?.('change', kick);
-    field.destroy();
-    // Browsers keep about 16 WebGL contexts; release this one now rather than when the canvas is collected.
-    try { (canvas.getContext('webgl2') as WebGL2RenderingContext | null)?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* already gone */ }
-    canvas.remove();
+    live.destroy();
     styles.restore();
     art.width = art.height = 1;
   }
 
-  kick();
+  live.start();
+  if (live.failed) { teardown(); return null; }
   return {
-    get field() { return field; },
-    canvas,
+    field,
+    get canvas() { return live.canvas; },
+    get live() { return live.live; },
     kick,
-    refresh() { if (destroyed) return; dark = isDark(host); field.update({ ...config.look(), ink: ink() }); kick(); },
+    refresh() { if (destroyed) return; dark = isDark(host); field.update({ ...BASE_LOOK, ...config.look(), ink: ink() }); kick(); },
     still,
     dark: () => dark,
     box,
@@ -337,7 +394,9 @@ export function handle<O, X extends object>(surface: () => Surface | null, optio
     get field() { return destroyed ? null : surface()?.field ?? null; },
     update(next) {
       if (destroyed) return;
-      options.current = { ...options.current, ...next };
+      options.current = mergeOptions(options.current, next);
+      const still = (next as { poster?: string }).poster;
+      if (still) setPosterSource(options, still);
       apply(options.current);
     },
     play() { if (!destroyed) surface()?.play(); },
@@ -346,6 +405,7 @@ export function handle<O, X extends object>(surface: () => Surface | null, optio
       if (destroyed) return;
       destroyed = true;
       surface()?.destroy();
+      disposeKit(options);
       cleanup();
     },
   };

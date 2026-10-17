@@ -11,6 +11,8 @@ export interface OdometerOptions extends KitOptions {
   stagger?: number;
   /** Glyphs the columns roll through. Default `#%*+=-:`. */
   glyphs?: string;
+  /** `text`: crisp text at rest, characters only while a column rolls. `glyph`: the whole figure is drawn in characters. Default `text`. */
+  face?: 'text' | 'glyph';
 }
 
 export interface OdometerHandle extends KitHandle<OdometerOptions> {
@@ -19,7 +21,7 @@ export interface OdometerHandle extends KitHandle<OdometerOptions> {
   readonly value: number;
 }
 
-const DEFAULTS = { value: 0, duration: 360, stagger: 60, glyphs: '#%*+=-:', format: (n: number) => n.toLocaleString() };
+const DEFAULTS = { value: 0, duration: 360, stagger: 60, glyphs: '#%*+=-:', format: (n: number) => n.toLocaleString(), face: 'text' as 'text' | 'glyph' };
 
 /** The rightmost-indexed column where `to` first differs from `from` among digits, or -1. Columns count from the right. */
 export function firstChanged(from: string, to: string) {
@@ -28,6 +30,8 @@ export function firstChanged(from: string, to: string) {
   return -1;
 }
 
+/** The kit's poster, which the element keeps when its own children are replaced. */
+const posterOf = (element: HTMLElement) => [...element.children].filter(c => c.tagName === 'IMG' && (c as HTMLElement).dataset?.asciiPoster !== undefined);
 /**
  * A figure in the page's own font whose changed digits roll through glyphs and land back on the crisp digit.
  * The element's text becomes one span per character; a visually hidden live copy announces each value.
@@ -55,6 +59,7 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
     host: element,
     look,
     ink: () => state.current.ink ?? getComputedStyle(element).color,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: 2,
     onFail: () => { surface = null; element.textContent = text; styles.restore(); },
@@ -65,7 +70,7 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
       pen.font = font; pen.textAlign = 'center'; pen.textBaseline = 'alphabetic';
       // CSS centres the font's content area in the line box; the painted digit has to sit on the same baseline.
       const metric = pen.measureText('0'), ascent = metric.fontBoundingBoxAscent || size * 0.8, descent = metric.fontBoundingBoxDescent || size * 0.2;
-      const { from, to, t0, up, first } = roll, cells = [...digits.children] as HTMLElement[], o = state.current;
+      const { from, to, t0, up, first } = roll, cells = [...digits.children] as HTMLElement[], o = state.current, glyph = o.face === 'glyph';
       const at = (s: string, r: number) => s[s.length - 1 - r] ?? '';
       let moving = false;
       cells.forEach((cell, i) => {
@@ -73,12 +78,16 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
         const x = b.x + (b.w - spacing) / 2, top = b.y, slot = b.h, mid = top + (slot - ascent - descent) / 2 + ascent;
         const next = at(to, r), order = first - r;
         const p = !still && first >= 0 && order >= 0 && /\d/.test(next) ? clamp((now - t0) / (o.duration + order * o.stagger)) : 1, spin = house(p);
-        // The text already holds the new digit: it steps aside at once and fades back in as the column settles.
-        const opacity = p < 1 ? smoothstep(0.72, 1, p).toFixed(3) : '';
+        // Text face: the text already holds the new digit, so it steps aside at once and fades back in as the column settles.
+        // Glyph face: the text stays hidden and every character is drawn, at rest too.
+        const opacity = p < 1 && !glyph ? smoothstep(0.72, 1, p).toFixed(3) : '';
         if (cell.style.opacity !== opacity) cell.style.opacity = opacity;
-        if (p >= 1) return;
+        if (p >= 1) {
+          if (glyph) { pen.globalAlpha = 1; pen.font = font; pen.fillStyle = '#fff'; pen.fillText(next, x, mid); }
+          return;
+        }
         moving = true;
-        pen.globalAlpha = 1 - smoothstep(0.72, 1, p);
+        pen.globalAlpha = glyph ? 1 : 1 - smoothstep(0.72, 1, p);
         const prev = at(from, r), count = 5 + order * 2;
         const line = [prev, ...Array.from({ length: count }, (_, j) => o.glyphs[Math.floor(hash(j + r * 7, t0) * o.glyphs.length)] ?? ''), next];
         if (!up) line.reverse();
@@ -100,10 +109,12 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
     },
   });
 
+  const showFace = () => { if (surface) styles.set(digits, 'color', state.current.face === 'glyph' ? 'transparent' : 'inherit'); };
   if (surface) {
     styles.set(digits, 'display', 'inline-flex');
+    showFace();
     digits.setAttribute('aria-hidden', 'true');
-    element.replaceChildren(live, digits, surface.canvas);
+    element.replaceChildren(live, digits, ...posterOf(element), surface.canvas);
     render();
     void document.fonts?.ready.then(() => surface?.kick());
   }
@@ -111,7 +122,8 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
   const set = (next: number) => {
     if (!Number.isFinite(next)) return;
     const before = value, from = text;
-    value = next;
+    // Kept in the options too, so a later update({ ink }) does not roll the figure back to its first value.
+    value = state.current.value = next;
     text = state.current.format(next);
     if (!surface) { element.textContent = text; return; }
     if (from === text) return;
@@ -121,6 +133,7 @@ export function odometer(element: HTMLElement, options: OdometerOptions = {}): O
   };
 
   return handle(() => surface, state, next => {
+    showFace();
     if (next.value !== value) set(next.value);
     else { text = next.format(value); render(); surface?.refresh(); }
   }, {

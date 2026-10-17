@@ -4,7 +4,7 @@ import { handle, hash, house, mountSurface, styleKeeper, type KitHandle, type Ki
 export interface DecodeOptions extends KitOptions {
   /** Text to draw instead of the element's own, centred and as large as fits; `\n` breaks lines. By default the element's text is drawn exactly where the browser lays it out. */
   text?: string;
-  /** Total length in ms: the first 30% is drift alone, then the words resolve left to right. Default 900. */
+  /** Total length in ms: the first 30% is drift alone, then the words resolve left to right. Default 800. */
   duration?: number;
   /** `visible` decodes when the element scrolls into view; `manual` waits for `replay()`. Default `visible`. */
   trigger?: 'visible' | 'manual';
@@ -19,7 +19,7 @@ export interface DecodeHandle extends KitHandle<DecodeOptions> {
   replay(): void;
 }
 
-const DEFAULTS = { duration: 900, trigger: 'visible' as const, replayOnHover: true, settle: 'glyphs' as const };
+const DEFAULTS = { duration: 800, trigger: 'visible' as const, replayOnHover: true, settle: 'glyphs' as const };
 const RESOLUTION = 2;
 
 /** A soft value-noise cloud that drifts with `t`, feathered toward the edges. */
@@ -73,10 +73,16 @@ function paintOwnText(pen: CanvasRenderingContext2D, element: HTMLElement, origi
 function paintGivenText(pen: CanvasRenderingContext2D, element: HTMLElement, text: string, w: number, h: number) {
   const style = getComputedStyle(element), lines = text.split('\n');
   pen.fillStyle = '#fff'; pen.textAlign = 'center'; pen.textBaseline = 'middle';
+  // Letter spacing is kept as a share of the font size, so a tight headline stays tight at whatever size fits.
+  const em = (parseFloat(style.letterSpacing) || 0) / (parseFloat(style.fontSize) || 16);
+  const spacing = (px: number) => { if ('letterSpacing' in pen) (pen as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${em * px}px`; };
+  // Measured untracked, then tracked: a tight headline sits a little inside the 94% it is sized to.
   pen.font = `${style.fontWeight} 100px ${style.fontFamily}`;
+  spacing(0);
   const widest = Math.max(1, ...lines.map(line => pen.measureText(line).width));
   const size = Math.min(((w * 0.94) / widest) * 100, (h * 0.9) / lines.length);
   pen.font = `${style.fontWeight} ${size}px ${style.fontFamily}`;
+  spacing(size);
   lines.forEach((line, i) => pen.fillText(line, w / 2, h / 2 + (i - (lines.length - 1) / 2) * size * 1.04));
 }
 
@@ -108,6 +114,7 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
     look,
     // Text fill is hidden while the field draws, but `color` still holds the theme's text colour.
     ink: () => state.current.ink ?? getComputedStyle(element).color,
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: RESOLUTION,
     onFail: () => { surface = null; styles.restore(); },
@@ -177,8 +184,17 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
     if (view) view.observe(element);
     else if (state.current.trigger === 'visible') run();
   }
-  const onEnter = () => { if (state.current.replayOnHover && start < 0) run(); };
-  if (surface) element.addEventListener('pointerenter', onEnter);
+  // Entry is read from pointer moves too, so a scripted cursor that only sends pointermove replays it like a real one.
+  let inside = false;
+  const onEnter = () => { if (inside) return; inside = true; if (state.current.replayOnHover && start < 0) run(); };
+  const onLeave = () => { inside = false; };
+  const onAway = (event: Event) => { if (inside && !(event.target instanceof Node && element.contains(event.target))) inside = false; };
+  if (surface) {
+    element.addEventListener('pointerenter', onEnter);
+    element.addEventListener('pointermove', onEnter);
+    element.addEventListener('pointerleave', onLeave);
+    document.addEventListener('pointermove', onAway, true);
+  }
   if (surface) void document.fonts?.ready.then(() => { artKey = ''; surface?.kick(); });
 
   return handle(() => surface, state, () => { artKey = ''; surface?.refresh(); }, {
@@ -186,6 +202,9 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
   }, () => {
     view?.disconnect();
     element.removeEventListener('pointerenter', onEnter);
+    element.removeEventListener('pointermove', onEnter);
+    element.removeEventListener('pointerleave', onLeave);
+    document.removeEventListener('pointermove', onAway, true);
     styles.restore();
   });
 }

@@ -116,6 +116,7 @@ export function fieldBackground(element: HTMLElement, options: FieldBackgroundOp
     ink,
     source: lost() ? draw() : null,
     label: state.current.label ?? (lost() ? state.current.text : undefined),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { page = null; },
   });

@@ -10,6 +10,8 @@ export interface BlockChartOptions extends KitOptions {
   max?: number;
   /** How long each bar grows, in ms. Default 520. */
   duration?: number;
+  /** Grow the bars in the first time the chart comes into view. `false` draws them in place at once, as in a view that is swapped in. Default true. */
+  intro?: boolean;
   /** Ms between bars growing. Default 45 for up to 7 bars, else 9. */
   stagger?: number;
   /** Formats values for the screen reader table. Default `toLocaleString()`. */
@@ -37,7 +39,7 @@ export const barAt = (x: number, n: number) => (n ? Math.min(n - 1, Math.max(0, 
 /** A bar chart drawn in columns of characters: bars grow in staggered, the last is emphasised, and hover lights one and dims the rest. */
 export function blockChart(element: HTMLElement, options: BlockChartOptions = {}): BlockChartHandle {
   const state = { current: { ...DEFAULTS, ...options } };
-  let drawn = state.current.values, active: number | null = null, t0 = performance.now(), emph: number[] = [], then = 0, seen = false, surface: Surface | null = null;
+  let drawn = state.current.values, active: number | null = null, t0 = state.current.intro === false ? -1e9 : performance.now(), emph: number[] = [], then = 0, seen = false, surface: Surface | null = null;
   const values = () => state.current.values ?? [];
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
@@ -48,6 +50,7 @@ export function blockChart(element: HTMLElement, options: BlockChartOptions = {}
     host: element,
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,
     onFail: () => { surface = null; },
@@ -105,7 +108,8 @@ export function blockChart(element: HTMLElement, options: BlockChartOptions = {}
     const body = document.createElement('tbody');
     values().forEach((v, i) => {
       const tr = document.createElement('tr'), th = document.createElement('th'), td = document.createElement('td');
-      th.setAttribute('scope', 'row'); th.textContent = labels[i] ?? String(i + 1); td.textContent = fmt(v);
+      // Row headers keep the page's weight: a hidden table should not add a bold weight to the page's type.
+      th.setAttribute('scope', 'row'); th.setAttribute('style', 'font-weight:inherit'); th.textContent = labels[i] ?? String(i + 1); td.textContent = fmt(v);
       tr.appendChild(th); tr.appendChild(td); body.appendChild(tr);
     });
     table.replaceChildren(body);
@@ -151,7 +155,7 @@ export function blockChart(element: HTMLElement, options: BlockChartOptions = {}
   element.addEventListener('blur', onLeave);
   // The bars grow the first time the chart comes into view, not off screen where nobody sees them.
   const view = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
-    if (entry?.isIntersecting && !seen) { seen = true; grow(); }
+    if (entry?.isIntersecting && !seen) { seen = true; if (state.current.intro !== false) grow(); }
   }, { threshold: 0.4 }) : null;
   view?.observe(element);
 

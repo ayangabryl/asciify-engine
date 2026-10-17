@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { snapshot } from './capture';
+import { drawCover, snapshot, toneOf } from './capture';
 import { clamp, easeOut, handle, mountSurface, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 export type PullState = 'idle' | 'pulling' | 'refreshing' | 'done';
@@ -62,7 +62,7 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
   let phase: PullState = 'idle', held = false, pulling = false, y0 = 0, pointer = -1, spin = 0, at = 0, last = 0, ok = true;
   let surface: Surface | null = null;
   /** Rows resolving in: a still of each in characters, drawn where the row is now; `start` is Infinity while held back. */
-  let fresh: { row: HTMLElement; snap: HTMLCanvasElement; start: number; opacity: string; transition: string; shown: boolean }[] = [];
+  let fresh: { row: HTMLElement; snap: HTMLCanvasElement | null; start: number; opacity: string; transition: string; shown: boolean; photos: HTMLImageElement[] }[] = [];
   const revealed = new WeakSet<Element>();
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
@@ -74,6 +74,7 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
     host: element,
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: 2,
     onFail: () => { surface = null; },
@@ -119,8 +120,15 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
         if (k >= HANDOVER) handOver(item);
         if (k >= 1) { handOver(item, true); return false; }
         const b = box(item.row);
+        // The still is taken as the row starts to resolve, and again while the row is still opening (a height transition), so it always fits.
+        if (!item.snap || Math.abs(item.snap.width / 2 - b.w) > 0.5 || Math.abs(item.snap.height / 2 - b.h) > 0.5) {
+          item.snap = snapshot(item.row, b.w, b.h, el => { const e = box(el); return { x: e.x - b.x, y: e.y - b.y, w: e.w, h: e.h }; }).canvas;
+          item.photos = [...item.row.querySelectorAll('img')];
+        }
+        const snap = item.snap;
+        if (item.photos.length) tonePhotos(item, snap, box);
         pen.globalAlpha = k < HANDOVER ? easeOut(k / HANDOVER, 3) : 1 - easeOut((k - HANDOVER) / (1 - HANDOVER), 3);
-        pen.drawImage(item.snap, b.x, b.y, b.w, b.h);
+        pen.drawImage(snap, b.x, b.y, b.w, b.h);
         pen.globalAlpha = 1;
         moving = true;
         return true;
@@ -131,22 +139,36 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
   });
 
   const kick = () => surface?.kick();
+  /** Photos arrive as themselves in characters rather than flat tiles: each image is drawn into the row's still as tone once it has loaded. */
+  function tonePhotos(item: (typeof fresh)[number], snap: HTMLCanvasElement, box: (el: Element) => { x: number; y: number; w: number; h: number }) {
+    const pen = snap.getContext('2d'), o = box(item.row);
+    item.photos = item.photos.filter(img => {
+      if (!img.complete) return true;
+      if (!pen || !img.naturalWidth) return false;
+      const r = box(img), x = r.x - o.x, y = r.y - o.y, radius = Math.min(parseFloat(getComputedStyle(img).borderTopLeftRadius) || 0, r.w / 2, r.h / 2);
+      pen.save();
+      pen.setTransform(2, 0, 0, 2, 0, 0);
+      pen.beginPath(); pen.roundRect(x, y, r.w, r.h, radius); pen.clip();
+      pen.fillStyle = '#000'; pen.fillRect(x, y, r.w, r.h);
+      drawCover(pen, toneOf({ image: img, width: img.naturalWidth, height: img.naturalHeight }, !(surface?.dark() ?? false)), x, y, r.w, r.h);
+      pen.restore();
+      return false;
+    });
+  }
   /** The HTML row fades back in under its characters; `done` also puts back its own transition. */
   function handOver(item: (typeof fresh)[number], done = false) {
     const css = item.row.style;
     if (!item.shown) { item.shown = true; css.transition = 'opacity 280ms cubic-bezier(.16, 1, .3, 1)'; css.opacity = item.opacity; }
     if (done) css.transition = item.transition;
   }
-  /** Hides the rows now and keeps a still of each; they resolve in from `start`. */
+  /** Hides the rows now; they resolve in from `start`, as glyphs of a still taken then. */
   const hold = (rows: Iterable<Element>, start: number) => {
     const s = surface;
     if (!s || s.still()) return;
     for (const row of rows) {
       if (!(row instanceof HTMLElement) || revealed.has(row)) continue;
       revealed.add(row);
-      const at = s.box(row);
-      const snap = snapshot(row, at.w, at.h, el => { const b = s.box(el), o = s.box(row); return { x: b.x - o.x, y: b.y - o.y, w: b.w, h: b.h }; }).canvas;
-      fresh.push({ row, snap, start, opacity: row.style.opacity, transition: row.style.transition, shown: false });
+      fresh.push({ row, snap: null, start, opacity: row.style.opacity, transition: row.style.transition, shown: false, photos: [...row.querySelectorAll('img')] });
       row.style.transition = 'none';
       row.style.opacity = '0';
     }
@@ -197,7 +219,8 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
       if (raw < 6) return;
       pulling = true;
       phase = 'pulling';
-      (element as HTMLElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
+      // A pointer that is no longer active (or a scripted one) cannot be captured; the pull still follows it.
+      try { (element as HTMLElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
     }
     d.x = d.to = rubber(raw - 6);
     d.v = 0;

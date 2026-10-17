@@ -95,6 +95,7 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
     layer: 'under',
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; delete element.dataset.asciiField; },
     onTheme: retone,

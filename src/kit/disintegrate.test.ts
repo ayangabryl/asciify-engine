@@ -21,6 +21,9 @@ describe('disintegrate', () => {
     const done = disintegrate(asElement(li));
     expect(disintegrate(asElement(li))).toBe(done);
     expect(dom.canvases(list)).toHaveLength(1);
+    // The row holds until the field is ready to draw.
+    expect(name.style.getPropertyValue('opacity')).toBe('');
+    await Promise.resolve();
     expect(name.style.getPropertyValue('opacity')).toBe('0');
     expect(li.attributes.get('aria-hidden')).toBe('true');
     expect(dom.field.pulse).not.toHaveBeenCalled();

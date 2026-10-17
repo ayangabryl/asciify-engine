@@ -19,6 +19,8 @@ export interface CodeInputHandle extends KitHandle<CodeInputOptions> {
   verify(ok: boolean): void;
   /** Empties the code and returns to idle. */
   clear(): void;
+  /** Enters a whole code, as a paste or an autofill would: the characters resolve one after another. */
+  fill(code: string): void;
   readonly value: string;
   readonly state: CodeState;
 }
@@ -133,6 +135,7 @@ export function codeInput(element: HTMLElement, options: CodeInputOptions = {}):
     outset: 16,
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,
     onFail: () => { surface = null; digitStyles.restore(); cells().forEach(c => show(c, true)); },
@@ -241,6 +244,7 @@ export function codeInput(element: HTMLElement, options: CodeInputOptions = {}):
 
   return handle(() => surface, state, () => { field.setAttribute('maxlength', String(length())); sync(); surface?.refresh(); }, {
     verify, clear,
+    fill(code: string) { stagger = 55; accept(code); },
     get value() { return value; },
     get state() { return phase; },
   }, () => {

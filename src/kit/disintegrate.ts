@@ -46,9 +46,11 @@ export function disintegrate(row: HTMLElement, options: DisintegrateOptions = {}
   const host = o.host ?? row.parentElement ?? row;
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
-    cellSize: 5, cellAspect: 0.62, glyphScale: 0.92, contrast: 1.6, ...o.look,
+    cellSize: 5, cellAspect: 0.62, glyphScale: 0.92, contrast: 1.6,
+    // The glyphs shimmer as they go, so the row reads as breaking up rather than fading.
+    drift: 5, ...o.look,
   });
-  let start = 0, snap: HTMLCanvasElement | null = null, from = { x: 0, y: 0, w: 0, h: 0 };
+  let start = 0, started = false, snap: HTMLCanvasElement | null = null, from = { x: 0, y: 0, w: 0, h: 0 };
   let finish: () => void = () => {};
   const surface = mountSurface({
     host,
@@ -56,10 +58,12 @@ export function disintegrate(row: HTMLElement, options: DisintegrateOptions = {}
     outset: OUTSET,
     resolution: 2,
     ink: () => o.ink ?? '--ascii-ink-strong',
+    kit: { current: { lazy: false, globalLook: o.globalLook } },
     reducedMotion: () => o.reducedMotion,
     onFail: () => finish(),
     paint: ({ pen, now, still, scale }) => {
-      if (still || !snap) { queueMicrotask(finish); return false; }
+      if (still) { queueMicrotask(finish); return false; }
+      if (!snap || !started) return false;
       const ms = now - start, k = clamp(ms / o.duration);
       pen.setTransform(scale, 0, 0, scale, 0, 0);
       if (ms >= CLOSE_AT) close(house(clamp((ms - CLOSE_AT) / CLOSE_MS)));
@@ -95,9 +99,9 @@ export function disintegrate(row: HTMLElement, options: DisintegrateOptions = {}
     if (!surface || surface.still()) { hide(); finish(); return; }
     from = surface.box(row);
     snap = snapshot(row, surface.canvas.clientWidth || from.w + OUTSET * 2, surface.canvas.clientHeight || from.h + OUTSET * 2, surface.box).canvas;
-    hide();
-    start = performance.now();
-    surface.kick();
+    // The row stays as it is until the field can draw its first frame, so a slow mount never shows a gap.
+    const go = () => { if (over || started) return; hide(); started = true; start = performance.now(); surface.kick(); };
+    void surface.field.ready.then(go, () => { hide(); finish(); });
   });
   running.set(row, promise);
   return promise;

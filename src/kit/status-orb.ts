@@ -109,6 +109,7 @@ export function statusOrb(element: HTMLElement, options: StatusOrbOptions = {}):
     host: element,
     look,
     ink: dark => target(dark),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: () => [SIZE, SIZE],
     onFail: () => { surface = null; },

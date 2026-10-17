@@ -1,5 +1,7 @@
 # GPU glyph fields (4.11)
 
+For interface components and backgrounds, use `asciify-engine/kit` first ([applying-asciify.md](applying-asciify.md), [kit.md](kit.md)); it is built on this field and adds theme ink, posters, lazy mounting, the context budget and fallbacks. Mount the field directly only for a look the kit has no option for.
+
 `asciify-engine/field` draws an image, a video or generated motion as characters entirely on the GPU, with a fluid wake under the cursor. Use it for full-bleed heroes, section backgrounds and brand fields where the frame must stay smooth while people move over it. It is a separate, optional entry; importing the root, `/core`, `/hover` or `/studio` never loads it.
 
 Use `/studio` instead when you need the 24 render styles, dither, print styles, masks, effects or exports. The field draws glyph ramps only: characters, braille, block shading, dots, or your own letters.
@@ -38,6 +40,7 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 | `clear` | `false` | Keeps the field quiet around content so text stays readable: an element, `{ element, padding, feather, shape }` (followed through layout changes), or a zone in field fractions. (4.12) |
 | `charset` | `' .,:-=+*#%@'` | Ordered from empty to dense. Graphemes, so emoji, braille and block shading each take one cell. Up to 256. |
 | `cellSize`, `cellAspect` | `12`, `1` | Cell height in CSS px; width ÷ height. Monospaced ramps look best near `0.6`. Cells are whole device pixels, and glyphs are sampled texel for texel. |
+| `cellFit` | `'pixel'` | `'pixel'` snaps each cell to whole device pixels, so a fractional `cellSize` rounds and rows drift from a renderer that does not. `'fill'` fits a whole number of cells of at least `cellSize` × `cellAspect` and stretches them to fill the canvas exactly, as the core renderer lays out a frame; each glyph stays texel for texel, centred in its cell. |
 | `font`, `fontWeight`, `glyphScale` | monospace, `500`, `0.8` | Any loaded CSS font. The atlas is redrawn when the font finishes loading. |
 | `color` | `'ink'` | `'ink'` uses `ink`; `'source'` takes each cell's hue from the media. |
 | `ink`, `highlight` | `#f3ba32`, `'auto'` | Hex colors. The wake lifts characters toward `highlight`; `'auto'` brightens each character's own color so the wake keeps the artwork's hue. |

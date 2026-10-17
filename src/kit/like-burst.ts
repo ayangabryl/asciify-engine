@@ -14,6 +14,8 @@ export interface LikeBurstOptions extends KitOptions {
   limit?: HTMLElement | null;
   /** CSS pixels the field reaches past the button on every side. Default 40; set at mount. */
   outset?: number;
+  /** `under` (default) draws between the button's background and its content, so the count and label stay crisp over the sparks; `over` draws above everything. Set at mount. */
+  layer?: 'over' | 'under';
   /** Called after a click toggles the button. */
   onChange?: (pressed: boolean) => void;
 }
@@ -28,7 +30,7 @@ export interface LikeBurstHandle extends KitHandle<LikeBurstOptions> {
   readonly pressed: boolean;
 }
 
-const DEFAULTS = { kind: 'heart' as LikeMark, icon: 'svg', manage: true, outset: 40 };
+const DEFAULTS = { kind: 'heart' as LikeMark, icon: 'svg', manage: true, outset: 40, layer: 'under' as 'over' | 'under' };
 const BURST_MS = 560, UNDO_MS = 300;
 const grey = (t: number) => { const v = Math.round(clamp(t) * 255); return `rgb(${v} ${v} ${v})`; };
 const outCubic = (t: number) => 1 - (1 - clamp(t)) ** 3;
@@ -100,8 +102,10 @@ export function likeBurst(button: HTMLElement, options: LikeBurstOptions = {}): 
   surface = mountSurface({
     host: button,
     outset: state.current.outset,
+    layer: state.current.layer,
     look,
     ink: dark => state.current.ink ?? (state.current.kind === 'heart' ? `var(--ascii-like, ${dark ? '#ff6b70' : '#e5484d'})` : (dark ? '#d8d6cf' : '#1d1d1b')),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; },
     paint: ({ pen, w, now, box }) => {
@@ -145,7 +149,8 @@ export function likeBurst(button: HTMLElement, options: LikeBurstOptions = {}): 
     if (el !== button) styles.set(el, 'opacity', '0');
     timers.push(setTimeout(() => {
       styles.restore();
-      if (el !== button && typeof el.animate === 'function') el.animate({ scale: ['.6', '1.12', '1'] }, { duration: 220, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+      // It fades up as it springs from 0.7x, so the hand-over from characters to the crisp icon has no hard cut.
+      if (el !== button && typeof el.animate === 'function') el.animate({ opacity: ['0', '1'], scale: ['.7', '1'] }, { duration: 220, easing: 'cubic-bezier(.34, 1.42, .64, 1)' });
     }, BURST_MS * 0.62) as unknown as number);
     surface.kick();
   };

@@ -71,6 +71,12 @@ export interface GlyphFieldSettings {
   cellSize: number;
   /** Cell width divided by height. 1 is a square grid. */
   cellAspect: number;
+  /**
+   * `pixel` (default) snaps each cell to whole device pixels. `fill` fits a whole number of cells of at least `cellSize` to the
+   * canvas and stretches them to fill it exactly, as asciify-engine's core renderer lays out a frame, so rows and columns keep their
+   * place however fractional the cell; each glyph sits centred in its cell, texel for texel.
+   */
+  cellFit: 'pixel' | 'fill';
   font: string;
   fontWeight: number;
   /** Glyph height relative to the cell. */
@@ -135,6 +141,7 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   charset: ' .,:-=+*#%@',
   cellSize: 12,
   cellAspect: 1,
+  cellFit: 'pixel',
   font: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontWeight: 500,
   glyphScale: 0.8,
@@ -223,6 +230,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     charset,
     cellSize: clamp(input.cellSize, 3, 96, base.cellSize),
     cellAspect: clamp(input.cellAspect, 0.3, 2, base.cellAspect),
+    cellFit: input.cellFit === 'fill' || input.cellFit === 'pixel' ? input.cellFit : base.cellFit,
     font: typeof input.font === 'string' && input.font.trim() ? input.font : base.font,
     fontWeight: Math.round(clamp(input.fontWeight, 100, 900, base.fontWeight)),
     glyphScale: clamp(input.glyphScale, 0.3, 1.6, base.glyphScale),
@@ -292,6 +300,13 @@ export function fieldSourceScale(naturalWidth: number, naturalHeight: number, wi
   const density = fit === 'cover' ? Math.min(naturalWidth / width, naturalHeight / height) : Math.max(naturalWidth / width, naturalHeight / height);
   const needed = texelsPerCell / cellHeight / density;
   return needed > 0.5 ? 1 : 2 ** -Math.floor(Math.log2(1 / needed));
+}
+
+/** The grid pitch in device pixels: the atlas cell for `pixel`, or a whole number of cells stretched across the canvas for `fill`. */
+export function fieldCellPitch(cellFit: 'pixel' | 'fill', cellSize: number, cellAspect: number, pixelRatio: number, width: number, height: number, cell: { width: number; height: number }): [number, number] {
+  if (cellFit !== 'fill' || !(width > 0 && height > 0)) return [cell.width, cell.height];
+  const h = cellSize * pixelRatio, w = h * cellAspect;
+  return [width / Math.max(1, Math.floor(width / w + 1e-6)), height / Math.max(1, Math.floor(height / h + 1e-6))];
 }
 
 /** Device-pixel cell and atlas layout. Cells are whole pixels so glyphs are sampled texel for texel. */

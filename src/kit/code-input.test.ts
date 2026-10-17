@@ -50,6 +50,20 @@ describe('codeInput', () => {
     expect(onComplete).toHaveBeenCalledWith('1234');
     c.destroy();
   });
+  it('fills a whole code, resolving the characters one after another', () => {
+    const el = element();
+    const onComplete = vi.fn();
+    const c = codeInput(as(el), { length: 4, onComplete });
+    const { cells } = parts(el);
+    c.fill('12-34');
+    expect(c.value).toBe('1234');
+    run(330);
+    expect(cells[0].querySelector('[data-digit]')!.style.getPropertyValue('opacity')).toBe('1');
+    expect(cells[3].querySelector('[data-digit]')!.style.getPropertyValue('opacity')).toBe('0');
+    run(600);
+    expect(onComplete).toHaveBeenCalledWith('1234');
+    c.destroy();
+  });
   it('breaks up and clears a wrong code, and gathers a right one into a check', () => {
     const el = element();
     const c = codeInput(as(el), { length: 4 });

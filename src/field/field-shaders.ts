@@ -205,24 +205,26 @@ export const FIELD_COMPOSITE = `#version 300 es
 precision highp float;
 precision highp sampler2D;
 uniform sampler2D uAtlas, uCells, uUnder;
-uniform vec2 uResolution, uCell;
+uniform vec2 uResolution, uCell, uPitch;
 uniform float uColumns, uDotScale;
 uniform int uMark;
 out vec4 outColor;
 void main(){
   vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
-  vec2 cell=floor(frag/uCell);
+  // The pitch is the atlas cell, or a fractional one under cellFit 'fill', where each glyph sits centred in its stretched cell.
+  vec2 cell=floor(frag/uPitch);
   vec4 ink=texelFetch(uCells,ivec2(cell),0),under=texelFetch(uUnder,ivec2(cell),0);
-  vec2 local=frag-cell*uCell;
+  vec2 local=frag-cell*uPitch;
   float coverage;
   if(uMark==1){
     // Halftone: dot area follows tone, so midtones read true; edges are antialiased to one device pixel.
-    float r=sqrt(ink.a)*min(uCell.x,uCell.y)*.5*uDotScale;
-    coverage=ink.a>.003?clamp(r-length(local-uCell*.5)+.5,0.,1.):0.;
+    float r=sqrt(ink.a)*min(uPitch.x,uPitch.y)*.5*uDotScale;
+    coverage=ink.a>.003?clamp(r-length(local-uPitch*.5)+.5,0.,1.):0.;
   } else {
     float index=floor(ink.a*255.+.5);
     ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
-    coverage=texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(local),0).a;
+    vec2 texel=floor(local-floor((uPitch-uCell)*.5));
+    coverage=all(greaterThanEqual(texel,vec2(0.)))&&all(lessThan(texel,uCell))?texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(texel),0).a:0.;
   }
   outColor=vec4(ink.rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
 }`;

@@ -32,6 +32,17 @@ describe('toastStack', () => {
     expect(dom.canvases(host)).toHaveLength(0);
   });
 
+  it('lays its field above every toast, and draws no glint when asked not to', () => {
+    const host = dom.element();
+    const stack = toastStack(asElement(host), { glint: false });
+    expect(dom.canvases(host)[0].style.zIndex).toBe('11');
+    stack.push({ title: 'Invite sent' });
+    dom.settle();
+    expect(dom.pen().stroke).not.toHaveBeenCalled();
+    expect(dom.frames.size).toBe(0);
+    stack.destroy();
+  });
+
   it('stacks the newest in front and keeps at most `max`', () => {
     const host = dom.element();
     const stack = toastStack(asElement(host), { max: 2, reducedMotion: true });
@@ -112,5 +123,17 @@ describe('toastStack', () => {
 
   it('exports its defaults', () => {
     expect(TOAST_DEFAULTS).toMatchObject({ max: 3, duration: 6000 });
+  });
+});
+
+describe('hidesInk', () => {
+  it('flags a fill too close to the ink for gathering characters to read, and passes clear or contrasting fills', async () => {
+    const { hidesInk } = await import('./toast-stack');
+    expect(hidesInk('rgb(29, 29, 27)', '#1d1d1b')).toBe(true);
+    expect(hidesInk('rgb(40 40 40)', '#1d1d1b')).toBe(true);
+    expect(hidesInk('rgb(255, 255, 255)', '#1d1d1b')).toBe(false);
+    expect(hidesInk('rgba(29, 29, 27, 0)', '#1d1d1b')).toBe(false);
+    expect(hidesInk('rgb(250 249 245 / 90%)', '#d8d6cf')).toBe(true);
+    expect(hidesInk('transparent', '#1d1d1b')).toBe(false);
   });
 });

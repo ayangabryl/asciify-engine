@@ -70,11 +70,12 @@ export function paintOrb(pen: CanvasRenderingContext2D, w: number, h: number, se
     pen.strokeStyle = shade(0.16 * depth);
     pen.beginPath(); pen.ellipse(cx, cy, r * Math.abs(Math.cos(phase)), r, 0, 0, Math.PI * 2); pen.stroke();
   }
-  pen.globalCompositeOperation = 'source-over';
+  // The rim adds light at the edge, still in 'lighter', so the sphere reads round and bright to its outline.
   const rim = pen.createRadialGradient(cx, cy, r * 0.7, cx, cy, r);
-  rim.addColorStop(0, 'rgb(0 0 0 / 0)'); rim.addColorStop(1, shade(0.3));
+  rim.addColorStop(0, '#000'); rim.addColorStop(1, shade(0.3));
   pen.fillStyle = rim; pen.fillRect(cx - r, cy - r, r * 2, r * 2);
   pen.restore();
+  pen.globalCompositeOperation = 'source-over';
   if (!stops.length) return;
   pen.globalCompositeOperation = 'color';
   const turn = sec * 0.4, shift = lv * 0.5;
@@ -114,6 +115,7 @@ export function voiceOrb(element: HTMLElement, options: VoiceOrbOptions = {}): V
     outset: Math.round((element.offsetWidth || 0) * 0.08),
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onTheme: () => surface && canvasStyle(surface),
     onFail: () => { surface = null; },

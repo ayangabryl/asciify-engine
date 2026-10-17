@@ -70,7 +70,8 @@ class FakeElement extends FakeNode {
   appendChild<T extends FakeNode>(node: T) { node.remove(); node.parentElement = this; this.childNodes.push(node); return node; }
   removeChild(node: FakeNode) { this.childNodes = this.childNodes.filter(n => n !== node); node.parentElement = null; }
   replaceChildren(...nodes: FakeNode[]) { for (const n of this.childNodes) n.parentElement = null; this.childNodes = []; nodes.forEach(n => this.appendChild(n)); }
-  prepend(node: FakeNode) { node.remove(); node.parentElement = this; this.childNodes.unshift(node); }
+  insertBefore<T extends FakeNode>(node: T, before: FakeNode | null) { if (!before) return this.appendChild(node); node.remove(); node.parentElement = this; this.childNodes.splice(this.childNodes.indexOf(before), 0, node); return node; }
+    prepend(node: FakeNode) { node.remove(); node.parentElement = this; this.childNodes.unshift(node); }
   setAttribute(name: string, value: string) { this.attributes.set(name, String(value)); if (name === 'style') String(value).split(';').forEach(rule => { const [k, v] = rule.split(':'); if (k && v) this.style[k.trim().replace(/-(\w)/g, (_, c) => c.toUpperCase())] = v.trim(); }); }
   getAttribute(name: string) { return this.attributes.get(name) ?? null; }
   hasAttribute(name: string) { return this.attributes.has(name); }
@@ -270,7 +271,8 @@ describe('lifecycle', () => {
     for (const kit of kits) {
       for (const key of ['update', 'play', 'pause', 'destroy']) expect(typeof (kit as unknown as Record<string, unknown>)[key]).toBe('function');
       expect(kit.supported).toBe(true);
-      expect(kit.field).toBe(field);
+      kit.field?.pulse();
+      expect(field.pulse).toHaveBeenCalled();
       kit.destroy();
     }
   });
@@ -533,10 +535,29 @@ describe('component behaviour', () => {
     b.fail('Retry');
     expect(button.animate).toHaveBeenCalled();
     b.succeed('Deployed');
-    expect(button.textContent).toContain('✓ Deployed');
+    expect(button.textContent).toContain('Deployed');
+    expect(button.querySelector('[data-ascii-check]')?.style.opacity).toBe('1');
     b.destroy();
     expect(button.textContent).toBe('Deploy');
     expect(button.dataset.state).toBeUndefined();
+  });
+  it('breathes one cell over an icon-only button and swaps in a check, naming each state', () => {
+    const button = element('BUTTON'), icon = new FakeElement('svg');
+    button.setAttribute('aria-label', 'Refresh status');
+    button.appendChild(icon);
+    const b = buttonLoading(asElement(button), { reducedMotion: false });
+    b.start('Refreshing status');
+    expect(button.getAttribute('aria-label')).toBe('Refreshing status');
+    expect(icon.style.getPropertyValue('opacity')).toBe('0');
+    advance(); advance();
+    expect(frames.size).toBe(1);
+    b.succeed('Status up to date');
+    expect(button.querySelector('[data-ascii-check]')?.style.opacity).toBe('1');
+    b.reset();
+    expect(button.getAttribute('aria-label')).toBe('Refresh status');
+    expect(icon.style.getPropertyValue('opacity')).toBe('1');
+    b.destroy();
+    expect(button.children).toEqual([icon]);
   });
   it('rolls the odometer only while it changes, and keeps a live value', () => {
     const figure = element('SPAN');
@@ -551,6 +572,16 @@ describe('component behaviour', () => {
     expect(figure.children[0].textContent).toBe('$49,530');
     o.destroy();
     expect(figure.textContent).toBe('$49,530');
+  });
+  it('draws the whole odometer figure in glyphs with the glyph face, and hands back to text', () => {
+    const figure = element('SPAN');
+    const o = odometer(asElement(figure), { value: 12, face: 'glyph' });
+    const digits = figure.children[1];
+    expect(digits.style.getPropertyValue('color')).toBe('transparent');
+    o.update({ face: 'text' });
+    expect(digits.style.getPropertyValue('color')).toBe('inherit');
+    o.destroy();
+    expect(figure.textContent).toBe('12');
   });
   it('settles the orb on its outcome and stops drawing', () => {
     const el = element();

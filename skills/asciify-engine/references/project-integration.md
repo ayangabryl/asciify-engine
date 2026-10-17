@@ -11,7 +11,7 @@ A downloaded PNG is one output; it is not a substitute for a live component.
 | Application-owned render loop | `/studio` → `createStudioRenderer` | Caller passes time, pointer input, invalidation and cleanup. |
 | ASCII text data | Core frame/text conversion | No animation loop needed unless requested. |
 | Full-bleed hero or brand field that must stay smooth under the cursor, or the user's word as the characters | `/field` → `mountGlyphField` (4.11+) | The field owns its wake and drift. Keep a poster and a `/studio` or core fallback for browsers without a GPU; see [glyph-field.md](glyph-field.md). |
-| Ambient background with no media | Downloaded template from asciify.org/backgrounds, or a `/field` generated scene | Templates own their loop; call `destroy()` on unmount. |
+| Interface component, or a background with no media | `/kit`: one call per component, `background()` with a preset | The kit owns its loop, theme ink, posters and fallback; call `destroy()` on unmount. See [applying-asciify.md](applying-asciify.md). |
 
 Choose colors, fonts and sizes from the project's design tokens before writing settings; [design-matching.md](design-matching.md) maps the user's mood words to values.
 

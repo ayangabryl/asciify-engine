@@ -79,6 +79,7 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
     layer: 'under',
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: (w, h) => { const W = Math.min(480, Math.max(2, Math.round(w))); return [W, Math.max(2, Math.round((W * h) / Math.max(1, w)))]; },
     onFail: () => { surface = null; styles.restore(); },
@@ -87,7 +88,8 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
       if (running && state.current.elapsed) state.current.elapsed.textContent = elapsedLabel(now - start);
       // While a request runs the ground breathes on a slow, uneven beat, so a long wait never reads as a loop.
       const breathe = running && !still ? 1 + 0.12 * Math.sin(t * 2.1) * (0.7 + 0.3 * Math.sin(t * 0.37)) : 1;
-      const nw = Math.max(2, Math.round(W / 20)), nh = Math.max(2, Math.ceil(H / 20));
+      // The ground's grain is fixed to the frame, not its pixels: 24 noise cells across at any size.
+      const nw = 24, nh = Math.max(2, Math.ceil((24 * H) / Math.max(1, W)));
       if (noise.width !== nw || noise.height !== nh) { noise.width = nw; noise.height = nh; }
       driftNoise(noise, SEED + (running ? t * 0.55 : 0), 0.35);
       const layers = layersAt(now, still);
@@ -118,7 +120,8 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
   const showPhoto = (on: boolean) => {
     const img = photo();
     if (!img || !surface) return;
-    styles.set(img, 'transition', surface.still() ? 'none' : `opacity ${STEP}ms cubic-bezier(.16, 1, .3, 1)`);
+    // The characters already hold the image, so the photo crossfades in on an even curve; the house curve's fast start reads as a pop.
+    styles.set(img, 'transition', surface.still() ? 'none' : `opacity ${on ? STEP : 240}ms ${on ? 'cubic-bezier(.45, 0, .25, 1)' : 'cubic-bezier(.16, 1, .3, 1)'}`);
     styles.set(img, 'opacity', on ? '1' : '0');
   };
   const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

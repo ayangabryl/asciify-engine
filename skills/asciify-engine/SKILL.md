@@ -1,51 +1,80 @@
 ---
 name: asciify-engine
-description: Build and tune browser ASCII art with asciify-engine so it fits the user's request, preferences and the project's design. Use for photo, video and GIF conversion, interactive heroes, GPU character fields with the user's own words, ambient backgrounds, text banners, art styles and export, hover and motion choices, layered HTML typography, and rendering performance.
+description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.13.0"
-  updated: "2026-10-14"
+  tested-engine: "4.14.0"
+  updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.13.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.14.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
-- Playground: https://asciify.org/editor
-- API documentation: https://asciify.org/docs/api
+- Components: https://asciify.org/components · Backgrounds: https://asciify.org/backgrounds
+- Playground: https://asciify.org/editor · API documentation: https://asciify.org/docs/api
 - Repository: https://github.com/ayangabryl/asciify-engine
 
 ```sh
 npm install asciify-engine@latest
 ```
 
-Entries: `asciify-engine` and `/core` for media and text conversion; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for GPU character fields; `/kit` for interface components, one call each. Each optional entry loads only when imported. Procedural background templates are downloaded from asciify.org/backgrounds and are not npm exports. GIF decoding loads `gifuct-js` when a GIF API is called.
+Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
 
-## Start here: the request, then the design
+## Start here: kit first
 
-Most requests are a feeling ("make the hero feel alive", "retro", "subtle behind the pricing", "like unseen.co, with our name") rather than an API. Before writing code:
+Most requests are a feeling ("make the loading state feel alive", "a calm background behind pricing", "like asciify.org") rather than an API. Work in this order:
 
-1. **Read the request.** Subject (their media, a word, or nothing), placement (hero, background behind text, card, banner), mood words, interaction, and any reference site.
-2. **Read the design.** Open the project's tokens (CSS custom properties, Tailwind theme, brand file): page background, text colors, the one accent, mono and display fonts, light/dark themes, motion durations and easing, reduced-motion handling.
-3. **Pick the tool** from the table below, then **derive every color, font and size from the tokens**. Never add a new brand color, a black canvas on a light site, or a white hover glow on a colored artwork.
-4. **Decide living or still.** A still photo can be made to feel alive (field `drift`, studio `motion`), but some users want it still. Follow their words; keep art behind text, in grids and in data views still; reduced motion always gets a still. See [living or still](references/design-matching.md#living-or-still).
+1. **Is it a UI component or a background?** Almost always, yes. Read [applying-asciify.md](references/applying-asciify.md) (the house design: when characters earn a place, ink, the clear zone and veil, density, radii, motion, performance, accessibility, which background suits which surface), then take the call from [components.md](references/components.md) and its options from [kit.md](references/kit.md). Stop there unless the kit has no option for the look.
+2. **Read the request.** Subject (their media, a word, or nothing), placement (hero, card, control, background behind text), mood words, interaction, any reference site.
+3. **Read the design.** Open the project's tokens: ground and surface colours, text colours, the one accent, mono and display fonts, radii, light and dark themes, motion durations and easing, reduced-motion handling. Map the kit's ink tokens (`--ascii-ink`, `--ascii-ink-strong`, `--ascii-success`, `--ascii-warning`, `--ascii-error`) onto them; never add a brand colour.
+4. **Decide living or still.** Follow the user's words; keep art behind text, in grids and in data views still; reduced motion always gets a still. See [living or still](references/design-matching.md#living-or-still).
 5. **Say what you chose in one line** and offer one alternative. Ask only when the media is missing or motion would be new to a site that has none.
 
-**For any UI component, start with [references/components.md](references/components.md) and [references/kit.md](references/kit.md).** `asciify-engine/kit` makes each component one call that handles theme ink, reduced motion, the no-WebGL fallback and cleanup; components.md has 31 of them as short kit snippets: controls (button loading, slide to confirm, like burst, verification code, command palette, pills, tabs), feedback (loading states, skeleton loader, toast stack, pull to refresh), AI (voice orb, thinking, streaming text, image generation), transitions (page transition, delete into characters), data (chart, odometer, border beam), media (before and after, dropzone, accordion, swipe cards, video), text (decode headline, wordmark) and pages (sign-in, pricing, 404, hero background), each with the prompt a person gives and the kit code. Start there when the request matches one; drop to the raw `/field` helper at the end of components.md only for a look the kit has no option for.
-
-[references/design-matching.md](references/design-matching.md) maps mood words to settings, explains light themes, contrast and fonts, and gives tested recipes for the common requests. Read it whenever the user describes a look rather than an option.
+[design-matching.md](references/design-matching.md) maps mood words to settings for the lower-level APIs and media looks.
 
 | The user wants | Use |
 | --- | --- |
-| A UI component in characters (button loading, border beam, toasts, tabs, AI states, pages) | `asciify-engine/kit` ([components.md](references/components.md), [kit.md](references/kit.md)) |
-| Their photo, video or GIF as ASCII on the page, optionally answering the cursor | `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` for the website hovers |
-| A full-bleed hero or brand field that stays smooth under the cursor, or their own word as the characters | `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)); `hover: 'trail'` for the classic Asciify Trail on pure characters, `'fluid'` for bold and liquid, `'lantern'` for a subtle light |
-| A calm background behind product content (SaaS hero, pricing, docs), light or dark | `mountGlyphField` with `mark: 'dot'`, `scene: 'drift'`, `clear` around the copy, and `pulse()` on events (4.12) |
-| Art styles, saved looks, backdrops, masks, effects, PNG/MP4/GIF export | `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
-| Several media and text layers in one artwork | `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
-| An ambient background with no media | A template from asciify.org/backgrounds, or a `/field` generated scene |
-| A text banner or lettering | `asciifyText` / `renderTextToCanvas` |
-| Headline text visible through the art | Layered HTML ([layered-hero.md](references/layered-hero.md)) |
+| A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404 | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
+| A background behind a hero, pricing, docs or a section, light or dark | Kit `fieldBackground(el, { preset: 'hero', clear })` (asciify.org's hero) or `background(el, { preset, clear })` with one of the 26 presets below |
+| Their word or brand in characters | Kit `wordmark`, or `background()` with `wordField` |
+| Their video in characters on the page | Kit `asciiVideo` |
+| Their photo, video or GIF converted, optionally answering the cursor | Advanced: `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` |
+| A full-bleed field with a look the kit has no option for | Advanced: `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)) |
+| Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
+| Several media and text layers in one artwork | Advanced: `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
+| A text banner or lettering | Advanced: `asciifyText` / `renderTextToCanvas` |
+| Headline text visible through media art | Advanced: layered HTML ([layered-hero.md](references/layered-hero.md)) |
+
+## The kit in one paragraph
+
+Each kit function mounts an `aria-hidden` field over or inside your element, follows its size and border radius, inks it from your theme in light and dark, pauses off screen, honours reduced motion, falls back without WebGL2 to an inert handle that leaves your HTML working, and cleans up on `destroy()`. components.md has 31 components as short snippets with the prompt a person gives, in categories Components, AI, Text, Transitions, Media, Pages and Backgrounds. In React, create the handle in an effect and return its `destroy`.
+
+```ts
+import { beam } from 'asciify-engine/kit';
+const b = beam(card, { palette: 'mono', mode: 'pulse' });
+// On unmount: b.destroy();
+```
+
+`background()`, the 26 presets, `lazy`, `poster`, `setFieldBudget` and `setGlobalLook` are new in 4.14.0. Check that the installed `asciify-engine/kit` exports them; if not, upgrade ([upgrading.md](references/upgrading.md)).
+
+## Backgrounds
+
+`background(element, { preset })` draws every background on asciify.org/backgrounds with the site's own renderers and graphite inks. Import presets by name; a page pays only for those it imports. Which one suits which surface, and how to keep it calm, is in [applying-asciify.md](references/applying-asciify.md#9-backgrounds).
+
+```ts
+import { background, halftone } from 'asciify-engine/kit';
+const bg = background(pricing, { preset: halftone, clear: pricingCopy });
+```
+
+The 26 presets, as export → `id` (name):
+
+- GPU glyph field (WebGL2, shares the context budget): `drift` → `drift` (Drift), `halftone` → `halftone` (Halftone), `wordField` → `field` (Field), `fluid` → `fluid` (Fluid).
+- 2D canvas (no WebGL): `caustics` → `caustics` (Caustics), `contour` → `contour` (Contour), `facet` → `facet` (Facet), `etch` → `etch` (Etch), `moire` → `moire` (Moiré), `weave` → `weave` (Weave), `veil` → `veil` (Veil), `dune` → `dune` (Dune), `wave` → `wave` (Wave), `aurora` → `aurora` (Aurora), `noise` → `noise` (Noise), `silk` → `silk` (Silk), `rain` → `rain` (Rain), `stars` → `stars` (Stars), `pulse` → `pulse` (Pulse), `grid` → `grid` (Grid), `voidWell` → `void` (Void), `morph` → `morph` (Morph), `fire` → `fire` (Fire), `dna` → `dna` (DNA), `terrain` → `terrain` (Terrain), `circuit` → `circuit` (Circuit).
+
+`voidWell` is the export for the `void` preset, because `void` is reserved in JavaScript. `wordField`'s id is `field`, the name the site uses. `fieldBackground` is separate: its `hero`, `brand` and `notFound` presets are the asciify.org hero ground, the same ground in the brand colour, and the 404.
+
+Downloaded templates from asciify.org/backgrounds (`asciiBackground` from a local `./wave.js`) still work in apps that already use them; new work uses `background()`.
 
 ## Install the agent skill
 
@@ -55,15 +84,23 @@ npx skills add ayangabryl/asciify-engine --skill asciify-engine
 
 This uses the Vercel Skills CLI to install the repository skill and its linked resources. The npm dependency and an installed agent skill update separately. When asked to update Asciify or when an integration needs newer options, follow [references/upgrading.md](references/upgrading.md): check npm's current `latest`, update with the project's package manager, then refresh only this skill in its installed scope. Do not treat this document's tested version as permanently latest, or upgrade unrelated skills/dependencies.
 
+## Verify before handing off
+
+Run the checklist at the end of [applying-asciify.md](references/applying-asciify.md#10-checklist-before-you-finish) for kit work. For any integration, check the real page: readable subject and text in both themes, no stretching or unintended margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, WebGL off, and cleanup after navigation. Observe several seconds of motion and a loop boundary. State the measured device and settings with any FPS figure; screenshots alone do not establish performance.
+
+Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload`.
+
+# Advanced: the lower-level APIs
+
+Use these when the request is media conversion, art styles or export, or a field look the kit cannot give. They do not handle theme ink, posters, the context budget or fallbacks for you; the rules in applying-asciify.md still apply to the result.
+
 ## Choose the integration
 
 For a live project component, start with [project-integration.md](references/project-integration.md): it maps each use case to one rendering pipeline, covers instance ownership, and keeps PNG/video export independent of live playback. Use `/studio` for a new composition with art styles, masks, backdrops and saved settings. It already owns hover/motion; do not add another `/hover` instance on top.
 
-
 - Static image: `asciify(source, canvas, config)` returns `Promise<() => void>`. Call the cleanup on unmount, including for a still image.
 - Video: `asciifyVideo(source, canvas, config)` returns `Promise<() => void>`. Call that function on unmount. Use `fitTo` and `objectFit: 'cover'` for full-bleed heroes; `contain` for a whole-subject preview.
 - GIF: `asciifyGif(source, canvas, config)` returns a cleanup function asynchronously.
-- Procedural background: download a template from https://asciify.org/backgrounds and import its `asciiBackground` helper locally. Call its `destroy()` on unmount. No background generators ship in npm 4.0.
 - Dense custom rendering: use `imageToAsciiTextFrame` and `renderTextFrameToCanvas`; keep the same options when converting and rendering. Use object frames when per-cell mutation is required.
 
 For a hero with HTML layered through the ASCII, read [references/layered-hero.md](references/layered-hero.md) and use the accompanying [HTML](examples/layered-hero.html), [CSS](examples/layered-hero.css), and [JavaScript](examples/layered-hero.js). These are ordinary Vite/bundler inputs, not another npm dependency. Supply your own media.
@@ -112,7 +149,7 @@ const letters = [...new Set('ASCIIFY'.toUpperCase().replace(/[^A-Z]/g, ''))].joi
 const charset = ` .:-=+${letters}#%@`;
 ```
 
-Preview it: letter glyph densities differ, so arbitrary words are not automatically an evenly ordered ramp. When the user wants the artwork drawn in their name, `/field` handles it better: put the word after a quiet ramp (`' .,:-+' + word`), use one ink with `shade: 1`, and let brightness carry the image (see [design-matching.md](references/design-matching.md)). Keep the leading space and the light/dense symbols. Use the curated `CHARACTER_SETS.standard.chars`, `detailed.chars`, `blocks.chars`, or `braille.chars` from `/core` when appropriate.
+Preview it: letter glyph densities differ, so arbitrary words are not automatically an evenly ordered ramp. When the user wants the artwork drawn in their name, the kit's `wordmark` or `wordField` background does it; on raw `/field`, put the word after a quiet ramp (`' .,:-+' + word`), use one ink with `shade: 1`, and let brightness carry the image (see [design-matching.md](references/design-matching.md)). Keep the leading space and the light/dense symbols. Use the curated `CHARACTER_SETS.standard.chars`, `detailed.chars`, `blocks.chars`, or `braille.chars` from `/core` when appropriate.
 
 ## Engine effects versus studio effects
 
@@ -124,25 +161,21 @@ To reproduce those interactions, read [references/studio-effects.md](references/
 
 For built-in hover alone, use a supported `options.hoverEffect` and a restrained nonzero `hoverStrength`; validate its behavior instead of promising that it matches the website.
 
-## Text layering
+## Text layering over media art
 
-Use real HTML for the headline, description, and links. The engine draws artwork; CSS controls which HTML sits in front of it.
-
-For our cover relationship, use a single isolated hero stacking context:
+For interface grounds, text sits on a clear zone and a frosted veil ([applying-asciify.md](references/applying-asciify.md#3-text-over-a-field-clear-zone-plus-frosted-veil)). For a media hero where the headline should read through the artwork, use real HTML and a single isolated hero stacking context:
 
 1. Headline at `z-index: 0`.
 2. Transparent ASCII canvas/stage at `z-index: 1`.
 3. Description, CTA, and motion controls at `z-index: 2` or above.
 
-Keep these as sibling layers. A transformed or isolated content wrapper can trap all its descendants below the canvas. Set decorative artwork to `pointer-events: none`; attach optional hover input to the positioned hero host. Keep controls clickable, focusable, and visually unobscured. Leave canvas background transparent; an opaque canvas or stage hides the headline beneath it.
-
-Choose the more conventional arrangement—artwork behind all text—when it improves readability. The layered example explains both arrangements without imposing the Asciify homepage's branding or layout on another project.
+Keep these as sibling layers. A transformed or isolated content wrapper can trap all its descendants below the canvas. Set decorative artwork to `pointer-events: none`; attach optional hover input to the positioned hero host. Keep controls clickable, focusable, and visually unobscured. Leave canvas background transparent; an opaque canvas or stage hides the headline beneath it. Choose artwork behind all text when it reads better.
 
 ## Performance and lifecycle
 
 - Reduce processing dimensions and cell count before dropping source playback FPS. Do not default to 60 fps on a 24 fps video.
 - Start video at 24–30 fps with a 720–960px processing cap. More processing pixels do not create detail absent from the source.
-- When the user asks for a smooth, high-frame-rate hero, prefer `/field` over a canvas pipeline, and keep the canvas pipeline as its fallback.
+- When the user asks for a smooth, high-frame-rate hero, prefer the kit or `/field` over a canvas pipeline, and keep the canvas pipeline as its fallback.
 - Keep stable canvas dimensions; resize on layout changes, not on every animation frame.
 - Avoid remounting the renderer on pointer movement or each React render.
 - Pause media offscreen and when the document is hidden. Reduced-motion users should get a still; do not merely hide a playing video with CSS.
@@ -150,13 +183,7 @@ Choose the more conventional arrangement—artwork behind all text—when it imp
 - Compress media at a resolution appropriate to ASCII sampling, remove unused audio, use fast-start MP4, and provide a small poster. Immutable caching requires a content-hashed URL; keep this skill's URL revalidatable.
 - Fine dithering can add texture but can shimmer on moving footage. Compare a still and a loop, and offer a non-dithered rendering.
 - YouTube page URLs and iframe players are not direct canvas video sources. Use permitted direct media files with suitable CORS; see https://asciify.org/docs/youtube.
-
-## Verify before handing off
-
-Check the actual implementation: readable subject and text, no stretching or unintended empty margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, and cleanup after navigation. Observe several seconds of motion and an entire loop boundary. State the measured device/settings if reporting FPS; screenshots and recordings alone do not establish performance.
-
-Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload`. For deterministic composition export, use `/studio` as described below. For recording an existing interactive canvas, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.
-
+- For deterministic composition export, use `/studio`. To record an existing interactive canvas, use a browser `MediaRecorder` with a supported `canvas.captureStream()` format and clean up its tracks; for snapshots, inspect the published `captureSnapshot` / `snapshotAndDownload` types.
 
 ## Hero finish
 
@@ -168,14 +195,13 @@ For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved lo
 
 ## GPU glyph fields
 
-For a full-bleed hero, section background or brand field that must stay smooth under the cursor, use `mountGlyphField` from `asciify-engine/field` and read [references/glyph-field.md](references/glyph-field.md). It draws glyph ramps (including words and braille) from images, video or generated motion on WebGL2 with a fluid wake that keeps each character's own color. It does not replace `/studio` for the 24 render styles, dither, print styles, effects or export. Check `isGlyphFieldSupported()` (false without a GPU), always provide a poster and a canvas fallback, and call `destroy()` on unmount.
+The kit is built on `mountGlyphField` from `asciify-engine/field`. Use it directly only for a look the kit has no option for, and read [references/glyph-field.md](references/glyph-field.md) and the raw-field helper at the end of [components.md](references/components.md#advanced-raw-field). It draws glyph ramps (including words and braille) from images, video or generated motion on WebGL2 with a fluid wake. It does not replace `/studio` for the 24 render styles, dither, print styles, effects or export. Check `isGlyphFieldSupported()`, provide a poster and a fallback, honour reduced motion, and call `destroy()` on unmount. To build your own component with the kit's plumbing instead, use `mountSurface` ([kit.md](references/kit.md#your-own-components)).
 
 ## Current catalogs
 
 For multiple media/text layers in one live component, use 4.8+ `mountStudioProject` and read [layered-projects.md](references/layered-projects.md). It shares one playback loop and rendering budgets across up to eight independently styled layers. Persist source keys separately from media, and use `exportStudioProject` for independent exports. Do not create one mounted Studio instance per layer or rasterize accessible interface text.
 
 Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS` and their key types are removed. Do not import them or generate old names such as Katakana, Binary, Waves or Smoke. Use the 24 `STUDIO_STYLES` for render-style selectors and `/studio` rendering. For ASCII-only character ramps use `CHARACTER_SETS` from `/core` or `STUDIO_CHARACTER_SETS` from `/studio`; custom Unicode and user-provided frame arrays remain supported. Core `artStyle` only accepts `classic`; use explicit options instead of preset shortcuts. Despite the requested 4.1.0 version number, migrating these removed APIs is a breaking change.
-
 
 ## Version notes
 
@@ -197,10 +223,10 @@ From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risogr
 
 `STUDIO_ANIMATION_PRESETS` provides six editable motion/hover pairings through `/studio` and `/hover`. Apply `motion` and `hover` to an existing Studio player to keep the source and art style; do not treat the pairings as additional art styles. Read [studio-effects.md](references/studio-effects.md#lively-images-410) for exact new IDs, loop limits and the live component example.
 
-### GPU glyph fields (4.11)
+### GPU glyph fields (4.11) and the kit (4.13)
 
-`asciify-engine/field` adds `mountGlyphField`, `isGlyphFieldSupported` and `glyphFieldTier`. Older installs do not have this entry; upgrade before using it.
+`asciify-engine/field` adds `mountGlyphField`, `isGlyphFieldSupported` and `glyphFieldTier` in 4.11; `mark`, `clear` and `pulse()` in 4.12. `asciify-engine/kit` arrives in 4.13; `background()` and its presets, `lazy`, `poster`, the context budget and the global look follow it. Older installs do not have these entries; upgrade before using them.
 
 ## Scenario prompts
 
-Use [scenario-prompts.md](references/scenario-prompts.md) for copyable briefs covering images, heroes, characters, all styles, dither, backgrounds, video/GIF, scroll, layers, text, export, frameworks, procedural trails, reference matching, troubleshooting, upgrades, saved looks and accessibility. Adapt the prompt to the user’s intent; do not add unrelated features. Use the published renderer’s native Trail; do not add a separate tonal ribbon overlay.
+Use [scenario-prompts.md](references/scenario-prompts.md) for copyable briefs covering images, heroes, characters, all styles, dither, backgrounds, video/GIF, scroll, layers, text, export, frameworks, procedural trails, reference matching, troubleshooting, upgrades, saved looks and accessibility. Adapt the prompt to the user's intent; do not add unrelated features. Use the published renderer's native Trail; do not add a separate tonal ribbon overlay.

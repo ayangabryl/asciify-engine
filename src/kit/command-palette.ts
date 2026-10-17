@@ -65,6 +65,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     // Over the content: the marker sits in the gutter on top of the row's own highlight, and flights draw while the content is hidden.
     look,
     ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,
     onFail: () => { surface = null; },
@@ -168,7 +169,9 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     panel.dataset.state = 'closing';
     if (surface) { fly(true); hideContent(true); }
     const anim = clip([full(), triggerInset()], CLOSE_MS, 'forwards');
-    timer = setTimeout(() => { done(); anim?.cancel(); }, CLOSE_MS);
+    // The panel's surface fades out as its clip lands on the trigger, so the trigger shows through instead of a blank pill.
+    const fade = typeof panel.animate === 'function' ? panel.animate([{ opacity: 1 }, { opacity: 1, offset: 0.4 }, { opacity: 0 }], { duration: CLOSE_MS, fill: 'forwards' }) : null;
+    timer = setTimeout(() => { done(); anim?.cancel(); fade?.cancel(); }, CLOSE_MS);
   };
   const select = (index: number) => {
     const n = rows().length;

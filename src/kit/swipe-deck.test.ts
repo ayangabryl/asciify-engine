@@ -35,6 +35,19 @@ describe('swipeDeck', () => {
     expect(cards.map(c => c.style.getPropertyValue('opacity'))).toEqual(['', '', '']);
     expect(canvases(el)).toHaveLength(0);
   });
+  it('leans a target of your choosing, and only follows the pointer that took the card', () => {
+    const { el } = deck();
+    const row = element();
+    const d = swipeDeck(as(el), { leanTarget: as(row) });
+    el.dispatch('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 9 });
+    el.dispatch('pointermove', { clientX: 140, clientY: 100, pointerId: 9 });
+    el.dispatch('pointermove', { clientX: 400, clientY: 100, pointerId: 1 });
+    run(16);
+    expect(parseFloat(String(row.style.getPropertyValue('--ascii-lean')))).toBeCloseTo(0.5, 1);
+    expect(el.style.getPropertyValue('--ascii-lean')).toBe('');
+    d.destroy();
+    expect(row.style.getPropertyValue('--ascii-lean')).toBe('');
+  });
   it('flings on the arrow keys, dissolving the top card, and moves on', () => {
     const { el, cards } = deck();
     const onSwipe = vi.fn();

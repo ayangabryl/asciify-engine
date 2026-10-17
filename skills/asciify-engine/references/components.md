@@ -10,7 +10,7 @@ Every snippet uses `asciify-engine/kit`, one call per component. Start there by 
 - falls back without WebGL2 to an inert handle that leaves your HTML working as it was;
 - cleans up on `destroy()`.
 
-Build them in the project's own framework, design tokens and lifecycle; read [design matching](design-matching.md) first. Free names in the snippets, such as `card`, `button` or `deployButton`, are the project's own DOM elements and functions. In React, create the handle in an effect and return its `destroy`:
+Before choosing one, read [applying Asciify](applying-asciify.md): when characters earn a place, ink from theme tokens, the clear zone and frosted veil for text, density, radii, motion limits, the field budget and accessibility. Build them in the project's own framework, design tokens and lifecycle. Free names in the snippets, such as `card`, `button` or `deployButton`, are the project's own DOM elements and functions. In React, create the handle in an effect and return its `destroy`:
 
 ```tsx
 useEffect(() => { const b = beam(ref.current!); return () => b.destroy(); }, []);

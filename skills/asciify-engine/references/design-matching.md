@@ -33,14 +33,16 @@ Never introduce a new brand color, a black canvas on a light site, or a second a
 
 ## 3. Pick the tool
 
+For an interface component or a background, use `asciify-engine/kit` and follow [applying-asciify.md](applying-asciify.md); the rows below are for media looks and the lower-level APIs.
+
 | The user wants | Use | Notes |
 | --- | --- | --- |
 | A photo, video or GIF converted on their page, with optional hover | `asciify`, `asciifyVideo`, `asciifyGif` (+ `mountHover` from `/hover`) | Lightest path. Disable core hover and motion when `/hover` owns them. |
 | A full-bleed hero or brand field that must feel smooth under the cursor, their name or word as the characters, an Unseen-style look | `mountGlyphField` from `/field` | WebGL2 on a GPU, 120 fps class. Glyph ramps only. Keep a poster and a fallback. See [glyph-field.md](glyph-field.md). |
-| A calm background for a product page, docs, pricing or SaaS hero, in light or dark | `mountGlyphField` with `mark: 'dot'`, `scene: 'drift'` and `clear` around the copy | The halftone. Muted ink, transparent background, `pulse()` on real events. See [glyph-field.md](glyph-field.md#halftone-for-interfaces-412). |
+| A calm background for a product page, docs, pricing or SaaS hero, in light or dark | Kit `background(el, { preset: halftone, clear })` or `fieldBackground(el, { preset: 'hero', clear })` | Graphite ink, clear zone plus veil. See [applying-asciify.md](applying-asciify.md#9-backgrounds). Raw `mountGlyphField` with `mark: 'dot'` only for a look the kit lacks ([glyph-field.md](glyph-field.md#halftone-for-interfaces-412)). |
 | Art styles (halftone, dither, braille, print, mosaic, LED…), saved looks, backdrops, masks, effects, PNG/MP4/GIF export | `mountStudio` from `/studio` | Studio owns motion, hover and finish. Start from `studioLook(id)` when one of the 12 looks matches the mood. |
 | Several media and text layers in one artwork | `mountStudioProject` from `/studio` | One loop and budget for up to eight layers. See [layered-projects.md](layered-projects.md). |
-| An ambient animated background with no media (rain, stars, waves, aurora…) | A background template from asciify.org/backgrounds | Downloaded files, not npm exports. Or a `/field` generated scene (`flow`, `orb`) for a GPU field. |
+| An ambient animated background with no media (rain, stars, waves, aurora…) | Kit `background(el, { preset })` with one of the 26 presets | Import presets by name from `asciify-engine/kit`. See [applying-asciify.md](applying-asciify.md#9-backgrounds) for which suits which surface. |
 | A text banner or lettering | `asciifyText` / `renderTextToCanvas` | Plain text output works anywhere; canvas for color. |
 | Headline text visible through the art | Layered HTML, see [layered-hero.md](layered-hero.md) | Real text stays in the DOM. |
 
@@ -86,7 +88,7 @@ Autonomous motion that lasts longer than five seconds needs a visible pause cont
 
 ## 5. Derive concrete values from the tokens
 
-- **Ink.** One-ink looks use the accent token. Photo looks keep source color unless the brand is strictly monochrome.
+- **Ink.** Interface fields and grounds use a quiet graphite mapped to the muted text token, never the accent; colour is for outcomes only ([applying-asciify.md](applying-asciify.md#2-ink-quiet-by-default-colour-only-for-meaning)). A one-ink brand or media artwork the user asked for may use the accent. Photo looks keep source color unless the brand is strictly monochrome.
 - **Ground.** Use the page background token exactly, or a transparent canvas over it. On light themes draw dark ink on the light ground: core `invert: true` or `'auto'`, field `background: <page color>` with a dark `ink` and `invert: true`, studio dark `ink` with a light `backdrop.color`.
 - **Backdrop.** `backdrop` puts a blurred copy of the source under the characters. It enriches a photo but reads as a pale photographic wash on light subjects. Leave it at 0 when the user wants pure ASCII, and never use it behind text.
 - **Wake color.** Keep the field's default `highlight: 'auto'`, which brightens each character's own color. Only set a hex highlight when the brand asks for a second color; never default to white on a colored artwork.
@@ -134,11 +136,12 @@ const field = mountGlyphField(canvas, {
 
 For a quieter product page, add `hover: 'lantern'` (a soft light, no distortion) and keep `drift: 0` so the photo stays still until touched. Use `/studio` instead when they also want halftone, dither or an export button.
 
-**"A subtle animated background behind our pricing section."** Download a template (for example Aurora or Silk) from asciify.org/backgrounds and mount it with the page's colors, low opacity and the cursor off:
+**"A subtle animated background behind our pricing section."** Use a quiet kit preset with the page's muted ink, the cursor off and the copy kept clear:
 
-```js
-import { asciiBackground } from './aurora.js';
-const { destroy } = asciiBackground('#pricing', { colorScheme: 'auto', color: tokens.textMuted, opacity: 0.2, fontSize: 12, speed: 0.6 });
+```ts
+import { background, silk } from 'asciify-engine/kit';
+const bg = background(pricing, { preset: silk, ink: '--ascii-ink', opacity: 0.6, cursor: false, clear: pricingCopy });
+// On unmount: bg.destroy();
 ```
 
 **"Retro terminal look for our launch video."**

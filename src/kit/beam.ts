@@ -140,6 +140,7 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
     host: element,
     look,
     ink: dark => state.current.ink ?? (dark ? '#b3b1aa' : '#8a8882'),
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onTheme: () => surface && canvasStyle(surface),
     onFail: () => { surface = null; },
@@ -149,14 +150,16 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
       const style = getComputedStyle(element), short = Math.min(element.clientWidth || w, element.clientHeight || h);
       const deep = Math.max(2, Math.min(o.depth, Math.min(parseFloat(style.paddingTop) || o.depth, parseFloat(style.paddingLeft) || o.depth) - 2));
       const radii = [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(r => px(r ?? '', short));
-      const key = `${w}x${h}:${o.grain}:${deep}:${radii.join(',')}`;
+      // The band is laid on the field's own cells, so a `look` that changes the cell size moves the band with it.
+      const L = look(), glyphs = L.mark !== 'dot', cell = L.cellSize ?? (glyphs ? 5 : 3.5), aspect = L.cellAspect ?? (glyphs ? 0.6 : 1);
+      const key = `${w}x${h}:${o.grain}:${deep}:${radii.join(',')}:${cell}:${aspect}`;
       if (key !== size) {
         size = key;
         surface!.canvas.style.clipPath = `inset(0 round ${radii.map(r => `${r}px`).join(' ')})`;
         // The field's own cell in CSS px: whole device pixels, as the engine lays them out.
-        const ratio = Math.min(globalThis.devicePixelRatio || 1, 2), tall = Math.max(2, Math.round((o.grain === 'glyphs' ? 5 : 3.5) * ratio));
-        const cw = (o.grain === 'glyphs' ? Math.max(2, Math.round(tall * 0.6)) : tall) / ratio, ch = tall / ratio;
-        band = beamBand(w, h, cw, ch, deep, radii, o.grain === 'glyphs' ? Math.min(cw, ch) / 2 : (0.82 * cw) / 2);
+        const ratio = Math.min(globalThis.devicePixelRatio || 1, L.maxPixelRatio ?? 2), tall = Math.max(2, Math.round(cell * ratio));
+        const cw = Math.max(2, Math.round(tall * aspect)) / ratio, ch = tall / ratio;
+        band = beamBand(w, h, cw, ch, deep, radii, glyphs ? Math.min(cw, ch) / 2 : ((L.dotScale ?? 0.82) * cw) / 2);
         image = pen.createImageData(band.W, band.H);
         rgb = new Uint8Array(band.weight.length * 3);
       }
@@ -259,11 +262,13 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
     },
   });
 
-  const onEnter = () => { hot = true; surface?.kick(); }, onLeave = () => { hot = false; surface?.kick(); };
+  // Moves count as well as enter, so a pointer that is already over the element, or a scripted one that only sends moves, heats it.
+  const onEnter = () => { if (!hot) { hot = true; surface?.kick(); } }, onLeave = () => { hot = false; surface?.kick(); };
   const onFocus = (event: FocusEvent) => { hot = (event.target as Element)?.matches?.(':focus-visible') ?? false; surface?.kick(); };
   if (surface) {
     canvasStyle(surface);
     element.addEventListener('pointerenter', onEnter);
+    element.addEventListener('pointermove', onEnter);
     element.addEventListener('pointerleave', onLeave);
     element.addEventListener('focusin', onFocus);
     element.addEventListener('focusout', onLeave);
@@ -281,6 +286,7 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
     reset() { fill = 0; set('idle'); },
   }, () => {
     element.removeEventListener('pointerenter', onEnter);
+    element.removeEventListener('pointermove', onEnter);
     element.removeEventListener('pointerleave', onLeave);
     element.removeEventListener('focusin', onFocus);
     element.removeEventListener('focusout', onLeave);

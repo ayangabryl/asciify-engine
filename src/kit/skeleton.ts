@@ -65,6 +65,7 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
     host: element,
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
+    kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; settleAll(); },
     paint: ({ pen, now, still, box, w }) => {
@@ -110,9 +111,12 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
   });
 
   const reset = () => {
+    const shown = arrived !== null;
     started = performance.now(); arrived = null;
     element.setAttribute('aria-busy', 'true');
     if (!surface) return;
+    // Loaded content fades out as the skeleton comes up over it, rather than cutting.
+    if (shown && !surface.still()) for (const { el } of blocks()) el.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     hide();
     surface.kick();
   };
