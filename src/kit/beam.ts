@@ -7,7 +7,7 @@ export type BeamMode = 'rotate' | 'pulse' | 'progress';
 export interface BeamOptions extends KitOptions {
   /** A named palette, or your own hex stops looped once round the border. `mono` draws in the ink. Default `colorful`. */
   palette?: BeamPalette;
-  /** `rotate`: two arcs turn round the border. `pulse`: the whole border breathes. `progress`: quiet at rest, lit while work runs. */
+  /** `rotate`: two arcs turn round the border. `pulse`: the whole border breathes. `progress`: all but dark at rest, a progress ring while work runs. */
   mode?: BeamMode;
   /** `dots` is a fine halftone; `glyphs` draws the light in small characters. */
   grain?: 'dots' | 'glyphs';
@@ -17,16 +17,14 @@ export interface BeamOptions extends KitOptions {
   hover?: boolean;
   /** How far the glow reaches inward, in CSS px. It also stops 2px short of the element's padding. Default 18. */
   depth?: number;
-  /** How far the faint bloom reaches outside the border, in CSS px. Default 7. */
-  outset?: number;
 }
 
 export interface BeamHandle extends KitHandle<BeamOptions> {
-  /** Work is running, 0–1. The beam speeds up as it fills. */
+  /** Work is running, 0–1. In `progress` mode the ring grows clockwise from the top to this point; the other modes speed up as it fills. */
   progress(value: number): void;
-  /** One bright pass of light round the whole border, then the beam settles. */
+  /** The light closes into a full ring, a flash sweeps once round it, a green fade settles, then the beam goes back to rest. */
   success(): void;
-  /** The turn stutters, then crawls on in red until `reset()` or `progress()`. */
+  /** Everything stops, flickers red twice and cracks into dim red fragments, which stay until `reset()` or `progress()`. */
   error(): void;
   /** Back to rest. */
   reset(): void;
@@ -38,17 +36,18 @@ export const BEAM_PALETTES: Record<'colorful' | 'mono' | 'ocean' | 'sunset', rea
   ocean: ['#22d3ee', '#3b82f6', '#2dd4bf', '#818cf8'],
   sunset: ['#f97316', '#f43f5e', '#ec4899', '#fbbf24'],
 };
-const DEFAULTS = { palette: 'colorful' as BeamPalette, mode: 'rotate' as BeamMode, grain: 'dots' as const, speed: 1, hover: true, depth: 18, outset: 7 };
+const DEFAULTS = { palette: 'colorful' as BeamPalette, mode: 'rotate' as BeamMode, grain: 'dots' as const, speed: 1, hover: true, depth: 18 };
+const MODES: BeamMode[] = ['rotate', 'pulse', 'progress'];
 
 // Tone is GAIN x the painted luminance (contrast GAIN, brightness GAIN / 2 - 0.5), so a violet or a blue still reaches a full dot.
 const GAIN = 2.4;
 // The field samples a mip of the source, so a lit cell bleeds into its neighbours; tones under KNEE are cut, so that bleed draws nothing.
 const KNEE = 0.12;
-const RED = [1, 0.29, 0.29];
-const SPIN = 2600;
+const SPIN = 2600, SETTLED = 2700;
 
 const rgbOf = (hex: string) => { const h = /^#[\da-f]{3}$/i.test(hex) ? `#${[...hex.slice(1)].map(c => c + c).join('')}` : hex; return [1, 3, 5].map(i => (parseInt(h.slice(i, i + 2), 16) || 0) / 255); };
 const mixRgb = (a: number[], b: number[], k: number) => a.map((v, i) => v + (b[i] - v) * k);
+const RED = rgbOf('#ff4a4a'), GREEN = rgbOf('#2fd67b');
 
 /** 256 steps of a looped palette, each at full value with its luminance, so a pixel is one lookup. */
 export function beamPalette(palette: BeamPalette) {
@@ -69,37 +68,49 @@ const arc = (f: number, len: number) => {
 };
 /** Two arcs half a turn apart, the second shorter and dimmer. */
 export const beamArcs = (f: number) => Math.max(arc(f, 0.3), 0.75 * arc(f - 0.5, 0.22));
+/** The progress ring: lit clockwise from the top to `p`, brightening toward a head at `p`. */
+export const beamRing = (t: number, p: number) => {
+  if (t <= p) return 0.42 + 0.4 * (t / Math.max(p, 0.001)) ** 1.6 + 0.38 * Math.exp(-(((p - t) / 0.03) ** 2));
+  return t - p < 0.014 ? 1.2 * (1 - (t - p) / 0.014) ** 2 : 0;
+};
+/** What is left of a cell once the border has cracked `k` of the way: whole runs drop out, then single dots. */
+export const beamCracked = (score: number, k: number) => clamp((score - 0.68 * k) / 0.07);
 
 /**
- * For each field cell near the edge: its depth weight and its angle round the rounded rectangle.
- * Brightest on the edge, fading inward over `deep` px, with a faint bloom `out` px outside.
+ * For each field cell inside the edge: its depth weight, its turn round the border from the top, clockwise, and its crack score.
+ * Depth is the signed distance to the rounded rectangle with each corner's own radius, fading inward over `deep` px. Where a corner
+ * curves through a cell, the weight is held to the room inside the curve (`dot` px is a full dot), so the clip never shears one.
  */
-export function beamBand(w: number, h: number, cw: number, ch: number, deep: number, out: number, radius: number) {
-  const cols = Math.ceil(w / cw), hw = (w - 2 * out) / 2, hh = (h - 2 * out) / 2, r = Math.max(0, Math.min(radius, hw, hh));
-  const slot = new Int32Array(cols * Math.ceil(h / ch)).fill(-1), weight: number[] = [], turn: number[] = [], outside: number[] = [];
+export function beamBand(w: number, h: number, cw: number, ch: number, deep: number, radii: readonly number[], dot: number) {
+  const cols = Math.ceil(w / cw), hw = w / 2, hh = h / 2, cap = Math.min(hw, hh);
+  const [tl, tr, br, bl] = [0, 1, 2, 3].map(i => Math.max(0, Math.min(radii[i] ?? radii[0] ?? 0, cap)));
+  const slot = new Int32Array(cols * Math.ceil(h / ch)).fill(-1), weight: number[] = [], turn: number[] = [], crack: number[] = [];
   for (let i = 0; i < slot.length; i++) {
-    const px = ((i % cols) + 0.5) * cw - w / 2, py = (Math.floor(i / cols) + 0.5) * ch - h / 2;
+    const px = ((i % cols) + 0.5) * cw - hw, py = (Math.floor(i / cols) + 0.5) * ch - hh;
+    const r = px < 0 ? (py < 0 ? tl : bl) : (py < 0 ? tr : br);
     const qx = Math.abs(px) - hw + r, qy = Math.abs(py) - hh + r;
     const depth = -(Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r);
-    const k = depth >= 0 ? Math.max(0, 1 - depth / Math.max(1, deep)) ** 1.7 : out > 0 ? 0.22 * Math.max(0, 1 + depth / out) ** 2 : 0;
+    const k = depth > 0 ? Math.min(Math.max(0, 1 - depth / Math.max(1, deep)) ** 1.7, depth / Math.max(0.1, dot)) : 0;
     if (k < 0.004) continue;
-    slot[i] = weight.length; weight.push(k); outside.push(depth < 0 ? 1 : 0);
+    slot[i] = weight.length; weight.push(k);
     // Angle in a square-normalised frame, so the light keeps an even pace along long and short sides.
-    turn.push(Math.atan2(py / Math.max(1, hh), px / Math.max(1, hw)) / (2 * Math.PI) + 0.25);
+    const u = Math.atan2(py / Math.max(1, hh), px / Math.max(1, hw)) / (2 * Math.PI) + 0.25, f = u - Math.floor(u);
+    turn.push(f);
+    crack.push(0.78 * hash(Math.floor(f * 46), 5) + 0.22 * hash(i, 9));
   }
   const W = Math.max(1, Math.round(w)), H = Math.max(1, Math.round(h)), pixel: number[] = [], owner: number[] = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const at = slot[Math.min(cols - 1, Math.floor((x + 0.5) / cw)) + cols * Math.floor((y + 0.5) / ch)];
     if (at >= 0) { pixel.push(y * W + x); owner.push(at); }
   }
-  return { W, H, weight: Float32Array.from(weight), turn: Float32Array.from(turn), outside: Uint8Array.from(outside), pixel: Int32Array.from(pixel), owner: Int32Array.from(owner) };
+  return { W, H, weight: Float32Array.from(weight), turn: Float32Array.from(turn), crack: Float32Array.from(crack), pixel: Int32Array.from(pixel), owner: Int32Array.from(owner) };
 }
 
 const px = (value: string, size: number) => (value.endsWith('%') ? (parseFloat(value) / 100) * size : parseFloat(value) || 0);
 
 /**
- * A band of light turning round an element's border, drawn as fine halftone dots or small characters.
- * Rounded corners are followed from the element's own border radius.
+ * A band of light round an element's border, drawn as fine halftone dots or small characters inside the edge.
+ * The field covers the element exactly and is clipped to its computed corner radii, so nothing lands past its corners.
  */
 export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandle {
   const state = { current: { ...DEFAULTS, ...options } };
@@ -121,11 +132,12 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
   };
 
   let band: ReturnType<typeof beamBand> | null = null, image: ImageData | null = null, rgb = new Uint8Array(0), size = '';
-  let then = 0, seen: Phase | null = null, mark = 0, rot = 0.62, hue = 0, v = 0, lift = 0, red = 0, flash = 0, presence = 1;
+  let then = 0, seen: Phase | null = null, mark = 0, rot = 0.62, hue = 0, v = 0, lift = 0, red = 0, p = 0, clock = 0;
+  const weight: Record<BeamMode, number> = { rotate: 0, pulse: 0, progress: 0 };
+  weight[state.current.mode] = 1;
   let surface: Surface | null = null;
   surface = mountSurface({
     host: element,
-    outset: state.current.outset,
     look,
     ink: dark => state.current.ink ?? (dark ? '#b3b1aa' : '#8a8882'),
     reducedMotion: () => state.current.reducedMotion,
@@ -134,73 +146,121 @@ export function beam(element: HTMLElement, options: BeamOptions = {}): BeamHandl
     resolution: (w, h) => [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))],
     paint: frame => {
       const { pen, w, h, now, still, dark } = frame, o = state.current;
-      const style = getComputedStyle(element);
+      const style = getComputedStyle(element), short = Math.min(element.clientWidth || w, element.clientHeight || h);
       const deep = Math.max(2, Math.min(o.depth, Math.min(parseFloat(style.paddingTop) || o.depth, parseFloat(style.paddingLeft) || o.depth) - 2));
-      const radius = px(style.borderTopLeftRadius, Math.min(element.clientWidth, element.clientHeight));
-      const key = `${w}x${h}:${o.grain}:${deep}:${radius}:${o.outset}`;
+      const radii = [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(r => px(r ?? '', short));
+      const key = `${w}x${h}:${o.grain}:${deep}:${radii.join(',')}`;
       if (key !== size) {
         size = key;
+        surface!.canvas.style.clipPath = `inset(0 round ${radii.map(r => `${r}px`).join(' ')})`;
         // The field's own cell in CSS px: whole device pixels, as the engine lays them out.
         const ratio = Math.min(globalThis.devicePixelRatio || 1, 2), tall = Math.max(2, Math.round((o.grain === 'glyphs' ? 5 : 3.5) * ratio));
-        band = beamBand(w, h, (o.grain === 'glyphs' ? Math.max(2, Math.round(tall * 0.6)) : tall) / ratio, tall / ratio, deep, o.outset, radius);
+        const cw = (o.grain === 'glyphs' ? Math.max(2, Math.round(tall * 0.6)) : tall) / ratio, ch = tall / ratio;
+        band = beamBand(w, h, cw, ch, deep, radii, o.grain === 'glyphs' ? Math.min(cw, ch) / 2 : (0.82 * cw) / 2);
         image = pen.createImageData(band.W, band.H);
         rgb = new Uint8Array(band.weight.length * 3);
       }
-      const b = band!, data = image!.data;
-      const draw = (light: (turn: number) => number, shift: number, redness: number) => {
+      const b = band!, data = image!.data, crack = b.crack;
+      /** `light(turn, cell)` is the strength there; `red` and `green` tint toward the error and success colours; `white(turn)` lifts a flash. */
+      const draw = (light: (turn: number, cell: number) => number, shift: number, redness: number, greenness: number, white?: (turn: number) => number) => {
         rgb.fill(0);
         for (let i = 0; i < b.weight.length; i++) {
-          if (!dark && b.outside[i]) continue;
           // Dot size and brightness both follow the tone: large at the border, specks inward. A light ground holds the peak lower.
-          const t = b.turn[i], tone = clamp(b.weight[i] * light(t)) * (dark ? 1.12 : 0.8);
+          const t = b.turn[i], tone = clamp(b.weight[i] * light(t, i)) * (dark ? 1.12 : 0.8);
           if (tone < 0.03) continue;
           const k = (Math.floor(((((t - shift) % 1) + 1) % 1) * 256) & 255) * 4;
           let cr = lut[k], cg = lut[k + 1], cb = lut[k + 2], lum = lut[k + 3];
-          if (redness > 0) { cr += (RED[0] - cr) * redness; cg += (RED[1] - cg) * redness; cb += (RED[2] - cb) * redness; lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb; }
+          // A white flash would vanish on a light ground, so there it stays in colour and reads by size alone.
+          const lift = white && dark ? white(t) : 0;
+          if (greenness > 0 || redness > 0 || lift > 0) {
+            if (greenness > 0) { cr += (GREEN[0] - cr) * greenness; cg += (GREEN[1] - cg) * greenness; cb += (GREEN[2] - cb) * greenness; }
+            if (redness > 0) { cr += (RED[0] - cr) * redness; cg += (RED[1] - cg) * redness; cb += (RED[2] - cb) * redness; }
+            if (lift > 0) { cr += (1 - cr) * lift; cg += (1 - cg) * lift; cb += (1 - cb) * lift; }
+            lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+          }
           // Scale the hue so its luminance x GAIN lands on the tone: the field reads that back as the dot's size.
           const scale = Math.min(1, (tone + KNEE) / GAIN / Math.max(lum, 0.01)) * 255;
           rgb[i * 3] = cr * scale; rgb[i * 3 + 1] = cg * scale; rgb[i * 3 + 2] = cb * scale;
         }
         data.fill(0);
         for (let j = 0; j < b.pixel.length; j++) {
-          const p = b.pixel[j] * 4, i = b.owner[j] * 3;
-          data[p] = rgb[i]; data[p + 1] = rgb[i + 1]; data[p + 2] = rgb[i + 2]; data[p + 3] = 255;
+          const q = b.pixel[j] * 4, i = b.owner[j] * 3;
+          data[q] = rgb[i]; data[q + 1] = rgb[i + 1]; data[q + 2] = rgb[i + 2]; data[q + 3] = 255;
         }
         pen.putImageData(image!, 0, 0);
       };
 
       if (still) {
-        // Reduced motion: a still gradient border, one level per state.
-        const level = phase === 'success' ? 0.9 : phase === 'running' ? 0.75 : 0.55;
-        draw(t => level * (0.7 + 0.3 * Math.cos(2 * Math.PI * (t - 0.12))), 0, phase === 'error' ? 0.85 : 0);
+        // Reduced motion: one settled frame per state.
+        const base = o.mode === 'progress'
+          ? (t: number) => (phase === 'running' || phase === 'error' ? beamRing(t, fill) : 0.14)
+          : (t: number) => (phase === 'running' ? 0.75 : 0.55) * (0.7 + 0.3 * Math.cos(2 * Math.PI * (t - 0.12)));
+        if (phase === 'success') draw(() => 0.62, 0, 0, 0.9);
+        else if (phase === 'error') draw((t, i) => base(t) * 0.5 * beamCracked(crack[i], 1), 0, 0.9, 0);
+        else draw(base, 0, 0, 0);
         return false;
       }
       const dt = then ? Math.min(48, now - then) : 16;
       then = now;
-      if (phase !== seen) { if (phase === 'success' || phase === 'error') mark = now; seen = phase; }
-      const running = phase === 'running', failed = phase === 'error', since = now - mark, heat = o.hover && hot;
-      const lap = (running ? 1500 - 500 * fill : o.mode === 'progress' ? 7000 : o.mode === 'pulse' ? 9000 : SPIN) / Math.max(0.05, o.speed);
-      v += ((1 / lap) * (heat ? 1.35 : 1) * (failed ? 0.4 : 1) - v) * (1 - Math.exp(-dt / 320));
-      // An error stutters: the turn catches and jumps for a second, then crawls on in red.
-      const stutter = failed && since < 1100 ? hash(Math.floor(since / 85), 7) : -1;
-      rot += v * dt * (stutter < 0 ? 1 : stutter < 0.45 ? 0 : 2.6);
-      hue += dt / (o.mode === 'pulse' ? 14000 : 26000);
+      if (phase !== seen) { if (phase === 'running' && seen !== 'running') p = 0; mark = now; seen = phase; }
+      let since = now - mark;
+      if (phase === 'success' && since > SETTLED) { phase = seen = 'idle'; fill = 0; mark = now; since = 0; }
+      const running = phase === 'running', failed = phase === 'error', live = phase === 'success', heat = o.hover && hot;
+      for (const id of MODES) weight[id] += ((id === o.mode ? 1 : 0) - weight[id]) * (1 - Math.exp(-dt / 260));
+      // A failure stops everything dead where it was: the turn, the breath and the ring.
+      if (!failed) {
+        const lap = (running ? 1500 - 500 * fill : o.mode === 'pulse' ? 9000 : SPIN) / Math.max(0.05, o.speed);
+        v += ((1 / lap) * (heat ? 1.35 : 1) - v) * (1 - Math.exp(-dt / 320));
+        rot += v * dt;
+        clock += dt;
+        hue += (dt / (o.mode === 'pulse' ? 14000 : 26000)) * (1 - weight.progress);
+        if (running || live) p += ((live ? 1 : fill) - p) * (1 - Math.exp(-dt / 110));
+      } else v = 0;
       lift += ((heat ? 1 : 0) - lift) * (1 - Math.exp(-dt / 220));
-      red += ((failed ? 0.85 : 0) - red) * (1 - Math.exp(-dt / (failed ? 140 : 420)));
-      flash = phase === 'success' ? smoothstep(0, 120, since) * (1 - clamp((since - 420) / 1400)) ** 1.6 : flash * Math.exp(-dt / 200);
-      const quiet = o.mode === 'progress' && !running && !failed && flash < 0.01;
-      presence += ((quiet ? 0.3 : 1) - presence) * (1 - Math.exp(-dt / 400));
-      const flicker = stutter < 0 ? 1 : 0.55 + 0.45 * hash(Math.floor(since / 60), 3);
-      const gain = presence * (1 + 0.22 * lift) * flicker;
-      const breath = 0.32 + 0.68 * (0.5 - 0.5 * Math.cos((2 * Math.PI * now) / 2400));
-      const shape = o.mode === 'pulse' && !running ? (t: number) => breath * (0.78 + 0.22 * Math.cos(2 * Math.PI * (t - rot))) : (t: number) => beamArcs(t - rot);
-      draw(t => Math.max(shape(t) * gain, flash * 1.05), hue, red);
+      red = failed ? smoothstep(0, 60, since) * 0.9 : red * Math.exp(-dt / 180);
+      const gain = 1 + 0.22 * lift;
+      const breath = 0.32 + 0.68 * (0.5 - 0.5 * Math.cos((2 * Math.PI * clock) / 2400));
+      // Progress at rest is all but dark, one slow breath on the hairline; while it runs, the ring.
+      const hush = 0.05 + 0.1 * (0.5 - 0.5 * Math.cos((2 * Math.PI * clock) / 5200));
+      const rest = running || live || failed;
+      const base = (t: number) => gain * (
+        weight.rotate * beamArcs(t - rot)
+        + weight.pulse * (running || failed ? beamArcs(t - rot) : breath * (0.78 + 0.22 * Math.cos(2 * Math.PI * (t - rot))))
+        + weight.progress * (rest ? beamRing(t, p) : hush));
+
+      if (live) {
+        // Success: the light closes into a full ring, one flash runs round it from the top, then a soft green settles and fades.
+        const close = smoothstep(0, 260, since), head = clamp((since - 240) / 620), passing = 1 - smoothstep(860, 1060, since);
+        const settle = smoothstep(780, 1000, since), fade = smoothstep(1350, 2450, since);
+        const level = (dark ? 0.86 : 0.55) * close * (1 - settle) + 0.62 * settle * (1 - fade);
+        const keep = 1 - close * (1 - smoothstep(1900, SETTLED, since) * (1 - weight.progress));
+        const flash = (t: number) => {
+          if (since < 240) return 0;
+          const d = head - t;
+          return passing * (d >= 0 ? (d < 0.2 ? (1 - d / 0.2) ** 2 : 0) : d > -0.02 ? (1 + d / 0.02) ** 2 : 0);
+        };
+        draw(t => Math.max(base(t) * keep, level * (0.9 + 0.1 * Math.cos(2 * Math.PI * (t - 0.1))), 1.3 * flash(t), weight.progress * hush * fade),
+          hue, 0, 0.9 * settle * (1 - fade), t => clamp(flash(t) * 0.8));
+        return true;
+      }
+      if (failed) {
+        // Error: stopped dead, two red flickers, then the border cracks into fragments and rests dim red.
+        const flick = since < 90 ? 1.2 : since < 170 ? 0.1 : since < 260 ? 1.2 : since < 340 ? 0.1 : 1;
+        const k = smoothstep(380, 1150, since), dim = 1 - 0.5 * smoothstep(700, 1500, since), tick = Math.floor(since / 50);
+        draw((t, i) => {
+          const left = beamCracked(crack[i], k);
+          if (left <= 0) return 0;
+          return base(t) * flick * left * dim * (1 - 1.4 * k * (1 - k) * hash(i, tick));
+        }, hue, red, 0);
+        return since < 1600 || Math.abs(lift - (heat ? 1 : 0)) > 0.01;
+      }
+      draw(base, hue, red, 0);
       return true;
     },
   });
 
-  const onEnter = () => { hot = true; }, onLeave = () => { hot = false; };
-  const onFocus = (event: FocusEvent) => { hot = (event.target as Element)?.matches?.(':focus-visible') ?? false; };
+  const onEnter = () => { hot = true; surface?.kick(); }, onLeave = () => { hot = false; surface?.kick(); };
+  const onFocus = (event: FocusEvent) => { hot = (event.target as Element)?.matches?.(':focus-visible') ?? false; surface?.kick(); };
   if (surface) {
     canvasStyle(surface);
     element.addEventListener('pointerenter', onEnter);

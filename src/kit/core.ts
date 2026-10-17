@@ -136,9 +136,16 @@ export const toHex = (rgb: number[]) => `#${rgb.map(v => Math.round(clamp(v, 0, 
 export const hexRgb = (hex: string) => { const n = parseInt(hex.slice(1, 7), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 export const mixHex = (a: string, b: string, k: number) => { const x = hexRgb(a), y = hexRgb(b); return toHex(x.map((v, i) => v + (y[i] - v) * k)); };
 
-/** True when the element's text is light, which on almost every page means a dark ground. */
+/** True when the element sits on a dark ground: its own opaque background if it has one, else light text. */
 export function isDark(element: Element) {
-  const color = resolveColor(typeof getComputedStyle === 'function' ? getComputedStyle(element).color : '', element);
+  const style = typeof getComputedStyle === 'function' ? getComputedStyle(element) : null;
+  // A video player or a dark card on a light page has a dark ground of its own, whatever colour its text inherits.
+  const ground = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?/i.exec(style?.backgroundColor ?? '');
+  if (ground) {
+    const alpha = ground[4] === undefined ? 1 : ground[4].endsWith('%') ? parseFloat(ground[4]) / 100 : parseFloat(ground[4]);
+    if (alpha >= 0.5) return 0.2126 * +ground[1] + 0.7152 * +ground[2] + 0.0722 * +ground[3] < 128;
+  }
+  const color = resolveColor(style?.color ?? '', element);
   if (!color) return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
   const [r, g, b] = hexRgb(color);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 140;

@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Build and tune browser ASCII art with asciify-engine so it fits the user's request, preferences and the project's design. Use for photo, video and GIF conversion, interactive heroes, GPU character fields with the user's own words, ambient backgrounds, text banners, art styles and export, hover and motion choices, layered HTML typography, and rendering performance.
 metadata:
-  tested-engine: "4.12.1"
+  tested-engine: "4.13.0"
   updated: "2026-10-14"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.12.1**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package for browser canvas rendering. Tested against **4.13.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Playground: https://asciify.org/editor
@@ -19,7 +19,7 @@ Use the published `asciify-engine` npm package for browser canvas rendering. Tes
 npm install asciify-engine@latest
 ```
 
-Entries: `asciify-engine` and `/core` for media and text conversion; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for GPU character fields. Each optional entry loads only when imported. Procedural background templates are downloaded from asciify.org/backgrounds and are not npm exports. GIF decoding loads `gifuct-js` when a GIF API is called.
+Entries: `asciify-engine` and `/core` for media and text conversion; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for GPU character fields; `/kit` for interface components, one call each. Each optional entry loads only when imported. Procedural background templates are downloaded from asciify.org/backgrounds and are not npm exports. GIF decoding loads `gifuct-js` when a GIF API is called.
 
 ## Start here: the request, then the design
 
@@ -31,12 +31,13 @@ Most requests are a feeling ("make the hero feel alive", "retro", "subtle behind
 4. **Decide living or still.** A still photo can be made to feel alive (field `drift`, studio `motion`), but some users want it still. Follow their words; keep art behind text, in grids and in data views still; reduced motion always gets a still. See [living or still](references/design-matching.md#living-or-still).
 5. **Say what you chose in one line** and offer one alternative. Ask only when the media is missing or motion would be new to a site that has none.
 
-[references/components.md](references/components.md) has 31 ready-made components with a shared theme-aware helper: controls (button loading, slide to confirm, like burst, verification code, command palette, pills, tabs), feedback (loading states, skeleton loader, toast stack, pull to refresh), AI (voice orb, thinking, streaming text, image generation), transitions (page transition, delete into characters), data (chart, odometer, border beam), media (before and after, dropzone, accordion, swipe cards, video), text (decode headline, wordmark) and pages (sign-in, pricing, 404, hero background), each with the prompt a person gives and the reference code. Start there when the request matches one.
+**For any UI component, start with [references/components.md](references/components.md) and [references/kit.md](references/kit.md).** `asciify-engine/kit` makes each component one call that handles theme ink, reduced motion, the no-WebGL fallback and cleanup; components.md has 31 of them as short kit snippets: controls (button loading, slide to confirm, like burst, verification code, command palette, pills, tabs), feedback (loading states, skeleton loader, toast stack, pull to refresh), AI (voice orb, thinking, streaming text, image generation), transitions (page transition, delete into characters), data (chart, odometer, border beam), media (before and after, dropzone, accordion, swipe cards, video), text (decode headline, wordmark) and pages (sign-in, pricing, 404, hero background), each with the prompt a person gives and the kit code. Start there when the request matches one; drop to the raw `/field` helper at the end of components.md only for a look the kit has no option for.
 
 [references/design-matching.md](references/design-matching.md) maps mood words to settings, explains light themes, contrast and fonts, and gives tested recipes for the common requests. Read it whenever the user describes a look rather than an option.
 
 | The user wants | Use |
 | --- | --- |
+| A UI component in characters (button loading, border beam, toasts, tabs, AI states, pages) | `asciify-engine/kit` ([components.md](references/components.md), [kit.md](references/kit.md)) |
 | Their photo, video or GIF as ASCII on the page, optionally answering the cursor | `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` for the website hovers |
 | A full-bleed hero or brand field that stays smooth under the cursor, or their own word as the characters | `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)); `hover: 'trail'` for the classic Asciify Trail on pure characters, `'fluid'` for bold and liquid, `'lantern'` for a subtle light |
 | A calm background behind product content (SaaS hero, pricing, docs), light or dark | `mountGlyphField` with `mark: 'dot'`, `scene: 'drift'`, `clear` around the copy, and `pulse()` on events (4.12) |

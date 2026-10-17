@@ -122,6 +122,14 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
     styles.set(img, 'opacity', on ? '1' : '0');
   };
   const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const show = (src: Blob | string) => {
+    const img = photo();
+    if (!img) return;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = typeof src === 'string' ? '' : URL.createObjectURL(src);
+    img.src = objectUrl || (src as string);
+    if (!surface) styles.set(img, 'visibility', 'visible');
+  };
 
   const run = async (stream: ImageStream | undefined = state.current.stream): Promise<GenerateState> => {
     if (!stream) return phase;
@@ -139,16 +147,12 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
         const src = update.final ?? update.preview;
         if (!src) continue;
         if (update.final) {
-          const img = photo();
-          if (img) {
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
-            objectUrl = typeof update.final === 'string' ? '' : URL.createObjectURL(update.final);
-            img.src = objectUrl || (update.final as string);
-          }
+          show(update.final);
           if (surface) develop(await toImage(update.final), DEVELOP.final.k, DEVELOP.final.blur);
           break;
         }
-        if (!surface) continue;
+        // Without the field the previews go straight into the photo, so the frame still shows progress.
+        if (!surface) { show(update.preview!); continue; }
         const stage = DEVELOP.preview[Math.min(previews++, DEVELOP.preview.length - 1)];
         develop(await toImage(update.preview!), stage.k, stage.blur);
       }
@@ -166,7 +170,11 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
     return phase;
   };
 
-  if (surface) { const img = photo(); if (img) styles.set(img, 'opacity', '0'); }
+  {
+    const img = photo();
+    // An <img> with no source yet would show the browser's broken-image icon in the fallback.
+    if (img) styles.set(img, surface ? 'opacity' : 'visibility', surface ? '0' : img.getAttribute('src') ? 'visible' : 'hidden');
+  }
   if (state.current.stream) void run();
 
   return handle(() => surface, state, () => surface?.refresh(), {
