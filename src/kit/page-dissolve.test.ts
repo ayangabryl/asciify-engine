@@ -19,7 +19,7 @@ function page() {
 async function play(ms: number) { for (let t = 0; t < ms; t += 16) { run(16); await flush(); } }
 
 describe('pageDissolve', () => {
-  it('dissolves the old view, swaps it underneath, condenses the new one and hands back crisp HTML', async () => {
+  it('crossfades into characters, swaps underneath, condenses the new view behind the wave and hands back crisp HTML', async () => {
     const { box, view } = page();
     const p = pageDissolve(as(box));
     expect(canvases(box)).toHaveLength(1);
@@ -32,7 +32,8 @@ describe('pageDissolve', () => {
     await play(150);
     expect(render).toHaveBeenCalledOnce();
     expect(box.dataset.state).toBe('in');
-    await play(200);
+    expect(view.style.getPropertyValue('opacity')).toBe('0');
+    await play(400);
     await done;
     expect(view.style.getPropertyValue('opacity')).toBe('');
     expect(box.dataset.state).toBeUndefined();

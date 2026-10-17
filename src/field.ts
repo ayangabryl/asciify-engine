@@ -4,6 +4,6 @@
 export { mountGlyphField, isGlyphFieldSupported, glyphFieldTier } from './field/glyph-field';
 export type { GlyphField, GlyphFieldOptions, FieldSource, FieldClearElement } from './field/glyph-field';
 export {
-  DEFAULT_FIELD_SETTINGS, DEFAULT_FIELD_FLUID, DEFAULT_FIELD_LANTERN, DEFAULT_FIELD_TRAIL, FIELD_HOVERS, activeFieldHover, normalizeFieldSettings, fieldClearFromRects, fieldGlyphs, fieldSourceRect, fieldCellLayout, fieldLevels,
+  DEFAULT_FIELD_SETTINGS, DEFAULT_FIELD_FLUID, DEFAULT_FIELD_LANTERN, DEFAULT_FIELD_TRAIL, FIELD_HOVERS, FIELD_MARKS, activeFieldHover, normalizeFieldSettings, fieldClearFromRects, fieldGlyphs, fieldSourceRect, fieldCellLayout, fieldLevels,
 } from './field/field-model';
 export type { GlyphFieldSettings, GlyphFieldInput, FieldFluidOptions, FieldLanternOptions, FieldTrailOptions, FieldHover, FieldColor, FieldFit, FieldScene, FieldMark, FieldClearZone } from './field/field-model';

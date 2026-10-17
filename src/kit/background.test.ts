@@ -9,6 +9,7 @@ import { caustics } from './backgrounds/caustics';
 import { fire } from './backgrounds/fire';
 import { wave } from './backgrounds/wave';
 import { drift } from './backgrounds/drift';
+import { swell } from './backgrounds/swell';
 import { mountCanvas } from './backgrounds/canvas';
 
 /* A small DOM: elements with styles and listeners, 2D canvases that record what they draw, and manual frames. */
@@ -284,6 +285,26 @@ describe('GPU presets', () => {
     expect(bg.supported).toBe(true);
     bg.destroy();
     expect(field.destroy).toHaveBeenCalled();
+  });
+
+  it('draw swell as rolling halftone dots, quiet in the middle, with a lantern under the pointer', async () => {
+    const el = host();
+    const bg = background(as(el), { preset: swell, lazy: false });
+    await flush();
+    expect(mount.mock.calls[0][1]).toMatchObject({ scene: 'swell', mark: 'dot', cellSize: 10, hover: 'lantern', clear: { shape: 'ellipse' } });
+    expect(kitCanvases(el)[0]?.style.opacity).toBe('0.6');
+    bg.destroy();
+  });
+
+  it('keep the host isolated when a field preset hands over to a canvas one, and restore it on destroy', async () => {
+    const el = host();
+    const bg = background(as(el), { preset: swell, lazy: false, reducedMotion: true });
+    await flush();
+    bg.setPreset(aurora);
+    expect(el.style.getPropertyValue('isolation')).toBe('isolate');
+    bg.destroy();
+    expect(el.style.getPropertyValue('isolation')).toBe('');
+    expect(el.style.getPropertyValue('position')).toBe('');
   });
 
   it('return an inert handle without WebGL2 and leave the element alone', () => {

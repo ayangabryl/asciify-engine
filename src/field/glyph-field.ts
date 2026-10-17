@@ -2,7 +2,7 @@ import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader } from
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { InkTrail } from '../surface/ink-trail';
 import {
-  activeFieldHover, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
+  FIELD_MARKS, activeFieldHover, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
@@ -550,8 +550,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(u.uCount, glyphCount);
     gl.uniform1f(u.uBlend, settings.blend === 'on' || (glyphCount <= 9 && (settings.blend === 'coarse' || (settings.blend === 'auto' && photographic))) ? 1 : 0);
     gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
-    gl.uniform1i(u.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : settings.scene === 'drift' ? 4 : 3);
-    gl.uniform1i(u.uMark, settings.mark === 'dot' ? 1 : 0);
+    gl.uniform1i(u.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : settings.scene === 'drift' ? 4 : settings.scene === 'swell' ? 5 : 3);
+    gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(u.uScale, settings.scale);
     const zone = settings.clear;
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
@@ -599,7 +599,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform2f(p.uPitch, pitchX, pitchY);
     gl.uniform1f(p.uColumns, layout.columns);
     gl.uniform1f(p.uDotScale, settings.dotScale);
-    gl.uniform1i(p.uMark, settings.mark === 'dot' ? 1 : 0);
+    gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
+    gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 

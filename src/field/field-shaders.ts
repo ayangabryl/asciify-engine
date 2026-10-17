@@ -103,6 +103,14 @@ vec3 generated(vec2 uv,float aspect){
     float n=fbm(q+w*1.3+vec2(t*.4,t*.25));
     return vec3(smoothstep(.36,.74,n));
   }
+  if(uScene==5){
+    // Swell: three crossing swells, the second bent by the first, so crests roll diagonally instead of pooling.
+    float t=uTime;
+    float s=sin((dot(p,vec2(.94,.33))/.95-t/9.)*6.2831853);
+    float c=sin((dot(p,vec2(.6,-.8))/.58-t/13.)*6.2831853+s*.9);
+    float k=sin((dot(p,vec2(-.29,.96))/.36+t/17.)*6.2831853);
+    return vec3(smoothstep(.3,.9,.5+.5*(s*.5+c*.35+k*.15)));
+  }
   return vec3(0.);
 }
 void main(){
@@ -202,20 +210,46 @@ void main(){
   ink=mix(ink,lifted,wake*.7);
   float underAlpha=max(uBackground.a,min(1.,max(glow.r,max(glow.g,glow.b))));
   vec3 under=min(uBackground.rgb*uBackground.a+glow,vec3(underAlpha));
-  // Halftone keeps the tone for the dot size; glyphs keep their atlas index, exact in 8 bits.
-  outInk=vec4(ink,uMark==1?(tone>.003?tone:0.):index/255.);
+  // Glyphs keep their atlas index, exact in 8 bits; the other marks keep the tone, and empty where the charset is blank.
+  outInk=vec4(ink,uMark==0?index/255.:uMark==1?(tone>.003?tone:0.):index>0.?max(tone,1./255.):0.);
   outUnder=vec4(under,underAlpha);
 }`;
 
-/** The pixel pass: reads its cell and draws the glyph texel for texel from the atlas, or the halftone dot. */
+/**
+ * The pixel pass: reads its cell and draws the glyph texel for texel from the atlas, the halftone dot, or one of the Studio's
+ * tile and print marks (see FIELD_MARKS). Each mark is one branch on a uniform, drawn from the cell's tone and colour alone.
+ */
 export const FIELD_COMPOSITE = `#version 300 es
 precision highp float;
 precision highp sampler2D;
 uniform sampler2D uAtlas, uCells, uUnder;
 uniform vec2 uResolution, uCell, uPitch;
-uniform float uColumns, uDotScale;
+uniform float uColumns, uDotScale, uSourceColor;
 uniform int uMark;
 out vec4 outColor;
+const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+// The Studio's print defaults: screen angle -35deg, roughness .35, seed 7, registration .2 and its coral second ink.
+const vec2 DIR=vec2(.81915,-.57358);
+const float ROUGH=.35,SEED=7.;
+const vec3 SECOND=vec3(.925,.404,.322);
+float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+// Coverage of a signed distance given in device pixels.
+float cover(float d){return clamp(.5-d,0.,1.);}
+float box(vec2 p,vec2 lo,vec2 hi){vec2 a=clamp(p-lo,0.,1.)*clamp(hi-p,0.,1.);return a.x*a.y;}
+float disc(vec2 p,vec2 c,float r){return r>.05?cover(length(p-c)-r):0.;}
+float ellipse(vec2 p,vec2 c,vec2 r,float a){vec2 d=p-c;d=vec2(cos(a)*d.x+sin(a)*d.y,-sin(a)*d.x+cos(a)*d.y);float k=length(d/r);return cover((k-1.)*min(r.x,r.y));}
+// World-anchored parallel cuts across direction d: period and width in cell heights, so lines run on from cell to cell.
+float cuts(vec2 w,vec2 d,float period,float width,float px){
+  if(width<=0.)return 0.;
+  float proj=dot(vec2(-d.y,d.x),w);
+  return cover((abs(fract(proj/period+.5)-.5)*period-width*.5)*px);
+}
+// Lays an ink over what is already down, multiplying where they overlap, as transparent inks do on paper.
+void lay(inout vec3 rgb,inout float a,vec3 c,float k){
+  float next=a+k*(1.-a);
+  rgb=next>0.?(rgb*a*(1.-k)+mix(c,rgb*c,a)*k)/next:c;
+  a=next;
+}
 void main(){
   vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
   // The pitch is the atlas cell, or a fractional one under cellFit 'fill', where each glyph sits centred in its stretched cell.
@@ -223,15 +257,101 @@ void main(){
   vec4 ink=texelFetch(uCells,ivec2(cell),0),under=texelFetch(uUnder,ivec2(cell),0);
   vec2 local=frag-cell*uPitch;
   float coverage;
-  if(uMark==1){
-    // Halftone: dot area follows tone, so midtones read true; edges are antialiased to one device pixel.
-    float r=sqrt(ink.a)*min(uPitch.x,uPitch.y)*.5*uDotScale;
-    coverage=ink.a>.003?clamp(r-length(local-uPitch*.5)+.5,0.,1.):0.;
-  } else {
+  vec3 rgb=ink.rgb;
+  if(uMark==0){
     float index=floor(ink.a*255.+.5);
     ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
     vec2 texel=floor(local-floor((uPitch-uCell)*.5));
     coverage=all(greaterThanEqual(texel,vec2(0.)))&&all(lessThan(texel,uCell))?texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(texel),0).a:0.;
+  } else if(uMark==1){
+    // Halftone: dot area follows tone, so midtones read true; edges are antialiased to one device pixel.
+    float r=sqrt(ink.a)*min(uPitch.x,uPitch.y)*.5*uDotScale;
+    coverage=ink.a>.003?clamp(r-length(local-uPitch*.5)+.5,0.,1.):0.;
+  } else if(ink.a<=0.){
+    coverage=0.;
+  } else {
+    float tone=ink.a,side=min(uPitch.x,uPitch.y);
+    vec2 q=local/uPitch,c=uPitch*.5,p=local+.5;
+    // Tiles fade with the tone in one ink, as the Studio's do; in source colour the colour already carries it.
+    float fade=uSourceColor>.5?1.:tone,gap=max(.5,uPitch.x*.06),grain=hash(cell+SEED);
+    vec2 w=(cell+q)*uPitch/uPitch.y;
+    if(uMark==2)coverage=fade;
+    else if(uMark==3)coverage=box(p,vec2(0.),uPitch-gap)*fade;
+    else if(uMark==4){
+      // Lego: a gapped brick, lit from above, with a raised stud ringed by its shadow.
+      coverage=box(p,vec2(0.),uPitch-gap)*fade;
+      rgb*=1.06-.14*q.y;
+      float r=side*.28,d=length(local-c)-r,lit=clamp(dot(c-local,vec2(.6,.8))/r,-1.,1.);
+      rgb=mix(rgb,mix(rgb,vec3(1.),.2+.12*lit),cover(d));
+      rgb=mix(rgb,rgb*.72,cover(abs(d)-max(.5,side*.04)));
+    } else if(uMark==5){
+      // Voxel: an isometric cube; top, left and right faces at full, .72 and .42 strength.
+      float h=.5*abs(q.x-.5);
+      coverage=cover(-min(q.y-h,1.-h-q.y)*uPitch.y)*cover(-min(q.x,1.-q.x)*uPitch.x);
+      coverage*=mix(q.x<.5?.72:.42,1.,cover((q.y-(.5-h))*uPitch.y))*fade;
+    } else if(uMark==6){
+      // Disco: a gapped mirror tile, its upper facet catching light and its lower in shade.
+      coverage=box(p,vec2(0.),uPitch-gap)*fade;
+      rgb=q.y<.35?mix(rgb,vec3(1.),.1+grain*.25):q.y>.65?rgb*.75:rgb;
+    } else if(uMark==7){
+      // Dither: an ordered 4x4 Bayer screen at about five dots a cell, lit where the cell's tone passes the threshold.
+      ivec2 b=ivec2(mod(floor(frag/max(1.,floor(side/5.))),4.));
+      coverage=tone>(BAYER[b.y*4+b.x]+.5)/16.?1.:0.;
+    } else if(uMark==8){
+      // Hex: a flat-topped hexagon filling the cell.
+      vec2 h=abs((local-c)/(uPitch*.49));
+      coverage=cover(max(h.y-.866,h.x*.866+h.y*.5-.866)*side*.49)*fade;
+    } else if(uMark==9){
+      // LED: a round lamp with a soft halo and a specular glint, separated by an unlit matrix.
+      float r=side*.39,d=length(local-c);
+      coverage=max(cover(d-r),.3*exp(-pow(max(0.,d-r)/(side*.12),2.)))*fade;
+      rgb=mix(rgb,vec3(1.),.35*disc(local,uPitch*vec2(.43,.4),side*.11));
+    } else if(uMark==10){
+      // CMYK: the cell's hue separated into offset cyan, magenta and yellow dots, each sized by its share of the tone. The
+      // key screen carries the neutral share in the ink's own lightness, since a light ink on a dark page has no black.
+      float top=max(rgb.r,max(rgb.g,rgb.b)),low=min(rgb.r,min(rgb.g,rgb.b));
+      vec3 cmy=(top-rgb)/max(top,.001);
+      float a=0.;vec3 col=vec3(1.);
+      lay(col,a,vec3(top),disc(local,c,side*.48*sqrt(tone*low/max(top,.001))));
+      lay(col,a,vec3(0.,1.,1.),disc(local,uPitch*vec2(.36,.36),side*.48*sqrt(tone*cmy.x)));
+      lay(col,a,vec3(1.,0.,1.),disc(local,uPitch*vec2(.64,.36),side*.48*sqrt(tone*cmy.y)));
+      lay(col,a,vec3(1.,1.,0.),disc(local,uPitch*vec2(.5,.66),side*.48*sqrt(tone*cmy.z)));
+      rgb=col;coverage=a;
+    } else if(uMark==11||uMark==16){
+      // Stipple and pointillism: four jittered marks a cell, their size following the tone.
+      coverage=0.;vec3 col=rgb;
+      for(int m=0;m<4;m++){
+        vec2 o=vec2(float(m%2),float(m/2));
+        float j=hash(cell*2.+o+SEED),jy=hash(cell+o*11.+SEED+1.);
+        vec2 at=((o+.5)/2.+(vec2(j,jy)-.5)*ROUGH*.28)*uPitch;
+        float r=min(min(min(at.x,uPitch.x-at.x),min(at.y,uPitch.y-at.y)),side*min(.245,.21*sqrt(tone)*(1.-ROUGH*j*.35)));
+        float k=uMark==11?disc(local,at,r):ellipse(local,at,vec2(r,r*.64),j*3.14159);
+        if(uMark==16&&k>coverage)col=uSourceColor>.5?clamp(rgb+(j-.5)*ROUGH*.25*vec3(1.,-.4,-1.),0.,1.):rgb*(1.+(j-.5)*ROUGH*.5);
+        coverage=max(coverage,k);
+      }
+      rgb=col;
+    } else if(uMark==12||uMark==13){
+      // Engraving and crosshatch: parallel cuts whose weight follows the tone; crossings join only in the darker tones.
+      float cv=tone*(1.-ROUGH*grain*.3),px=uPitch.y;
+      coverage=cuts(w,DIR,.5,min(.47,.36*cv),px);
+      if(uMark==13){
+        coverage=max(coverage,cuts(w,vec2(-DIR.y,DIR.x),.5,min(.47,.36*max(0.,cv*1.5-.3)),px)*step(.2,cv));
+        coverage=max(coverage,cuts(w,normalize(DIR+vec2(-DIR.y,DIR.x)),.5,min(.47,.36*max(0.,cv*2.-1.2)),px)*step(.6,cv));
+      }
+    } else if(uMark==14){
+      // Woodblock: broad carved bands in five stepped weights, their edges wavering along the grain.
+      float cv=ceil(tone*(1.-ROUGH*grain*.3)*5.)/5.,width=min(.94,.72*cv);
+      float proj=dot(vec2(-DIR.y,DIR.x),w),line=floor(proj+.5),along=dot(DIR,w);
+      float cut=sin(along*5.3+line*1.9+SEED)*.5+sin(along*13.1+line)*.25;
+      coverage=cover((abs(proj-line)-width*.5*(1.+ROUGH*cut*.5))*uPitch.y);
+    } else if(uMark==15){
+      // Risograph: two offset screens, the main ink and the coral second ink, misregistered along the screen angle.
+      float split=uSourceColor>.5?clamp(.5+(rgb.r-rgb.b)*.5,0.,1.):.5,r=side*min(.48,.44*sqrt(tone));
+      float a=0.;vec3 col=rgb;
+      lay(col,a,rgb,disc(local,c,r*sqrt(.35+(1.-split)*.65)));
+      lay(col,a,SECOND,disc(local,c+DIR*.2*.38*side,r*sqrt(.3+split*.7)*(1.-ROUGH*hash(cell+SEED+13.)*.3)));
+      rgb=col;coverage=a;
+    } else coverage=0.;
   }
-  outColor=vec4(ink.rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
+  outColor=vec4(rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
 }`;

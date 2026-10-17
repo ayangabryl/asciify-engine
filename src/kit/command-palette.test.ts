@@ -28,12 +28,16 @@ function palette(rows = 3) {
 }
 
 describe('commandPalette', () => {
-  it('sits over the content and marks the selected row from the gutter', () => {
+  it('lies under the content and glides a highlight to the selected row', () => {
     const { panel, input, items } = palette();
     const p = commandPalette(as(panel));
     const [canvas] = canvases(panel);
-    expect(canvas.style.zIndex).toBe('');
+    expect(canvas.style.zIndex).toBe('-1');
     expect(canvas.style.pointerEvents).toBe('none');
+    const hl = panel.children[0];
+    expect(hl.dataset.asciiCmdHighlight).toBe('');
+    expect(hl.dataset.on).toBe('');
+    expect(hl.style.translate).toBe('6px 50px');
     expect(p.isOpen).toBe(true);
     expect(items.map(r => r.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
     expect(input.getAttribute('aria-activedescendant')).toBe('cmd-0');
@@ -48,10 +52,12 @@ describe('commandPalette', () => {
     expect(input.getAttribute('aria-activedescendant')).toBe('cmd-2');
     items[1].dispatch('pointermove');
     expect(p.selected).toBe(1);
+    expect(hl.style.translate).toBe('6px 90px');
     advance();
     expect(env.field.setSource).toHaveBeenCalled();
     p.destroy();
     expect(canvases(panel)).toHaveLength(0);
+    expect(panel.children.includes(hl)).toBe(false);
     expect(env.docListeners.get('keydown')?.size ?? 0).toBe(0);
   });
   it('condenses out of the trigger and dissolves back into it', () => {
@@ -67,15 +73,9 @@ describe('commandPalette', () => {
     expect(panel.animate).toHaveBeenCalled();
     expect(input.focus).toHaveBeenCalled();
     expect(input.style.getPropertyValue('opacity')).toBe('0');
-    advance();
-    const art = (env.field.setSource.mock.calls[0] as unknown[])[0] as { getContext(kind: string): { roundRect: unknown } };
-    const pen = art.getContext('2d');
-    const marker = vi.fn();
-    pen.roundRect = marker;
     run(300);
-    // Once the flight lands, the same paint draws the selected row's marker.
-    expect(marker).toHaveBeenCalled();
     expect(panel.dataset.state).toBeUndefined();
+    expect(panel.children[0].dataset.on).toBe('');
     expect(input.style.getPropertyValue('opacity')).toBe('');
     key(input, 'Escape');
     expect(panel.dataset.state).toBe('closing');
@@ -105,6 +105,15 @@ describe('commandPalette', () => {
     items[2].dispatch('click');
     expect(onRun.mock.calls[1][0]).toBe(2);
     p.destroy();
+  });
+  it('shimmers the selected AI row in characters, masking its text under the crest', () => {
+    const { panel, items } = palette();
+    items[0].dataset.ai = '';
+    commandPalette(as(panel));
+    run(400);
+    expect(items[0].style.getPropertyValue('mask-image')).toContain('linear-gradient');
+    run(1200);
+    expect(items[0].style.getPropertyValue('mask-image')).toBe('');
   });
   it('toggles on Cmd/Ctrl+K and closes on an outside press', () => {
     const { panel } = palette();

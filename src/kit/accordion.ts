@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, easeOut, handle, mountSurface, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, mountSurface, prefersReduced, smoothstep, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 import { drawCover, imageFor, imageReady, injectStyle, toneOf, type Picture } from './capture';
 
 export interface AccordionImage {
@@ -16,7 +16,7 @@ export interface AccordionOptions extends KitOptions {
   images: (string | AccordionImage)[];
   /** The panel open at first. Default 0. */
   open?: number;
-  /** Ms a panel takes to open. Default 280. */
+  /** Ms a panel takes to settle open; the panels move on one critically damped spring, so a change mid-move carries its speed. Default 420. */
   duration?: number;
   /** Accessible name of the group. Default `Images`. */
   label?: string;
@@ -31,30 +31,30 @@ export interface AccordionHandle extends KitHandle<AccordionOptions> {
 
 const CSS = `
 :where([data-ascii-accordion]){display:flex;gap:6px}
-:where(.ascii-acc-panel){position:relative;flex:1 1 0;min-width:0;margin:0;padding:0;border:0;border-radius:12px;overflow:hidden;background:transparent;color:#fff;font:inherit;text-align:left;cursor:pointer;transition:flex-grow var(--ascii-acc-ms, 280ms) cubic-bezier(.16, 1, .3, 1)}
-:where(.ascii-acc-panel[aria-expanded="true"]){flex-grow:4.2;cursor:default}
-:where(.ascii-acc-photo){position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;scale:1.04;transition:opacity 160ms cubic-bezier(.16, 1, .3, 1),scale var(--ascii-acc-ms, 280ms) cubic-bezier(.16, 1, .3, 1)}
-:where([data-ascii-accordion]:not([data-ascii-field])) :where(.ascii-acc-photo){opacity:.45}
-:where(.ascii-acc-panel[aria-expanded="true"]) :where(.ascii-acc-photo){opacity:1;scale:1;transition:opacity 240ms cubic-bezier(.16, 1, .3, 1) 40ms,scale var(--ascii-acc-ms, 280ms) cubic-bezier(.16, 1, .3, 1)}
-:where(.ascii-acc-caption){position:absolute;inset:auto 0 0;display:flex;color:#fff;flex-direction:column;gap:2px;padding:28px 12px 11px;background:linear-gradient(to top, rgb(0 0 0 / .62), transparent);white-space:nowrap;opacity:0;translate:0 6px;transition:opacity 120ms,translate 200ms}
-:where(.ascii-acc-panel[aria-expanded="true"]) :where(.ascii-acc-caption){opacity:1;translate:0 0;transition-delay:160ms}
+:where(.ascii-acc-panel){position:relative;flex:calc(1 + 3.2 * var(--ascii-acc-open, 0)) 1 0;min-width:0;margin:0;padding:0;border:0;border-radius:12px;overflow:hidden;background:transparent;color:#fff;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+:where(.ascii-acc-panel[aria-expanded="true"]){cursor:default}
+:where(.ascii-acc-photo){position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:var(--ascii-acc-photo, 0);scale:calc(1.04 - .04 * var(--ascii-acc-open, 0))}
+:where(.ascii-acc-caption){position:absolute;inset:auto 0 0;display:flex;color:#fff;flex-direction:column;gap:2px;padding:28px 12px 11px;background:linear-gradient(to top, rgb(0 0 0 / .62), transparent);white-space:nowrap;opacity:var(--ascii-acc-caption, 0);translate:0 calc(6px - 6px * var(--ascii-acc-caption, 0))}
 :where(.ascii-acc-title){font-size:15px;font-weight:500}
 :where(.ascii-acc-meta){font-size:14px;opacity:.8}
-@media (prefers-reduced-motion:reduce){:where(.ascii-acc-panel,.ascii-acc-photo,.ascii-acc-caption){transition:none}}
 `;
+
+/** Ms a fast-moving pointer must rest on a panel before it opens, so sweeping across the strip does not open every panel on the way. */
+const INTENT_MS = 90, SLOW = 0.3;
 
 const normal = (image: string | AccordionImage): AccordionImage => (typeof image === 'string' ? { src: image } : image);
 
 /**
  * A strip of image panels: the open one shows its photo, the closed ones the same photos in characters. Pointing at,
- * pressing or focusing a panel opens it, and as it opens its characters flare denser for a beat, then give way to the photo.
+ * pressing or focusing a panel opens it. Width, photo and caption all follow one spring per panel, so the characters and the photo
+ * cross over without a gap and a change of mind mid-move carries on smoothly.
  */
 export function accordion(element: HTMLElement, options: AccordionOptions): AccordionHandle {
-  const state = { current: { open: 0, duration: 280, label: 'Images', ...options } };
+  const state = { current: { open: 0, duration: 420, label: 'Images', ...options } };
   const styles = styleKeeper();
   const images = state.current.images.map(normal);
-  let open = clamp(Math.round(state.current.open), 0, Math.max(0, images.length - 1)), last = 0, changed = performance.now();
-  let vis = images.map((_, i): number => (i === open ? 1 : 0));
+  let open = clamp(Math.round(state.current.open), 0, Math.max(0, images.length - 1)), last = 0, loop = 0;
+  const springs = images.map((_, i) => ({ x: i === open ? 1 : 0, v: 0 }));
   const pics: (Picture | null)[] = images.map(() => null), tones: (Picture | null)[] = images.map(() => null);
   let surface: Surface | null = null;
   const look = (): GlyphFieldOptions => ({ blend: 'coarse',
@@ -99,33 +99,52 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; delete element.dataset.asciiField; },
     onTheme: retone,
-    paint: ({ pen, now, still, box }) => {
-      const dt = last ? Math.min(64, now - last) : 16;
-      last = now;
-      let moving = false;
-      vis = vis.map((v, i) => {
-        const to = i === open ? 1 : 0, next = still ? to : v + Math.sign(to - v) * Math.min(Math.abs(to - v), dt / Math.max(1, state.current.duration));
-        if (next !== to) moving = true;
-        return next;
-      });
+    paint: ({ pen, still, now, box }) => {
+      const moving = step(now, still);
       panels.forEach((panel, i) => {
-        const tone = tones[i], v = easeOut(vis[i]);
-        if (!tone || v >= 1) return;
-        const r = box(panel), radius = parseFloat(getComputedStyle(panel).borderTopLeftRadius) || 0;
+        const tone = tones[i], k = springs[i].x, alpha = 1 - smoothstep(0.45, 0.95, k);
+        if (!tone || alpha <= 0) return;
+        const r = box(panel), radius = parseFloat(getComputedStyle(panel).borderTopLeftRadius) || 0, grow = 1.04 - 0.04 * k;
         pen.save();
         pen.beginPath(); pen.roundRect(r.x, r.y, r.w, r.h, radius); pen.clip();
-        pen.globalAlpha = 1 - v;
-        drawCover(pen, tone, r.x, r.y, r.w, r.h, images[i].focus?.x, images[i].focus?.y);
-        const flare = Math.sin(Math.PI * clamp(v * 1.4)) * 0.4;
-        if (flare > 0.01) { pen.globalCompositeOperation = 'lighter'; pen.globalAlpha = flare; pen.fillStyle = '#fff'; pen.fillRect(r.x, r.y, r.w, r.h); }
+        pen.globalAlpha = alpha;
+        // Scaled like the photo, so characters and photo line up while they cross.
+        drawCover(pen, tone, r.x - (r.w * (grow - 1)) / 2, r.y - (r.h * (grow - 1)) / 2, r.w * grow, r.h * grow, images[i].focus?.x, images[i].focus?.y);
         pen.restore();
       });
-      // Panels resize with a CSS transition, so keep drawing until it has run.
-      if (now - changed < state.current.duration + 60) moving = true;
-      if (!moving) last = 0;
       return moving;
     },
   });
+
+  /** Advances the springs and writes them to the panels; the field paints in the same frame, so its characters never lag the layout. */
+  function step(now: number, still: boolean) {
+    const dt = last ? Math.min(0.064, (now - last) / 1000) : 1 / 60;
+    last = now;
+    const w = 5 / (Math.max(1, state.current.duration) / 1000), n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+    let moving = false;
+    springs.forEach((s, i) => {
+      const to = i === open ? 1 : 0;
+      if (still) { s.x = to; s.v = 0; }
+      for (let j = 0; j < n && (s.x !== to || s.v); j++) { s.v += (-w * w * (s.x - to) - 2 * w * s.v) * h; s.x += s.v * h; }
+      if (Math.abs(s.x - to) < 0.001 && Math.abs(s.v) < 0.01) { s.x = to; s.v = 0; } else moving = true;
+      write(panels[i], s.x);
+    });
+    if (!moving) last = 0;
+    return moving;
+  }
+  function write(panel: HTMLElement, k: number) {
+    const css = panel.style;
+    css.setProperty('--ascii-acc-open', k.toFixed(4));
+    css.setProperty('--ascii-acc-photo', (surface ? smoothstep(0.15, 0.75, k) : 0.45 + 0.55 * k).toFixed(3));
+    css.setProperty('--ascii-acc-caption', smoothstep(0.6, 1, k).toFixed(3));
+  }
+  /** Without the field nothing paints, so the springs run on a loop of their own. */
+  const run = () => {
+    if (surface) { surface.kick(); return; }
+    if (loop || typeof requestAnimationFrame !== 'function') { if (!loop) step(performance.now(), true); return; }
+    const frame = (now: number) => { loop = step(now, !!(state.current.reducedMotion ?? prefersReduced())) ? requestAnimationFrame(frame) : 0; };
+    loop = requestAnimationFrame(frame);
+  };
 
   const sync = () => {
     panels.forEach((panel, i) => {
@@ -138,34 +157,49 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
     if (focus) panels[index]?.focus();
     if (index === open) return;
     open = index;
-    changed = performance.now();
     sync();
     state.current.onChange?.(index);
-    surface?.kick();
+    run();
   };
+  let intent: ReturnType<typeof setTimeout> | 0 = 0, px = 0, pt = 0, speed = 0, aim = 0;
+  const wait = () => { if (intent) clearTimeout(intent); intent = 0; };
   const listeners = panels.map((panel, i) => {
-    const show = () => select(i);
+    // A mouse that rests or moves slowly opens the panel at once; one sweeping past waits a beat to see whether it stays.
+    const hover = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      const t = event.timeStamp || performance.now(), gap = Math.max(1, t - pt);
+      speed = pt && gap < 100 ? speed * 0.5 + (Math.abs(event.clientX - px) / gap) * 0.5 : 0;
+      px = event.clientX; pt = t;
+      if (aim !== i) wait();
+      aim = i;
+      if (i === open) { wait(); return; }
+      if (speed < SLOW) { wait(); select(i); return; }
+      if (!intent) intent = setTimeout(() => { intent = 0; select(aim); }, INTENT_MS);
+    };
+    const press = () => { wait(); select(i); };
     const focus = () => { if (panel.matches(':focus-visible')) select(i); };
     const keys = (event: KeyboardEvent) => {
-      const step = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>)[event.key];
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? panels.length - 1 : step !== undefined ? (i + step + panels.length) % panels.length : null;
+      const by = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>)[event.key];
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? panels.length - 1 : by !== undefined ? (i + by + panels.length) % panels.length : null;
       if (next === null) return;
       event.preventDefault();
       select(next, true);
     };
-    panel.addEventListener('pointermove', show);
-    panel.addEventListener('pointerdown', show);
-    panel.addEventListener('click', show);
+    panel.addEventListener('pointermove', hover);
+    panel.addEventListener('pointerdown', press);
+    panel.addEventListener('click', press);
     panel.addEventListener('focus', focus);
     panel.addEventListener('keydown', keys);
     return () => {
-      panel.removeEventListener('pointermove', show);
-      panel.removeEventListener('pointerdown', show);
-      panel.removeEventListener('click', show);
+      panel.removeEventListener('pointermove', hover);
+      panel.removeEventListener('pointerdown', press);
+      panel.removeEventListener('click', press);
       panel.removeEventListener('focus', focus);
       panel.removeEventListener('keydown', keys);
     };
   });
+  const leave = () => { wait(); pt = 0; };
+  element.addEventListener('pointerleave', leave);
 
   injectStyle('ascii-kit-accordion', CSS);
   element.dataset.asciiAccordion = '';
@@ -173,8 +207,7 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
   const hadRole = element.getAttribute('role'), hadLabel = element.getAttribute('aria-label');
   if (!hadRole) element.setAttribute('role', 'group');
   if (!hadLabel) element.setAttribute('aria-label', state.current.label);
-  styles.set(element, '--ascii-acc-ms', `${state.current.duration}ms`);
-  panels.forEach(panel => element.appendChild(panel));
+  panels.forEach((panel, i) => { write(panel, springs[i].x); element.appendChild(panel); });
   sync();
   panels.forEach((panel, i) => {
     const photo = panel.querySelector('img');
@@ -182,7 +215,6 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
   });
 
   return handle(() => surface, state, next => {
-    styles.set(element, '--ascii-acc-ms', `${next.duration}ms`);
     if (!hadLabel) element.setAttribute('aria-label', next.label);
     surface?.refresh();
   }, {
@@ -190,6 +222,9 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
     get open() { return open; },
   }, () => {
     listeners.forEach(off => off());
+    wait();
+    if (loop) cancelAnimationFrame(loop);
+    element.removeEventListener('pointerleave', leave);
     panels.forEach(panel => panel.remove());
     delete element.dataset.asciiAccordion;
     delete element.dataset.asciiField;

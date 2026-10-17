@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, handle, house, isDark, mountSurface, srOnly, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, isDark, mountSurface, srOnly, type KitHandle, type KitOptions, type Surface } from './core';
 import { drawCover, imageFor, imageReady, injectStyle, type Picture } from './capture';
 
 export type DropState = 'empty' | 'developing' | 'done';
@@ -13,7 +13,7 @@ export interface DropzoneOptions extends KitOptions {
   onError?: (message: string, file: File) => void;
   /** Largest file accepted, in bytes. Default 10 MB. */
   maxBytes?: number;
-  /** Ms the image takes to develop in characters. Default 720. */
+  /** Ms the image takes to develop in characters. Default 900. */
   develop?: number;
   /** File name for `download()`. Default `<name>-ascii.png`. */
   filename?: string;
@@ -33,8 +33,9 @@ export interface DropzoneHandle extends KitHandle<DropzoneOptions> {
   readonly state: DropState;
 }
 
-const DEFAULTS = { maxBytes: 10 * 1024 * 1024, develop: 720 };
-const CELL = 6, BREATHE_MS = 1300, REST = 0.08;
+const DEFAULTS = { maxBytes: 10 * 1024 * 1024, develop: 900 };
+// The ring rests on the lightest character of any set; a drag lifts it and sets packets chasing at CHASE_SPEED cells a second.
+const CELL = 6, REST = 0.08, RING = 0.3, CHASE_SPEED = 14;
 const CSS = `
 :where(.ascii-drop-empty){position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%;min-height:inherit;padding:24px;box-sizing:border-box;text-align:center}
 :where([data-ascii-dropzone]:not([data-state="empty"])) :where(.ascii-drop-empty){display:none}
@@ -80,14 +81,32 @@ export function ringGrid(w: number, h: number, ratio = Math.min(2, typeof device
   return { cols: x.n, rows: y.n, w: x.css, h: y.css, cw: cwD / ratio, ch: chD / ratio };
 }
 
+export interface RingLook {
+  /** Tone of the ring row, 0–1. */
+  tone: number;
+  /** 0–1: how far the drag look has come in, lit packets chasing round the ring and a halo leaning in from it. */
+  glow?: number;
+  /** Where the chase has got to, in cells along the ring. */
+  phase?: number;
+  /** The dragged file, in cells, so the halo swells on the side nearest it. */
+  near?: { x: number; y: number } | null;
+}
+
+const CHASE = 9, HALO = 3;
+
 /**
- * The idle ring, one texel block per cell: every side gets exactly one even row of characters, a cell in from the frame,
- * with corners rounded to `radius` CSS px. `inner` (0–1) adds a dimmer row inside it, the breath that answers a drag.
+ * The ring, one texel block per cell: every side gets exactly one even row of characters, a cell in from the frame,
+ * with corners rounded to `radius` CSS px. While a file is over it, packets of denser characters chase round the row
+ * and a halo a few cells deep leans in from it, deepest on the side nearest the file.
  */
-export function paintRing(pen: CanvasRenderingContext2D, grid: ReturnType<typeof ringGrid>, radius: number, tone: number, inner: number) {
+export function paintRing(pen: CanvasRenderingContext2D, grid: ReturnType<typeof ringGrid>, radius: number, look: RingLook) {
   const { cols, rows } = grid, image = pen.createImageData(cols * 2, rows * 2), data = image.data;
+  const { tone, glow = 0, phase = 0, near = null } = look;
   const rx = Math.max(1, radius / grid.cw), ry = Math.max(1, radius / grid.ch);
   const x0 = 1, x1 = cols - 2, y0 = 1, y1 = rows - 2;
+  // Lengths along the ring, in cells: top, right, bottom and left sides, each followed by a quarter arc.
+  const sx = Math.max(0, x1 - x0 - 2 * rx), sy = Math.max(0, y1 - y0 - 2 * ry), arc = (Math.PI / 4) * (rx + ry);
+  const reach = Math.hypot(cols, rows) * 0.45;
   for (let row = 0; row < rows; row++) {
     for (let c = 0; c < cols; c++) {
       // Signed distance in cells to the rounded rectangle: straight sides exactly, corners along the ray from their centre.
@@ -95,7 +114,30 @@ export function paintRing(pen: CanvasRenderingContext2D, grid: ReturnType<typeof
       let d;
       if (qx > 0 && qy > 0) { const e = Math.hypot(qx / rx, qy / ry); d = Math.hypot(qx, qy) * (1 - 1 / e); }
       else d = -Math.min(c - x0, x1 - c, row - y0, y1 - row);
-      const t = Math.abs(d) < 0.5 ? tone : inner > 0 && d < -0.5 && d > -1.5 ? tone * 0.55 * inner : 0;
+      let t = 0;
+      if (Math.abs(d) < 0.5) {
+        t = tone;
+        if (glow > 0) {
+          // Position along the ring, clockwise from the top left corner's end.
+          const right = c > x1 - rx, bottom = row > y1 - ry, left = c < x0 + rx, top = row < y0 + ry;
+          const turn = (a: number, b: number) => Math.atan2(a, b) / (Math.PI / 2);
+          let s;
+          if (top && !left && !right) s = c - (x0 + rx);
+          else if (top && right) s = sx + arc * turn(qx / rx, qy / ry);
+          else if (right && !top && !bottom) s = sx + arc + (row - (y0 + ry));
+          else if (bottom && right) s = sx + arc + sy + arc * turn(qy / ry, qx / rx);
+          else if (bottom && !left) s = sx + 2 * arc + sy + ((x1 - rx) - c);
+          else if (bottom && left) s = 2 * sx + 2 * arc + sy + arc * turn(qx / rx, qy / ry);
+          else if (left && !top) s = 2 * sx + 3 * arc + sy + ((y1 - ry) - row);
+          else s = 2 * sx + 3 * arc + 2 * sy + arc * turn(qy / ry, qx / rx);
+          const w = (((s - phase) % CHASE) + CHASE) % CHASE;
+          const lit = Math.max(0, 1 - Math.abs(w - CHASE / 2) / 2.2);
+          t = tone + glow * (0.2 + 0.32 * lit);
+        }
+      } else if (glow > 0 && d < -0.5 && d > -0.5 - HALO) {
+        const depth = (-d - 0.5) / HALO, lean = near ? Math.max(0, 1 - Math.hypot(c - near.x, row - near.y) / reach) : 0.4;
+        t = glow * (1 - depth) ** 1.6 * (0.1 + 0.32 * lean);
+      }
       const v = Math.round(Math.min(1, t) * 255);
       for (let k = 0; k < 4; k++) { const i = ((row * 2 + (k >> 1)) * cols * 2 + c * 2 + (k & 1)) * 4; data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255; }
     }
@@ -104,14 +146,40 @@ export function paintRing(pen: CanvasRenderingContext2D, grid: ReturnType<typeof
 }
 
 /**
- * An image dropzone whose border is a quiet ring of characters that thickens and breathes while a file is dragged over.
- * A dropped image develops in characters, in its own colours. Any element inside with `data-dropzone="pick"`, `"clear"`
+ * The develop: the image opens out of the dark from `origin` in a soft circle, its wavefront lit so the characters
+ * there climb the ramp a beat before they settle. `k` runs 0–1.
+ */
+function developMask(pen: CanvasRenderingContext2D, w: number, h: number, origin: { x: number; y: number }, k: number) {
+  const far = Math.max(Math.hypot(origin.x, origin.y), Math.hypot(w - origin.x, origin.y), Math.hypot(origin.x, h - origin.y), Math.hypot(w - origin.x, h - origin.y));
+  const edge = Math.max(24, Math.min(w, h) * 0.22), r = k * (far + edge);
+  const inner = Math.max(0, r - edge);
+  const shade = pen.createRadialGradient(origin.x, origin.y, inner, origin.x, origin.y, Math.max(inner + 1, r));
+  shade.addColorStop(0, 'rgb(0 0 0 / 0)');
+  shade.addColorStop(1, 'rgb(0 0 0 / 1)');
+  pen.globalCompositeOperation = 'source-over';
+  pen.fillStyle = shade;
+  pen.fillRect(0, 0, w, h);
+  const lit = pen.createRadialGradient(origin.x, origin.y, inner, origin.x, origin.y, Math.max(inner + 1, r));
+  const fade = 1 - k * k;
+  lit.addColorStop(0, 'rgb(255 255 255 / 0)');
+  lit.addColorStop(0.55, `rgb(255 255 255 / ${0.5 * fade})`);
+  lit.addColorStop(1, 'rgb(255 255 255 / 0)');
+  pen.globalCompositeOperation = 'lighter';
+  pen.fillStyle = lit;
+  pen.fillRect(0, 0, w, h);
+  pen.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * An image dropzone whose border is a quiet ring of characters that comes alive while a file is dragged over.
+ * A dropped image opens out from the drop point in characters, in its own colours. Any element inside with `data-dropzone="pick"`, `"clear"`
  * or `"download"` is wired to that action. Without content of your own it adds a title, hint and Choose file button.
  */
 export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): DropzoneHandle {
   const state = { current: { ...DEFAULTS, ...options } };
   let phase: DropState = 'empty', pic: Picture | null = null, src = '', objectUrl = '', name = 'image', since = 0, request = 0;
-  let over = false, depth = 0, glow = 0, then = 0, lastFile: File | null = null;
+  let over = false, depth = 0, glow = 0, then = 0, phase0 = 0, lastFile: File | null = null;
+  let pointer: { x: number; y: number } | null = null, origin: { x: number; y: number } | null = null;
   let surface: Surface | null = null, ring: ReturnType<typeof ringGrid> | null = null;
   const live = srOnly('', true);
   const FRAME = ['left', 'top', 'width', 'height'] as const;
@@ -138,7 +206,7 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     : { blend: 'coarse', mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 500, cellSize: CELL, cellAspect: 0.8, glyphScale: 0.8,
       // Characters in the photo's own colours read only on a dark ground: on a light zone the shadows would vanish into it.
       background: isDark(element) ? 'transparent' : PHOTO_GROUND,
-      color: 'source', saturation: 1.15, contrast: 1.15, levels: 'auto', brightness: phase === 'developing' ? -1 : REST, hover: 'trail', trail: { strength: 0.6, radius: 0.3 }, ...state.current.look });
+      color: 'source', saturation: 1.15, contrast: 1.15, levels: 'auto', brightness: REST, hover: 'trail', trail: { strength: 0.6, radius: 0.3 }, ...state.current.look });
 
   surface = mountSurface({
     host: element,
@@ -154,24 +222,27 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     paint: ({ pen, w, h, now, still }) => {
       if (phase !== 'empty') {
         if (!pic) return false;
-        const k = still ? 1 : house(clamp((now - since) / state.current.develop));
+        const t = still ? 1 : clamp((now - since) / state.current.develop);
+        // The wavefront's area grows with the square of its radius, so the radius eases gently or the sweep is over in a blink.
+        const k = 1 - (1 - t) ** 2;
         drawCover(pen, pic, 0, 0, w, h);
-        // The image develops out of the dark, after its levels are set, until only a touch of lift remains.
-        const rest = state.current.look?.brightness ?? REST;
-        if (phase === 'developing') surface?.field.update({ brightness: -1 + k * (1 + rest) });
-        if (k >= 1 && phase === 'developing') settle();
-        return k < 1;
+        if (phase === 'developing' && k < 1) developMask(pen, w, h, origin ?? { x: w / 2, y: h / 2 }, k);
+        if (t >= 1 && phase === 'developing') settle();
+        return t < 1;
       }
-      // The ring: one row of characters a cell in from the edge, following the corners; a drag adds a dimmer row inside.
       const dt = then ? Math.min(64, now - then) : 16;
       then = now;
       const to = over ? 1 : 0;
-      glow = still ? to : glow + (to - glow) * (1 - Math.exp(-dt / 70));
-      const breath = still ? 0.5 : 0.5 - 0.5 * Math.cos((now / BREATHE_MS) * Math.PI * 2);
+      glow = still ? to : glow + (to - glow) * (1 - Math.exp(-dt / 90));
+      if (!still && glow > 0.004) phase0 += (dt / 1000) * CHASE_SPEED;
       const radius = Math.max(4, (parseFloat(getComputedStyle(element).borderTopLeftRadius) || 16) - CELL);
       const grid = trim();
-      if (grid) paintRing(pen, grid, radius, 0.56 + glow * (0.14 + 0.28 * breath), glow * (0.4 + 0.6 * breath));
-      const moving = over || Math.abs(to - glow) > 0.004;
+      if (grid) {
+        const box = surface!.canvas.getBoundingClientRect();
+        const near = pointer && box.width ? { x: ((pointer.x - box.left) / box.width) * grid.cols, y: ((pointer.y - box.top) / box.height) * grid.rows } : null;
+        paintRing(pen, grid, radius, { tone: RING, glow, phase: phase0, near });
+      }
+      const moving = !still && (over || Math.abs(to - glow) > 0.004);
       if (!moving) then = 0;
       return moving;
     },
@@ -195,8 +266,9 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     if (fallbackImg.parentElement !== element) { element.prepend(fallbackImg); added.push(fallbackImg); }
   }
 
-  const setImage = async (next: string | Blob, file: File | null = null) => {
+  const setImage = async (next: string | Blob, file: File | null = null, from: { x: number; y: number } | null = null) => {
     const id = ++request;
+    origin = from;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = typeof next === 'string' ? '' : URL.createObjectURL(next);
     src = objectUrl || (next as string);
@@ -215,11 +287,11 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
     if (phase === 'done') settle();
   };
 
-  const accept = (file: File) => {
+  const accept = (file: File, from: { x: number; y: number } | null = null) => {
     const fail = (message: string) => { live.textContent = message; state.current.onError?.(message, file); };
     if (!file.type.startsWith('image/')) return fail(`${file.name} isn’t an image.`);
     if (file.size > state.current.maxBytes) return fail(`${file.name} is over ${Math.round(state.current.maxBytes / 1024 / 1024)} MB.`);
-    void setImage(file, file);
+    void setImage(file, file, from);
   };
   const clear = () => {
     request++;
@@ -257,15 +329,16 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
   });
 
   const kick = () => { then = 0; surface?.kick(); };
-  const onEnter = (event: DragEvent) => { event.preventDefault(); depth++; if (!over) { over = true; element.dataset.over = ''; kick(); } };
-  const onOver = (event: DragEvent) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'; };
-  const onLeave = () => { depth = Math.max(0, depth - 1); if (!depth && over) { over = false; delete element.dataset.over; kick(); } };
+  const onEnter = (event: DragEvent) => { event.preventDefault(); depth++; pointer = { x: event.clientX, y: event.clientY }; if (!over) { over = true; element.dataset.over = ''; kick(); } };
+  const onOver = (event: DragEvent) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'; pointer = { x: event.clientX, y: event.clientY }; };
+  const onLeave = () => { depth = Math.max(0, depth - 1); if (!depth && over) { over = false; pointer = null; delete element.dataset.over; kick(); } };
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
-    depth = 0; over = false; delete element.dataset.over;
-    if (surface) { const box = element.getBoundingClientRect(); surface.field.pulse({ x: event.clientX - box.left, y: event.clientY - box.top, strength: 1 }); }
+    depth = 0; over = false; pointer = null; delete element.dataset.over;
+    const box = element.getBoundingClientRect(), at = { x: event.clientX - box.left, y: event.clientY - box.top };
+    surface?.field.pulse({ ...at, strength: 1 });
     const file = event.dataTransfer?.files?.[0];
-    if (file) accept(file); else kick();
+    if (file) accept(file, at); else kick();
   };
   const onClick = (event: MouseEvent) => {
     const action = (event.target as Element | null)?.closest?.('[data-dropzone]')?.getAttribute('data-dropzone');

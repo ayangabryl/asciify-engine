@@ -32,9 +32,9 @@ describe('toastStack', () => {
     expect(dom.canvases(host)).toHaveLength(0);
   });
 
-  it('lays its field above every toast, and draws no glint when asked not to', () => {
+  it('lays its field above every toast and draws nothing round them at rest', () => {
     const host = dom.element();
-    const stack = toastStack(asElement(host), { glint: false });
+    const stack = toastStack(asElement(host));
     expect(dom.canvases(host)[0].style.zIndex).toBe('11');
     stack.push({ title: 'Invite sent' });
     dom.settle();
@@ -67,7 +67,7 @@ describe('toastStack', () => {
     expect(node.dataset.gone).toBe('');
     expect(stack.toasts).toEqual([]);
     expect(dom.frames.size).toBe(1);
-    vi.advanceTimersByTime(160);
+    vi.advanceTimersByTime(240);
     expect(toasts(host)).toHaveLength(0);
   });
 
@@ -98,6 +98,26 @@ describe('toastStack', () => {
     const close = toasts(host)[0].querySelector('.ascii-toast-close')!;
     expect(close.attributes.get('aria-label')).toBe('Dismiss Again');
     close.dispatch('click');
+    expect(stack.toasts).toHaveLength(0);
+  });
+
+  it('throws a toast out on a sideways swipe and springs back on a short one', () => {
+    const host = dom.element();
+    const stack = toastStack(asElement(host), { duration: 0 });
+    stack.push({ title: 'Swipe me' });
+    dom.settle();
+    const [node] = toasts(host), list = host.querySelector('ol')!;
+    list.dispatch('pointerdown', { target: node, clientX: 0 });
+    dom.advance(120);
+    list.dispatch('pointermove', { target: node, clientX: 30 });
+    expect(node.style.getPropertyValue('transform')).toBe('translateX(30px)');
+    list.dispatch('pointerup', { target: node, clientX: 30 });
+    expect(node.style.getPropertyValue('transform')).toBe('');
+    expect(stack.toasts).toHaveLength(1);
+    list.dispatch('pointerdown', { target: node, clientX: 0 });
+    list.dispatch('pointermove', { target: node, clientX: 90 });
+    list.dispatch('pointerup', { target: node, clientX: 90 });
+    expect(node.dataset.gone).toBe('');
     expect(stack.toasts).toHaveLength(0);
   });
 

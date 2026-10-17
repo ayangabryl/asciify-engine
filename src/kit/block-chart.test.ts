@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 const { mount, support } = vi.hoisted(() => ({ mount: vi.fn(), support: { on: true } }));
 vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyphField: mount }));
 
-import { barAt, blockChart } from './block-chart';
+import { barAt, barLayout, blockChart } from './block-chart';
 import { useFakeDom } from './fake-dom-2a';
 
 const { env, advance, run, element, as, canvases, key } = useFakeDom(mount, support);
@@ -13,7 +13,7 @@ describe('blockChart', () => {
     const el = element();
     const c = blockChart(as(el), { values: [3, 5, 8], labels: ['Mon', 'Tue', 'Wed'] });
     expect(canvases(el)).toHaveLength(1);
-    expect(mount.mock.calls[0][1]).toMatchObject({ cellSize: 7, cellAspect: 0.6, shade: 0.35 });
+    expect(mount.mock.calls[0][1]).toMatchObject({ cellSize: 7, cellAspect: 1, blend: 'off' });
     const table = el.children.find(n => n.tagName === 'TABLE')!;
     expect(table.textContent).toBe('Mon3Tue5Wed8');
     expect(el.getAttribute('role')).toBe('group');
@@ -71,6 +71,24 @@ describe('blockChart', () => {
     expect(plain.children[0].getAttribute('style')).toContain('height:100.00%');
     c.destroy();
     expect(el.children.some(n => n === plain)).toBe(false);
+  });
+  it('lays bars on whole cells, centred, dropping the gaps only when they cannot fit', () => {
+    expect(barLayout(60, 7)).toEqual({ bar: 6, gap: 3, left: 0 });
+    expect(barLayout(106, 30)).toEqual({ bar: 2, gap: 1, left: 8 });
+    expect(barLayout(43, 30)).toEqual({ bar: 1, gap: 0, left: 6 });
+    expect(barLayout(10, 0)).toEqual({ bar: 0, gap: 0, left: 0 });
+  });
+  it('glides bars that keep their label and settles after the move', () => {
+    const el = element();
+    const c = blockChart(as(el), { values: [1, 2, 3], labels: ['a', 'b', 'c'], intro: false });
+    run(100);
+    c.set([5, 1, 2, 3], ['z', 'a', 'b', 'c']);
+    expect(c.values).toEqual([5, 1, 2, 3]);
+    expect(el.children.find(n => n.tagName === 'TABLE')!.textContent).toBe('z5a1b2c3');
+    expect(env.frames.size).toBe(1);
+    run(900);
+    expect(env.frames.size).toBe(0);
+    c.destroy();
   });
   it('maps a position to a bar', () => {
     expect(barAt(0, 7)).toBe(0);

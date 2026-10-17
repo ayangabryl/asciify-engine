@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FIELD_COMPOSITE, fieldCellShader, fieldFluidShader } from './field-shaders';
+import { FIELD_MARKS } from './field-model';
 
 // Uniform locations are read from the linked program, so a misspelt name would be silently ignored by WebGL.
 const declared = (shader: string) => new Set([...shader.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(([, names]) => names.split(',').map(name => name.trim().replace(/\[\d+\]$/, ''))));
@@ -25,6 +26,15 @@ describe('glyph field programs', () => {
     const names = declared(fieldFluidShader(true));
     expect([...used(fluid, 'at')].filter(name => !names.has(name))).toEqual([]);
     expect([...names].filter(name => !used(fluid, 'at').has(name))).toEqual([]);
+  });
+  it('draws every mark in one branch of the pixel pass, indexed as FIELD_MARKS orders them', () => {
+    const branches = new Set([...FIELD_COMPOSITE.matchAll(/uMark==(\d+)/g)].map(([, n]) => Number(n)));
+    for (let i = 0; i < FIELD_MARKS.length; i++) expect(branches.has(i)).toBe(true);
+    expect(Math.max(...branches)).toBe(FIELD_MARKS.length - 1);
+    expect(draw).toContain('gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark))');
+    expect(draw).toContain('gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark))');
+    // No mark samples anything but its own cell, so styles cost no extra passes or textures.
+    expect(FIELD_COMPOSITE.match(/texelFetch\(uCells/g)).toHaveLength(1);
   });
   it('writes ink and what lies under it from the cell pass, which the pixel pass reads per cell', () => {
     for (const packed of [false, true]) {

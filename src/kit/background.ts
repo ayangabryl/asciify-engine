@@ -164,11 +164,22 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
     if (paused) mounted.pause();
     return mounted;
   };
+  // Each run restores the host's position and isolation as it found them, so an outgoing run would strip the incoming one's.
+  const own = { position: element.style.getPropertyValue('position'), isolation: element.style.getPropertyValue('isolation') };
+  const restyle = (name: 'position' | 'isolation', value: string) => { if (value) element.style.setProperty(name, value); else element.style.removeProperty(name); };
+  let swapped = false;
+  const leave = (old: BackgroundRun) => {
+    swapped = true;
+    old.destroy();
+    if (!run || destroyed) return;
+    if (typeof getComputedStyle === 'function' && getComputedStyle(element).position === 'static') element.style.setProperty('position', 'relative');
+    element.style.setProperty('isolation', 'isolate');
+  };
   const retire = (old: BackgroundRun) => {
-    if (still()) { old.destroy(); return; }
+    if (still()) { leave(old); return; }
     old.canvas.style.transition = `opacity ${FADE_MS - 20}ms cubic-bezier(.16, 1, .3, 1)`;
     old.canvas.style.opacity = '0';
-    const entry = { run: old, timer: setTimeout(() => { leaving.delete(entry); old.destroy(); }, FADE_MS) };
+    const entry = { run: old, timer: setTimeout(() => { leaving.delete(entry); leave(old); }, FADE_MS) };
     leaving.add(entry);
   };
   const setPreset = (preset: BackgroundPreset) => {
@@ -200,10 +211,11 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      for (const entry of leaving) { clearTimeout(entry.timer); entry.run.destroy(); }
+      for (const entry of leaving) { clearTimeout(entry.timer); entry.run.destroy(); swapped = true; }
       leaving.clear();
       run?.destroy();
       run = null;
+      if (swapped) { restyle('position', own.position); restyle('isolation', own.isolation); }
       disposeKit(state);
     },
   };

@@ -93,7 +93,7 @@ Text never sits on raw characters, and never in a box. Two layers do the work:
 
 | Surface | Cell size | Characters | Site reference |
 | --- | --- | --- | --- |
-| Page hero ground | 10–12px, broad shapes | Sparse: `' .:+*#'` in the mono face | `fieldBackground` `hero` (10px), `drift` (11px), `halftone` (14px dot spacing) |
+| Page hero ground | 10–12px, broad shapes | Sparse: `' .:+*#'` in the mono face | `fieldBackground` `hero` (10px), `drift` (11px), `halftone` (14px dot spacing), `swell` (10px dot spacing) |
 | Section band or card stage | 7–10px | Fuller ramp for images (`' .:-=+*#%@'`), quiet ramp for grounds | images 7px, character fields 10px, halftone 9px |
 | Control: button, pill, tabs, code input, odometer | Leave it to the kit | The kit fits cells to the element's text | Use a monospaced label for `buttonLoading` |
 
@@ -191,7 +191,7 @@ publishButton.addEventListener('click', async () => {
 
 | Surface | Presets | Notes |
 | --- | --- | --- |
-| Product hero, pricing, docs landing, behind copy | `drift`, `halftone`, or `fieldBackground` `hero` | GPU grounds that clear around `clear`. `halftone` is the calmest; `fieldBackground` `hero` is asciify.org's own hero, with ripples and `pulse()`. |
+| Product hero, pricing, docs landing, behind copy | `drift`, `halftone`, `swell`, or `fieldBackground` `hero` | GPU grounds that clear around `clear`. `halftone` is the calmest; `swell` is the finest, a dot grid in slow waves that stays quiet in the middle even without `clear`; `fieldBackground` `hero` is asciify.org's own hero, with ripples and `pulse()`. |
 | A brand or name moment | `wordField` (id `field`), `fieldBackground` `brand` | Your word in the field; keep copy off its centre. |
 | Art-first hero with little copy | `fluid` | The original Asciify hero, 7px cells at 0.7 opacity. Not behind reading text. |
 | Quiet texture: section bands, footers, empty states, side panels | `caustics`, `contour`, `facet`, `etch`, `moire`, `weave`, `veil`, `dune`, `silk` | Canvas, no cursor, slow. The safest behind text after `halftone`. |
