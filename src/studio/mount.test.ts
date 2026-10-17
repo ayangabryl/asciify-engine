@@ -73,3 +73,18 @@ it('exposes the last painted phase for accurate snapshots after a speed edit',()
   expect(player.motionTime).not.toBeCloseTo(player.time*2,5);
   player.destroy();
 });
+it('lowers the live budget only on a sustained frame-budget miss, then restores the requested grid for the settled still',()=>{
+  const {canvas,media}=fixture();
+  renderer.setBudget.mockImplementation((cells:number)=>{renderer.maxCells=cells;});
+  const player=mountStudioMedia(canvas,media);
+  player.setBudget(20000);advance();
+  // A slow hover: every frame misses 60 fps.
+  const now=vi.spyOn(performance,'now').mockImplementation((()=>{let t=0;return ()=>(t+=25);})());
+  renderer.active=true;
+  for(let i=0;i<50;i++){listeners.pointermove({clientX:50,clientY:50,timeStamp:i} as unknown as Event);advance();}
+  expect(renderer.maxCells).toBeLessThan(20000);
+  // The hover settles: the still is drawn again at the requested budget.
+  renderer.active=false;advance();
+  expect(renderer.maxCells).toBe(20000);
+  now.mockRestore();player.destroy();
+});

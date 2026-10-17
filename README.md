@@ -645,3 +645,22 @@ const field = mountGlyphField(canvas, {
 ```
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
+
+## 4.12: halftone fields for interfaces
+
+`mark: 'dot'` turns the GPU field into a halftone: one circle per cell, its area following the tone, crisp at any pixel ratio. The new `drift` scene draws a few broad, slow lobes; `clear` keeps the field quiet around an element so copy stays readable; `pulse()` sends a ring through the dots when your interface wants to answer an event.
+
+```ts
+const field = mountGlyphField(canvas, {
+  mark: 'dot', scene: 'drift', cellSize: 14, dotScale: 0.64,
+  ink: '#9a988f', background: 'transparent',
+  clear: { element: document.querySelector('#hero .copy') },
+});
+saveButton.addEventListener('click', () => field.pulse({ element: saveButton }));
+```
+
+Also in 4.12:
+
+- **Even quality across styles.** Character styles stretch each image's tones to its own range and pick glyphs by measured ink, so dark or flat images keep their subject in every character set and look. Set `color.levels: 'none'` for the previous linear mapping. Adaptive resolution only steps down while frames are genuinely over budget, and returns to full detail when motion settles.
+- **Faster fields.** Image sources decode off the main thread and are scaled to what the cells can show; scene maths runs once per cell; shaders compile without blocking. `ready` resolves for fields mounted off screen, and a shader link failure is reported through `onError`.
+- **21 ready-made components in the agent skill** ([components.md](skills/asciify-engine/references/components.md)): interface pieces, backgrounds, text, transitions, pages and AI states, each with the prompt and the reference code. See them running at [asciify.org/components](https://asciify.org/components).

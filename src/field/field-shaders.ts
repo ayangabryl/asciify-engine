@@ -1,4 +1,4 @@
-/** GLSL ES 3.00 programs for the glyph field. Both draw one fullscreen triangle without vertex buffers. */
+/** GLSL ES 3.00 programs for the glyph field. Each draws one fullscreen triangle without vertex buffers. */
 
 export const FIELD_VERTEX = `#version 300 es
 void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}`;
@@ -40,13 +40,17 @@ void main(){
   outColor=encodeFluid(state);
 }`;
 
-/** Samples the source once per cell, then draws that cell's glyph texel for texel from the atlas. */
-export const fieldCompositeShader = (packed: boolean) => `#version 300 es
+/**
+ * The cell pass: one fragment per character cell. Samples the source (or the generated scene) once, applies the
+ * tone, hover and pulse response, and writes the cell's ink with its glyph index (or dot tone) plus what lies under it.
+ * Cell row 0 is the top row, so the composite reads it with texelFetch.
+ */
+export const fieldCellShader = (packed: boolean) => `#version 300 es
 precision highp float;
 precision highp sampler2D;
-uniform sampler2D uSource, uAtlas, uFluid;
+uniform sampler2D uSource, uFluid;
 uniform vec2 uResolution, uCell;
-uniform float uCount, uColumns;
+uniform float uCount;
 uniform vec4 uSourceMap;
 uniform int uScene;
 uniform vec3 uInk, uHighlight;
@@ -60,14 +64,19 @@ uniform vec3 uTrail[12];
 uniform float uLightRadius, uLightGain, uClock, uFlicker, uTrailAmount;
 uniform sampler2D uTrailMap;
 uniform vec2 uLevels;
-out vec4 outColor;
+uniform int uMark;
+uniform float uScale, uClearFeather, uClearShape;
+uniform vec4 uClear;
+uniform vec4 uPulse[4];
+layout(location=0) out vec4 outInk;
+layout(location=1) out vec4 outUnder;
 ${FLUID_CODEC(packed)}
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}
 float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}
 vec3 generated(vec2 uv,float aspect){
-  vec2 p=(uv-.5)*vec2(aspect,1.);
+  vec2 p=(uv-.5)*vec2(aspect,1.)*uScale;
   if(uScene==1){
     float t=uTime*.08;
     vec2 q=vec2(fbm(p*1.6+t),fbm(p*1.6-t+3.1));
@@ -85,11 +94,18 @@ vec3 generated(vec2 uv,float aspect){
     }
     return vec3(exp(-pow((d-r)*9.,2.))*.35);
   }
+  if(uScene==4){
+    // Drift: a few broad lobes that wander slowly. Built for halftone, where large soft shapes read best.
+    float t=uTime*.045;
+    vec2 q=p*1.15;
+    vec2 w=vec2(fbm(q*.7+vec2(t,-t*.7)),fbm(q*.7+vec2(4.3-t*.8,t+1.7)));
+    float n=fbm(q+w*1.3+vec2(t*.4,t*.25));
+    return vec3(smoothstep(.36,.74,n));
+  }
   return vec3(0.);
 }
 void main(){
-  vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
-  vec2 cell=floor(frag/uCell);
+  vec2 cell=floor(gl_FragCoord.xy);
   vec2 uv=(cell+.5)*uCell/uResolution;
   float aspect=uResolution.x/uResolution.y;
   vec4 fluid=vec4(0.);
@@ -155,11 +171,23 @@ void main(){
   }
   tone=clamp(tone+lift,0.,1.);
   tone+=(1.-2.*tone)*trailFold;
+  // Pulses: rings sent by the interface (field.pulse()), e.g. on a save or a notification.
+  for(int i=0;i<4;i++){
+    if(uPulse[i].w<=0.)continue;
+    float dist=length((uv-uPulse[i].xy)*vec2(aspect,1.)),front=uPulse[i].z*.95;
+    float ring=exp(-pow((dist-front)/.1,2.))*uPulse[i].w*exp(-uPulse[i].z*.85);
+    tone=clamp(tone+ring*.85,0.,1.);
+  }
   tone*=1.-uVignette*smoothstep(.35,1.05,length((uv-.5)*vec2(min(aspect,1.8),1.)*2.));
+  if(uClear.z>0.){
+    // Clear zone: the field fades out around content so text above it stays readable.
+    vec2 half_=uClear.zw*.5*vec2(aspect,1.),q=(uv-uClear.xy-uClear.zw*.5)*vec2(aspect,1.);
+    float dz;
+    if(uClearShape>.5){vec2 e=abs(q)-half_;dz=length(max(e,0.))+min(max(e.x,e.y),0.);}
+    else dz=(length(q/max(half_,vec2(1e-4)))-1.)*min(half_.x,half_.y);
+    tone*=smoothstep(0.,uClearFeather,dz);
+  }
   float index=min(uCount-1.,floor(tone*(uCount-1.)+.5)+(flick>.5&&tone>.02?1.:0.));
-  vec2 local=frag-cell*uCell;
-  ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
-  float coverage=texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(local),0).a;
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
@@ -167,5 +195,34 @@ void main(){
   ink=mix(ink,lifted,wake*.7);
   float underAlpha=max(uBackground.a,min(1.,max(glow.r,max(glow.g,glow.b))));
   vec3 under=min(uBackground.rgb*uBackground.a+glow,vec3(underAlpha));
-  outColor=vec4(ink*coverage+under*(1.-coverage),coverage+underAlpha*(1.-coverage));
+  // Halftone keeps the tone for the dot size; glyphs keep their atlas index, exact in 8 bits.
+  outInk=vec4(ink,uMark==1?(tone>.003?tone:0.):index/255.);
+  outUnder=vec4(under,underAlpha);
+}`;
+
+/** The pixel pass: reads its cell and draws the glyph texel for texel from the atlas, or the halftone dot. */
+export const FIELD_COMPOSITE = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+uniform sampler2D uAtlas, uCells, uUnder;
+uniform vec2 uResolution, uCell;
+uniform float uColumns, uDotScale;
+uniform int uMark;
+out vec4 outColor;
+void main(){
+  vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
+  vec2 cell=floor(frag/uCell);
+  vec4 ink=texelFetch(uCells,ivec2(cell),0),under=texelFetch(uUnder,ivec2(cell),0);
+  vec2 local=frag-cell*uCell;
+  float coverage;
+  if(uMark==1){
+    // Halftone: dot area follows tone, so midtones read true; edges are antialiased to one device pixel.
+    float r=sqrt(ink.a)*min(uCell.x,uCell.y)*.5*uDotScale;
+    coverage=ink.a>.003?clamp(r-length(local-uCell*.5)+.5,0.,1.):0.;
+  } else {
+    float index=floor(ink.a*255.+.5);
+    ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
+    coverage=texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(local),0).a;
+  }
+  outColor=vec4(ink.rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
 }`;

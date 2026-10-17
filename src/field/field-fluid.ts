@@ -93,22 +93,27 @@ void main(){
 export interface FluidSplat { from: [number, number]; to: [number, number]; force: [number, number] }
 export interface FluidStep { dt: number; radius: number; curl: number; dissipation: number; aspect: number }
 
-type Link = (fragment: string, names: string[]) => { program: WebGLProgram; at: Record<string, WebGLUniformLocation | null> };
+type Locations = Record<string, WebGLUniformLocation | null>;
+/** Starts linking a program; `ready` reports whether it has linked, without blocking where the browser can compile in parallel. */
+export interface FieldProgram { program: WebGLProgram; locations: Locations | null }
+type Link = (fragment: string) => FieldProgram;
+type Ready = (entry: FieldProgram) => boolean;
 interface Target { texture: WebGLTexture; buffer: WebGLFramebuffer }
 
 const ITERATIONS = 20;
 
-export function createStableFluid(gl: WebGL2RenderingContext, link: Link) {
+export function createStableFluid(gl: WebGL2RenderingContext, link: Link, linked: Ready) {
   const programs = {
-    splat: link(SPLAT, ['uTexel', 'uVelocity', 'uFrom', 'uTo', 'uForce', 'uAspect', 'uRadius']),
-    curl: link(CURL, ['uTexel', 'uVelocity']),
-    vorticity: link(VORTICITY, ['uTexel', 'uVelocity', 'uCurl', 'uStrength', 'uDt']),
-    divergence: link(DIVERGENCE, ['uTexel', 'uVelocity']),
-    fade: link(FADE, ['uTexel', 'uSource', 'uAmount']),
-    pressure: link(PRESSURE, ['uTexel', 'uPressure', 'uDivergence']),
-    gradient: link(GRADIENT, ['uTexel', 'uPressure', 'uVelocity']),
-    advect: link(ADVECT, ['uTexel', 'uVelocity', 'uDt', 'uDissipation']),
+    splat: link(SPLAT),
+    curl: link(CURL),
+    vorticity: link(VORTICITY),
+    divergence: link(DIVERGENCE),
+    fade: link(FADE),
+    pressure: link(PRESSURE),
+    gradient: link(GRADIENT),
+    advect: link(ADVECT),
   };
+  const entries = Object.values(programs);
   let width = 0, height = 0;
   let velocity: Target[] = [], pressure: Target[] = [], divergence: Target | null = null, curl: Target | null = null;
 
@@ -138,23 +143,21 @@ export function createStableFluid(gl: WebGL2RenderingContext, link: Link) {
     velocity = []; pressure = []; divergence = curl = null;
   };
 
-  const pass = (name: keyof typeof programs, output: Target, textures: Record<string, WebGLTexture>, values: Record<string, number | number[]> = {}) => {
-    const { program, at } = programs[name];
-    gl.useProgram(program);
+  // Each pass binds its own inputs, so a step allocates nothing.
+  const use = (entry: FieldProgram, output: Target) => {
+    const at = entry.locations!;
+    gl.useProgram(entry.program);
     gl.bindFramebuffer(gl.FRAMEBUFFER, output.buffer);
     gl.uniform2f(at.uTexel, 1 / width, 1 / height);
-    let unit = 0;
-    for (const [uniform, texture] of Object.entries(textures)) {
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.uniform1i(at[uniform], unit++);
-    }
-    for (const [uniform, value] of Object.entries(values)) {
-      if (Array.isArray(value)) gl.uniform2f(at[uniform], value[0], value[1]);
-      else gl.uniform1f(at[uniform], value);
-    }
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return at;
   };
+  const bind = (at: Locations, name: string, unit: number, texture: WebGLTexture) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(at[name], unit);
+  };
+  const draw = () => gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const swap = (pair: Target[]) => { const first = pair[0]; pair[0] = pair[1]; pair[1] = first; };
 
   return {
     /** Returns false when float render targets are unavailable. */
@@ -167,30 +170,55 @@ export function createStableFluid(gl: WebGL2RenderingContext, link: Link) {
       velocity = [made[0]!, made[1]!]; pressure = [made[2]!, made[3]!]; divergence = made[4]; curl = made[5];
       return true;
     },
+    /** True once every pass has linked. Throws if one failed. */
+    ready() { return entries.every(linked); },
     step(splat: FluidSplat | null, options: FluidStep) {
       if (!velocity.length || !divergence || !curl) return;
       gl.viewport(0, 0, width, height);
-      const swap = <T>(pair: T[]) => { pair.reverse(); };
+      let at: Locations;
       if (splat) {
-        pass('splat', velocity[1], { uVelocity: velocity[0].texture }, { uFrom: splat.from, uTo: splat.to, uForce: splat.force, uAspect: options.aspect, uRadius: options.radius });
-        swap(velocity);
+        at = use(programs.splat, velocity[1]);
+        bind(at, 'uVelocity', 0, velocity[0].texture);
+        gl.uniform2f(at.uFrom, splat.from[0], splat.from[1]);
+        gl.uniform2f(at.uTo, splat.to[0], splat.to[1]);
+        gl.uniform2f(at.uForce, splat.force[0], splat.force[1]);
+        gl.uniform1f(at.uAspect, options.aspect);
+        gl.uniform1f(at.uRadius, options.radius);
+        draw(); swap(velocity);
       }
       if (options.curl > 0) {
-        pass('curl', curl, { uVelocity: velocity[0].texture });
-        pass('vorticity', velocity[1], { uVelocity: velocity[0].texture, uCurl: curl.texture }, { uStrength: options.curl, uDt: options.dt });
-        swap(velocity);
+        at = use(programs.curl, curl);
+        bind(at, 'uVelocity', 0, velocity[0].texture);
+        draw();
+        at = use(programs.vorticity, velocity[1]);
+        bind(at, 'uVelocity', 0, velocity[0].texture);
+        bind(at, 'uCurl', 1, curl.texture);
+        gl.uniform1f(at.uStrength, options.curl);
+        gl.uniform1f(at.uDt, options.dt);
+        draw(); swap(velocity);
       }
-      pass('divergence', divergence, { uVelocity: velocity[0].texture });
-      pass('fade', pressure[1], { uSource: pressure[0].texture }, { uAmount: 0.8 });
-      swap(pressure);
+      at = use(programs.divergence, divergence);
+      bind(at, 'uVelocity', 0, velocity[0].texture);
+      draw();
+      at = use(programs.fade, pressure[1]);
+      bind(at, 'uSource', 0, pressure[0].texture);
+      gl.uniform1f(at.uAmount, 0.8);
+      draw(); swap(pressure);
       for (let i = 0; i < ITERATIONS; i++) {
-        pass('pressure', pressure[1], { uPressure: pressure[0].texture, uDivergence: divergence.texture });
-        swap(pressure);
+        at = use(programs.pressure, pressure[1]);
+        bind(at, 'uPressure', 0, pressure[0].texture);
+        bind(at, 'uDivergence', 1, divergence.texture);
+        draw(); swap(pressure);
       }
-      pass('gradient', velocity[1], { uPressure: pressure[0].texture, uVelocity: velocity[0].texture });
-      swap(velocity);
-      pass('advect', velocity[1], { uVelocity: velocity[0].texture }, { uDt: options.dt, uDissipation: options.dissipation });
-      swap(velocity);
+      at = use(programs.gradient, velocity[1]);
+      bind(at, 'uPressure', 0, pressure[0].texture);
+      bind(at, 'uVelocity', 1, velocity[0].texture);
+      draw(); swap(velocity);
+      at = use(programs.advect, velocity[1]);
+      bind(at, 'uVelocity', 0, velocity[0].texture);
+      gl.uniform1f(at.uDt, options.dt);
+      gl.uniform1f(at.uDissipation, options.dissipation);
+      draw(); swap(velocity);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     },
     get velocity() { return velocity[0]?.texture ?? null; },
@@ -198,7 +226,7 @@ export function createStableFluid(gl: WebGL2RenderingContext, link: Link) {
     release,
     dispose() {
       release();
-      Object.values(programs).forEach(({ program }) => gl.deleteProgram(program));
+      entries.forEach(({ program }) => gl.deleteProgram(program));
     },
   };
 }

@@ -1,11 +1,12 @@
-/** Curated ASCII ramps. Use custom text to supply a different alphabet. */
+/** Curated ASCII ramps, each ordered by measured glyph ink from empty to dense so tone reads evenly.
+ *  Use custom text to supply a different alphabet. */
 export const CHARACTER_SETS = {
   standard: { label: 'Classic ASCII', chars: ' .:-=+*#%@' },
-  asciify: { label: 'Asciify', chars: ' .:-=+ASCIIFY#@' },
+  asciify: { label: 'Asciify', chars: ' .:-=+YCIFSA#@' },
   minimal: { label: 'Minimal', chars: ' .:+' },
-  detailed: { label: 'Detailed', chars: ' .,:;i1tfLCG08@' },
-  letters: { label: 'Letters', chars: ' .ilLCFTYASMW' },
-  technical: { label: 'Technical', chars: ' .:;>_/[{}]=+*#@$' },
+  detailed: { label: 'Detailed', chars: ' .,:;itLf1CG80@' },
+  letters: { label: 'Letters', chars: ' .liLTYCFSAWM' },
+  technical: { label: 'Technical', chars: ' ._:;+/>=][{}*$#@' },
   blocks: { label: 'Tonal blocks', chars: ' ░▒▓█' },
   braille: { label: 'Braille', chars: ' ⠁⠃⠇⡇⣇⣧⣷⣿' },
 } as const;

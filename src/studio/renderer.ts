@@ -46,6 +46,76 @@ const ramps: Record<string, string> = {
   diamond: " ·◇◈◆",
   mixed: " .:+/◇#@",
 };
+/** Ignore the darkest and brightest 1% so a few specular or black pixels do not decide the range. */
+const LEVEL_LOW = 0.01, LEVEL_HIGH = 0.99;
+/** Never stretch a flat source more than about 3x, which would only amplify noise. */
+const LEVEL_MIN_SPAN = 0.32;
+/** Stretched tones below this stay on the emptiest glyph. */
+const BLANK_TONE = 0.07;
+/** Mid-tone lift bounds: always a little, never more than lifting a dark subject's mean to about half ink. */
+const INK_GAMMA_MIN = 0.6, INK_GAMMA_MAX = 0.9;
+/** 1st and 99th luminance percentiles of the opaque sampled cells. */
+export function studioLevels(pixels: Uint8ClampedArray): [number, number] {
+  const bins = new Uint32Array(256);
+  let total = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3] < 8) continue;
+    bins[Math.min(255, (pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114) | 0)]++;
+    total++;
+  }
+  if (!total) return [0, 1];
+  const at = (q: number) => {
+    let seen = 0;
+    const target = q * total;
+    for (let v = 0; v < 256; v++) if ((seen += bins[v]) >= target) return v / 255;
+    return 1;
+  };
+  let low = at(LEVEL_LOW), high = at(LEVEL_HIGH);
+  if (high - low < LEVEL_MIN_SPAN) {
+    low = Math.max(0, Math.min(1 - LEVEL_MIN_SPAN, (low + high) / 2 - LEVEL_MIN_SPAN / 2));
+    high = low + LEVEL_MIN_SPAN;
+  }
+  return [low, high];
+}
+/**
+ * Ink-aware gamma for the stretched tones: lifts the subject's mean tone (cells above the near-black ground)
+ * toward half ink, within gentle bounds, so mid-tones land on glyphs with visible coverage. Bright sources keep
+ * the mild minimum lift; it never darkens.
+ */
+export function studioToneGamma(pixels: Uint8ClampedArray, low: number, high: number): number {
+  const span = Math.max(1e-3, high - low);
+  let sum = 0, count = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3] < 8) continue;
+    const t = ((pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114) / 255 - low) / span;
+    if (t <= 0.06) continue;
+    sum += Math.min(1, t);
+    count++;
+  }
+  if (!count) return INK_GAMMA_MAX;
+  const mean = Math.min(0.99, Math.max(0.01, sum / count));
+  return Math.min(INK_GAMMA_MAX, Math.max(INK_GAMMA_MIN, Math.log(0.5) / Math.log(mean)));
+}
+/**
+ * Tone (0–255) to glyph index by measured ink: each glyph's coverage is normalised across the ramp and every tone
+ * takes the glyph whose ink is nearest, after the mid-tone lift. Returns null when the coverage cannot be read.
+ */
+export function inkIndexLookup(coverage: number[], gamma = INK_GAMMA_MAX): Uint8Array | null {
+  const min = Math.min(...coverage), max = Math.max(...coverage);
+  if (!(max - min > 1e-4)) return null;
+  const normal = coverage.map((value) => (value - min) / (max - min));
+  const lookup = new Uint8Array(256);
+  for (let t = 0; t < 256; t++) {
+    // The ground stays empty: the lift applies to the subject, not to near-black, or dark grounds fill with dots.
+    if (t / 255 < BLANK_TONE) { lookup[t] = normal.indexOf(0); continue; }
+    const target = Math.pow(t / 255, gamma);
+    let best = 0;
+    for (let i = 1; i < normal.length; i++)
+      if (Math.abs(normal[i] - target) < Math.abs(normal[best] - target)) best = i;
+    lookup[t] = best;
+  }
+  return lookup;
+}
 /** Reusable bounded renderer. Call configure only when settings change; render owns no RAF. */
 export function createStudioRenderer(
   canvas: HTMLCanvasElement,
@@ -69,6 +139,9 @@ export function createStudioRenderer(
     glow = surface(),
     stud = surface();
   let studSize = 0;
+  // Auto levels: the current source's tonal range, eased over time for video so it never flickers.
+  let levelLow = 0, levelHigh = 1, levelGamma = INK_GAMMA_MAX, levelSource: unknown = null;
+  let inkCoverage: number[] | null = null, inkLookup: Uint8Array | null = null, inkKey = "";
   let finish: ReturnType<typeof createStudioFinish> | undefined;
   let state = normalizeStudioSettings(settings),
     revision = 0,
@@ -212,6 +285,16 @@ export function createStudioRenderer(
       }
       if (toneLookup) applyColorLookups(pixels, toneLookup);
       pixels = warper.apply(pixels,cols,rows,w/h);
+      if (state.color.levels !== "none") {
+        const [low, high] = studioLevels(pixels);
+        const gamma = studioToneGamma(pixels, low, high);
+        // A new still snaps to its own range; a playing video eases toward each frame's range.
+        const ease = levelSource === source && "currentTime" in source ? 0.15 : 1;
+        levelSource = source;
+        levelLow += (low - levelLow) * ease;
+        levelHigh += (high - levelHigh) * ease;
+        levelGamma += (gamma - levelGamma) * ease;
+      }
     }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
@@ -307,7 +390,26 @@ export function createStudioRenderer(
           chars.forEach((char, i) =>
             atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2),
           );
+          // Measure each glyph's ink once per atlas, for tone-to-glyph matching.
+          inkCoverage = null;
+          inkKey = "";
+          try {
+            const ink = atlas.ctx.getImageData(0, 0, atlas.canvas.width, atlas.canvas.height).data;
+            inkCoverage = chars.map((_, g) => {
+              let sum = 0;
+              for (let yy = 0; yy < atlas.canvas.height; yy++)
+                for (let xx = g * aw; xx < (g + 1) * aw && xx < atlas.canvas.width; xx++)
+                  sum += ink[(yy * atlas.canvas.width + xx) * 4 + 3];
+              return sum;
+            });
+          } catch { inkCoverage = null; }
         }
+        const autoTone = glyphMode && state.color.levels !== "none";
+        if (autoTone && inkCoverage) {
+          const key = atlasKey + ":" + levelGamma.toFixed(2);
+          if (key !== inkKey) { inkKey = key; inkLookup = inkIndexLookup(inkCoverage, levelGamma); }
+        }
+        const levelSpan = Math.max(1e-3, levelHigh - levelLow);
         if (state.style === 'lego' && studSize !== cell) {
           studSize = cell;
           resize(stud.canvas, Math.ceil(cell), Math.ceil(ch));
@@ -336,7 +438,7 @@ export function createStudioRenderer(
             if (!sampled[3]) continue;
             const r = sampled[0], g = sampled[1], b = sampled[2];
             const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-            let lum = sourceLum;
+            let lum = autoTone ? Math.max(0, Math.min(1, (sourceLum - levelLow) / levelSpan)) : sourceLum;
             if (["trail", "contour"].includes(state.hover.effect) && energy)
               lum = invertTrailTone(lum, energy);
             else if ((state.hover.effect === "etch" || state.hover.effect === "ripple"))
@@ -355,6 +457,9 @@ export function createStudioRenderer(
             lum = Math.max(0, Math.min(1, lum + ambient[2]));
             alpha = ambient[3] * sampled[3] / 255;
             if (!glyphMode && !printStyle && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
+            // With one ink, density alone carries tone and a lit subject flattens into a uniform wash. Auto levels
+            // let brightness carry it too: quiet glyphs in the shadows, full ink on the lights.
+            else if (autoTone && state.colorMode === "accent") alpha *= 0.32 + 0.68 * Math.pow(lum, levelGamma);
             ac.globalAlpha = alpha;
             const toneDelta = (lum - sourceLum) * 255;
             const ink =
@@ -370,10 +475,9 @@ export function createStudioRenderer(
                 state.colorMode === 'gray' ? lum * 255 : g + toneDelta,
                 state.colorMode === 'gray' ? lum * 255 : b + toneDelta, state.colorMode);
             } else if (glyphMode) {
-              const index = Math.max(
-                0,
-                Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))),
-              );
+              const index = autoTone && inkLookup
+                ? inkLookup[Math.round(lum * 255)]
+                : Math.max(0, Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))));
               if (state.colorMode === "accent")
                 ac.drawImage(
                   atlas.canvas,

@@ -170,6 +170,12 @@ export interface StudioSettings {
     highlights?: number;
     curves?: Partial<StudioCurves>;
     denoise?: number;
+    /**
+     * Character styles only. 'auto' stretches each source's luminance to its 1st–99th percentile and maps tone to
+     * glyphs by their measured ink, so mid-tones land on characters with visible coverage. 'none' is the plain
+     * linear ramp.
+     */
+    levels?: "auto" | "none";
   };
   dither: {
     algorithm: DitherAlgorithm;
@@ -251,6 +257,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     highlights: 0,
     curves: {rgb:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]},
     denoise: 0,
+    levels: "auto",
   },
   dither: {
     algorithm: "none",
@@ -395,6 +402,7 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       highlights: n(g.highlights, 0, -1, 1),
       curves: normalizeStudioCurves(g.curves),
       denoise: n(g.denoise, 0, 0, 1),
+      levels: g.levels === "none" ? "none" : "auto",
     },
     dither: {
       algorithm: choice(h.algorithm, DITHER_ALGORITHMS, "none"),

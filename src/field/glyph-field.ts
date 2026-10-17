@@ -1,14 +1,19 @@
-import { FIELD_VERTEX, fieldCompositeShader, fieldFluidShader } from './field-shaders';
-import { createStableFluid, type StableFluid } from './field-fluid';
+import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader } from './field-shaders';
+import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { InkTrail } from '../surface/ink-trail';
 import {
-  activeFieldHover, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, normalizeFieldSettings, parseFieldColor,
+  activeFieldHover, fieldCellLayout, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
 export type FieldSource = string | HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap;
 
-export interface GlyphFieldOptions extends GlyphFieldInput {
+export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
+  /**
+   * Keep the field quiet around content: an element (followed through layout changes), an element with
+   * `padding` (CSS px), `feather` (fraction of the shorter side) and `shape`, a zone in field fractions, or `false`.
+   */
+  clear?: GlyphFieldInput['clear'] | HTMLElement | FieldClearElement;
   /** Image or video URL, or a decoded element. Without one, `scene` draws generated motion. */
   source?: FieldSource | null;
   /** Where pointer movement is read. Defaults to the window, so overlaid text never blocks the wake. */
@@ -17,6 +22,8 @@ export interface GlyphFieldOptions extends GlyphFieldInput {
   label?: string;
   onError?: (error: Error) => void;
 }
+
+export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect' }
 
 export interface GlyphField {
   readonly canvas: HTMLCanvasElement;
@@ -29,6 +36,11 @@ export interface GlyphField {
   pointer(x: number | null, y?: number): void;
   /** Draws the current frame now, so the canvas can be read with drawImage in the same task. */
   redraw(): void;
+  /**
+   * Sends a ring through the field, for interface events such as a save or a message.
+   * `x` and `y` are CSS pixels relative to the canvas, or pass an element to start from its centre. Ignored under reduced motion.
+   */
+  pulse(options?: { x?: number; y?: number; element?: Element; strength?: number }): void;
   play(): void;
   pause(): void;
   resize(): void;
@@ -37,6 +49,8 @@ export interface GlyphField {
 }
 
 const VIDEO = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
+type Program = FieldProgram & { fragment: WebGLShader };
+type Bitmapish = { width: number; height: number; close(): void };
 
 let tier: 'gpu' | 'software' | 'none' | undefined;
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render/i;
@@ -69,9 +83,18 @@ export function isGlyphFieldSupported(options: { allowSoftware?: boolean } = {})
  * A GPU character field: every cell samples the source once and draws its glyph texel for texel,
  * while a small advected fluid bends the sampling and lifts characters under the cursor.
  * Idle fields stop drawing until the pointer, a video frame or generated motion needs a new frame.
+ * Each frame shades one fragment per cell, then draws the glyphs per pixel, so the cost of the scene does not grow with pixel density.
  */
 export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOptions = {}): GlyphField {
-  let settings = normalizeFieldSettings(options);
+  const isElement = (value: unknown): value is HTMLElement => typeof HTMLElement !== 'undefined' && value instanceof HTMLElement;
+  const splitClear = (input: GlyphFieldOptions): { element: FieldClearElement | null; rest: GlyphFieldInput } => {
+    const clear = input.clear as unknown;
+    if (isElement(clear)) return { element: { element: clear }, rest: { ...input, clear: undefined } as GlyphFieldInput };
+    if (clear && typeof clear === 'object' && isElement((clear as FieldClearElement).element)) return { element: clear as FieldClearElement, rest: { ...input, clear: undefined } as GlyphFieldInput };
+    return { element: null, rest: input as GlyphFieldInput };
+  };
+  let clearElement = splitClear(options).element;
+  let settings = normalizeFieldSettings(splitClear(options).rest);
   const onError = options.onError;
   const maybeGl = canvas.getContext('webgl2', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: 'high-performance' });
   if (!maybeGl) throw new Error('WebGL2 is not available for the glyph field.');
@@ -81,13 +104,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   canvas.dataset.renderer = 'glyph-field';
 
   let packed = false;
-  let composite: WebGLProgram, fluidProgram: WebGLProgram;
-  let compositeAt: Record<string, WebGLUniformLocation | null> = {}, fluidAt: Record<string, WebGLUniformLocation | null> = {};
+  const parallel = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
+  let cellProgram: Program | null = null, pixelProgram: Program | null = null, fluidProgram: Program | null = null;
   let atlasTexture: WebGLTexture, sourceTexture: WebGLTexture;
+  let cells: { ink: WebGLTexture; under: WebGLTexture; buffer: WebGLFramebuffer; columns: number; rows: number } | null = null;
   let fluidTextures: WebGLTexture[] = [], fluidBuffers: WebGLFramebuffer[] = [];
   // The incompressible solver curls and lingers like ink in water; the single-pass wake is its fallback.
   let stable: StableFluid | null = null, stableOn = false;
   let vertexArray: WebGLVertexArrayObject | null = null;
+  let vertexShader: WebGLShader | null = null;
   const shaders: WebGLShader[] = [];
 
   let width = 0, height = 0, pixelRatio = 1, atlasRatio = 0;
@@ -95,11 +120,25 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let simWidth = 0, simHeight = 0, read = 0;
   let source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap | null = null;
   let ownedVideo: HTMLVideoElement | null = null, sourceWidth = 0, sourceHeight = 0, sourceToken = 0;
+  // An image the field decoded itself, and the height it was uploaded at.
+  let ownedBitmap: Bitmapish | null = null, textureHeight = 0;
   let videoFresh = true, videoCallback = 0, levels: [number, number] = [0, 1], levelsAt = -Infinity;
-  let raf = 0, last = 0, time = 0, dirty = true, destroyed = false, lost = false, paused = false, visible = true;
+  let raf = 0, last = 0, time = 0, dirty = true, destroyed = false, lost = false, failed = false, paused = false, visible = true;
   let previous: [number, number] | null = null, pending: { from: [number, number]; to: [number, number] } | null = null;
   // Slow frames for about a second drop the field to 1x pixels, then to no ambient motion; the wake keeps working.
   let frameCost = 1 / 60, slowFrames = 0, degraded = 0;
+  // Pulses live about 2.4 seconds; four at a time is plenty for interface events.
+  let pulses: { x: number; y: number; born: number; strength: number }[] = [];
+  const pulseUniform = new Float32Array(16);
+  const measureClear = () => {
+    if (!clearElement) return;
+    const { element, padding = 32, feather = 0.16, shape = 'rect' } = clearElement;
+    const zone = fieldClearFromRects(canvas.getBoundingClientRect(), element.getBoundingClientRect(), padding, feather, shape);
+    const previous = settings.clear;
+    if (JSON.stringify(previous) === JSON.stringify(zone)) return;
+    settings = { ...settings, clear: zone };
+    dirty = true;
+  };
   // Lantern: the light glides toward the pointer, and its recent positions fade as a short tail.
   const lantern = { target: null as [number, number] | null, at: null as [number, number] | null, strength: 0, trail: [] as { x: number; y: number; born: number }[] };
   const trailUniform = new Float32Array(36);
@@ -129,26 +168,31 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
   const stepLantern = (dt: number, now: number) => {
     const options = settings.lantern;
-    if (lantern.target) {
-      if (!lantern.at || reduced()) lantern.at = [...lantern.target];
+    const target = lantern.target;
+    if (target) {
+      const at = lantern.at;
+      if (!at) lantern.at = [target[0], target[1]];
+      else if (reduced()) { at[0] = target[0]; at[1] = target[1]; }
       else {
         const k = 1 - Math.exp(-options.follow * dt);
-        lantern.at = [lantern.at[0] + (lantern.target[0] - lantern.at[0]) * k, lantern.at[1] + (lantern.target[1] - lantern.at[1]) * k];
+        at[0] += (target[0] - at[0]) * k; at[1] += (target[1] - at[1]) * k;
       }
-      const lastPoint = lantern.trail[lantern.trail.length - 1];
-      if (options.trail > 0 && (!lastPoint || (now - lastPoint.born > 28 && Math.hypot(lantern.at[0] - lastPoint.x, lantern.at[1] - lastPoint.y) > 0.004))) {
-        lantern.trail.push({ x: lantern.at[0], y: lantern.at[1], born: now });
+      const point = lantern.at!, lastPoint = lantern.trail[lantern.trail.length - 1];
+      if (options.trail > 0 && (!lastPoint || (now - lastPoint.born > 28 && Math.hypot(point[0] - lastPoint.x, point[1] - lastPoint.y) > 0.004))) {
+        lantern.trail.push({ x: point[0], y: point[1], born: now });
         if (lantern.trail.length > 12) lantern.trail.shift();
       }
     }
-    lantern.strength += ((lantern.target ? 1 : 0) - lantern.strength) * (1 - Math.exp(-dt * (lantern.target ? 9 : 5)));
-    lantern.trail = lantern.trail.filter(point => options.trail > 0 && now - point.born < options.trail * 4000);
+    lantern.strength += ((target ? 1 : 0) - lantern.strength) * (1 - Math.exp(-dt * (target ? 9 : 5)));
+    const trail = lantern.trail;
+    for (let i = trail.length - 1; i >= 0; i--) if (!(options.trail > 0 && now - trail[i].born < options.trail * 4000)) trail.splice(i, 1);
     trailUniform.fill(0);
-    lantern.trail.forEach((point, index) => {
-      trailUniform[index * 3] = point.x; trailUniform[index * 3 + 1] = point.y;
-      trailUniform[index * 3 + 2] = 0.55 * Math.exp(-(now - point.born) / 1000 / Math.max(0.01, options.trail));
-    });
-    return lantern.strength > 0.003 || lantern.trail.length > 0;
+    for (let i = 0; i < trail.length; i++) {
+      const point = trail[i];
+      trailUniform[i * 3] = point.x; trailUniform[i * 3 + 1] = point.y;
+      trailUniform[i * 3 + 2] = 0.55 * Math.exp(-(now - point.born) / 1000 / Math.max(0.01, options.trail));
+    }
+    return lantern.strength > 0.003 || trail.length > 0;
   };
   let activeUntil = 0;
   const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -157,23 +201,43 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let resolveReady!: () => void;
   const ready = new Promise<void>(resolve => { resolveReady = resolve; });
   let readyPending = true;
+  const report = (error: unknown) => onError?.(error instanceof Error ? error : new Error(String(error)));
 
   const compile = (type: number, code: string) => {
     const shader = gl.createShader(type)!;
     shaders.push(shader);
     gl.shaderSource(shader, code);
     gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) || 'Glyph field shader failed to compile.');
     return shader;
   };
-  const link = (fragment: string, names: string[]) => {
+  // Linking starts here and finishes in the browser's compiler; `linked` collects it without waiting where that is supported.
+  const link = (fragment: string): Program => {
+    vertexShader ??= compile(gl.VERTEX_SHADER, FIELD_VERTEX);
     const program = gl.createProgram()!;
-    gl.attachShader(program, compile(gl.VERTEX_SHADER, FIELD_VERTEX));
-    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragment));
+    const shader = compile(gl.FRAGMENT_SHADER, fragment);
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, shader);
     gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || 'Glyph field program failed to link.');
-    return { program, at: Object.fromEntries(names.map(name => [name, gl.getUniformLocation(program, name)])) };
+    return { program, locations: null, fragment: shader };
   };
+  const linked = (entry: FieldProgram, wait = false): boolean => {
+    if (entry.locations) return true;
+    const { program, fragment } = entry as Program;
+    if (!wait && parallel && !gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) return false;
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      if (gl.isContextLost()) return false;
+      throw new Error(gl.getShaderInfoLog(fragment) || gl.getProgramInfoLog(program) || 'Glyph field program failed to link.');
+    }
+    // Uniforms the compiler removed are absent; WebGL ignores a missing location.
+    const locations: Record<string, WebGLUniformLocation | null> = {};
+    for (let i = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS) - 1; i >= 0; i--) {
+      const name = gl.getActiveUniform(program, i)!.name.replace(/\[0\]$/, '');
+      locations[name] = gl.getUniformLocation(program, name);
+    }
+    entry.locations = locations;
+    return true;
+  };
+  const programsReady = (wait = false) => !!cellProgram && !!pixelProgram && linked(cellProgram, wait) && linked(pixelProgram, wait);
   const texture = (filter: number) => {
     const handle = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, handle);
@@ -184,6 +248,27 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     return handle;
   };
 
+  /** One texel per cell: the cell pass writes ink with glyph index (or dot tone), and what lies under the glyph. */
+  const releaseCells = () => {
+    if (!cells) return;
+    gl.deleteTexture(cells.ink); gl.deleteTexture(cells.under); gl.deleteFramebuffer(cells.buffer);
+    cells = null;
+  };
+  const ensureCells = () => {
+    const columns = Math.ceil(width / layout.width), rows = Math.ceil(height / layout.height);
+    if (cells && cells.columns === columns && cells.rows === rows) return cells;
+    releaseCells();
+    // Half floats keep the dot tone smooth; 8 bits where float targets are missing.
+    const target = () => { const handle = texture(gl.NEAREST); gl.texStorage2D(gl.TEXTURE_2D, 1, packed ? gl.RGBA8 : gl.RGBA16F, columns, rows); return handle; };
+    const ink = target(), under = target(), buffer = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, buffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ink, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, under, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    return (cells = { ink, under, buffer, columns, rows });
+  };
+
+  const wantsFluid = () => !!settings.fluid && activeFieldHover(settings) === 'fluid';
   const releaseFluid = () => {
     stable?.release();
     stableOn = false;
@@ -191,10 +276,19 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     fluidBuffers.forEach(handle => gl.deleteFramebuffer(handle));
     fluidTextures = []; fluidBuffers = [];
   };
+  // The wake's programs are only built for fields whose hover is fluid.
+  function buildFluid() {
+    if (fluidProgram) gl.deleteProgram(fluidProgram.program);
+    fluidProgram = link(fieldFluidShader(packed));
+    stable?.dispose();
+    stable = packed ? null : createStableFluid(gl, link, entry => linked(entry));
+  }
   const resizeFluid = () => {
     releaseFluid();
-    if (!settings.fluid || !width || !height) return;
-    const resolution = settings.fluid.resolution, aspect = width / height;
+    const fluid = settings.fluid;
+    if (!fluid || !wantsFluid() || !width || !height) return;
+    if (!fluidProgram) buildFluid();
+    const resolution = fluid.resolution, aspect = width / height;
     simWidth = aspect >= 1 ? resolution : Math.max(8, Math.round(resolution * aspect));
     simHeight = aspect >= 1 ? Math.max(8, Math.round(resolution / aspect)) : resolution;
     stableOn = !!stable && stable.resize(simWidth, simHeight);
@@ -215,6 +309,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       if (packed) throw new Error('The glyph field could not allocate its fluid buffers.');
       packed = true;
       buildPrograms();
+      buildFluid();
       allocate();
     }
     for (const buffer of fluidBuffers) {
@@ -228,14 +323,13 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
 
   function buildPrograms() {
-    if (composite) gl.deleteProgram(composite);
-    if (fluidProgram) gl.deleteProgram(fluidProgram);
-    const c = link(fieldCompositeShader(packed), ['uSource', 'uAtlas', 'uFluid', 'uResolution', 'uCell', 'uCount', 'uColumns', 'uSourceMap', 'uScene', 'uInk', 'uHighlight', 'uBackground', 'uBrightness', 'uContrast', 'uGamma', 'uInvert', 'uVignette', 'uSourceColor', 'uRefraction', 'uGlow', 'uTime', 'uDrift', 'uFluidOn', 'uLod', 'uSaturation', 'uBackdrop', 'uLevels', 'uShade', 'uHighlightAuto', 'uFluidMode', 'uFluidTexel', 'uHoverMode', 'uLight', 'uTrail', 'uLightRadius', 'uLightGain', 'uClock', 'uFlicker', 'uTrailMap', 'uTrailAmount']);
-    const f = link(fieldFluidShader(packed), ['uPrevious', 'uSize', 'uAspect', 'uDt', 'uDecay', 'uEnergyDecay', 'uRadius', 'uSplat', 'uFrom', 'uTo', 'uForce']);
-    composite = c.program; compositeAt = c.at;
-    fluidProgram = f.program; fluidAt = f.at;
-    stable?.dispose();
-    stable = packed ? null : createStableFluid(gl, link);
+    if (cellProgram) gl.deleteProgram(cellProgram.program);
+    if (pixelProgram) gl.deleteProgram(pixelProgram.program);
+    releaseCells();
+    cellProgram = link(fieldCellShader(packed));
+    pixelProgram = link(FIELD_COMPOSITE);
+    // Without parallel compilation the check blocks either way, so a broken driver still throws from mount.
+    if (!parallel) programsReady(true);
   }
 
   const fontString = () => `${settings.fontWeight} ${Math.max(1, layout.height * settings.glyphScale)}px ${settings.font}`;
@@ -274,8 +368,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     paint.width = paint.height = 1;
     dirty = true;
   };
+  const fonts = typeof document === 'undefined' ? undefined : (document as Document & { fonts?: FontFaceSet }).fonts;
   const awaitFont = () => {
-    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
     if (!fonts?.load) return;
     const font = fontString();
     void fonts.load(font, fieldGlyphs(settings.charset).join('')).then(() => {
@@ -283,6 +377,13 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       buildAtlas();
       wake();
     }, () => {});
+  };
+  // A stylesheet that declares the font after mounting (loaded without blocking render) is picked up when a face arrives.
+  const unquote = (family: string) => family.trim().replace(/^["']|["']$/g, '').toLowerCase();
+  const onFontsLoaded = (event: Event) => {
+    const faces = (event as Event & { fontfaces?: readonly FontFace[] }).fontfaces ?? [];
+    const wanted = settings.font.split(',').map(unquote);
+    if (faces.some(face => wanted.includes(unquote(face.family)))) awaitFont();
   };
 
   const measureLevels = () => {
@@ -292,6 +393,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const probe = document.createElement('canvas');
       probe.width = probe.height = 64;
       const context = probe.getContext('2d', { willReadFrequently: true })!;
+      // An image element is sampled from a decode at this size; averaging the field's own bitmap the same way keeps levels unchanged.
+      if (source === ownedBitmap) context.imageSmoothingQuality = 'medium';
       context.drawImage(source as CanvasImageSource, 0, 0, 64, 64);
       levels = fieldLevels(context.getImageData(0, 0, 64, 64).data);
     } catch {
@@ -309,7 +412,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
       gl.generateMipmap(gl.TEXTURE_2D);
     } catch (error) {
-      onError?.(error instanceof Error ? error : new Error(String(error)));
+      report(error);
     }
   };
 
@@ -322,11 +425,10 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     gl.generateMipmap(gl.TEXTURE_2D);
-    width = height = 0;
+    // Measuring from zero builds the atlas for this pixel ratio and the wake's buffers.
+    width = height = 0; atlasRatio = 0;
     measure();
-    buildAtlas();
     awaitFont();
-    resizeFluid();
     if (source) uploadSource();
   };
 
@@ -338,8 +440,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const aspectChanged = !width || Math.abs(nextWidth / nextHeight - width / height) > 0.01;
     pixelRatio = ratio; width = nextWidth; height = nextHeight;
     canvas.width = width; canvas.height = height;
-    if (atlasTexture && atlasRatio !== pixelRatio) buildAtlas();
-    if (fluidProgram && (aspectChanged || !fluidTextures.length)) resizeFluid();
+    if (atlasRatio !== pixelRatio) buildAtlas();
+    if (aspectChanged || (wantsFluid() && !fluidTextures.length && !stableOn)) resizeFluid();
     dirty = true;
     return true;
   }
@@ -356,6 +458,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const stepFluid = (dt: number, now: number) => {
     const fluid = settings.fluid;
     if (!fluid || (!fluidBuffers.length && !stableOn)) return;
+    // Still compiling: keep the stroke and apply it once the wake can run.
+    if (stableOn ? !stable?.ready() : !fluidProgram || !linked(fluidProgram)) return;
     const aspect = width / height;
     const splat = pending;
     pending = null;
@@ -367,86 +471,132 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         { dt: Math.min(dt, 1 / 60), radius: fluid.radius * 1.1, curl: fluid.curl, dissipation: fluid.dissipation, aspect });
       return;
     }
-    let force: [number, number] = [0, 0];
+    let forceX = 0, forceY = 0;
     if (splat) {
       const scale = (reduced() ? 1 : 3) * fluid.force;
-      force = [(splat.to[0] - splat.from[0]) * aspect * scale * 4, (splat.to[1] - splat.from[1]) * scale * 4];
+      forceX = (splat.to[0] - splat.from[0]) * aspect * scale * 4; forceY = (splat.to[1] - splat.from[1]) * scale * 4;
       activeUntil = now + (7 / Math.min(fluid.dissipation, fluid.dissipation * 1.1)) * 1000;
     }
+    const at = fluidProgram!.locations!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fluidBuffers[1 - read]);
     gl.viewport(0, 0, simWidth, simHeight);
-    gl.useProgram(fluidProgram);
+    gl.useProgram(fluidProgram!.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, fluidTextures[read]);
-    gl.uniform1i(fluidAt.uPrevious, 0);
-    gl.uniform2f(fluidAt.uSize, simWidth, simHeight);
-    gl.uniform1f(fluidAt.uAspect, aspect);
-    gl.uniform1f(fluidAt.uDt, dt);
-    gl.uniform1f(fluidAt.uDecay, fluid.dissipation);
-    gl.uniform1f(fluidAt.uEnergyDecay, fluid.dissipation * 1.1);
-    gl.uniform1f(fluidAt.uRadius, fluid.radius);
-    gl.uniform1f(fluidAt.uSplat, splat ? 1 : 0);
-    gl.uniform2f(fluidAt.uFrom, splat?.from[0] ?? 0, splat?.from[1] ?? 0);
-    gl.uniform2f(fluidAt.uTo, splat?.to[0] ?? 0, splat?.to[1] ?? 0);
-    gl.uniform2f(fluidAt.uForce, force[0], force[1]);
+    gl.uniform1i(at.uPrevious, 0);
+    gl.uniform2f(at.uSize, simWidth, simHeight);
+    gl.uniform1f(at.uAspect, aspect);
+    gl.uniform1f(at.uDt, dt);
+    gl.uniform1f(at.uDecay, fluid.dissipation);
+    gl.uniform1f(at.uEnergyDecay, fluid.dissipation * 1.1);
+    gl.uniform1f(at.uRadius, fluid.radius);
+    gl.uniform1f(at.uSplat, splat ? 1 : 0);
+    gl.uniform2f(at.uFrom, splat?.from[0] ?? 0, splat?.from[1] ?? 0);
+    gl.uniform2f(at.uTo, splat?.to[0] ?? 0, splat?.to[1] ?? 0);
+    gl.uniform2f(at.uForce, forceX, forceY);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     read = 1 - read;
   };
 
+  // Values derived from settings and the source, recomputed only when those change.
+  let derivedFor: GlyphFieldSettings | null = null;
+  let inkColor: [number, number, number] = [0, 0, 0], highlightColor: [number, number, number] = [1, 1, 1], backgroundColor = [0, 0, 0, 0];
+  let map = fieldSourceRect(1, 1, 1, 1, 'cover'), mapFor: GlyphFieldSettings | null = null, mapWidth = 0, mapHeight = 0, mapSourceWidth = 0, mapSourceHeight = 0;
+  const derive = () => {
+    if (derivedFor !== settings) {
+      derivedFor = settings;
+      inkColor = parseFieldColor(settings.ink);
+      highlightColor = parseFieldColor(settings.highlight === 'auto' ? '#ffffff' : settings.highlight);
+      backgroundColor = settings.background === 'transparent' ? [0, 0, 0, 0] : [...parseFieldColor(settings.background), 1];
+    }
+    if (mapFor !== settings || mapWidth !== width || mapHeight !== height || mapSourceWidth !== sourceWidth || mapSourceHeight !== sourceHeight) {
+      mapFor = settings; mapWidth = width; mapHeight = height; mapSourceWidth = sourceWidth; mapSourceHeight = sourceHeight;
+      map = fieldSourceRect(width, height, sourceWidth || 1, sourceHeight || 1, settings.fit, settings.focus);
+    }
+  };
+
   const draw = () => {
+    derive();
     const fluid = settings.fluid;
-    const map = fieldSourceRect(width, height, sourceWidth || 1, sourceHeight || 1, settings.fit, settings.focus);
-    const texelsPerCell = source && sourceHeight ? (layout.height / height) * sourceHeight * map.scale[1] : 1;
-    const background = settings.background === 'transparent' ? [0, 0, 0, 0] : [...parseFieldColor(settings.background), 1];
+    const texelsPerCell = source && textureHeight ? (layout.height / height) * textureHeight * map.scale[1] : 1;
+    const target = ensureCells();
+    const u = cellProgram!.locations!, p = pixelProgram!.locations!;
+    const hover = activeFieldHover(settings);
+    const motion = !reduced();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.buffer);
+    gl.viewport(0, 0, target.columns, target.rows);
+    gl.useProgram(cellProgram!.program);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); gl.uniform1i(u.uSource, 0);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(u.uFluid, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(u.uTrailMap, 3);
+    gl.uniform1f(u.uFluidMode, stableOn ? 1 : 0);
+    gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : 0);
+    gl.uniform1f(u.uTrailAmount, settings.trail.strength);
+    gl.uniform3f(u.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, hover === 'lantern' ? lantern.strength : 0);
+    gl.uniform3fv(u.uTrail, trailUniform);
+    gl.uniform1f(u.uLightRadius, settings.lantern.radius);
+    gl.uniform1f(u.uLightGain, settings.lantern.strength);
+    gl.uniform1f(u.uClock, performance.now() / 1000);
+    gl.uniform1f(u.uFlicker, motion ? 1 : 0);
+    gl.uniform2f(u.uFluidTexel, 1 / Math.max(1, simWidth), 1 / Math.max(1, simHeight));
+    gl.uniform2f(u.uResolution, width, height);
+    gl.uniform2f(u.uCell, layout.width, layout.height);
+    gl.uniform1f(u.uCount, glyphCount);
+    gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
+    gl.uniform1i(u.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : settings.scene === 'drift' ? 4 : 3);
+    gl.uniform1i(u.uMark, settings.mark === 'dot' ? 1 : 0);
+    gl.uniform1f(u.uScale, settings.scale);
+    const zone = settings.clear;
+    gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
+    gl.uniform1f(u.uClearFeather, zone ? zone.feather : 0.1);
+    gl.uniform1f(u.uClearShape, zone && zone.shape === 'rect' ? 1 : 0);
+    const nowMs = performance.now();
+    pulseUniform.fill(0);
+    for (let i = 0; i < pulses.length; i++) {
+      const pulse = pulses[i], offset = i * 4;
+      pulseUniform[offset] = pulse.x; pulseUniform[offset + 1] = pulse.y;
+      pulseUniform[offset + 2] = (nowMs - pulse.born) / 1000; pulseUniform[offset + 3] = pulse.strength;
+    }
+    gl.uniform4fv(u.uPulse, pulseUniform);
+    gl.uniform3fv(u.uInk, inkColor);
+    gl.uniform3fv(u.uHighlight, highlightColor);
+    gl.uniform1f(u.uHighlightAuto, settings.highlight === 'auto' ? 1 : 0);
+    gl.uniform4fv(u.uBackground, backgroundColor);
+    gl.uniform1f(u.uBrightness, settings.brightness);
+    gl.uniform1f(u.uContrast, settings.contrast);
+    gl.uniform1f(u.uGamma, settings.gamma);
+    gl.uniform1f(u.uInvert, settings.invert ? 1 : 0);
+    gl.uniform1f(u.uVignette, settings.vignette);
+    gl.uniform1f(u.uSourceColor, settings.color === 'source' ? 1 : 0);
+    gl.uniform1f(u.uRefraction, fluid ? fluid.refraction * (motion ? 1 : 0.25) : 0);
+    gl.uniform1f(u.uGlow, fluid ? fluid.glow : 0);
+    gl.uniform1f(u.uTime, time);
+    gl.uniform1f(u.uDrift, motion ? settings.drift : 0);
+    gl.uniform1f(u.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
+    gl.uniform1f(u.uLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5));
+    gl.uniform1f(u.uSaturation, settings.saturation);
+    gl.uniform1f(u.uShade, settings.shade);
+    gl.uniform1f(u.uBackdrop, source ? settings.backdrop : 0);
+    gl.uniform2f(u.uLevels, source && settings.levels === 'auto' ? levels[0] : 0, source && settings.levels === 'auto' ? levels[1] : 1);
+    gl.bindVertexArray(vertexArray);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
-    gl.useProgram(composite);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); gl.uniform1i(compositeAt.uSource, 0);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlasTexture); gl.uniform1i(compositeAt.uAtlas, 1);
-    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(compositeAt.uFluid, 2);
-    gl.uniform1f(compositeAt.uFluidMode, stableOn ? 1 : 0);
-    const hover = activeFieldHover(settings);
-    gl.uniform1i(compositeAt.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : 0);
-    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(compositeAt.uTrailMap, 3);
-    gl.uniform1f(compositeAt.uTrailAmount, settings.trail.strength);
-    gl.uniform3f(compositeAt.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, hover === 'lantern' ? lantern.strength : 0);
-    gl.uniform3fv(compositeAt.uTrail, trailUniform);
-    gl.uniform1f(compositeAt.uLightRadius, settings.lantern.radius);
-    gl.uniform1f(compositeAt.uLightGain, settings.lantern.strength);
-    gl.uniform1f(compositeAt.uClock, performance.now() / 1000);
-    gl.uniform1f(compositeAt.uFlicker, reduced() ? 0 : 1);
-    gl.uniform2f(compositeAt.uFluidTexel, 1 / Math.max(1, simWidth), 1 / Math.max(1, simHeight));
-    gl.uniform2f(compositeAt.uResolution, width, height);
-    gl.uniform2f(compositeAt.uCell, layout.width, layout.height);
-    gl.uniform1f(compositeAt.uCount, glyphCount);
-    gl.uniform1f(compositeAt.uColumns, layout.columns);
-    gl.uniform4f(compositeAt.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
-    gl.uniform1i(compositeAt.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : 3);
-    gl.uniform3fv(compositeAt.uInk, parseFieldColor(settings.ink));
-    gl.uniform3fv(compositeAt.uHighlight, parseFieldColor(settings.highlight === 'auto' ? '#ffffff' : settings.highlight));
-    gl.uniform1f(compositeAt.uHighlightAuto, settings.highlight === 'auto' ? 1 : 0);
-    gl.uniform4fv(compositeAt.uBackground, background);
-    gl.uniform1f(compositeAt.uBrightness, settings.brightness);
-    gl.uniform1f(compositeAt.uContrast, settings.contrast);
-    gl.uniform1f(compositeAt.uGamma, settings.gamma);
-    gl.uniform1f(compositeAt.uInvert, settings.invert ? 1 : 0);
-    gl.uniform1f(compositeAt.uVignette, settings.vignette);
-    gl.uniform1f(compositeAt.uSourceColor, settings.color === 'source' ? 1 : 0);
-    gl.uniform1f(compositeAt.uRefraction, fluid ? fluid.refraction * (reduced() ? 0.25 : 1) : 0);
-    gl.uniform1f(compositeAt.uGlow, fluid ? fluid.glow : 0);
-    gl.uniform1f(compositeAt.uTime, time);
-    gl.uniform1f(compositeAt.uDrift, reduced() ? 0 : settings.drift);
-    gl.uniform1f(compositeAt.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
-    gl.uniform1f(compositeAt.uLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5));
-    gl.uniform1f(compositeAt.uSaturation, settings.saturation);
-    gl.uniform1f(compositeAt.uShade, settings.shade);
-    gl.uniform1f(compositeAt.uBackdrop, source ? settings.backdrop : 0);
-    gl.uniform2f(compositeAt.uLevels, source && settings.levels === 'auto' ? levels[0] : 0, source && settings.levels === 'auto' ? levels[1] : 1);
-    gl.bindVertexArray(vertexArray);
+    gl.useProgram(pixelProgram!.program);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlasTexture); gl.uniform1i(p.uAtlas, 1);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, target.ink); gl.uniform1i(p.uCells, 4);
+    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, target.under); gl.uniform1i(p.uUnder, 5);
+    gl.uniform2f(p.uResolution, width, height);
+    gl.uniform2f(p.uCell, layout.width, layout.height);
+    gl.uniform1f(p.uColumns, layout.columns);
+    gl.uniform1f(p.uDotScale, settings.dotScale);
+    gl.uniform1i(p.uMark, settings.mark === 'dot' ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 
-  const live = () => !destroyed && !lost && visible && !(typeof document !== 'undefined' && document.hidden);
+  // The first frame draws even off screen, so a field mounted ahead of the viewport is ready when it scrolls in.
+  const live = () => !destroyed && !lost && !failed && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
   const frame = (now: number) => {
     raf = 0;
     if (!live()) return;
@@ -455,32 +605,43 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     last = now;
     frameCost = frameCost * 0.9 + Math.min(elapsed, 0.25) * 0.1;
     slowFrames = frameCost > 1 / 24 ? slowFrames + 1 : 0;
-    if (slowFrames > 45 && degraded < 2) {
-      slowFrames = 0;
-      degraded++;
-      if (degraded === 1 && pixelRatio > 1) { settings = { ...settings, maxPixelRatio: 1 }; measure(); }
-      else degraded = 2;
+    try {
+      if (slowFrames > 45 && degraded < 2) {
+        slowFrames = 0;
+        degraded++;
+        if (degraded === 1 && pixelRatio > 1) { settings = { ...settings, maxPixelRatio: 1 }; measure(); }
+        else degraded = 2;
+      }
+      const compiled = programsReady();
+      const moving = animated();
+      if (moving) time += dt * settings.speed;
+      if (source instanceof HTMLVideoElement && source.readyState >= 2 && videoFresh) {
+        if (!('requestVideoFrameCallback' in source)) videoFresh = true; else videoFresh = false;
+        uploadSource();
+        dirty = true;
+      }
+      const hover = activeFieldHover(settings);
+      let simulating = hover === 'fluid' && (pending !== null || now < activeUntil);
+      if (simulating) stepFluid(dt, now);
+      else pending = null;
+      if (hover === 'lantern') simulating = stepLantern(dt, now) || simulating;
+      // Draw once more after the wake settles, so the last frame is clean.
+      if (hover === 'trail') { const wasActive = !!inkTrail?.active; simulating = stepTrail(dt) || simulating; if (wasActive && !inkTrail?.active) dirty = true; }
+      if (pulses.length) {
+        for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].born >= 2400) pulses.splice(i, 1);
+        simulating = true;
+        if (!pulses.length) dirty = true;
+      }
+      if (compiled && (moving || simulating || dirty)) {
+        draw();
+        dirty = false;
+        if (readyPending && (!sourceToken || source)) { readyPending = false; resolveReady(); }
+      }
+      if (moving || simulating || pending || !compiled) raf = requestAnimationFrame(frame);
+    } catch (error) {
+      failed = true;
+      report(error);
     }
-    const moving = animated();
-    if (moving) time += dt * settings.speed;
-    if (source instanceof HTMLVideoElement && source.readyState >= 2 && videoFresh) {
-      if (!('requestVideoFrameCallback' in source)) videoFresh = true; else videoFresh = false;
-      uploadSource();
-      dirty = true;
-    }
-    const hover = activeFieldHover(settings);
-    let simulating = hover === 'fluid' && (pending !== null || now < activeUntil);
-    if (simulating) stepFluid(dt, now);
-    else pending = null;
-    if (hover === 'lantern') simulating = stepLantern(dt, now) || simulating;
-    // Draw once more after the wake settles, so the last frame is clean.
-    if (hover === 'trail') { const wasActive = !!inkTrail?.active; simulating = stepTrail(dt) || simulating; if (wasActive && !inkTrail?.active) dirty = true; }
-    if (moving || simulating || dirty) {
-      draw();
-      dirty = false;
-      if (readyPending && (!sourceToken || source)) { readyPending = false; resolveReady(); }
-    }
-    if (moving || simulating || pending) raf = requestAnimationFrame(frame);
   };
   function wake() {
     if (raf || !live()) return;
@@ -526,8 +687,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   document.addEventListener('pointerleave', onPointerLeave);
   if (target !== window) target.addEventListener('pointerleave', onPointerLeave);
 
-  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (measure()) wake(); }) : null;
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { const resized = measure(); measureClear(); if (resized || dirty) wake(); }) : null;
   resizeObserver?.observe(canvas);
+  if (clearElement) resizeObserver?.observe(clearElement.element);
   const intersection = typeof IntersectionObserver === 'function'
     ? new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) { dirty = true; wake(); } }, { rootMargin: '120px' })
     : null;
@@ -536,13 +698,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   document.addEventListener('visibilitychange', onVisibility);
   const onMotionPreference = () => { dirty = true; wake(); };
   reducedQuery?.addEventListener?.('change', onMotionPreference);
+  fonts?.addEventListener?.('loadingdone', onFontsLoaded);
 
   const onLost = (event: Event) => { event.preventDefault(); lost = true; if (raf) cancelAnimationFrame(raf); raf = 0; };
   const onRestored = () => {
     lost = false;
-    shaders.length = 0;
+    shaders.length = 0; vertexShader = null;
+    cellProgram = pixelProgram = fluidProgram = null; cells = null;
     fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false;
-    try { init(); dirty = true; wake(); } catch (error) { onError?.(error instanceof Error ? error : new Error(String(error))); }
+    try { init(); dirty = true; wake(); } catch (error) { report(error); }
   };
   canvas.addEventListener('webglcontextlost', onLost);
   canvas.addEventListener('webglcontextrestored', onRestored);
@@ -557,6 +721,10 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (videoCallback && source instanceof HTMLVideoElement && 'cancelVideoFrameCallback' in source) (source as HTMLVideoElement & { cancelVideoFrameCallback(id: number): void }).cancelVideoFrameCallback(videoCallback);
     videoCallback = 0;
   };
+  const dropBitmap = () => {
+    ownedBitmap?.close();
+    ownedBitmap = null;
+  };
   const watchVideo = (video: HTMLVideoElement) => {
     const withFrames = video as HTMLVideoElement & { requestVideoFrameCallback?(callback: () => void): number };
     if (!withFrames.requestVideoFrameCallback) return;
@@ -568,15 +736,39 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     };
     videoCallback = withFrames.requestVideoFrameCallback(next);
   };
-  type Loaded = { element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap; owned: boolean };
-  const load = (input: FieldSource): Promise<Loaded> => {
+  type Loaded = { element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap; owned: boolean; natural?: [number, number] };
+  // Decoding and scaling run off the main thread; only the small result is uploaded.
+  const decodeBlob = async (blob: Blob): Promise<Loaded> => {
+    const full = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
+    const natural: [number, number] = [full.width, full.height];
+    // Larger images are scaled down to what the cells can show; the field samples a mip level near one texel per cell.
+    const scale = fieldSourceScale(full.width, full.height, width, height, layout.height, settings.fit);
+    if (scale === 1) return { element: full, owned: true, natural };
+    try {
+      const small = await createImageBitmap(full, {
+        resizeWidth: Math.max(1, Math.round(full.width * scale)), resizeHeight: Math.max(1, Math.round(full.height * scale)), resizeQuality: 'medium', premultiplyAlpha: 'none',
+      });
+      return { element: small, owned: true, natural };
+    } finally {
+      full.close();
+    }
+  };
+  const loadImage = (url: string) => new Promise<Loaded>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.decoding = 'async';
+    image.onload = () => resolve({ element: image, owned: false });
+    image.onerror = () => reject(new Error('The glyph field could not load this image.'));
+    image.src = url;
+  });
+  const load = async (input: FieldSource): Promise<Loaded> => {
     if (typeof input !== 'string') {
       if (input instanceof HTMLImageElement && !input.complete) return input.decode().then(() => ({ element: input, owned: false }));
       if (input instanceof HTMLVideoElement && input.readyState < 2) return new Promise((resolve, reject) => {
         input.addEventListener('loadeddata', () => resolve({ element: input, owned: false }), { once: true });
         input.addEventListener('error', () => reject(new Error('The glyph field could not load this video.')), { once: true });
       });
-      return Promise.resolve({ element: input, owned: false });
+      return { element: input, owned: false };
     }
     if (VIDEO.test(input)) return new Promise((resolve, reject) => {
       const video = document.createElement('video');
@@ -585,34 +777,47 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       video.addEventListener('error', () => reject(new Error('The glyph field could not load this video.')), { once: true });
       video.src = input;
     });
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.crossOrigin = 'anonymous';
-      image.decoding = 'async';
-      image.onload = () => resolve({ element: image, owned: false });
-      image.onerror = () => reject(new Error('The glyph field could not load this image.'));
-      image.src = input;
-    });
+    if (typeof createImageBitmap !== 'function' || typeof fetch !== 'function') return loadImage(input);
+    let blob: Blob;
+    try {
+      blob = await (await fetch(input).then(response => {
+        if (!response.ok) throw new Error('The glyph field could not load this image.');
+        return response;
+      })).blob();
+    } catch (error) {
+      // A policy that blocks fetch can still allow images; a missing file fails the same way either way.
+      if (error instanceof Error && error.message.startsWith('The glyph field')) throw error;
+      return loadImage(input);
+    }
+    if (!/svg/i.test(blob.type)) {
+      try { return await decodeBlob(blob); } catch { /* A format this browser decodes only in an image element. */ }
+    }
+    const local = URL.createObjectURL(blob);
+    try { return await loadImage(local); } finally { URL.revokeObjectURL(local); }
   };
   const setSource = async (input: FieldSource | null) => {
     const token = ++sourceToken;
     if (!input) {
-      dropVideo();
-      source = null; sourceWidth = sourceHeight = 0;
+      dropVideo(); dropBitmap();
+      source = null; sourceWidth = sourceHeight = textureHeight = 0;
       dirty = true; wake();
       return;
     }
     try {
-      const { element, owned } = await load(input);
+      const loaded = await load(input);
+      const { element, owned } = loaded;
       if (destroyed || token !== sourceToken) {
         if (owned && element instanceof HTMLVideoElement) { element.pause(); element.removeAttribute('src'); element.load(); }
+        else if (owned) (element as ImageBitmap).close();
         return;
       }
-      dropVideo();
+      dropVideo(); dropBitmap();
       ownedVideo = owned && element instanceof HTMLVideoElement ? element : null;
+      if (owned && !(element instanceof HTMLVideoElement)) ownedBitmap = element as ImageBitmap;
       source = element;
-      sourceWidth = element instanceof HTMLVideoElement ? element.videoWidth : element instanceof HTMLImageElement ? element.naturalWidth : element.width;
-      sourceHeight = element instanceof HTMLVideoElement ? element.videoHeight : element instanceof HTMLImageElement ? element.naturalHeight : element.height;
+      textureHeight = element instanceof HTMLVideoElement ? element.videoHeight : element instanceof HTMLImageElement ? element.naturalHeight : element.height;
+      sourceWidth = loaded.natural?.[0] ?? (element instanceof HTMLVideoElement ? element.videoWidth : element instanceof HTMLImageElement ? element.naturalWidth : element.width);
+      sourceHeight = loaded.natural?.[1] ?? textureHeight;
       videoFresh = true;
       if (element instanceof HTMLVideoElement) watchVideo(element);
       if (!lost) uploadSource();
@@ -620,11 +825,12 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       wake();
     } catch (error) {
       if (readyPending && token === sourceToken) { readyPending = false; resolveReady(); }
-      onError?.(error instanceof Error ? error : new Error(String(error)));
+      report(error);
     }
   };
 
   init();
+  measureClear();
   const initialSource = options.source ?? null;
   if (initialSource) { sourceToken = 1; void setSource(initialSource); } else wake();
 
@@ -634,7 +840,14 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     get settings() { return settings; },
     update(next: GlyphFieldOptions) {
       const before = settings;
-      settings = normalizeFieldSettings(next, settings);
+      const { element, rest } = splitClear(next);
+      if ('clear' in next) {
+        if (clearElement && clearElement.element !== element?.element) resizeObserver?.unobserve(clearElement.element);
+        clearElement = element;
+        if (element) resizeObserver?.observe(element.element);
+      }
+      settings = normalizeFieldSettings(element ? { ...rest, clear: settings.clear } : rest, settings);
+      measureClear();
       if (next.label) canvas.setAttribute('aria-label', next.label);
       if (settings.maxPixelRatio !== before.maxPixelRatio) measure();
       if (settings.charset !== before.charset || settings.cellSize !== before.cellSize || settings.cellAspect !== before.cellAspect
@@ -643,7 +856,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         awaitFont();
       }
       if (settings.levels !== before.levels) { measureLevels(); }
-      const fluidChanged = !!settings.fluid !== !!before.fluid || (settings.fluid && before.fluid && settings.fluid.resolution !== before.fluid.resolution);
+      const wasFluid = !!before.fluid && activeFieldHover(before) === 'fluid';
+      const fluidChanged = wasFluid !== wantsFluid() || (settings.fluid && before.fluid && settings.fluid.resolution !== before.fluid.resolution);
       if (fluidChanged) resizeFluid();
       if ('source' in next) void setSource(next.source ?? null);
       dirty = true;
@@ -656,8 +870,26 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       moveTo(toField(rect.left + x, rect.top + y));
     },
     redraw() {
-      if (destroyed || lost || !width) return;
-      draw();
+      if (destroyed || lost || failed || !width) return;
+      try {
+        if (programsReady(true)) draw();
+      } catch (error) {
+        failed = true;
+        report(error);
+      }
+    },
+    pulse(options: { x?: number; y?: number; element?: Element; strength?: number } = {}) {
+      if (destroyed || reduced()) return;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      let x = options.x ?? rect.width / 2, y = options.y ?? rect.height / 2;
+      if (options.element) {
+        const box = options.element.getBoundingClientRect();
+        x = box.left + box.width / 2 - rect.left; y = box.top + box.height / 2 - rect.top;
+      }
+      const strength = Math.max(0, Math.min(2, options.strength ?? 1));
+      pulses = [...pulses, { x: x / rect.width, y: y / rect.height, born: performance.now(), strength }].slice(-4);
+      wake();
     },
     play() {
       paused = false;
@@ -679,16 +911,19 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       target.removeEventListener('pointerleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
       reducedQuery?.removeEventListener?.('change', onMotionPreference);
+      fonts?.removeEventListener?.('loadingdone', onFontsLoaded);
       canvas.removeEventListener('webglcontextlost', onLost);
       canvas.removeEventListener('webglcontextrestored', onRestored);
       resizeObserver?.disconnect();
       intersection?.disconnect();
       dropVideo();
+      dropBitmap();
       source = null;
       if (!lost) {
         releaseFluid();
+        releaseCells();
         gl.deleteTexture(atlasTexture); gl.deleteTexture(sourceTexture);
-        gl.deleteProgram(composite); gl.deleteProgram(fluidProgram);
+        for (const entry of [cellProgram, pixelProgram, fluidProgram]) if (entry) gl.deleteProgram(entry.program);
         stable?.dispose();
         if (trailTexture) gl.deleteTexture(trailTexture);
         shaders.forEach(shader => gl.deleteShader(shader));

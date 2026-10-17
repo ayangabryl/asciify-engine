@@ -32,7 +32,10 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 | Option | Default | Notes |
 | --- | --- | --- |
 | `source` | none | URL (`.mp4`, `.webm`, `.mov` load as muted, looping, inline video), `HTMLImageElement`, `HTMLVideoElement`, `HTMLCanvasElement` or `ImageBitmap`. Cross-origin media needs CORS. |
-| `scene` | `'flow'` | Generated motion when there is no source: `'flow'` (domain-warped noise), `'orb'` (lit sphere) or `'none'` (blank, wake only). |
+| `scene` | `'flow'` | Generated motion when there is no source: `'flow'` (domain-warped noise), `'drift'` (a few broad lobes, made for halftone, 4.12), `'orb'` (lit sphere) or `'none'` (blank, wake only). |
+| `mark`, `dotScale` | `'glyph'`, `0.9` | `'dot'` draws a halftone: one circle per cell whose area follows tone, antialiased at any pixel ratio. `dotScale` is the largest dot as a fraction of the cell; about 0.6 keeps a calm, open grid. (4.12) |
+| `scale` | `1` | Feature size of generated scenes; higher is finer. Use about 1.8 on phones, where the field is tall. (4.12) |
+| `clear` | `false` | Keeps the field quiet around content so text stays readable: an element, `{ element, padding, feather, shape }` (followed through layout changes), or a zone in field fractions. (4.12) |
 | `charset` | `' .,:-=+*#%@'` | Ordered from empty to dense. Graphemes, so emoji, braille and block shading each take one cell. Up to 256. |
 | `cellSize`, `cellAspect` | `12`, `1` | Cell height in CSS px; width ÷ height. Monospaced ramps look best near `0.6`. Cells are whole device pixels, and glyphs are sampled texel for texel. |
 | `font`, `fontWeight`, `glyphScale` | monospace, `500`, `0.8` | Any loaded CSS font. The atlas is redrawn when the font finishes loading. |
@@ -55,6 +58,26 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 | `interactionTarget` | `window` | Where pointer movement is read. Use the hero element when it dispatches synthetic pointer events. |
 
 `update(options)` merges and rebuilds only what changed (the atlas for type changes, the simulation for resolution changes). `setSource(source)` swaps media. `pointer(x, y)` moves the wake in CSS pixels relative to the canvas (`pointer(null)` lifts it), which is useful for an intro stroke. `redraw()` draws immediately, so you can copy the canvas with `drawImage` in the same task, for example to cross-fade between looks.
+
+## Halftone for interfaces (4.12)
+
+Product pages, docs, pricing and SaaS heroes want a background that is calm, works in light and dark themes, and never fights the copy. Use dots, the drift scene, a clear zone around the content, and `pulse()` for interface events:
+
+```ts
+const field = mountGlyphField(heroCanvas, {
+  mark: 'dot', scene: 'drift', cellSize: 14, dotScale: 0.64,
+  color: 'ink', ink: tokens.textMuted, background: 'transparent',
+  clear: { element: heroCopy, padding: 40, feather: 0.18 },
+  hover: 'lantern',
+});
+saveButton.addEventListener('click', () => field.pulse({ element: saveButton }));
+```
+
+- Ink: the muted text token, not the accent. On light grounds a mid grey such as `#9a988f`; on dark about `#5f5e58`.
+- Clear zone: always set one when text sits over the field. Measure contrast at the busiest frame anyway.
+- Pulse: one ring per meaningful event (saved, sent, connected), not on every click. It is skipped under reduced motion.
+- `pulse({ x, y })` takes CSS pixels relative to the canvas; `pulse({ element })` starts at the element's centre; no argument starts at the centre.
+
 
 ## Living or still
 
