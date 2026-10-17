@@ -98,7 +98,7 @@ await fetchPost();
 await s.resolve();
 ```
 
-Options: `blocks` (selector, default `[data-block]`; `reset()` fades loaded content out under the returning skeleton), `shimmer` (ms per sweep, default 1250), `resolve` (ms per block, default 240), `stagger` (ms between blocks unless `data-delay` is set, default 60), `develop` (ms an image develops, default 560). Methods: `resolve()` (a promise for the last block), `reset()`; getter `loading`. Sets `aria-busy` on the element while loading.
+Options: `blocks` (selector, default `[data-block]`; `reset()` fades loaded content out under the returning skeleton), `shimmer` (ms per pass of a wave that loops without pausing until `resolve()`, default 1400), `resolve` (ms per block, default 420), `stagger` (ms between blocks unless `data-delay` is set, default 60), `develop` (ms an image develops, default 640). Block shapes come from the blocks' own CSS: an image's `border-radius`, and one bar per rendered line of text, as wide as the words and as tall as the font's x-height, so the skeleton follows the design's tokens without settings. Methods: `resolve()` (a promise for the last block), `reset()`; getter `loading`. Sets `aria-busy` on the element while loading.
 
 ## pill
 
@@ -175,7 +175,7 @@ const off = subscribeGlobalLook(look => menu.value = look?.charset ?? '');
 orb.update({ ink: '--brand', look: { cellSize: 6 } });
 ```
 
-`setGlobalLook({ charset })` applies to every glyph field, live or released, except dot marks, fields whose own `charset` holds letters (a word or a brand, such as `wordmark`), and fields created with `globalLook: false` (use it for a locked region). An empty `charset` keeps each field's own. `getGlobalLook()` reads the current look, so `subscribeGlobalLook` pairs with React's `useSyncExternalStore`.
+`setGlobalLook({ charset })` balances the set's weight against classic ASCII: block and solid sets draw smaller glyphs so they keep detail, sets without light glyphs (binary) ease off, and faint sets (minimal, braille, code) draw larger, bolder glyphs; tones are untouched. It applies to every glyph field, live or released, except dot marks, fields whose own `charset` holds letters (a word or a brand, such as `wordmark`), and fields created with `globalLook: false` (use it for a locked region). An empty `charset` keeps each field's own. `getGlobalLook()` reads the current look, so `subscribeGlobalLook` pairs with React's `useSyncExternalStore`.
 
 Each change sweeps: a field that has drawn its first frame holds that frame over itself and wipes it away left to right in 200ms (after a 40ms beat, `cubic-bezier(.23,1,.32,1)`), led by a 2px scan line, as the new characters land under it. The line is `--ascii-sweep` (default amber `#f3ba32`, at 35% with a soft glow); the held frame and the line are an `aria-hidden` canvas and span marked `data-ascii-sweep`, placed exactly over the field (style them alongside the field, for example with the same mask) and removed when the sweep ends. Under reduced motion (the visitor's, or `reducedMotion: true`), and for a field still on its poster, the characters change at once.
 

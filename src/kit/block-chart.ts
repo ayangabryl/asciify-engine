@@ -49,7 +49,7 @@ export function blockChart(element: HTMLElement, options: BlockChartOptions = {}
   surface = mountSurface({
     host: element,
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     resolution: SCALE,

@@ -517,8 +517,11 @@ export function asciiField(canvas: HTMLCanvasElement, options: GlyphFieldOptions
 ```
 
 ```css
-:root { --ascii-ink: #76746e; --ascii-ink-strong: #1d1d1b; }
-@media (prefers-color-scheme: dark) { :root { --ascii-ink: #7a7872; --ascii-ink-strong: #d8d6cf; } }
+/* From the app's own tokens (see applying-asciify.md); the names on the right are examples. */
+:root {
+  --ascii-ink: color-mix(in oklab, var(--foreground) 50%, var(--background));
+  --ascii-ink-strong: color-mix(in oklab, var(--foreground) 92%, var(--background));
+}
 ```
 
 In React, wrap it once and reuse it:

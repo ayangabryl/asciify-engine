@@ -42,7 +42,7 @@ export function artPanel(element: HTMLElement, options: ArtPanelOptions = {}): A
   page = !image ? null : mountPageField({
     host: element,
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     source: image,
     label: state.current.label ?? (image instanceof HTMLImageElement ? image.alt || undefined : undefined),
     kit: state,

@@ -127,7 +127,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
     host: deck,
     outset: state.current.outset,
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; styles.restore(); hideRest(); },

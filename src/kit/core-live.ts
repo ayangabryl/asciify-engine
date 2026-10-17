@@ -160,6 +160,60 @@ function pump(fromFrame = false) {
   }
 }
 
+/* ---------------- Balancing a swapped charset ---------------- */
+
+const FIELD_FONT = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const inkCache = new Map<string, InkWeight>();
+const CLASSIC = '.:-=+*#%@';
+/** A charset's weight next to classic ASCII in the field's font: its densest glyph against `@`, and its ramp's average. */
+export interface InkWeight { max: number; mean: number }
+/** Measures a charset's ink: about 1 and 1 for ASCII ramps, over 2 for block sets, under 0.6 for braille. 1 where it cannot be measured. */
+export function inkWeight(charset: string, font = FIELD_FONT): InkWeight {
+  const key = `${font}\u0000${charset}`;
+  const known = inkCache.get(key);
+  if (known) return known;
+  let weight: InkWeight = { max: 1, mean: 1 };
+  try {
+    const pen = typeof document === 'undefined' ? null : Object.assign(document.createElement('canvas'), { width: 48, height: 48 }).getContext('2d', { willReadFrequently: true });
+    if (pen && typeof pen.getImageData === 'function') {
+      pen.font = `500 36px ${font}`; pen.textAlign = 'center'; pen.textBaseline = 'middle';
+      const cover = (glyph: string) => {
+        pen.clearRect(0, 0, 48, 48); pen.fillStyle = '#000'; pen.fillText(glyph, 24, 25);
+        const data = pen.getImageData(0, 0, 48, 48).data;
+        let sum = 0;
+        for (let i = 3; i < data.length; i += 4) sum += data[i];
+        return sum / 255;
+      };
+      const ramp = (set: string) => [...set].filter(g => g.trim()).map(cover);
+      const average = (list: number[]) => list.reduce((a, b) => a + b, 0) / Math.max(1, list.length);
+      const own = ramp(charset), house = ramp(CLASSIC), at = cover('@');
+      if (own.length && at > 0 && average(house) > 0) weight = { max: Math.max(...own) / at, mean: average(own) / average(house) };
+    }
+  } catch { /* no 2D canvas: leave the charset as it is */ }
+  inkCache.set(key, weight);
+  return weight;
+}
+
+/**
+ * Evens out a charset's weight so any set reads like the house ASCII. Block and solid sets draw smaller glyphs and keep
+ * their detail instead of turning to slabs; sets with no light glyphs (binary) ease off; faint sets (minimal, braille,
+ * code) draw larger, bolder glyphs. Tones are left alone, so images keep their detail in every set.
+ */
+export function balanceCharset(charset: string, own: GlyphFieldOptions): GlyphFieldOptions {
+  const { max, mean } = inkWeight(charset, own.font ?? FIELD_FONT);
+  const scale = own.glyphScale ?? 0.8, gamma = own.gamma ?? 1, weight = own.fontWeight ?? 500;
+  if (max > 1.15) return { glyphScale: Math.max(0.3, scale * Math.max(0.62, max ** -0.36)), gamma, fontWeight: weight };
+  if (mean > 1.5) return { glyphScale: Math.max(0.3, scale * mean ** -0.25), gamma, fontWeight: weight };
+  if (max < 0.85) {
+    return {
+      glyphScale: Math.min(1.6, scale * Math.min(1.3, max ** -0.3)),
+      gamma,
+      fontWeight: max < 0.6 ? Math.max(weight, 700) : weight,
+    };
+  }
+  return { glyphScale: scale, gamma, fontWeight: weight };
+}
+
 /* ---------------- One field that can be released and mounted again ---------------- */
 
 export interface LiveConfig {
@@ -296,10 +350,10 @@ export function liveField(config: LiveConfig): Live {
   const charsetPatch = (): GlyphFieldOptions | null => {
     const own = merged.charset;
     const want = kit?.current.globalLook !== false && (merged.mark ?? 'glyph') === 'glyph' && !LETTER.test(own ?? '') && look?.charset ? look.charset : undefined;
-    if (want) { if (want === shown) return null; shown = want; return { charset: want }; }
+    if (want) { if (want === shown) return null; shown = want; return { charset: want, ...balanceCharset(want, merged) }; }
     if (shown === undefined) return null;
     shown = undefined;
-    return { charset: own ?? ENGINE_CHARSET };
+    return { charset: own ?? ENGINE_CHARSET, glyphScale: merged.glyphScale ?? 0.8, gamma: merged.gamma ?? 1, fontWeight: merged.fontWeight ?? 500 };
   };
 
   const slot: Slot = {
@@ -393,7 +447,7 @@ export function liveField(config: LiveConfig): Live {
       merged = { ...merged, ...options };
       if (!real) return;
       const patch = charsetPatch();
-      real.update(shown !== undefined ? { ...options, charset: shown } : patch ? { ...options, ...patch } : options);
+      real.update(shown !== undefined ? { ...options, charset: shown, ...balanceCharset(shown, merged) } : patch ? { ...options, ...patch } : options);
     },
     setSource(next) { source = next; return real ? real.setSource(next) : Promise.resolve(); },
     pointer(x, y) { real?.pointer(x, y); },

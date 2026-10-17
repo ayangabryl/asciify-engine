@@ -53,7 +53,7 @@ export function wordmark(element: HTMLElement, options: WordmarkOptions = {}): W
     host: element,
     layer: 'over',
     look,
-    ink: dark => state.current.ink ?? (dark ? '#d8d6cf' : '#1d1d1b'),
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
     source: draw(),
     label: labelled ? state.current.label ?? text : undefined,
     kit: state,
