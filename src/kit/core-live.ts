@@ -75,6 +75,8 @@ const viewport = () => (typeof innerHeight === 'number' ? innerHeight : 0);
 /** CSS px between the element and the viewport, vertically; 0 when on screen, Infinity when detached. */
 function offscreen(host: HTMLElement, box: { top: number; bottom: number } = host.getBoundingClientRect()) {
   if (host.isConnected === false) return Infinity;
+  // `display: none` (a hidden tab, a collapsed breakpoint) reports a zero box at the origin, which would read as on screen.
+  if (typeof host.getClientRects === 'function' && host.getClientRects().length === 0) return Infinity;
   const d = box.bottom < 0 ? -box.bottom : box.top - viewport();
   return d > 0 ? d : 0;
 }
