@@ -57,7 +57,7 @@ export function accordion(element: HTMLElement, options: AccordionOptions): Acco
   let vis = images.map((_, i): number => (i === open ? 1 : 0));
   const pics: (Picture | null)[] = images.map(() => null), tones: (Picture | null)[] = images.map(() => null);
   let surface: Surface | null = null;
-  const look = (): GlyphFieldOptions => ({
+  const look = (): GlyphFieldOptions => ({ blend: 'coarse',
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
     cellSize: 6, cellAspect: 0.62, glyphScale: 0.94, hover: 'trail', trail: { strength: 0.5, radius: 0.25 }, ...state.current.look,
   });

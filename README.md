@@ -646,6 +646,11 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.16: smooth shading in every charset, rolling streamed text
+
+- Glyph fields gain `blend` (default `'auto'`): with nine or fewer characters, a photo or video mixes neighbouring characters in a fixed 4x4 pattern for the shades between them, so binary, dots and block sets shade like a full ramp. Drawn interface shapes stay crisp. It costs one comparison per cell and never shimmers.
+- `streamText(el, { transition: 'roll' })` rolls each character up through glyphs into the crisp letter, like the odometer, with the caret on the front of the roll.
+
 ## 4.15: every charset at the same weight, inks from your tokens
 
 - `setGlobalLook({ charset })` measures the set's ink against classic ASCII and balances it: block and solid sets draw smaller glyphs and keep their detail, sets without light glyphs ease off, and faint sets draw larger, bolder glyphs. Tones are untouched.
