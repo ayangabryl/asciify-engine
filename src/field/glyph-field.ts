@@ -433,7 +433,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
 
   function measure() {
-    const rect = canvas.getBoundingClientRect();
+    // Layout size, not getBoundingClientRect: a transform (a dialog scaling open) must not bake a stretched size in.
+    const rect = canvas.clientWidth || canvas.clientHeight ? { width: canvas.clientWidth, height: canvas.clientHeight } : canvas.getBoundingClientRect();
     const ratio = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio);
     const nextWidth = Math.max(1, Math.round(rect.width * ratio)), nextHeight = Math.max(1, Math.round(rect.height * ratio));
     if (nextWidth === width && nextHeight === height && ratio === pixelRatio) return false;
