@@ -646,6 +646,22 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.13: the kit — interface components in one call
+
+`asciify-engine/kit` turns Asciify's interface components into short, customisable calls on the GPU field. Each one follows its element's size and border radius, takes ink from your CSS variables in light and dark, honours reduced motion, pauses off screen, leaves your HTML working without WebGL2, and cleans up with `destroy()`.
+
+```ts
+import { beam, buttonLoading, statusOrb } from 'asciify-engine/kit';
+
+const b = beam(card, { palette: 'colorful', mode: 'progress' });
+b.progress(0.6); b.success();
+
+const save = buttonLoading(saveButton, { text: 'Save' });
+save.start('Saving'); await request; save.succeed('Saved');
+```
+
+Thirty components ship in the kit: beam, decode, odometer, buttonLoading, statusOrb, skeleton, pill, tabs, imageGenerate, voiceOrb, commandPalette, slideToConfirm, likeBurst, blockChart, pageDissolve, swipeDeck, codeInput, toastStack, thinking, streamText, compare, accordion, dropzone, disintegrate, pullRefresh, fieldBackground, wordmark, asciiVideo, artPanel and pricingGlow. Unused components tree-shake away; each adds about 2–4 kB gzipped on top of a 3.5 kB shared core and the `/field` entry. See [kit.md](skills/asciify-engine/references/kit.md), and [components.md](skills/asciify-engine/references/components.md) for the prompt and snippet of every component.
+
 ## 4.12: halftone fields for interfaces
 
 `mark: 'dot'` turns the GPU field into a halftone: one circle per cell, its area following the tone, crisp at any pixel ratio. The new `drift` scene draws a few broad, slow lobes; `clear` keeps the field quiet around an element so copy stays readable; `pulse()` sends a ring through the dots when your interface wants to answer an event.

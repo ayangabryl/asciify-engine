@@ -3,16 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { mount, support } = vi.hoisted(() => ({ mount: vi.fn(), support: { on: true } }));
 vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyphField: mount }));
 
-import { beam, beamPalette, BEAM_DEFAULTS, beamArcs } from './beam';
+import { beam, beamPalette, BEAM_DEFAULTS, beamArcs, beamRing, beamCracked, beamBand } from './beam';
 import { decode } from './decode';
 import { odometer, firstChanged } from './odometer';
 import { buttonLoading, letterCells, letterGlyph } from './button-loading';
 import { statusOrb } from './status-orb';
 import { skeleton, blockKind } from './skeleton';
-import { pill, pillTone } from './pill';
+import { pill, pillTone, pillLane, laneClip } from './pill';
 import { tabs, streamSpan } from './tabs';
 import { imageGenerate, elapsedLabel } from './image-generate';
-import { resolveColor, mixHex, handle } from './core';
+import { resolveColor, mixHex, handle, isDark } from './core';
 
 /* A small DOM: enough element, style, canvas and observer behaviour for the kit to run in Node. */
 
@@ -162,7 +162,7 @@ describe('fallback without WebGL2', () => {
     expect(card.style.position).toBeUndefined();
     expect(figure.textContent).toBe('$1,200');
     expect(label.textContent).toBe('Deploy');
-    a.progress(0.5); a.success(); a.error(); d.loading(); d.success(); f.sparkle(); h.replay(); a.play(); a.pause(); a.update({ palette: 'mono' });
+    a.progress(0.5); a.success(); a.error(); d.loading(); d.success(); f.sheen(); f.count(3); h.replay(); a.play(); a.pause(); a.update({ palette: 'mono' });
     expect(frames.size).toBe(0);
     for (const kit of [a, b, c, d, e, f, g, h, i]) kit.destroy();
   });
@@ -180,6 +180,22 @@ describe('fallback without WebGL2', () => {
     o.set(1200);
     expect(figure.textContent).toBe((1200).toLocaleString());
     await expect(skeleton(asElement(element())).resolve()).resolves.toBeUndefined();
+  });
+  it('shows image generation progress in the photo itself', async () => {
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:1', revokeObjectURL: vi.fn() });
+    vi.stubGlobal('setTimeout', (fn: () => void) => { fn(); return 0; });
+    const frame = element(), photo = new FakeImage();
+    frame.appendChild(photo);
+    const gen = imageGenerate(asElement(frame));
+    expect(photo.style.getPropertyValue('visibility')).toBe('hidden');
+    const seen: string[] = [];
+    async function* stream() { yield { preview: '/p1.webp' }; seen.push(photo.src); yield { final: '/final.webp' }; }
+    await expect(gen.run(stream)).resolves.toBe('done');
+    expect(seen).toEqual(['/p1.webp']);
+    expect(photo.src).toBe('/final.webp');
+    expect(photo.style.getPropertyValue('visibility')).toBe('visible');
+    gen.destroy();
+    expect(photo.style.getPropertyValue('visibility')).toBe('');
   });
   it('falls back when mounting throws, removing what it added', () => {
     support.on = true;
@@ -199,9 +215,9 @@ describe('lifecycle', () => {
     const [canvas] = canvases(card);
     expect(b.supported).toBe(true);
     expect(canvas.getAttribute('aria-hidden')).toBe('true');
-    expect(canvas.style.left).toBe('-7px');
-    expect(canvas.style.width).toBe('calc(100% + 14px)');
-    expect(canvas.style.borderRadius).toBe('17px 17px 17px 17px');
+    expect(canvas.style.left).toBe('0px');
+    expect(canvas.style.width).toBe('calc(100% + 0px)');
+    expect(canvas.style.borderRadius).toBe('10px 10px 10px 10px');
     expect(card.style.getPropertyValue('position')).toBe('relative');
     const look = mount.mock.calls[0][1];
     expect(look).toMatchObject({ mark: 'dot', background: 'transparent', hover: 'none', levels: 'none', color: 'source' });
@@ -325,6 +341,25 @@ describe('options', () => {
     expect(beamArcs(0)).toBeCloseTo(1);
     expect(beamArcs(0.25)).toBe(0);
   });
+  it('draws the progress ring up to its head and cracks the border away', () => {
+    expect(beamRing(0.2, 0.5)).toBeGreaterThan(0.42);
+    expect(beamRing(0.5, 0.5)).toBeGreaterThan(beamRing(0.25, 0.5));
+    expect(beamRing(0.6, 0.5)).toBe(0);
+    expect(beamCracked(0.5, 0)).toBe(1);
+    expect(beamCracked(0.5, 1)).toBe(0);
+    expect(beamCracked(0.95, 1)).toBe(1);
+  });
+  it('follows each corner radius and keeps dots inside the curve', () => {
+    const sharp = beamBand(60, 40, 3, 3, 9, [0, 0, 0, 0], 1.2), round = beamBand(60, 40, 3, 3, 9, [16, 0, 0, 0], 1.2);
+    const lit = (b: ReturnType<typeof beamBand>, col: number, row: number) => b.pixel.includes((row * 3 + 1) * b.W + col * 3 + 1);
+    expect(lit(sharp, 0, 0)).toBe(true);
+    expect(lit(round, 0, 0)).toBe(false);
+    expect(lit(round, 19, 0)).toBe(true);
+    expect(round.weight.length).toBeLessThan(sharp.weight.length);
+    expect(Math.max(...round.weight)).toBeLessThanOrEqual(1);
+    expect(round.turn.every(t => t >= 0 && t < 1)).toBe(true);
+    expect(round.crack.length).toBe(round.weight.length);
+  });
   it('resolves colours from literals, custom properties and fallbacks', () => {
     const el = element();
     styles.set(el, { '--brand': '#123456', '--short': '#abc' });
@@ -335,6 +370,16 @@ describe('options', () => {
     expect(resolveColor('var(--missing, #fff)', asElement(el))).toBe('#ffffff');
     expect(resolveColor('--missing', asElement(el), '#010203')).toBe('#010203');
     expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+  });
+  it('reads the ground from an opaque background before the text colour', () => {
+    const el = element();
+    expect(isDark(asElement(el))).toBe(false);
+    styles.set(el, { backgroundColor: 'rgb(0, 0, 0)' });
+    expect(isDark(asElement(el))).toBe(true);
+    styles.set(el, { backgroundColor: 'rgba(0, 0, 0, 0.2)', color: 'rgb(240, 240, 236)' });
+    expect(isDark(asElement(el))).toBe(true);
+    styles.set(el, { backgroundColor: 'rgb(255, 255, 255)', color: 'rgb(240, 240, 236)' });
+    expect(isDark(asElement(el))).toBe(false);
   });
   it('lands button letters on whole cells and waves only while loading', () => {
     for (const ratio of [1, 1.5, 2]) {
@@ -385,9 +430,9 @@ describe('options', () => {
     const many = pill([asElement(a), asElement(b)]);
     expect(mount).toHaveBeenCalledTimes(1);
     expect(canvases(list)).toHaveLength(1);
-    expect(canvases(list)[0].style.zIndex).toBe('');
+    expect(canvases(list)[0].style.zIndex).toBe('1');
     many.destroy();
-    const one = pill(asElement(a), { tone: 'green', shimmer: true });
+    const one = pill(asElement(a), { tone: 'green', live: true });
     expect(canvases(a)[0].style.zIndex).toBe('-1');
     expect(a.style.getPropertyValue('isolation')).toBe('isolate');
     expect(mount.mock.calls[1][1]).toMatchObject({ color: 'source' });
@@ -397,6 +442,61 @@ describe('options', () => {
 });
 
 describe('component behaviour', () => {
+  it('clips the beam to the element and plays its outcomes', () => {
+    const card = element();
+    styles.set(card, { borderTopLeftRadius: '12px', borderBottomRightRadius: '4px' });
+    const b = beam(asElement(card), { mode: 'progress' });
+    advance();
+    expect(canvases(card)[0].style.clipPath).toBe('inset(0 round 12px 10px 4px 10px)');
+    b.progress(0.5);
+    for (let i = 0; i < 20; i++) advance();
+    b.success();
+    for (let i = 0; i < 200; i++) advance();
+    expect(frames.size).toBe(1);
+    b.error();
+    for (let i = 0; i < 120; i++) advance();
+    expect(frames.size).toBe(0);
+    card.dispatch('pointerenter');
+    expect(frames.size).toBe(1);
+    b.reset();
+    for (let i = 0; i < 5; i++) advance();
+    expect(frames.size).toBe(1);
+    b.destroy();
+  });
+  it('gives each pill a lane of whole cells clear of its rounded ends', () => {
+    const lane = pillLane({ x: 10, y: 4, w: 80, h: 22 }, 4.8, 8);
+    expect(lane.x % 4.8).toBeCloseTo(0);
+    expect(lane.x).toBeGreaterThanOrEqual(15);
+    expect(lane.x + lane.w).toBeLessThanOrEqual(85);
+    expect(lane.y).toBe(8);
+    expect(laneClip([lane], 8)).toMatch(/^path\("M/);
+    expect(laneClip([{ x: 0, y: 0, w: 2 }], 8)).toBe('inset(50%)');
+  });
+  it('adds the live indicator, lifts labels over a shared field, and rolls counts', () => {
+    const list = element(), status = new FakeElement('SPAN'), count = new FakeElement('SPAN'), label = new FakeElement('SPAN');
+    status.dataset.tone = 'green'; status.dataset.live = ''; label.textContent = 'Live'; status.appendChild(label);
+    count.dataset.count = ''; count.textContent = '12';
+    list.appendChild(status); list.appendChild(count);
+    const p = pill([asElement(status), asElement(count)]);
+    const dot = status.querySelector('[data-dot]');
+    expect(dot?.getAttribute('aria-hidden')).toBe('true');
+    expect(label.style.getPropertyValue('z-index')).toBe('2');
+    expect(label.style.getPropertyValue('position')).toBe('relative');
+    expect(count.textContent).toBe('1212');
+    advance();
+    expect(canvases(list)[0].style.clipPath).toMatch(/^path\(/);
+    expect(frames.size).toBe(1);
+    p.count(14);
+    advance();
+    const digits = count.children[1].children;
+    expect(digits.map(d => d.textContent)).toEqual(['1', '4']);
+    expect(digits[0].style.opacity).toBeUndefined();
+    expect(count.children[0].textContent).toBe('14');
+    p.destroy();
+    expect(status.querySelector('[data-dot]')).toBeNull();
+    expect(label.style.getPropertyValue('z-index')).toBe('');
+    expect(count.textContent).toBe('14');
+  });
   it('runs tabs with keys, aria and panels', () => {
     const list = element(), panels = [element(), element(), element()];
     const tabsEls = [0, 1, 2].map(i => { const t = new FakeElement('BUTTON'); t.setAttribute('role', 'tab'); t.setAttribute('aria-controls', `p${i}`); panels[i].setAttribute('id', `p${i}`); list.appendChild(t); return t; });

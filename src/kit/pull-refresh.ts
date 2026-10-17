@@ -1,0 +1,254 @@
+import type { GlyphFieldOptions } from '../field';
+import { snapshot } from './capture';
+import { clamp, easeOut, handle, mountSurface, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+
+export type PullState = 'idle' | 'pulling' | 'refreshing' | 'done';
+
+export interface PullRefreshOptions extends KitOptions {
+  /** Runs the refresh. The spinner turns until its promise settles. */
+  onRefresh: () => unknown;
+  /** The element that moves down with the pull. Default the first child. */
+  content?: HTMLElement | null;
+  /** Pull distance in px that triggers a refresh on release. Default 88. */
+  threshold?: number;
+  /** What a screen reader hears. */
+  messages?: { refreshing?: string; done?: string; failed?: string };
+  /** A selector for the rows `onRefresh` added, such as `'[data-new]'`: they resolve in from characters as the content springs back. Each row is revealed once. */
+  reveal?: string;
+}
+
+export interface PullRefreshHandle extends KitHandle<PullRefreshOptions> {
+  /** Refreshes as if pulled, for a Refresh button or a keyboard shortcut. */
+  refresh(): Promise<void>;
+  /** Resolves these rows in from characters: they appear as glyphs of their own text and media, then hand over to the HTML. */
+  revealRows(rows: Iterable<Element>): void;
+  readonly state: PullState;
+}
+
+const DEFAULTS = { threshold: 88 };
+const ORB = 28, MIN_SPIN = 600, CHECK_MS = 300, HOLD_MS = 320, REVEAL_MS = 760, HANDOVER = 0.3;
+const rubber = (raw: number) => 128 * (1 - Math.exp(-Math.max(0, raw) / 128));
+
+interface Spring { x: number; v: number; to: number }
+/** Semi-implicit Euler in 240 Hz substeps; returns whether the spring is still moving. */
+export function stepSpring(s: Spring, dt: number, k = 300, z = 0.86, eps = 0.2) {
+  const c = 2 * Math.sqrt(k) * z, n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+  for (let i = 0; i < n; i++) { s.v += (-k * (s.x - s.to) - c * s.v) * h; s.x += s.v * h; }
+  if (Math.abs(s.x - s.to) < eps && Math.abs(s.v) < eps * 12) { s.x = s.to; s.v = 0; return false; }
+  return true;
+}
+
+function drawCheck(pen: CanvasRenderingContext2D, x: number, y: number, size: number, t: number) {
+  if (t <= 0) return;
+  const p = [[-0.82, 0.02], [-0.26, 0.56], [0.86, -0.6]].map(([px, py]) => [x + px * size, y + py * size]);
+  const length = Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) + Math.hypot(p[2][0] - p[1][0], p[2][1] - p[1][1]);
+  pen.save();
+  pen.strokeStyle = '#fff'; pen.lineWidth = size * 0.44; pen.lineCap = 'round'; pen.lineJoin = 'round';
+  pen.setLineDash([length * t, length]);
+  pen.beginPath(); pen.moveTo(p[0][0], p[0][1]); pen.lineTo(p[1][0], p[1][1]); pen.lineTo(p[2][0], p[2][1]); pen.stroke();
+  pen.restore();
+}
+
+/**
+ * Pull to refresh: dragging the content down at the top gathers an orb of characters in the gap, which tightens into a
+ * ring at the threshold. Let go past it and the ring spins while `onRefresh` runs, then draws a check and springs back.
+ */
+export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): PullRefreshHandle {
+  const state = { current: { ...DEFAULTS, ...options } };
+  const styles = styleKeeper();
+  const content = () => state.current.content ?? (element.children[0] as HTMLElement | undefined) ?? null;
+  const live = srOnly('', true);
+  const d: Spring = { x: 0, v: 0, to: 0 };
+  let phase: PullState = 'idle', held = false, pulling = false, y0 = 0, pointer = -1, spin = 0, at = 0, last = 0, ok = true;
+  let surface: Surface | null = null;
+  /** Rows resolving in: a still of each in characters, drawn where the row is now; `start` is Infinity while held back. */
+  let fresh: { row: HTMLElement; snap: HTMLCanvasElement; start: number; opacity: string; transition: string; shown: boolean }[] = [];
+  const revealed = new WeakSet<Element>();
+  const look = (): GlyphFieldOptions => ({
+    mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
+    cellSize: 5, cellAspect: 0.62, glyphScale: 0.94, ...state.current.look,
+  });
+  const say = (text: string) => { live.textContent = text; };
+
+  surface = mountSurface({
+    host: element,
+    look,
+    ink: () => state.current.ink ?? '--ascii-ink-strong',
+    reducedMotion: () => state.current.reducedMotion,
+    resolution: 2,
+    onFail: () => { surface = null; },
+    paint: ({ pen, w, now, still, scale, box }) => {
+      const dt = last ? Math.min(1 / 30, (now - last) / 1000) : 1 / 60;
+      last = now;
+      let moving = held;
+      if (still) { d.x = d.to; d.v = 0; } else if (!held) moving = stepSpring(d, dt) || moving;
+      if (phase === 'refreshing') { spin += dt * 7.5; moving = true; }
+      if (phase === 'done' && now - at < CHECK_MS + 20) moving = true;
+      const node = content();
+      if (node) styles.set(node, 'translate', `0 ${Math.max(0, d.x).toFixed(2)}px`);
+      pen.setTransform(scale, 0, 0, scale, 0, 0);
+      const gap = Math.max(0, d.x), cx = w / 2, cy = gap / 2, q = clamp(gap / state.current.threshold);
+      if (gap > 0.5) {
+        pen.save();
+        pen.beginPath(); pen.rect(0, 0, w, gap); pen.clip();
+        if (phase === 'idle' || phase === 'pulling') {
+          // The orb gathers with the pull: wider and denser until the threshold, where it tightens into a ring.
+          const r = 10 + (ORB + 4) * q, glow = pen.createRadialGradient(cx, cy, 0, cx, cy, r);
+          glow.addColorStop(0, `rgba(255,255,255,${0.25 + 0.75 * q * q})`);
+          glow.addColorStop(0.55, `rgba(255,255,255,${0.12 + 0.5 * q * q})`);
+          glow.addColorStop(1, 'rgba(255,255,255,0)');
+          pen.fillStyle = glow;
+          pen.fillRect(cx - r, cy - r, r * 2, r * 2);
+          if (q >= 1) { pen.strokeStyle = 'rgba(255,255,255,.9)'; pen.lineWidth = 8; pen.beginPath(); pen.arc(cx, cy, ORB, 0, Math.PI * 2); pen.stroke(); }
+        } else {
+          const k = phase === 'done' && ok ? (still ? 1 : easeOut((now - at) / CHECK_MS)) : 0;
+          pen.lineWidth = 9; pen.lineCap = 'round';
+          for (let i = 0; i < 18; i++) {
+            const a = spin + (i / 18) * Math.PI * 1.5;
+            pen.strokeStyle = `rgba(255,255,255,${(0.15 + 0.85 * (i / 17)) * (1 - k) * (phase === 'done' && !ok ? 0.4 : 1)})`;
+            pen.beginPath(); pen.arc(cx, cy, ORB, a, a + (Math.PI * 1.5) / 18 + 0.02); pen.stroke();
+          }
+          if (k > 0) drawCheck(pen, cx, cy, ORB - 2, k);
+        }
+        pen.restore();
+      }
+      fresh = fresh.filter(item => {
+        if (!item.row.isConnected) { handOver(item, true); return false; }
+        const k = still ? 1 : (now - item.start) / REVEAL_MS;
+        if (k < 0 || !Number.isFinite(k)) { moving = moving || Number.isFinite(k); return true; }
+        if (k >= HANDOVER) handOver(item);
+        if (k >= 1) { handOver(item, true); return false; }
+        const b = box(item.row);
+        pen.globalAlpha = k < HANDOVER ? easeOut(k / HANDOVER, 3) : 1 - easeOut((k - HANDOVER) / (1 - HANDOVER), 3);
+        pen.drawImage(item.snap, b.x, b.y, b.w, b.h);
+        pen.globalAlpha = 1;
+        moving = true;
+        return true;
+      });
+      if (!moving) last = 0;
+      return moving;
+    },
+  });
+
+  const kick = () => surface?.kick();
+  /** The HTML row fades back in under its characters; `done` also puts back its own transition. */
+  function handOver(item: (typeof fresh)[number], done = false) {
+    const css = item.row.style;
+    if (!item.shown) { item.shown = true; css.transition = 'opacity 280ms cubic-bezier(.16, 1, .3, 1)'; css.opacity = item.opacity; }
+    if (done) css.transition = item.transition;
+  }
+  /** Hides the rows now and keeps a still of each; they resolve in from `start`. */
+  const hold = (rows: Iterable<Element>, start: number) => {
+    const s = surface;
+    if (!s || s.still()) return;
+    for (const row of rows) {
+      if (!(row instanceof HTMLElement) || revealed.has(row)) continue;
+      revealed.add(row);
+      const at = s.box(row);
+      const snap = snapshot(row, at.w, at.h, el => { const b = s.box(el), o = s.box(row); return { x: b.x - o.x, y: b.y - o.y, w: b.w, h: b.h }; }).canvas;
+      fresh.push({ row, snap, start, opacity: row.style.opacity, transition: row.style.transition, shown: false });
+      row.style.transition = 'none';
+      row.style.opacity = '0';
+    }
+    kick();
+  };
+  const revealRows = (rows: Iterable<Element>) => hold(rows, performance.now());
+  const begin = () => { const now = performance.now(); fresh.forEach(item => { if (item.start === Infinity) item.start = now; }); kick(); };
+  const nextFrame = () => new Promise<void>(resolve => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => resolve()) : resolve()));
+  const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const refresh = async () => {
+    if (phase === 'refreshing' || phase === 'done') return;
+    const o = state.current, still = !surface || surface.still();
+    phase = 'refreshing';
+    held = pulling = false;
+    d.to = o.threshold;
+    at = performance.now();
+    element.setAttribute('aria-busy', 'true');
+    say(o.messages?.refreshing ?? 'Refreshing.');
+    kick();
+    ok = true;
+    try { await Promise.all([o.onRefresh(), wait(still ? 0 : MIN_SPIN)]); } catch { ok = false; }
+    if (phase !== 'refreshing') return;
+    // New rows wait, hidden, behind the check; they resolve in as the content springs back.
+    if (ok && o.reveal && !still) { await nextFrame(); const node = content(); if (node) hold(node.querySelectorAll(o.reveal), Infinity); }
+    phase = 'done';
+    at = performance.now();
+    say(ok ? o.messages?.done ?? 'Updated.' : o.messages?.failed ?? 'Couldn’t refresh.');
+    kick();
+    await wait(still ? 0 : CHECK_MS + HOLD_MS);
+    if (phase !== 'done') { begin(); return; }
+    phase = 'idle';
+    d.to = 0;
+    begin();
+    element.removeAttribute('aria-busy');
+    kick();
+  };
+
+  const scaleY = () => element.getBoundingClientRect().height / (element.clientHeight || 1) || 1;
+  const down = (event: PointerEvent) => {
+    if (event.button !== 0 || phase !== 'idle' || element.scrollTop > 0) return;
+    held = true; pulling = false; y0 = event.clientY; pointer = event.pointerId;
+  };
+  const move = (event: PointerEvent) => {
+    if (!held || event.pointerId !== pointer) return;
+    if (event.clientY < y0) y0 = event.clientY;
+    const raw = (event.clientY - y0) / scaleY();
+    if (!pulling) {
+      if (raw < 6) return;
+      pulling = true;
+      phase = 'pulling';
+      (element as HTMLElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
+    }
+    d.x = d.to = rubber(raw - 6);
+    d.v = 0;
+    kick();
+  };
+  const up = () => {
+    if (!held) return;
+    held = false;
+    if (!pulling) return;
+    pulling = false;
+    if (d.x >= state.current.threshold) { phase = 'idle'; void refresh(); return; }
+    phase = 'idle';
+    d.to = 0;
+    kick();
+  };
+  // Touch scrolling would take the gesture over; while pulling, the page stays put.
+  const touch = (event: TouchEvent) => { if (pulling) event.preventDefault(); };
+  // A mouse pull over an image or link would start a native drag (cancelling the pull), and over text a selection.
+  const noDrag = (event: Event) => { if (held) event.preventDefault(); };
+
+  if (surface) {
+    styles.set(element, 'overscroll-behavior-y', 'contain');
+    element.appendChild(live);
+    element.addEventListener('pointerdown', down);
+    element.addEventListener('pointermove', move);
+    element.addEventListener('pointerup', up);
+    element.addEventListener('pointercancel', up);
+    element.addEventListener('touchmove', touch, { passive: false });
+    element.addEventListener('dragstart', noDrag);
+    element.addEventListener('selectstart', noDrag);
+  } else element.appendChild(live);
+
+  return handle(() => surface, state, () => surface?.refresh(), {
+    refresh,
+    revealRows,
+    get state() { return phase; },
+  }, () => {
+    phase = 'idle';
+    fresh.forEach(item => { item.row.style.opacity = item.opacity; item.row.style.transition = item.transition; });
+    fresh = [];
+    element.removeEventListener('pointerdown', down);
+    element.removeEventListener('pointermove', move);
+    element.removeEventListener('pointerup', up);
+    element.removeEventListener('pointercancel', up);
+    element.removeEventListener('touchmove', touch);
+    element.removeEventListener('dragstart', noDrag);
+    element.removeEventListener('selectstart', noDrag);
+    element.removeAttribute('aria-busy');
+    live.remove();
+    styles.restore();
+  });
+}
+
+export const PULL_REFRESH_DEFAULTS = DEFAULTS;
