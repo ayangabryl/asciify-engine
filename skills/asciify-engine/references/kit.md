@@ -90,7 +90,7 @@ Options: `colourByState` (default true), `ring` (close into a ring, or leave the
 
 ## skeleton
 
-Placeholder blocks drawn in characters with a shimmer; on `resolve()` text wipes in left to right and images develop in characters, then fade to the photo.
+Placeholder blocks drawn in characters with a shimmer; on `resolve()` text comes in behind a feathered edge and images develop in characters, then fade to the photo.
 
 ```ts
 const s = skeleton(card); // blocks: [data-block="text" | "photo" | "avatar"]; images default to photo

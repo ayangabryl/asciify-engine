@@ -233,7 +233,7 @@ Prompt:
 import { skeleton } from 'asciify-engine/kit';
 
 // blocks: [data-block="text" | "photo" | "avatar"] inside the card
-const s = skeleton(postCard, { shimmer: 1250, stagger: 60 });
+const s = skeleton(postCard, { shimmer: 1600, stagger: 60 });
 renderPost(await fetchPost());
 await s.resolve(); // text wipes in, the photo develops in characters
 reloadButton.onclick = async () => { s.reset(); renderPost(await fetchPost()); await s.resolve(); };

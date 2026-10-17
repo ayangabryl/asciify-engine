@@ -6,13 +6,13 @@ export type SkeletonBlock = 'text' | 'photo' | 'avatar';
 export interface SkeletonOptions extends KitOptions {
   /** Selector for the placeholder blocks inside the element. `data-block` may name the kind (`text`, `photo`, `avatar`); images default to photo. Default `[data-block]`. */
   blocks?: string;
-  /** One shimmer sweep, in ms. Default 1250. */
+  /** One shimmer cycle in ms: an eased sweep, then a short rest. Default 1600. */
   shimmer?: number;
-  /** Each block resolves over this many ms. Default 240. */
+  /** Each block resolves over this many ms. Default 420. */
   resolve?: number;
   /** Ms between blocks resolving, unless a block sets `data-delay`. Default 60. */
   stagger?: number;
-  /** An image block develops in characters over this many ms. Default 560. */
+  /** An image block develops in characters over this many ms. Default 640. */
   develop?: number;
 }
 
@@ -24,8 +24,13 @@ export interface SkeletonHandle extends KitHandle<SkeletonOptions> {
   readonly loading: boolean;
 }
 
-const DEFAULTS = { blocks: '[data-block]', shimmer: 1250, resolve: 240, stagger: 60, develop: 560 };
+const DEFAULTS = { blocks: '[data-block]', shimmer: 1600, resolve: 420, stagger: 60, develop: 640 };
 const gray = (tone: number) => `rgb(${tone * 255} ${tone * 255} ${tone * 255})`;
+// The rest tone and the crest stay in the light end of the charset: dots and dashes, never a wall of # and @.
+const REST = 0.24, CREST = 0.54, SWEEP = 0.72, FEATHER = 28;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+/** Where a block stands in its resolve, eased: 0 waiting, 1 handed over. */
+const progress = (since: number, delay: number, length: number) => (since < 0 ? 0 : easeOut((since - delay) / length, 3));
 
 /** The kind of a block: its `data-block`, or an image's shape. */
 export function blockKind(element: HTMLElement): SkeletonBlock {
@@ -51,12 +56,17 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
   }));
   const end = () => Math.max(state.current.develop, ...blocks().map(b => b.delay + state.current.resolve));
 
-  const hide = () => { for (const { el } of blocks()) { styles.set(el, 'opacity', '0'); el.style.removeProperty('clip-path'); } };
+  const MASK = ['mask-image', '-webkit-mask-image'] as const;
+  const hide = () => { for (const { el } of blocks()) { styles.set(el, 'opacity', '0'); for (const m of MASK) el.style.removeProperty(m); } };
   const reveal = (since: number) => {
     for (const { el, kind, delay } of blocks()) {
-      const p = Math.min(1, Math.max(0, (since - delay) / state.current.resolve));
-      styles.set(el, 'opacity', p > 0 ? (kind === 'text' ? '1' : String(p)) : '0');
-      if (kind === 'text') styles.set(el, 'clip-path', `inset(-2px ${(1 - p) * 100}% -2px 0)`);
+      const p = progress(since, delay, state.current.resolve);
+      styles.set(el, 'opacity', String(kind === 'text' ? Math.min(1, p * 1.6) : p));
+      // Words come in behind a feathered edge rather than a hard cut.
+      if (kind === 'text') {
+        const edge = p * (100 + FEATHER) - FEATHER / 2;
+        for (const m of MASK) styles.set(el, m, p >= 1 ? 'none' : `linear-gradient(90deg, #000 ${edge - FEATHER / 2}%, transparent ${edge + FEATHER / 2}%)`);
+      }
     }
   };
   const settleAll = () => { styles.restore(); element.removeAttribute('aria-busy'); done?.(); done = null; };
@@ -73,14 +83,17 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
       const o = state.current, since = arrived === null ? -1 : now - arrived;
       if (arrived !== null && since > end() + 16) { settleAll(); return false; }
       if (arrived !== null) reveal(since);
-      const at = (still ? 0.3 : (((now - started) / o.shimmer) % 1)) * w * 1.7 - w * 0.35;
-      const intro = still ? 1 : 0.4 + 0.6 * Math.min(1, (now - started) / 160);
-      const band = pen.createLinearGradient(at - 90, 0, at + 90, 60);
-      band.addColorStop(0, gray(0.3)); band.addColorStop(0.5, gray(0.82)); band.addColorStop(1, gray(0.3));
+      // One eased pass, then a rest off the far edge, so the shimmer breathes instead of scrolling.
+      const cycle = still ? 0.4 : (((now - started) / o.shimmer) % 1);
+      const span = Math.max(160, w * 0.45);
+      const at = -span + easeInOut(Math.min(1, cycle / SWEEP)) * (w + span * 2);
+      const intro = still ? 1 : easeOut((now - started) / 280, 3);
+      const band = pen.createLinearGradient(at - span, 0, at + span, span * 0.18);
+      for (let k = 0; k <= 8; k++) band.addColorStop(k / 8, gray(REST + (CREST - REST) * (0.5 - 0.5 * Math.cos((k / 8) * Math.PI * 2))));
       const round = (x: number, y: number, bw: number, bh: number, r: number) => { pen.beginPath(); pen.roundRect(x, y, Math.max(0, bw), bh, Math.min(r, bh / 2, Math.max(0, bw) / 2)); };
       for (const { el, kind, delay } of blocks()) {
         const { x, y, w: bw, h: bh } = box(el);
-        const p = since < 0 ? 0 : Math.min(1, Math.max(0, (since - delay) / o.resolve));
+        const p = progress(since, delay, o.resolve);
         pen.fillStyle = band;
         if (kind === 'photo') {
           const develop = since < 0 ? 0 : easeOut(since / o.develop, 4);
@@ -97,12 +110,10 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
           pen.globalAlpha = (1 - p) * intro;
           pen.beginPath(); pen.arc(x + bw / 2, y + bh / 2, Math.min(bw, bh) / 2, 0, Math.PI * 2); pen.fill();
         } else {
-          // A text bar, cleared from the left as its words resolve, with a bright crest at the edge.
+          // A text bar that recedes to the right and fades as its words come in behind it.
           const barH = Math.min(bh * 0.62, 12), by = y + (bh - barH) / 2, edge = x + bw * p;
-          pen.globalAlpha = intro;
+          pen.globalAlpha = intro * (1 - p);
           round(edge, by, x + bw - edge, barH, barH / 2); pen.fill();
-          pen.globalAlpha = 1;
-          if (p > 0 && p < 1) { pen.fillStyle = '#fff'; pen.fillRect(edge - 2, by - 1, 6, barH + 2); }
         }
         pen.globalAlpha = 1;
       }
@@ -116,7 +127,7 @@ export function skeleton(element: HTMLElement, options: SkeletonOptions = {}): S
     element.setAttribute('aria-busy', 'true');
     if (!surface) return;
     // Loaded content fades out as the skeleton comes up over it, rather than cutting.
-    if (shown && !surface.still()) for (const { el } of blocks()) el.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+    if (shown && !surface.still()) for (const { el } of blocks()) el.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     hide();
     surface.kick();
   };
