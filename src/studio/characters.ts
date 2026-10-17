@@ -4,7 +4,7 @@ export const CHARACTER_SETS = {
   standard: { label: 'Classic ASCII', chars: ' .:-=+*#%@' },
   asciify: { label: 'Asciify', chars: ' .:-=+YCIFSA#@' },
   minimal: { label: 'Minimal', chars: ' .:+' },
-  detailed: { label: 'Detailed', chars: ' .,:;itLf1CG80@' },
+  detailed: { label: 'Detailed', chars: ' .,:;-~=+*xX#%@' },
   letters: { label: 'Letters', chars: ' .liLTYCFSAWM' },
   technical: { label: 'Technical', chars: ' ._:;+/>=][{}*$#@' },
   blocks: { label: 'Tonal blocks', chars: ' ░▒▓█' },

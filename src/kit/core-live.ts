@@ -1,9 +1,47 @@
-import { mountGlyphField, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
+import { mountGlyphField, type FieldMark, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
+
+/**
+ * The Studio's 24 render styles as the glyph field draws them: the glyph-like styles are ramps, the halftone is the dot mark,
+ * and the tile and print styles are field marks of the same name.
+ */
+export const KIT_STYLES = {
+  ascii: { mark: 'glyph', charset: ' .:-=+*#%@' },
+  blocks: { mark: 'glyph', charset: ' ░▒▓█' },
+  braille: { mark: 'glyph', charset: ' ⠁⠃⠇⡇⣇⣧⣷⣿' },
+  dots: { mark: 'dot' },
+  lines: { mark: 'glyph', charset: ' -═╪╬' },
+  cross: { mark: 'glyph', charset: ' ·+xX#' },
+  diagonal: { mark: 'glyph', charset: ' /╱╳' },
+  diamond: { mark: 'glyph', charset: ' ·◇◈◆' },
+  mixed: { mark: 'glyph', charset: ' .:+/◇#@' },
+  pixel: { mark: 'pixel' },
+  mosaic: { mark: 'mosaic' },
+  lego: { mark: 'lego' },
+  voxel: { mark: 'voxel' },
+  disco: { mark: 'disco' },
+  dither: { mark: 'dither' },
+  hex: { mark: 'hex' },
+  led: { mark: 'led' },
+  cmyk: { mark: 'cmyk' },
+  stipple: { mark: 'stipple' },
+  engraving: { mark: 'engraving' },
+  crosshatch: { mark: 'crosshatch' },
+  woodblock: { mark: 'woodblock' },
+  risograph: { mark: 'risograph' },
+  pointillism: { mark: 'pointillism' },
+} as const satisfies Record<string, { mark: FieldMark; charset?: string }>;
+export type KitStyle = keyof typeof KIT_STYLES;
+const isKitStyle = (style: unknown): style is KitStyle => typeof style === 'string' && Object.prototype.hasOwnProperty.call(KIT_STYLES, style);
 
 /** The page-wide look `setGlobalLook` lays over every glyph field. */
 export interface GlobalLook {
   /** Characters for every glyph field that keeps none of letters of its own. Empty keeps each field's own. */
   charset?: string;
+  /**
+   * One of the Studio's render styles (`KIT_STYLES`): what every such field draws in each cell. A glyph-like style brings its
+   * ramp, which `charset` overrides; a tile or print style changes the mark and keeps each field's own charset for its blanks.
+   */
+  style?: KitStyle;
 }
 
 /** The kit options the shared core reads. */
@@ -26,7 +64,8 @@ const fields = new Set<{ relook(): void }>();
 
 /** Re-skins every glyph field on the page at once; `null` gives each field its own characters back. */
 export function setGlobalLook(next: GlobalLook | null) {
-  look = next ? { ...next } : null;
+  const { charset, style } = next ?? {};
+  look = next ? { ...(charset ? { charset } : {}), ...(isKitStyle(style) ? { style } : {}) } : null;
   for (const field of fields) field.relook();
   for (const listener of [...lookListeners]) listener(look);
 }
@@ -284,8 +323,8 @@ export function poster(host: HTMLElement, src: string, place: string, kit: objec
 
 const SWEEP_EASE = 'cubic-bezier(.23,1,.32,1)';
 /**
- * The global-look sweep: the frame before a charset change holds over the field and is wiped away left to right, led by a thin
- * scan line, as the new characters land under it (200ms after a 40ms beat). The line is `--ascii-sweep` (default amber).
+ * The global-look sweep: the frame before a look change holds over the field and is wiped away left to right, led by a thin
+ * scan line, as the new look lands under it (200ms after a 40ms beat). The line is `--ascii-sweep` (default amber).
  */
 function sweep(canvas: HTMLCanvasElement, place: string) {
   if (!canvas.width || !canvas.height || typeof document === 'undefined') return null;
@@ -346,14 +385,26 @@ export function liveField(config: LiveConfig): Live {
   let shownReady = false, wiping: ReturnType<typeof sweep> = null;
   const still = !config.ownPoster && kit?.current.poster ? poster(host, kit.current.poster, config.place, kit, canvas) : null;
 
-  /** The global charset applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). */
-  const charsetPatch = (): GlyphFieldOptions | null => {
-    const own = merged.charset;
-    const want = kit?.current.globalLook !== false && (merged.mark ?? 'glyph') === 'glyph' && !LETTER.test(own ?? '') && look?.charset ? look.charset : undefined;
-    if (want) { if (want === shown) return null; shown = want; return { charset: want, ...balanceCharset(want, merged) }; }
-    if (shown === undefined) return null;
-    shown = undefined;
-    return { charset: own ?? ENGINE_CHARSET, glyphScale: merged.glyphScale ?? 0.8, gamma: merged.gamma ?? 1, fontWeight: merged.fontWeight ?? 500 };
+  /** The global look applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). */
+  const wanted = (): { mark: FieldMark; charset?: string } | undefined => {
+    if (!look || kit?.current.globalLook === false || (merged.mark ?? 'glyph') !== 'glyph' || LETTER.test(merged.charset ?? '')) return undefined;
+    const style = look.style ? KIT_STYLES[look.style] : undefined;
+    const mark: FieldMark = style?.mark ?? 'glyph';
+    const charset = mark === 'glyph' ? look.charset || (style && 'charset' in style ? style.charset : undefined) : undefined;
+    return style || charset ? { mark, charset } : undefined;
+  };
+  const own = (): GlyphFieldOptions => ({
+    mark: merged.mark ?? 'glyph', charset: merged.charset ?? ENGINE_CHARSET,
+    glyphScale: merged.glyphScale ?? 0.8, gamma: merged.gamma ?? 1, fontWeight: merged.fontWeight ?? 500,
+  });
+  const lookOptions = (want: { mark: FieldMark; charset?: string }): GlyphFieldOptions =>
+    want.charset ? { mark: want.mark, charset: want.charset, ...balanceCharset(want.charset, merged) } : { ...own(), mark: want.mark };
+  /** What changes since the look last applied: the look's options, the field's own back, or null for nothing. */
+  const lookPatch = (): GlyphFieldOptions | null => {
+    const want = wanted(), key = want && `${want.mark}\u0000${want.charset ?? ''}`;
+    if (key === shown) return null;
+    shown = key;
+    return want ? lookOptions(want) : own();
   };
 
   const slot: Slot = {
@@ -364,7 +415,7 @@ export function liveField(config: LiveConfig): Live {
       used = true;
       merged = { ...config.options(), ...recorded };
       shown = undefined;
-      const patch = charsetPatch();
+      const patch = lookPatch();
       let field: GlyphField;
       try {
         field = mountGlyphField(canvas, {
@@ -421,7 +472,7 @@ export function liveField(config: LiveConfig): Live {
   }
   const record = {
     relook() {
-      const patch = charsetPatch();
+      const patch = lookPatch();
       if (!patch || !real) return;
       const field = real;
       // A field still on its poster, or under reduced motion, takes the new characters at once.
@@ -446,8 +497,8 @@ export function liveField(config: LiveConfig): Live {
       recorded = { ...recorded, ...options };
       merged = { ...merged, ...options };
       if (!real) return;
-      const patch = charsetPatch();
-      real.update(shown !== undefined ? { ...options, charset: shown, ...balanceCharset(shown, merged) } : patch ? { ...options, ...patch } : options);
+      const patch = lookPatch(), want = wanted();
+      real.update(want ? { ...options, ...lookOptions(want) } : patch ? { ...options, ...patch } : options);
     },
     setSource(next) { source = next; return real ? real.setSource(next) : Promise.resolve(); },
     pointer(x, y) { real?.pointer(x, y); },

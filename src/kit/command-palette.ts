@@ -1,6 +1,7 @@
 import type { GlyphFieldOptions } from '../field';
-import { boxIn, clamp, handle, house, mountSurface, prefersReduced, styleKeeper, type Box, type KitHandle, type KitOptions, type Surface } from './core';
-import { blocksOf, drawBlocks, snapshot, type Block } from './paint-dom';
+import { boxIn, clamp, handle, hash, house, mountSurface, prefersReduced, styleKeeper, type Box, type KitHandle, type KitOptions, type Surface } from './core';
+import { BLOCK_H, BLOCK_W, blocksOf, drawBlocks, snapshot, type Block } from './paint-dom';
+import { injectStyle } from './capture';
 
 export interface CommandPaletteOptions extends KitOptions {
   /** The button that opens the palette. Blocks fly out of it on open and back into it on close. */
@@ -21,6 +22,10 @@ export interface CommandPaletteOptions extends KitOptions {
   onRun?: (index: number, row: HTMLElement) => void;
   /** Called after the palette opens or closes. */
   onOpenChange?: (open: boolean) => void;
+  /** A highlight that glides behind the selected row. `false` when your rows style `aria-selected` themselves. Default true. */
+  highlight?: boolean;
+  /** Rows that carry the AI signature: a sweep of characters runs through their highlight while selected. Default `[data-ai]`. */
+  ai?: string;
 }
 
 export interface CommandPaletteHandle extends KitHandle<CommandPaletteOptions> {
@@ -29,7 +34,7 @@ export interface CommandPaletteHandle extends KitHandle<CommandPaletteOptions> {
   /** Dissolves the palette back into the trigger. */
   close(): void;
   toggle(): void;
-  /** Moves the selection; the marker glides to the row. */
+  /** Moves the selection; the highlight glides to the row. */
   select(index: number): void;
   /** Runs a row as if it were clicked. */
   run(index?: number): void;
@@ -37,32 +42,123 @@ export interface CommandPaletteHandle extends KitHandle<CommandPaletteOptions> {
   readonly selected: number;
 }
 
-const DEFAULTS = { input: 'input', rows: '[role="option"]', hotkey: 'k' as string | false, manage: true, closeOnRun: true };
+const DEFAULTS = { input: 'input', rows: '[role="option"]', hotkey: 'k' as string | false, manage: true, closeOnRun: true, highlight: true, ai: '[data-ai]' };
 const OPEN_MS = 260, CLOSE_MS = 200, RUN_MS = 240, SCALE = 2;
+/** New rows resolve out of characters over RESOLVE_MS, each a beat after the one above. */
+const RESOLVE_MS = 280, RESOLVE_STAGGER = 28;
+/** The AI shimmer: one pass takes SWEEP_MS, once every SWEEP_EVERY ms while the row stays selected; the crest is 2 × CREST px wide. */
+const SWEEP_MS = 1100, SWEEP_EVERY = 3600, SWEEP_DELAY = 160, CREST = 40;
 const HOUSE = 'cubic-bezier(.16, 1, .3, 1)';
-const grey = (t: number) => { const v = Math.round(clamp(t) * 255); return `rgb(${v} ${v} ${v})`; };
+const CSS = `
+:where([data-ascii-cmd-highlight]){position:absolute;left:0;top:0;z-index:-1;pointer-events:none;opacity:0;background:var(--ascii-cmd-highlight,color-mix(in oklab,currentColor 7%,transparent));transition:translate 240ms ${HOUSE},width 240ms ${HOUSE},height 240ms ${HOUSE},opacity 160ms ${HOUSE}}
+:where([data-ascii-cmd-highlight][data-on]){opacity:1}
+@media (prefers-reduced-motion:reduce){:where([data-ascii-cmd-highlight]){transition:none}}
+`;
+const inOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+
+interface Resolve { row: HTMLElement; snap: HTMLCanvasElement; blocks: Block[]; order: Float32Array; start: number; styles: ReturnType<typeof styleKeeper> }
 
 /**
- * A command palette that condenses out of its trigger in blocks of characters and dissolves back into it, with a glyph marker
- * in the selected row's gutter that glides between rows.
+ * A command palette that condenses out of its trigger in blocks of characters and dissolves back into it. A highlight glides
+ * between rows, rows that a search brings in resolve out of characters, and an AI row's highlight carries a sweep of characters.
  */
 export function commandPalette(panel: HTMLElement, options: CommandPaletteOptions = {}): CommandPaletteHandle {
   const state = { current: { ...DEFAULTS, ...options } };
   const flightStyles = styleKeeper();
   const rows = () => [...panel.querySelectorAll<HTMLElement>(state.current.rows)];
   const input = () => panel.querySelector<HTMLInputElement>(state.current.input);
-  let isOpen = state.current.open ?? !panel.hasAttribute('hidden'), sel = 0, band: Box | null = null, lantern = false, glow = 0, then = 0;
+  const panelStyles = styleKeeper();
+  let isOpen = state.current.open ?? !panel.hasAttribute('hidden'), sel = 0;
   let flight: null | { snap: HTMLCanvasElement; blocks: Block[]; order: Float32Array; ox: number; oy: number; start: number; closing: boolean } = null;
-  let busy = false, timer = 0, surface: Surface | null = null;
+  let busy = false, timer = 0, surface: Surface | null = null, resolves: Resolve[] = [], sweepRow: HTMLElement | null = null, sweepFrom = 0, sweepTimer = 0;
+  const seen = new WeakMap<HTMLElement, number>();
   const reduced = () => !!(state.current.reducedMotion ?? prefersReduced());
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
     cellSize: 5, cellAspect: 0.62, glyphScale: 0.92, ...state.current.look,
   });
 
+  injectStyle('ascii-kit-command', CSS);
+  if (getComputedStyle(panel).position === 'static') panelStyles.set(panel, 'position', 'relative');
+  // Its own stacking context, so the highlight and the field can sit under the rows' text and still above the panel's fill.
+  panelStyles.set(panel, 'isolation', 'isolate');
+  const hl = document.createElement('div');
+  hl.setAttribute('aria-hidden', 'true');
+  hl.dataset.asciiCmdHighlight = '';
+  if (state.current.highlight) panel.insertBefore(hl, panel.firstElementChild);
+
+  /** A row's layout box in the panel, untouched by a pressed row's scale. */
+  const layoutBox = (row: HTMLElement): Box => {
+    if (row.offsetParent === undefined) return boxIn(panel, row);
+    let x = 0, y = 0;
+    for (let n: HTMLElement | null = row; n && n !== panel; n = n.offsetParent as HTMLElement | null) { x += n.offsetLeft; y += n.offsetTop; }
+    for (let n = row.parentElement; n && n !== panel; n = n.parentElement) { x -= n.scrollLeft; y -= n.scrollTop; }
+    return { x, y, w: row.offsetWidth, h: row.offsetHeight };
+  };
+  const place = (glide: boolean) => {
+    const row = rows()[sel];
+    if (!hl.parentElement) return;
+    if (!row || !isOpen) { delete hl.dataset.on; return; }
+    const b = layoutBox(row), snap = !glide || hl.dataset.on === undefined || reduced();
+    if (snap) hl.style.transition = 'none';
+    hl.style.translate = `${b.x}px ${b.y}px`;
+    hl.style.width = `${b.w}px`;
+    hl.style.height = `${b.h}px`;
+    hl.style.borderRadius = getComputedStyle(row).borderTopLeftRadius;
+    hl.dataset.on = '';
+    if (snap) { void hl.offsetWidth; hl.style.removeProperty('transition'); }
+  };
+
+  /** Rows a search brings in or moves resolve out of characters; rows that stay where they were are left alone. */
+  const resolveRows = () => {
+    const s = surface, all = rows();
+    const fresh = all.filter(row => { const y = layoutBox(row).y, was = seen.get(row); seen.set(row, y); return was === undefined || Math.abs(was - y) > 1; });
+    for (const fx of resolves) if (!all.includes(fx.row) || fresh.includes(fx.row)) fx.styles.restore();
+    resolves = resolves.filter(fx => all.includes(fx.row) && !fresh.includes(fx.row));
+    if (!s || !s.live || s.still() || busy || !isOpen) return;
+    const w = s.canvas.clientWidth || panel.offsetWidth, h = s.canvas.clientHeight || panel.offsetHeight, now = performance.now();
+    fresh.forEach((row, i) => {
+      const snap = snapshot(row, s.box, w, h, SCALE), blocks = blocksOf(snap, SCALE);
+      if (!blocks.length) return;
+      const left = Math.min(...blocks.map(b => b.x)), span = Math.max(1, Math.max(...blocks.map(b => b.x)) - left);
+      const styles = styleKeeper();
+      for (const child of [...row.children] as HTMLElement[]) styles.set(child, 'opacity', '0');
+      resolves.push({ row, snap, blocks, order: Float32Array.from(blocks, b => 0.72 * ((b.x - left) / span) + 0.28 * b.seed), start: now + i * RESOLVE_STAGGER, styles });
+    });
+    s.kick();
+  };
+
+  /**
+   * The AI row's shimmer: a crest crosses the row and the letters under it turn to characters and back. The row is masked
+   * out under the crest, so the HTML text and the characters never draw over each other.
+   */
+  let aiSnap: { row: HTMLElement; key: string; snap: HTMLCanvasElement; blocks: Block[] } | null = null;
+  const aiMask = styleKeeper();
+  const shimmer = (pen: CanvasRenderingContext2D, row: HTMLElement, b: Box, t: number, now: number) => {
+    const s = surface!, key = `${row.textContent}|${b.x}|${b.y}|${b.w}`;
+    if (aiSnap?.row !== row || aiSnap.key !== key) {
+      const snap = snapshot(row, s.box, s.canvas.clientWidth || panel.offsetWidth, s.canvas.clientHeight || panel.offsetHeight, SCALE);
+      aiSnap = { row, key, snap, blocks: blocksOf(snap, SCALE) };
+    }
+    const cx = b.x - CREST + (b.w + CREST * 2) * inOut(t), tick = Math.floor(now / 70);
+    for (const block of aiSnap.blocks) {
+      const d = (block.x + 2 - cx) / CREST;
+      if (d <= -1 || d >= 1) continue;
+      const strength = 1 - d * d;
+      // A few blocks drop out each tick, so the crest reads as characters turning over rather than a moving stamp.
+      if (hash(block.x + tick, block.y) > 0.35 + 0.65 * strength) continue;
+      pen.globalAlpha = Math.min(1, strength * 1.6);
+      pen.drawImage(aiSnap.snap, block.x * SCALE, block.y * SCALE, BLOCK_W * SCALE, BLOCK_H * SCALE, block.x, block.y, BLOCK_W, BLOCK_H);
+    }
+    pen.globalAlpha = 1;
+    const l = cx - b.x;
+    aiMask.set(row, 'mask-image', `linear-gradient(90deg, #000 ${l - CREST}px, transparent ${l - CREST * 0.35}px, transparent ${l + CREST * 0.35}px, #000 ${l + CREST}px)`);
+  };
+
   surface = mountSurface({
     host: panel,
-    // Over the content: the marker sits in the gutter on top of the row's own highlight, and flights draw while the content is hidden.
+    // Under the content, over the panel's fill and the highlight: the sweep lies behind the text, and flights draw while the content is hidden.
+    layer: 'under',
     look,
     ink: () => state.current.ink ?? '--ascii-ink-strong',
     kit: state,
@@ -71,8 +167,6 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     onFail: () => { surface = null; },
     paint: ({ pen, now, still, box }) => {
       pen.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-      const dt = then ? Math.min(48, now - then) : 16;
-      then = now;
       if (flight) {
         const f = flight, k = (now - f.start) / (f.closing ? CLOSE_MS : OPEN_MS);
         // A finished flight falls through, so an opened palette draws its marker in the same frame.
@@ -84,30 +178,44 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
         }
       }
       if (!isOpen || busy) return false;
+      let more = false;
+      resolves = resolves.filter(fx => {
+        const k = (now - fx.start) / RESOLVE_MS;
+        if (k >= 0.7 || still) fx.styles.restore();
+        if (k >= 1 || still || !panel.contains(fx.row)) { fx.styles.restore(); return false; }
+        more = true;
+        if (k > 0) drawBlocks(pen, fx.snap, fx.blocks, fx.order, house(k) * 1.04, (_, away) => [14 * away, 0], 1 - clamp((k - 0.7) / 0.3), 0.42);
+        return true;
+      });
       const row = rows()[sel];
-      if (!row) return false;
-      // The row's highlight stays crisp HTML; the characters mark it from the gutter, where no text is.
-      const b = box(row), was = band?.y ?? b.y;
-      if (!band || still) band = { ...b };
-      else { const a = 1 - Math.exp(-dt / 45); band = { x: b.x, w: b.w, y: band.y + (b.y - band.y) * a, h: band.h + (b.h - band.h) * a }; }
-      glow += ((lantern ? 1 : 0) - glow) * (still ? 1 : 1 - Math.exp(-dt / 70));
-      const x = band.x + 4, len = Math.max(4, band.h - 14), top = band.y + 7;
-      if (Math.abs(was - band.y) > 0.5) { pen.fillStyle = grey(0.32); pen.fillRect(x, Math.min(was, band.y) + 7, 6, Math.abs(was - band.y) + len); }
-      pen.fillStyle = grey(0.7 + 0.3 * glow);
-      pen.beginPath(); pen.roundRect(x, top, 6, len, 3); pen.fill();
-      return Math.abs(b.y - band.y) > 0.3 || Math.abs((lantern ? 1 : 0) - glow) > 0.01;
+      if (row && !still && row.matches(state.current.ai)) {
+        if (row !== sweepRow) { sweepRow = row; sweepFrom = now + SWEEP_DELAY; }
+        const since = now - sweepFrom, t = since >= 0 ? (since % SWEEP_EVERY) / SWEEP_MS : -1;
+        if (t >= 0 && t < 1 && !resolves.some(fx => fx.row === row)) { shimmer(pen, row, box(row), t, now); more = true; }
+        else {
+          aiMask.restore();
+          if (more) return true;
+          // Between passes nothing moves: wake for the next one instead of drawing empty frames.
+          if (sweepTimer) clearTimeout(sweepTimer);
+          const wait = since >= 0 ? SWEEP_EVERY - (since % SWEEP_EVERY) : -since;
+          sweepTimer = setTimeout(() => { sweepTimer = 0; surface?.kick(); }, Math.max(16, wait)) as unknown as number;
+        }
+      } else { sweepRow = null; aiMask.restore(); }
+      return more;
     },
   });
   if (surface) panel.dataset.gpu = '';
 
-  const sync = () => {
+  const sync = (glide = true) => {
     const all = rows();
     sel = all.length ? Math.min(Math.max(0, sel), all.length - 1) : 0;
+    place(glide);
     if (!state.current.manage) return;
     all.forEach((row, i) => row.setAttribute('aria-selected', String(i === sel)));
     const field = input(), id = all[sel]?.id;
     if (field && id) field.setAttribute('aria-activedescendant', id);
   };
+  const remember = () => { for (const row of rows()) seen.set(row, layoutBox(row).y); };
   const full = () => `inset(0 round ${getComputedStyle(panel).borderTopLeftRadius || '0px'})`;
   const triggerInset = () => {
     const t = state.current.trigger, W = panel.offsetWidth, H = panel.offsetHeight;
@@ -137,11 +245,12 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
   const open = (focus = true) => {
     if (isOpen && !busy) { if (focus) input()?.focus({ preventScroll: true }); return; }
     clearTimer();
-    isOpen = true; busy = false; band = null; sel = 0;
+    isOpen = true; busy = false; sel = 0;
     panel.removeAttribute('hidden');
     panel.dataset.open = '';
     state.current.trigger?.setAttribute('aria-expanded', 'true');
-    sync();
+    sync(false);
+    remember();
     if (focus) input()?.focus({ preventScroll: true });
     state.current.onOpenChange?.(true);
     if (reduced()) { surface?.kick(); return; }
@@ -158,6 +267,9 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
       timer = 0; busy = false; isOpen = false; flight = null;
       delete panel.dataset.state; delete panel.dataset.open;
       hideContent(false);
+      place(false);
+      for (const fx of resolves) fx.styles.restore();
+      resolves = []; aiMask.restore(); aiSnap = null;
       panel.setAttribute('hidden', '');
       state.current.trigger?.setAttribute('aria-expanded', 'false');
       if (refocus) state.current.trigger?.focus({ preventScroll: true });
@@ -185,6 +297,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     if (!row || busy) return;
     select(index);
     surface?.field.pulse({ element: row, strength: 0.6 });
+    if (row.matches(state.current.ai)) { sweepRow = row; sweepFrom = performance.now(); }
     row.dataset.run = '';
     state.current.onRun?.(index, row);
     const finish = () => { delete row.dataset.run; if (state.current.closeOnRun) close(); };
@@ -197,7 +310,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     if (event.key === 'Escape' && isOpen) { event.preventDefault(); event.stopPropagation(); close(); return; }
     if (event.target !== input() && !rows().includes(event.target as HTMLElement)) return;
     const to = event.key === 'ArrowDown' ? sel + 1 : event.key === 'ArrowUp' ? sel - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? n - 1 : null;
-    if (to !== null) { event.preventDefault(); lantern = false; select(to); return; }
+    if (to !== null) { event.preventDefault(); select(to); return; }
     if (event.key === 'Enter') { event.preventDefault(); run(); }
   };
   const rowOf = (event: Event) => {
@@ -208,12 +321,15 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     if (!state.current.manage) return;
     const i = rowOf(event);
     if (i < 0) return;
-    lantern = true;
-    if (i !== sel) select(i); else surface?.kick();
+    if (i !== sel) select(i);
   };
-  const onLeave = () => { lantern = false; surface?.kick(); };
   const onClick = (event: Event) => { if (!state.current.manage) return; const i = rowOf(event); if (i >= 0) run(i); };
-  const onInput = () => { if (state.current.manage) { lantern = false; band = null; select(0); } };
+  const onInput = () => { if (state.current.manage) { sel = 0; sync(false); } };
+  // A framework renders the search's rows after the input event, so the rows are watched rather than read on input.
+  const watch = typeof MutationObserver === 'function' ? new MutationObserver(() => { if (!isOpen) return; sync(false); resolveRows(); }) : null;
+  watch?.observe(panel, { childList: true, subtree: true });
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => place(false)) : null;
+  resize?.observe(panel);
   const onTrigger = () => { if (isOpen) close(); else open(true); };
   const onHotkey = (event: KeyboardEvent) => {
     const key = state.current.hotkey;
@@ -229,7 +345,6 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
 
   panel.addEventListener('keydown', onKey);
   panel.addEventListener('pointermove', onMove);
-  panel.addEventListener('pointerleave', onLeave);
   panel.addEventListener('click', onClick);
   panel.addEventListener('input', onInput);
   const trigger = state.current.trigger;
@@ -248,10 +363,16 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     get selected() { return sel; },
   }, () => {
     clearTimer();
+    if (sweepTimer) clearTimeout(sweepTimer);
     hideContent(false);
+    for (const fx of resolves) fx.styles.restore();
+    aiMask.restore();
+    watch?.disconnect();
+    resize?.disconnect();
+    hl.remove();
+    panelStyles.restore();
     panel.removeEventListener('keydown', onKey);
     panel.removeEventListener('pointermove', onMove);
-    panel.removeEventListener('pointerleave', onLeave);
     panel.removeEventListener('click', onClick);
     panel.removeEventListener('input', onInput);
     trigger?.removeEventListener('click', onTrigger);

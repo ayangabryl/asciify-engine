@@ -1,17 +1,17 @@
 ---
 name: asciify-engine
-description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, art styles and export, hover and motion, layered typography and rendering performance.
+description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.17.0"
+  tested-engine: "4.18.0"
   updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.17.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.18.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
-- Components: https://asciify.org/components · Backgrounds: https://asciify.org/backgrounds
+- Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
 - Playground: https://asciify.org/editor · API documentation: https://asciify.org/docs/api
 - Repository: https://github.com/ayangabryl/asciify-engine
 
@@ -41,6 +41,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | Their video in characters on the page | Kit `asciiVideo` |
 | Their photo, video or GIF converted, optionally answering the cursor | Advanced: `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` |
 | A full-bleed field with a look the kit has no option for | Advanced: `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)) |
+| Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
 | Several media and text layers in one artwork | Advanced: `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
 | A text banner or lettering | Advanced: `asciifyText` / `renderTextToCanvas` |
@@ -69,7 +70,7 @@ const bg = background(pricing, { preset: halftone, clear: pricingCopy });
 
 The 26 presets, as export → `id` (name):
 
-- GPU glyph field (WebGL2, shares the context budget): `drift` → `drift` (Drift), `halftone` → `halftone` (Halftone), `wordField` → `field` (Field), `fluid` → `fluid` (Fluid).
+- GPU glyph field (WebGL2, shares the context budget): `drift` → `drift` (Drift), `halftone` → `halftone` (Halftone), `swell` → `swell` (Swell), `wordField` → `field` (Field), `fluid` → `fluid` (Fluid).
 - 2D canvas (no WebGL): `caustics` → `caustics` (Caustics), `contour` → `contour` (Contour), `facet` → `facet` (Facet), `etch` → `etch` (Etch), `moire` → `moire` (Moiré), `weave` → `weave` (Weave), `veil` → `veil` (Veil), `dune` → `dune` (Dune), `wave` → `wave` (Wave), `aurora` → `aurora` (Aurora), `noise` → `noise` (Noise), `silk` → `silk` (Silk), `rain` → `rain` (Rain), `stars` → `stars` (Stars), `pulse` → `pulse` (Pulse), `grid` → `grid` (Grid), `voidWell` → `void` (Void), `morph` → `morph` (Morph), `fire` → `fire` (Fire), `dna` → `dna` (DNA), `terrain` → `terrain` (Terrain), `circuit` → `circuit` (Circuit).
 
 `voidWell` is the export for the `void` preset, because `void` is reserved in JavaScript. `wordField`'s id is `field`, the name the site uses. `fieldBackground` is separate: its `hero`, `brand` and `notFound` presets are the asciify.org hero ground, the same ground in the brand colour, and the 404.
@@ -191,7 +192,7 @@ Keep these as sibling layers. A transformed or isolated content wrapper can trap
 
 ## Studio composition and export
 
-For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). `/studio` is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop.
+For a finished artwork in a ready look (wallpaper, poster, cover, print), start from [references/looks.md](references/looks.md): 22 looks, each with the prompt, exact settings, and wallpaper/poster/loop export sizes. For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). `/studio` is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop.
 
 ## GPU glyph fields
 

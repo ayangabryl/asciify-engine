@@ -24,14 +24,14 @@ describe('pullRefresh', () => {
     expect(p.state).toBe('pulling');
     expect(el.setPointerCapture).toHaveBeenCalled();
     dom.advance();
-    expect(translate(feed)).toBeGreaterThan(88);
+    expect(translate(feed)).toBeGreaterThan(64);
     expect(dom.pen().fillRect).toHaveBeenCalled();
     el.dispatch('pointerup');
     expect(p.state).toBe('refreshing');
     expect(onRefresh).toHaveBeenCalledOnce();
     expect(el.getAttribute('aria-busy')).toBe('true');
     dom.settle(60);
-    expect(translate(feed)).toBeCloseTo(88, 0);
+    expect(translate(feed)).toBeCloseTo(48, 0);
     finish();
     await vi.advanceTimersByTimeAsync(600);
     expect(p.state).toBe('done');

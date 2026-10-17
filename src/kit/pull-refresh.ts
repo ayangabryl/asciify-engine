@@ -1,6 +1,6 @@
 import type { GlyphFieldOptions } from '../field';
 import { drawCover, snapshot, toneOf } from './capture';
-import { clamp, easeOut, handle, mountSurface, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, easeOut, handle, mountSurface, smoothstep, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 export type PullState = 'idle' | 'pulling' | 'refreshing' | 'done';
 
@@ -9,7 +9,7 @@ export interface PullRefreshOptions extends KitOptions {
   onRefresh: () => unknown;
   /** The element that moves down with the pull. Default the first child. */
   content?: HTMLElement | null;
-  /** Pull distance in px that triggers a refresh on release. Default 88. */
+  /** Pull distance in px that triggers a refresh on release. Default 64. */
   threshold?: number;
   /** What a screen reader hears. */
   messages?: { refreshing?: string; done?: string; failed?: string };
@@ -25,8 +25,9 @@ export interface PullRefreshHandle extends KitHandle<PullRefreshOptions> {
   readonly state: PullState;
 }
 
-const DEFAULTS = { threshold: 88 };
-const ORB = 28, MIN_SPIN = 600, CHECK_MS = 300, HOLD_MS = 320, REVEAL_MS = 760, HANDOVER = 0.3;
+const DEFAULTS = { threshold: 64 };
+/** The indicator is iOS-sized: a 26px ring; the content rests 48px down while it spins. */
+const RING = 11, STROKE = 4, REST = 48, POP_MS = 260, OPEN_MS = 240, MIN_SPIN = 600, CHECK_MS = 300, HOLD_MS = 320, REVEAL_MS = 760, HANDOVER = 0.3;
 const rubber = (raw: number) => 128 * (1 - Math.exp(-Math.max(0, raw) / 128));
 
 interface Spring { x: number; v: number; to: number }
@@ -43,15 +44,15 @@ function drawCheck(pen: CanvasRenderingContext2D, x: number, y: number, size: nu
   const p = [[-0.82, 0.02], [-0.26, 0.56], [0.86, -0.6]].map(([px, py]) => [x + px * size, y + py * size]);
   const length = Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) + Math.hypot(p[2][0] - p[1][0], p[2][1] - p[1][1]);
   pen.save();
-  pen.strokeStyle = '#fff'; pen.lineWidth = size * 0.44; pen.lineCap = 'round'; pen.lineJoin = 'round';
+  pen.strokeStyle = '#fff'; pen.lineWidth = STROKE + 0.5; pen.lineCap = 'round'; pen.lineJoin = 'round';
   pen.setLineDash([length * t, length]);
   pen.beginPath(); pen.moveTo(p[0][0], p[0][1]); pen.lineTo(p[1][0], p[1][1]); pen.lineTo(p[2][0], p[2][1]); pen.stroke();
   pen.restore();
 }
 
 /**
- * Pull to refresh: dragging the content down at the top gathers an orb of characters in the gap, which tightens into a
- * ring at the threshold. Let go past it and the ring spins while `onRefresh` runs, then draws a check and springs back.
+ * Pull to refresh: dragging the content down at the top draws a small ring of characters round in the gap, closing it at the
+ * threshold with a small pop. Let go past it and the ring opens into a spinning arc while `onRefresh` runs, then draws a check and springs back.
  */
 export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): PullRefreshHandle {
   const state = { current: { ...DEFAULTS, ...options } };
@@ -59,7 +60,7 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
   const content = () => state.current.content ?? (element.children[0] as HTMLElement | undefined) ?? null;
   const live = srOnly('', true);
   const d: Spring = { x: 0, v: 0, to: 0 };
-  let phase: PullState = 'idle', held = false, pulling = false, y0 = 0, pointer = -1, spin = 0, at = 0, last = 0, ok = true;
+  let phase: PullState = 'idle', held = false, pulling = false, y0 = 0, pointer = -1, spin = 0, at = 0, last = 0, ok = true, armed = 0;
   let surface: Surface | null = null;
   /** Rows resolving in: a still of each in characters, drawn where the row is now; `start` is Infinity while held back. */
   let fresh: { row: HTMLElement; snap: HTMLCanvasElement | null; start: number; opacity: string; transition: string; shown: boolean; photos: HTMLImageElement[] }[] = [];
@@ -83,33 +84,38 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
       last = now;
       let moving = held;
       if (still) { d.x = d.to; d.v = 0; } else if (!held) moving = stepSpring(d, dt) || moving;
-      if (phase === 'refreshing') { spin += dt * 7.5; moving = true; }
+      if (phase === 'refreshing') { spin += dt * 6.5; moving = true; }
       if (phase === 'done' && now - at < CHECK_MS + 20) moving = true;
       const node = content();
       if (node) styles.set(node, 'translate', `0 ${Math.max(0, d.x).toFixed(2)}px`);
       pen.setTransform(scale, 0, 0, scale, 0, 0);
-      const gap = Math.max(0, d.x), cx = w / 2, cy = gap / 2, q = clamp(gap / state.current.threshold);
-      if (gap > 0.5) {
+      const o = state.current, gap = Math.max(0, d.x), q = clamp(gap / o.threshold), rest = Math.min(o.threshold, REST);
+      // The ring grows in with the first part of the pull and shrinks away with the spring back, so it is never cut by the gap.
+      const size = phase === 'idle' || phase === 'pulling' ? smoothstep(0.1, 0.55, q) : clamp(gap / rest), cx = w / 2, cy = Math.min(gap, rest) / 2 + Math.max(0, gap - rest) * 0.25;
+      if (phase === 'pulling' && q >= 1 && !armed) armed = now;
+      if (q < 1) armed = 0;
+      const pop = armed && !still && now - armed < POP_MS ? Math.sin(Math.PI * ((now - armed) / POP_MS)) * 0.14 : 0;
+      if (pop) moving = true;
+      if (gap > 0.5 && size > 0.01) {
         pen.save();
         pen.beginPath(); pen.rect(0, 0, w, gap); pen.clip();
+        pen.translate(cx, cy); pen.scale(size * (1 + pop), size * (1 + pop));
+        pen.lineWidth = STROKE; pen.lineCap = 'round';
         if (phase === 'idle' || phase === 'pulling') {
-          // The orb gathers with the pull: wider and denser until the threshold, where it tightens into a ring.
-          const r = 10 + (ORB + 4) * q, glow = pen.createRadialGradient(cx, cy, 0, cx, cy, r);
-          glow.addColorStop(0, `rgba(255,255,255,${0.25 + 0.75 * q * q})`);
-          glow.addColorStop(0.55, `rgba(255,255,255,${0.12 + 0.5 * q * q})`);
-          glow.addColorStop(1, 'rgba(255,255,255,0)');
-          pen.fillStyle = glow;
-          pen.fillRect(cx - r, cy - r, r * 2, r * 2);
-          if (q >= 1) { pen.strokeStyle = 'rgba(255,255,255,.9)'; pen.lineWidth = 8; pen.beginPath(); pen.arc(cx, cy, ORB, 0, Math.PI * 2); pen.stroke(); }
+          // The arc is drawn round with the pull; past the threshold it turns on with the extra distance.
+          const turn = -Math.PI / 2 + Math.max(0, gap - o.threshold) * 0.03;
+          pen.strokeStyle = `rgba(255,255,255,${0.55 + 0.45 * q})`;
+          pen.beginPath(); pen.arc(0, 0, RING, turn, turn + Math.PI * 2 * Math.max(0.02, q)); pen.stroke();
         } else {
           const k = phase === 'done' && ok ? (still ? 1 : easeOut((now - at) / CHECK_MS)) : 0;
-          pen.lineWidth = 9; pen.lineCap = 'round';
-          for (let i = 0; i < 18; i++) {
-            const a = spin + (i / 18) * Math.PI * 1.5;
-            pen.strokeStyle = `rgba(255,255,255,${(0.15 + 0.85 * (i / 17)) * (1 - k) * (phase === 'done' && !ok ? 0.4 : 1)})`;
-            pen.beginPath(); pen.arc(cx, cy, ORB, a, a + (Math.PI * 1.5) / 18 + 0.02); pen.stroke();
+          // The closed ring opens into a comet as the refresh starts, rather than switching to it.
+          const open = phase === 'refreshing' && !still ? easeOut((now - at) / OPEN_MS) : 1, n = 24, span = Math.PI * 2 * (1 - 0.22 * open);
+          for (let i = 0; i < n; i++) {
+            const a = spin - Math.PI / 2 + (i / n) * span, fade = 1 - open * 0.85 * (1 - i / (n - 1));
+            pen.strokeStyle = `rgba(255,255,255,${fade * (1 - k) * (phase === 'done' && !ok ? 0.4 : 1)})`;
+            pen.beginPath(); pen.arc(0, 0, RING, a, a + span / n + 0.02); pen.stroke();
           }
-          if (k > 0) drawCheck(pen, cx, cy, ORB - 2, k);
+          if (k > 0) drawCheck(pen, 0, 0, RING, k);
         }
         pen.restore();
       }
@@ -183,7 +189,7 @@ export function pullRefresh(element: HTMLElement, options: PullRefreshOptions): 
     const o = state.current, still = !surface || surface.still();
     phase = 'refreshing';
     held = pulling = false;
-    d.to = o.threshold;
+    d.to = Math.min(o.threshold, REST);
     at = performance.now();
     element.setAttribute('aria-busy', 'true');
     say(o.messages?.refreshing ?? 'Refreshing.');

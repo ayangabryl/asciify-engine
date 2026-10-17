@@ -4,20 +4,23 @@ import { easeOut, handle, isDark, mountSurface, srOnly, styleKeeper, type Box, t
 export type PillTone = 'green' | 'amber' | 'red' | 'neutral' | 'new';
 
 export interface PillOptions extends KitOptions {
-  /** The tone of a pill without `data-tone`. `new` is a solid pill that takes a sheen on hover. Default `neutral`. */
+  /** The tone of a pill without `data-tone`. `new` is a solid pill led by a sparkle. Default `neutral`. */
   tone?: PillTone;
-  /** A live state such as Live or Syncing: the indicator breathes and a sweep crosses the pill every few seconds. `data-live` on a pill wins. Default false. */
+  /**
+   * A live state: the indicator moves. Amber turns a half-filled dot like a spinner (syncing); any other tone breathes its dot.
+   * `data-live` on a pill wins. Default false. Neutral shows an open ring, and a pill turning red blinks its dot open twice.
+   */
   live?: boolean;
-  /** A three-character indicator on status pills, drawn over the pill's `[data-dot]` element (one is added when missing). Default true. */
+  /** A one-cell glyph before the label, drawn over the pill's `[data-dot]` element (one is added when missing): a status dot, or a `new` pill's sparkle. Default true. */
   indicator?: boolean;
-  /** A gradient sheen of characters passes once across a `new` pill when the pointer enters it. Default true. */
+  /** A `new` pill's sparkle twinkles when the pointer enters it. Default true. */
   sheen?: boolean;
   /** Glyph hues to paint, as `[r, g, b]` 0–255, for the light and dark ground. */
   tones?: Partial<Record<'light' | 'dark', Partial<Record<PillTone, [number, number, number]>>>>;
 }
 
 export interface PillHandle extends KitHandle<PillOptions> {
-  /** Runs the sheen once across one pill, or every `new` pill. */
+  /** Twinkles the sparkle on one pill, or on every `new` pill. */
   sheen(pill?: HTMLElement): void;
   /** Sets a count pill (`data-count`) to `value`; only the changed digits roll. Without `pill`, the first count pill. */
   count(value: number | string, pill?: HTMLElement): void;
@@ -26,21 +29,34 @@ export interface PillHandle extends KitHandle<PillOptions> {
 }
 
 const DEFAULTS = { tone: 'neutral' as PillTone, live: false, indicator: true, sheen: true };
-/** Glyph hues painted into the source. The field normalises each hue and takes the glyph from its brightness. */
+/** Glyph hues painted into the source. The field normalises each hue and takes the glyph from its brightness. `new` is the neutral sparkle. */
 export const PILL_TONES: Record<'light' | 'dark', Record<PillTone, [number, number, number]>> = {
-  light: { green: [22, 150, 82], amber: [200, 128, 10], red: [214, 52, 52], neutral: [120, 120, 114], new: [98, 72, 214] },
-  dark: { green: [120, 240, 170], amber: [255, 206, 110], red: [255, 156, 156], neutral: [200, 200, 192], new: [180, 164, 255] },
+  light: { green: [22, 150, 82], amber: [214, 138, 8], red: [214, 52, 52], neutral: [120, 120, 114], new: [255, 255, 255] },
+  dark: { green: [120, 240, 170], amber: [255, 206, 110], red: [255, 156, 156], neutral: [200, 200, 192], new: [255, 255, 255] },
 };
 /*
- * Paint levels run 0 (empty) to 1 (densest). Light grounds keep every tone under 0.32 and stretch the ramp over that range, so dense
- * characters stay dark enough to read on a pale tint. Leading spaces swallow the faint spill the field's sampling picks up from a neighbour.
+ * The field picks a glyph by brightness, so the charset is a lookup table: each glyph owns a band of brightness and the kit
+ * paints the middle of a band to choose it. The field colours a glyph by brightness too, so a light ground keeps the bands low
+ * (deep, saturated glyphs) and a dark one high. A spinner's four quarters sit in four narrow bands of their own, above the dot
+ * on a dark ground so they stay as bright as it. The sparkle on a `new` pill sits wherever it contrasts with the solid fill:
+ * near white over ink on a light ground, near black on a dark one.
  */
-const RAMP = { light: { charset: '  .:+*' + '#'.repeat(15), top: 0.32 }, dark: { charset: '   .:+*' + '#'.repeat(4), top: 0.9 } };
-const SHEEN = [[255, 130, 225], [205, 175, 255], [120, 215, 255]];
-const CELL = 8, ASPECT = 0.6, BREATH = 1800, SWEEP_EVERY = 4200, SWEEP = 1100, ROLL = 460, ROLL_STAGGER = 70, SHEEN_MS = 900, TONE = 240;
+const BANDS = {
+  light: [[0.03, ' '], [0.08, '·'], [0.13, '•'], [0.18, '○'], [0.5, '●'], [0.56, '◐'], [0.62, '◓'], [0.68, '◑'], [0.74, '◒'], [0.8, '●'], [0.88, '✧'], [2, '✦']],
+  dark: [[0.02, ' '], [0.06, '✦'], [0.1, '✧'], [0.2, '·'], [0.3, '•'], [0.38, '○'], [0.64, '●'], [0.68, '◐'], [0.72, '◓'], [0.76, '◑'], [0.8, '◒'], [2, '●']],
+} as const;
+const glyphAt = (theme: 'light' | 'dark', glyph: string, at = 0.5) => {
+  const bands = BANDS[theme], i = bands.findIndex(([, g]) => g === glyph), lo = i > 0 ? bands[i - 1][0] : 0;
+  return lo + (Math.min(bands[i][0], 1) - lo) * at;
+};
+const ramp = (bands: readonly (readonly [number, string])[]) =>
+  Array.from({ length: 96 }, (_, i) => bands.find(([edge]) => i / 95 < edge)![1]).join('');
+const RAMP = { light: ramp(BANDS.light), dark: ramp(BANDS.dark) };
+const SPIN = ['◐', '◓', '◑', '◒'], TWINKLE = ['✧', '·', '✧', '✦', '✧', '✦'];
+/** Square cells sampled exactly, so a glyph never spills into the next cell. */
+const CELL = 12, BREATH = 2200, SPIN_MS = 130, BLINK = 640, ROLL = 460, ROLL_STAGGER = 70, SHEEN_MS = 720, TONE = 240;
 
 const mix = (a: number[], b: number[], k: number) => a.map((v, i) => v + (b[i] - v) * k);
-const gauss = (d: number, s: number) => Math.exp(-((d / s) ** 2));
 /** `hue` at full saturation, scaled so its luminance (the field's tone) is `tone`. */
 function toned(hue: number[], tone: number) {
   const top = Math.max(1, ...hue), n = hue.map(v => (v / top) * 255), lum = (0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2]) / 255;
@@ -54,19 +70,17 @@ export const pillTone = (pill: HTMLElement, fallback: PillTone): PillTone => (is
 
 export interface PillLane { x: number; y: number; w: number }
 /**
- * Field cells tile the canvas from its top-left corner in whole device pixels. A pill's lane is the one cell row nearest its centre,
- * between the first and last whole columns that clear its rounded ends by 5px.
+ * Field cells tile the canvas from its top-left corner in whole device pixels. A pill's lane is the one cell row nearest its
+ * centre, across the pill less 2px either side; the characters are drawn in whole cells inside it.
  */
 export function pillLane(b: Box, cw: number, ch: number): PillLane {
-  const y = Math.round((b.y + b.h / 2) / ch - 0.5) * ch, x = Math.ceil((b.x + 5) / cw) * cw, right = Math.floor((b.x + b.w - 5) / cw) * cw;
-  return { x, y, w: Math.max(0, right - x) };
+  return { x: b.x + 2, y: Math.round((b.y + b.h / 2) / ch - 0.5) * ch, w: Math.max(0, b.w - 4) };
 }
-/** The field shows only through the lanes, so a stray character can never reach a pill's edge. */
+/** The field shows only through the lanes, each a stadium inside its pill, so a stray character can never reach a pill's edge. */
 export function laneClip(lanes: PillLane[], ch: number) {
-  const f = (n: number) => n.toFixed(2), r = 2;
+  const f = (n: number) => n.toFixed(2), r = ch / 2;
   const d = lanes.filter(l => l.w > 2 * r).map(({ x, y, w }) =>
-    `M${f(x + r)} ${f(y)}H${f(x + w - r)}Q${f(x + w)} ${f(y)} ${f(x + w)} ${f(y + r)}V${f(y + ch - r)}Q${f(x + w)} ${f(y + ch)} ${f(x + w - r)} ${f(y + ch)}` +
-    `H${f(x + r)}Q${f(x)} ${f(y + ch)} ${f(x)} ${f(y + ch - r)}V${f(y + r)}Q${f(x)} ${f(y)} ${f(x + r)} ${f(y)}Z`).join('');
+    `M${f(x + r)} ${f(y)}H${f(x + w - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x + w - r)} ${f(y + ch)}H${f(x + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x + r)} ${f(y)}Z`).join('');
   return d ? `path("${d}")` : 'inset(50%)';
 }
 
@@ -78,8 +92,8 @@ function container(elements: HTMLElement[]) {
 }
 
 /**
- * Pills and badges with a strip of characters in their tone: a breathing live indicator, a sweep across live states, a sheen on
- * `new` pills and rolling digits on count pills. One element gets a field under its text; a list shares one field over their common
+ * Pills and badges whose characters stay inside them: a glyph dot in each status pill's tone that breathes while live, turns
+ * while syncing and blinks on failure, a sparkle on `new` pills and rolling digits on count pills. One element gets a field under its text; a list shares one field over their common
  * container (one WebGL context for all), with each pill's labels lifted above it.
  */
 export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillOptions = {}): PillHandle {
@@ -105,9 +119,29 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
   read();
   const theme = () => (surface?.dark() ?? (host ? isDark(host) : true) ? 'dark' : 'light');
   const look = (): GlyphFieldOptions => ({
-    mark: 'glyph', charset: RAMP[theme()].charset, font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
-    cellSize: CELL, cellAspect: ASPECT, glyphScale: 0.92, color: 'source', saturation: 1, shade: 0, ...state.current.look,
+    mark: 'glyph', charset: RAMP[theme()], font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
+    cellSize: CELL, cellAspect: 1, glyphScale: 1, color: 'source', saturation: 1, shade: 0, ...state.current.look,
   });
+  const cellOf = () => {
+    const { cellSize = CELL, cellAspect = 1 } = look(), ratio = Math.min(2, globalThis.devicePixelRatio || 1), device = Math.max(2, Math.round(cellSize * ratio));
+    return { ch: device / ratio, cw: Math.max(2, Math.round(device * cellAspect)) / ratio };
+  };
+  /*
+   * The field's grid is moved under the first status dot (or the first pill), so in the usual layout, pills in a column, nothing
+   * else moves. Any other pill off the grid is nudged by under half a cell, so its row and dot sit exactly on cells.
+   */
+  let grid: [number, number] = [0, 0];
+  const nudges = new Map<HTMLElement, [number, number]>();
+  /** `b` and `dot` as laid out, before any nudge. */
+  const nudge = (el: HTMLElement, b: Box, dot: Box | null, cw: number, ch: number) => {
+    const [ox, oy] = nudges.get(el) ?? [0, 0], snap = (v: number, c: number) => Math.round((v - c / 2) / c) * c + c / 2 - v;
+    const dx = dot ? snap(dot.x + dot.w / 2, cw) : 0, dy = snap(b.y + b.h / 2, ch);
+    if (Math.abs(dx - ox) > 0.01 || Math.abs(dy - oy) > 0.01) {
+      nudges.set(el, [dx, dy]);
+      styles.set(el, 'translate', `${dx.toFixed(2)}px ${dy.toFixed(2)}px`);
+    }
+    return { b: { ...b, x: b.x + dx, y: b.y + dy }, dot: dot && { ...dot, x: dot.x + dx, y: dot.y + dy } };
+  };
 
   let surface: Surface | null = null, mask = '';
   surface = !host ? null : mountSurface({
@@ -117,79 +151,96 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
     ink: () => state.current.ink,
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
+    // Two source pixels per cell (the canvas is sized to whole cells in paint), so a glyph never leaves a ghost in its neighbours.
+    resolution: (w, h) => { const { cw, ch } = cellOf(); return [Math.max(2, Math.round((w * 2) / cw)), Math.max(2, Math.round((h * 2) / ch))]; },
     onFail: () => { surface = null; restore(); },
-    onTheme: () => surface?.field.update({ charset: RAMP[theme()].charset }),
-    paint: ({ pen, now, still, dark, box }) => {
-      const o = state.current, t = dark ? 'dark' : 'light', palette = { ...PILL_TONES[t], ...o.tones?.[t] }, top = RAMP[t].top;
-      const ratio = Math.min(2, globalThis.devicePixelRatio || 1), ch = Math.round(CELL * ratio) / ratio, cw = Math.round(CELL * ratio * ASPECT) / ratio;
-      const colAt = (x: number) => Math.round(x / cw - 0.5) * cw;
-      const fill = (c: number[], u: number) => toned(c, u * top);
-      const lanes = pills.map(el => pillLane(box(el), cw, ch)), clip = laneClip(lanes, ch);
-      if (clip !== mask) { mask = clip; surface!.canvas.style.clipPath = clip; }
+    onTheme: () => surface?.field.update({ charset: RAMP[theme()] }),
+    paint: ({ pen, now, still, dark, box, width, w }) => {
+      const o = state.current, t = dark ? 'dark' : 'light', palette = { ...PILL_TONES[t], ...o.tones?.[t] }, at = (g: string, k?: number) => glyphAt(t, g, k);
+      const { cw, ch } = cellOf(), scale = width / w;
+      const put = (col: number, row: number, color: number[], level: number) => {
+        if (level <= 0) return;
+        pen.fillStyle = toned(color, level);
+        pen.fillRect(Math.round((col + 0.5) * cw * scale) - 1, Math.round((row + 0.5) * ch * scale) - 1, 2, 2);
+      };
       let busy = false;
+      const dots = pills.map(el => (kind(el) !== 'count' && o.indicator ? el.querySelector<HTMLElement>('[data-dot]') : null));
+      // Boxes in the host's frame, then the grid's offset: negative, so the canvas never spills past the host's right or bottom.
+      const raw = pills.map((el, i) => {
+        const b = box(el), d = dots[i] ? box(dots[i]!) : null, [ox, oy] = nudges.get(el) ?? [0, 0];
+        const lift = (r: Box) => ({ ...r, x: r.x + grid[0] - ox, y: r.y + grid[1] - oy });
+        return { b: lift(b), dot: d && lift(d) };
+      });
+      const anchor = raw.find((r, i) => r.dot && kind(pills[i]) === 'status') ?? raw.find(r => r.dot) ?? raw[0];
+      if (anchor) {
+        const off = (v: number, c: number) => { const m = (((v - c / 2) % c) + c) % c; return m > 1e-3 ? m - c : 0; };
+        const next: [number, number] = [anchor.dot ? off(anchor.dot.x + anchor.dot.w / 2, cw) : 0, off(anchor.b.y + anchor.b.h / 2, ch)];
+        if (Math.abs(next[0] - grid[0]) > 0.01 || Math.abs(next[1] - grid[1]) > 0.01) {
+          grid = next;
+          surface!.canvas.style.translate = `${grid[0].toFixed(2)}px ${grid[1].toFixed(2)}px`;
+        }
+      }
+      // A canvas of whole cells, so each cell is exactly two source pixels and its glyph is sampled from its own pixels only.
+      const css = surface!.canvas.style, fit = (size: number, g: number, c: number) => `${Math.max(1, Math.floor((size - g) / c)) * c}px`;
+      const cols = fit(host!.clientWidth, grid[0], cw), rows = fit(host!.clientHeight, grid[1], ch);
+      if (css.width !== cols || css.height !== rows) { css.width = cols; css.height = rows; surface!.field.resize(); busy = true; }
+      const placed = raw.map((r, i) => {
+        const shift = (x: Box) => ({ ...x, x: x.x - grid[0], y: x.y - grid[1] });
+        return nudge(pills[i], shift(r.b), r.dot && shift(r.dot), cw, ch);
+      });
+      const boxes = placed.map(p => p.b);
+      const lanes = boxes.map(b => pillLane(b, cw, ch)), clip = laneClip(lanes, ch);
+      if (clip !== mask) { mask = clip; surface!.canvas.style.clipPath = clip; }
       pills.forEach((el, i) => {
-        const { x: x0, y: y0, w } = lanes[i], what = kind(el);
-        if (w <= 0) return;
-        pen.save();
-        pen.beginPath(); pen.rect(x0, y0, w, ch); pen.clip();
+        const lane = lanes[i], what = kind(el), row = Math.round(lane.y / ch), first = Math.ceil(lane.x / cw), last = Math.floor((lane.x + lane.w) / cw) - 1;
+        if (last < first) return;
         if (what === 'status') {
-          const tone = tones.get(el)!, k = still ? 1 : easeOut((now - tone.at) / TONE);
-          if (k < 1) busy = true;
-          const color = mix(palette[tone.from], palette[tone.to], k), live = !still && isLive(el);
-          // A fine halftone sweep crosses a live pill once every few seconds.
-          if (live) {
+          const dot = placed[i].dot;
+          if (!dot) return;
+          const tone = tones.get(el)!, since = now - tone.at, mixed = still ? 1 : easeOut(since / TONE);
+          if (mixed < 1) busy = true;
+          const color = mix(palette[tone.from], palette[tone.to], mixed), live = !still && isLive(el);
+          const col = Math.floor((dot.x + dot.w / 2) / cw);
+          const rest = t === 'light' ? 0.55 : 0.7, swing = t === 'light' ? 0.35 : 0.25;
+          let level = tone.to === 'neutral' ? at('○') : tone.to === 'amber' && isLive(el) ? at('◐') : at('●', rest);
+          if (tone.to === 'red' && !still && since < BLINK) {
+            // A failure blinks the dot open twice as it lands.
             busy = true;
-            const p = ((now + i * 1300) % SWEEP_EVERY) / SWEEP;
-            if (p < 1) {
-              const crest = x0 - 12 + easeOut(p) * (w + 24);
-              for (let x = x0; x < x0 + w; x += 2) {
-                const u = 0.42 * gauss(x - crest, 9);
-                if (u > 0.05) { pen.fillStyle = fill(color, u); pen.fillRect(x, y0, 2, ch); }
-              }
-            }
+            if (Math.floor(since / (BLINK / 4)) % 2 === 0) level = at('○');
+          } else if (live && tone.to === 'amber') {
+            // Syncing: a half-filled dot turns clockwise.
+            busy = true;
+            level = at(SPIN[Math.floor((now + i * 90) / SPIN_MS) % 4]);
+          } else if (live) {
+            // Live: the dot breathes, deepening and brightening within its own glyph.
+            busy = true;
+            level = at('●', rest - swing * Math.cos(((now + i * 500) / BREATH) * Math.PI * 2));
           }
-          // The indicator: three characters that breathe while the state is live, '.#.' out to '*#*'.
-          const dot = el.querySelector<HTMLElement>('[data-dot]');
-          if (dot && o.indicator) {
-            const d = box(dot), c0 = colAt(d.x + d.w / 2);
-            const breath = live ? 0.5 - 0.5 * Math.cos((now / BREATH) * Math.PI * 2) : 0.6;
-            const core = tone.to === 'neutral' ? 0.7 : 1, side = core * (0.4 + 0.4 * breath);
-            pen.fillStyle = fill(color, side); pen.fillRect(c0 - cw, y0, cw * 3, ch);
-            pen.fillStyle = fill(color, core); pen.fillRect(c0, y0, cw, ch);
-          }
+          if (col >= first && col <= last) put(col, row, color, level);
         } else if (what === 'new') {
-          // A gradient sheen of characters passes once across the solid pill; only bright tones, so each character is a clean pastel.
-          const p = (now - (sheens.get(el) ?? -1e6)) / SHEEN_MS;
-          if (p < 1 && !still) {
-            busy = true;
-            const crest = x0 - 20 + easeOut(p) * (w + 40), fade = Math.sin(Math.PI * Math.min(1, p * 1.15));
-            for (let x = x0; x < x0 + w; x += 2) {
-              const u = (x - x0) / w, hue = u < 0.5 ? mix(SHEEN[0], SHEEN[1], u * 2) : mix(SHEEN[1], SHEEN[2], u * 2 - 1);
-              const level = fade * gauss(x - crest, 11);
-              if (level > 0.2) { pen.fillStyle = toned(hue, 0.55 + 0.4 * level); pen.fillRect(x, y0, 2, ch); }
-            }
-          }
+          // A sparkle leads the label and twinkles when the pointer arrives.
+          const dot = placed[i].dot;
+          if (!dot) return;
+          const p = (now - (sheens.get(el) ?? -1e6)) / SHEEN_MS, col = Math.floor((dot.x + dot.w / 2) / cw);
+          if (p < 1 && !still) busy = true;
+          if (col >= first && col <= last) put(col, row, palette.new, at(p < 1 && !still ? TWINKLE[Math.floor(p * TWINKLE.length)] : '✦'));
         } else {
           const roll = rolls.get(el), digits = counts.get(el)?.digits.children;
+          if (!digits) return;
           const k = roll ? (now - roll.at) / (ROLL + ROLL_STAGGER * 2) : 1;
-          if (digits) {
-            if (k >= 1 || still) for (const d of digits) { (d as HTMLElement).style.opacity = ''; (d as HTMLElement).style.translate = ''; }
-            else {
-              busy = true;
-              [...digits].forEach((node, j) => {
-                if (!roll!.changed[j]) return;
-                const digit = node as HTMLElement, g = box(digit), p = (now - roll!.at - j * ROLL_STAGGER) / ROLL;
-                // The real digit steps aside while its slot rolls up the glyph ramp, then settles back in.
-                const back = easeOut((p - 0.72) / 0.28);
-                digit.style.opacity = String(back); digit.style.translate = `0 ${(back - 1) * 3}px`;
-                if (p <= 0 || p >= 1) return;
-                pen.fillStyle = fill(palette.neutral, (0.3 + 0.7 * ((p * 2.6) % 1)) * Math.min(1, (1 - p) / 0.3));
-                pen.fillRect(g.x, y0, g.w, ch);
-              });
-            }
-          }
+          if (k >= 1 || still) { for (const d of digits) { (d as HTMLElement).style.opacity = ''; (d as HTMLElement).style.translate = ''; } return; }
+          busy = true;
+          [...digits].forEach((node, j) => {
+            if (!roll!.changed[j]) return;
+            const digit = node as HTMLElement, g = box(digit), p = (now - roll!.at - j * ROLL_STAGGER) / ROLL;
+            // The real digit steps aside while its cell turns through the dots, then settles back in.
+            const back = easeOut((p - 0.72) / 0.28);
+            digit.style.opacity = String(back); digit.style.translate = `0 ${(back - 1) * 3}px`;
+            if (p <= 0 || p >= 0.78) return;
+            const c = Math.min(last, Math.max(first, Math.floor((g.x + g.w / 2) / cw)));
+            put(c, row, palette.neutral, at(['·', '•', '○', '●'][Math.floor(p * 9) % 4]));
+          });
         }
-        pen.restore();
       });
       return busy;
     },
@@ -214,11 +265,11 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
         el.replaceChildren(live, digits);
         counts.set(el, { text, live, digits });
         undo.push(() => { const now = counts.get(el)?.text ?? text; if (now === text) el.replaceChildren(...saved); else el.textContent = now; });
-      } else if (what === 'status' && state.current.indicator && !el.querySelector('[data-dot]')) {
+      } else if (state.current.indicator && !el.querySelector('[data-dot]')) {
         const dot = document.createElement('span');
         dot.dataset.dot = '';
         dot.setAttribute('aria-hidden', 'true');
-        dot.setAttribute('style', 'display:inline-block;flex:none;width:15px;height:8px;margin-inline-end:4px;vertical-align:middle');
+        dot.setAttribute('style', `display:inline-block;flex:none;width:${CELL}px;height:${CELL}px;margin-inline-end:4px;vertical-align:middle`);
         el.prepend(dot);
         undo.push(() => dot.remove());
       }
@@ -249,7 +300,7 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
     for (const p of el ? [el] : pills.filter(p => kind(p) === 'new')) sheens.set(p, now);
     surface?.kick();
   }
-  // The pill under the pointer, from moves on the host, so a pointer already inside or a scripted one that only sends moves still runs the sheen.
+  // The pill under the pointer, from moves on the host, so a pointer already inside or a scripted one that only sends moves still twinkles the sparkle.
   let under: HTMLElement | null = null;
   function over(event: Event) {
     const target = event.target as Node | null, now = pills.find(p => target && p.contains(target)) ?? null;

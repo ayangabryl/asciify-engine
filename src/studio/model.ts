@@ -118,7 +118,7 @@ export const STUDIO_PALETTES: Record<string, readonly string[]> = {
   forest: ["#101f1b", "#355747", "#87a16f", "#e4e3ba"],
   ocean: ["#071b33", "#17577f", "#3fa7a4", "#d9efde"],
   newsprint: ["#191919", "#666666", "#aaaaaa", "#eee9df"],
-  custom: ["#080808", "#e8b900"],
+  custom: ["#0b0b0a", "#e6e3da"],
 };
 export interface StudioMask {
   kind: "rectangle" | "ellipse" | "brush";
@@ -230,7 +230,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   cellSize: 6,
   charset: " .:-=+*#%@",
   colorMode: "accent",
-  ink: "#e8b900",
+  ink: "#e6e3da",
   print: {...DEFAULT_STUDIO_PRINT},
   crop: { x: 0.5, y: 0.5, zoom: 1, rotation: 0 },
   warps: [],
@@ -238,7 +238,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   backdrop: {
     mode: "solid",
     color: "#080808",
-    color2: "#393323",
+    color2: "#1d1d1b",
     blur: 12,
     opacity: 1,
   },
@@ -247,7 +247,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
     contrast: 1,
     saturation: 1,
     grayscale: 0,
-    tint: "#e8b900",
+    tint: "#e6e3da",
     amount: 0,
     blend: "source-over",
     blackPoint: 0,
@@ -262,7 +262,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   dither: {
     algorithm: "none",
     palette: "mono",
-    colors: ["#080808", "#e8b900"],
+    colors: ["#080808", "#e6e3da"],
     amount: 1,
     scale: 2,
     threshold: 0.5,

@@ -4,7 +4,7 @@ const { mount, support } = vi.hoisted(() => ({ mount: vi.fn(), support: { on: tr
 vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyphField: mount }));
 
 import { asElement, useFakeDom, FakeImage } from './fake-dom-2b';
-import { dropzone, DROPZONE_DEFAULTS } from './dropzone';
+import { dropzone, DROPZONE_DEFAULTS, paintRing, ringGrid } from './dropzone';
 
 const dom = useFakeDom(mount, support);
 /** Every `<img>` the kit creates loads at once, as a 300 × 200 picture. */
@@ -15,7 +15,7 @@ function autoload() {
 const png = (name = 'cat.png', size = 2048, type = 'image/png') => new File([new Uint8Array(size)], name, { type });
 
 describe('dropzone', () => {
-  it('adds default content and a ring that breathes while a file is over it', () => {
+  it('adds default content and a ring that comes alive while a file is over it', () => {
     const zone = dom.element();
     const d = dropzone(asElement(zone));
     expect(zone.dataset.state).toBe('empty');
@@ -94,5 +94,24 @@ describe('dropzone', () => {
     await expect(d.download()).resolves.toBeNull();
     d.clear();
     expect(zone.querySelector('.ascii-drop-img')).toBeNull();
+  });
+
+  it('paints an even ring at rest, and chases and leans in while a file is over it', () => {
+    const grid = ringGrid(120, 80, 1);
+    const paint = (look: Parameters<typeof paintRing>[3]) => {
+      let out = new Uint8ClampedArray(0);
+      const pen = { createImageData: (w: number, h: number) => ({ data: (out = new Uint8ClampedArray(w * h * 4)) }), putImageData: vi.fn() };
+      paintRing(pen as unknown as CanvasRenderingContext2D, grid, 6, look);
+      return (c: number, r: number) => out[((r * 2) * grid.cols * 2 + c * 2) * 4] / 255;
+    };
+    const rest = paint({ tone: 0.3 });
+    const top = Array.from({ length: grid.cols - 8 }, (_, i) => rest(i + 4, 1));
+    expect(new Set(top.map(v => v.toFixed(2)))).toEqual(new Set(['0.30']));
+    expect(rest(grid.cols >> 1, 2)).toBe(0);
+    const over = paint({ tone: 0.3, glow: 1, phase: 0, near: { x: 4, y: 4 } });
+    const lit = Array.from({ length: grid.cols - 8 }, (_, i) => over(i + 4, 1));
+    expect(Math.min(...lit)).toBeGreaterThan(0.3);
+    expect(Math.max(...lit)).toBeGreaterThan(Math.min(...lit) + 0.2);
+    expect(over(4, 2)).toBeGreaterThan(over(grid.cols - 5, 2));
   });
 });

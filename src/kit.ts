@@ -69,6 +69,7 @@ export { background, backgroundCharset } from './kit/background';
 export type { BackgroundOptions, BackgroundHandle, BackgroundPreset, BackgroundContext, BackgroundRun, BackgroundSettings, BackgroundCursor, BackgroundCharset } from './kit/background';
 export { drift } from './kit/backgrounds/drift';
 export { halftone } from './kit/backgrounds/halftone';
+export { swell } from './kit/backgrounds/swell';
 export { wordField } from './kit/backgrounds/word-field';
 export { fluid } from './kit/backgrounds/fluid';
 export { aurora } from './kit/backgrounds/aurora';
@@ -96,5 +97,5 @@ export { weave } from './kit/backgrounds/weave';
 export { mountCanvas } from './kit/backgrounds/canvas';
 export type { TemplateDraw, TemplateFrame } from './kit/backgrounds/canvas';
 // core integration
-export { setFieldBudget, getFieldBudget, setGlobalLook, getGlobalLook, subscribeGlobalLook } from './kit/core-live';
-export type { GlobalLook } from './kit/core-live';
+export { setFieldBudget, getFieldBudget, setGlobalLook, getGlobalLook, subscribeGlobalLook, KIT_STYLES } from './kit/core-live';
+export type { GlobalLook, KitStyle } from './kit/core-live';

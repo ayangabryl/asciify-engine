@@ -19,7 +19,7 @@ Every function takes these options:
 | `reducedMotion` | the visitor's setting | `true` or `false` to override `prefers-reduced-motion`. Reduced motion draws each state settled, in one frame. |
 | `lazy` | `true` | Mount the field only near the viewport and release it far from it. `false` mounts at once, wherever the element is. See Performance and integration. |
 | `poster` | none | A still image under the field: shown until the first GPU frame, while the field is released, and in its place without WebGL. |
-| `globalLook` | `true` | `false` keeps this field's own characters when `setGlobalLook` re-skins the page. |
+| `globalLook` | `true` | `false` keeps this field's own characters and mark when `setGlobalLook` re-skins the page. |
 
 Every handle has `supported`, `field` (the underlying `GlyphField`, or `null` without WebGL), `update(options)`, `play()`, `pause()` and `destroy()`. `update` merges, and `look` merges key by key, so `update({ look: { cellSize: 6 } })` keeps an earlier `charset`; a look key set to `undefined` is removed, so the component's own value comes back. `update({ poster })` points the poster at a new still, such as the other theme's, without remounting. Components add their own methods, listed below.
 
@@ -102,37 +102,51 @@ Options: `blocks` (selector, default `[data-block]`; `reset()` fades loaded cont
 
 ## pill
 
-Pills and badges with one strip of characters each: the cell row nearest the pill's centre, clipped to whole cells that clear its rounded ends, so no character reaches the edge. The pill's own CSS draws its fill; the field adds a breathing three-character live indicator on status pills, a sweep across live states, a sheen on `new` pills and rolling digits on count pills. Pass one pill to put the field under its text, or a list to share one field (one WebGL context) over their common container; then each pill's labels are lifted above the field (`position: relative; z-index: 2`, bare text wrapped in a span).
+Pills and badges whose characters stay inside them. The pill's own CSS draws its fill and label; the field draws one glyph before the label and is clipped to a stadium one cell row tall inside each pill, so nothing reaches an edge or crosses the text. Status pills get a dot in their tone: it breathes while live, turns as a half-filled spinner (`◐◓◑◒`) while an amber pill is live (syncing), blinks open twice when a pill turns red, and is an open ring for `neutral`. A `new` pill gets a sparkle (`✦`) that twinkles when the pointer arrives. Count pills roll their changed digits through the dot glyphs. Pass one pill to put the field under its text, or a list to share one field (one WebGL context) over their common container; then each pill's labels are lifted above the field (`position: relative; z-index: 2`, bare text wrapped in a span).
 
 ```html
 <span class="pill" data-tone="green" data-live><span data-dot></span><span>Live</span></span>
-<span class="pill" data-tone="new">New</span>
+<span class="pill" data-tone="new"><span data-dot></span><span>New</span></span>
 <span class="pill" data-count>12</span>
 ```
 
 ```ts
 const pills = pill(document.querySelectorAll('.pill'));
 statusPill.dataset.tone = 'red'; delete statusPill.dataset.live;
-pills.refresh();  // tone changes ease over 240ms
+pills.refresh();  // tone changes ease over 240ms; red blinks the dot
 pills.count(14);  // only the changed digits roll
 ```
 
-Kinds: `data-count` makes a count pill, `data-tone="new"` a sheen pill, anything else a status pill. Options: `tone` (fallback for `data-tone`: `green | amber | red | neutral | new`, default `neutral`), `live` (fallback for `data-live`: the indicator breathes from `.#.` to `*#*` and a sweep crosses every few seconds; default false), `indicator` (draw the indicator over the pill's `[data-dot]`, adding a 15px one when missing; default true), `sheen` (when the pointer moves onto a `new` pill, default true), `tones` (`{ light, dark }` maps of `[r, g, b]` glyph hues). Methods: `sheen(pill?)`, `count(value, pill?)`, `refresh()`. Count pills keep a visually hidden copy of the number for screen readers.
+Kinds: `data-count` makes a count pill, `data-tone="new"` a sparkle pill, anything else a status pill. Options: `tone` (fallback for `data-tone`: `green | amber | red | neutral | new`, default `neutral`), `live` (fallback for `data-live`; default false), `indicator` (draw the glyph over the pill's `[data-dot]`, adding a 12px one when missing; default true), `sheen` (twinkle a `new` pill's sparkle when the pointer moves onto it, default true), `tones` (`{ light, dark }` maps of `[r, g, b]` glyph hues; the defaults are `PILL_TONES`, which also suit the pills' CSS text and fill). Methods: `sheen(pill?)` (twinkle), `count(value, pill?)`, `refresh()`. Count pills keep a visually hidden copy of the number for screen readers.
+
+The field uses square 12px cells sampled exactly, so a glyph never leaves a ghost in its neighbours. It moves its grid under the first status dot and nudges any other pill by under half a cell (inline `translate`), so every glyph sits centred; lay pills out in a column (same width, same edge) and rows on multiples of 12px and nothing moves at all. Keep pills at least one cell from the shared container's right and bottom edge. The charset is the kit's own glyph table, so `globalLook` does not apply and `look.charset` should be left alone.
 
 ## tabs
 
-Segmented tabs whose indicator is a pill of characters that streams across and condenses under the new tab. The kit wires clicks, arrow keys, Home and End, `aria-selected`, roving `tabindex` and the panels named by `aria-controls`.
+Segmented tabs with a gliding indicator. The pill is yours, so its outline stays crisp: style any element from `--tabs-x`, `--tabs-y`, `--tabs-w` and `--tabs-h`, which the kit sets on the tablist every frame (and once at rest without WebGL). The leading end goes first and the trailing end catches up, so it stretches and settles; a new choice mid-glide leaves from where it is. The field draws a row of characters along the pill's foot that glides with it (the grid moves with the indicator, so characters never step from cell to cell), runs dense toward the leading end in flight and settles into an even, tapered line. The kit wires clicks, arrow keys, Home and End, `aria-selected`, roving `tabindex` and the panels named by `aria-controls`.
+
+```html
+<div role="tablist" class="tabs">
+  <span class="thumb"></span>
+  <button role="tab" aria-controls="p1">Overview</button> …
+</div>
+<style>
+  .tabs { position: relative; }
+  .thumb { position: absolute; z-index: -2; left: var(--tabs-x); top: var(--tabs-y); width: var(--tabs-w); height: var(--tabs-h); border-radius: 999px; background: var(--surface-2); }
+  [role="tab"] { position: relative; z-index: 2; padding-bottom: 6px; } /* room for the row */
+</style>
+```
 
 ```ts
 const t = tabs(tablist, { onChange: i => track('tab', i) });
 t.select(2);
 ```
 
-Options: `tabs` (selector, default `[role="tab"]`), `active` (default: the tab with `aria-selected="true"`), `duration` (ms, default 280), `panels` (`'hidden'` toggles the attribute, `'attribute'` toggles `data-active`, `'none'`), `manage` (default true; false leaves events and ARIA to you), `onChange(index, tab)`. Methods: `select(i, focus?)`; getter `active`. The tablist needs a transparent background where the indicator shows; the field sits above the tablist's own background and below the tab labels.
+Options: `tabs` (selector, default `[role="tab"]`), `active` (default: the tab with `aria-selected="true"`), `duration` (ms, default 440), `panels` (`'hidden'` toggles the attribute, `'attribute'` toggles `data-active`, `'none'`), `manage` (default true; false leaves events and ARIA to you), `onChange(index, tab)`. Methods: `select(i, focus?)`; getter `active`. The field sits above the tablist's own background (`z-index: -1` in its stacking context) and below the tab labels, so put the pill element at `z-index: -2`. Ink defaults to `--ascii-ink`. Under reduced motion the indicator moves at once. For a figure in the panel that rolls on change, pair it with `odometer` and `update({ value, format })`.
 
 ## imageGenerate
 
-An image being generated: the field drifts with an elapsed clock, each streamed preview develops in a step sharper, then the final image, and the photo crossfades in. Wrap any provider (OpenAI partial images, Replicate or fal streams, a poll loop) as an async iterable of `{ preview?, final? }`, each a Blob or URL.
+An image being generated: the field drifts with an elapsed clock, each streamed preview develops in a step sharper, then the final image, and the photo crossfades in. Every change (a preview, the final, a reset) develops over the same 680ms sine curve whenever it arrives, an incoming picture lays over the outgoing one so the total never jumps, a preview keeps sharpening and the ground keeps drifting faintly over it until the next update, and the photo starts in (560ms) while the characters settle on the final. A new `run()` fades the photo back out over its characters. Wrap any provider (OpenAI partial images, Replicate or fal streams, a poll loop) as an async iterable of `{ preview?, final? }`, each a Blob or URL.
 
 ```ts
 const gen = imageGenerate(frame, { elapsed: clock }); // frame holds the <img> that shows the result
@@ -168,6 +182,7 @@ const orb = statusOrb(el, { poster: '/stills/orb-dark.webp' });
 
 // A header "Characters" menu: re-skins every glyph field at once.
 setGlobalLook({ charset: ' .:-=+YCIFSA#@' });
+setGlobalLook({ style: 'lego' });          // any of the Studio's 24 styles, KIT_STYLES
 setGlobalLook(null); // each field gets its own characters back
 const off = subscribeGlobalLook(look => menu.value = look?.charset ?? '');
 
@@ -175,7 +190,9 @@ const off = subscribeGlobalLook(look => menu.value = look?.charset ?? '');
 orb.update({ ink: '--brand', look: { cellSize: 6 } });
 ```
 
-`setGlobalLook({ charset })` balances the set's weight against classic ASCII: block and solid sets draw smaller glyphs so they keep detail, sets without light glyphs (binary) ease off, and faint sets (minimal, braille, code) draw larger, bolder glyphs; tones are untouched. It applies to every glyph field, live or released, except dot marks, fields whose own `charset` holds letters (a word or a brand, such as `wordmark`), and fields created with `globalLook: false` (use it for a locked region). An empty `charset` keeps each field's own. `getGlobalLook()` reads the current look, so `subscribeGlobalLook` pairs with React's `useSyncExternalStore`.
+`setGlobalLook({ style })` takes one of the Studio's 24 render styles (`KIT_STYLES`, typed `KitStyle`, in `STUDIO_STYLES` order). Glyph-like styles (`ascii`, `blocks`, `braille`, `lines`, `cross`, `diagonal`, `diamond`, `mixed`) bring their ramp, which a `charset` beside them overrides; `dots` is the halftone mark; the rest (`pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) switch the field's `mark` and keep each field's own charset, which decides the cells left blank. Unknown styles and empty charsets are dropped. `setGlobalLook(null)` gives each field its own mark and characters back.
+
+`setGlobalLook({ charset })` balances the set's weight against classic ASCII: block and solid sets draw smaller glyphs so they keep detail, sets without light glyphs (binary) ease off, and faint sets (minimal, braille, code) draw larger, bolder glyphs; tones are untouched. A look applies to every glyph field, live or released, except dot marks, fields whose own `charset` holds letters (a word or a brand, such as `wordmark`), and fields created with `globalLook: false` (use it for a locked region). An empty `charset` keeps each field's own. `getGlobalLook()` reads the current look, so `subscribeGlobalLook` pairs with React's `useSyncExternalStore`.
 
 Each change sweeps: a field that has drawn its first frame holds that frame over itself and wipes it away left to right in 200ms (after a 40ms beat, `cubic-bezier(.23,1,.32,1)`), led by a 2px scan line, as the new characters land under it. The line is `--ascii-sweep` (default amber `#f3ba32`, at 35% with a soft glow); the held frame and the line are an `aria-hidden` canvas and span marked `data-ascii-sweep`, placed exactly over the field (style them alongside the field, for example with the same mask) and removed when the sweep ends. Under reduced motion (the visitor's, or `reducedMotion: true`), and for a field still on its poster, the characters change at once.
 
@@ -282,7 +299,7 @@ Options: `palette` (`'mono' | 'aurora' | 'brand'` or your own hex stops, default
 
 ### commandPalette
 
-The palette condenses out of its trigger in blocks of characters and dissolves back into it, with a glyph marker in the selected row's gutter that glides between rows. The rows' own highlight stays crisp HTML.
+The palette condenses out of its trigger in blocks of characters and dissolves back into it. A crisp HTML highlight glides between rows; rows a search brings in (or moves) resolve out of characters left to right; and a selected AI row shimmers every few seconds, a crest crossing it that turns its letters to characters and back while the row's text is masked under the crest.
 
 ```ts
 const cmd = commandPalette(panel, { trigger, onRun: (i, row) => commands[row.dataset.id!].run() });
@@ -290,7 +307,7 @@ search.oninput = () => render(filter(search.value)); // the kit re-selects row 0
 cmd.select(2);
 ```
 
-Options: `trigger`, `input` (default `input`), `rows` (default `[role="option"]`), `open` (default: open unless the panel has `hidden`), `hotkey` (⌘K / Ctrl+K, default `'k'`, `false` for none), `manage` (arrow keys, Home, End, Enter, Escape, hover, outside clicks, `aria-selected` and `aria-activedescendant`; default true), `closeOnRun` (default true), `onRun(index, row)`, `onOpenChange(open)`. Methods: `open(focus?)`, `close()`, `toggle()`, `select(i)`, `run(i?)`; getters `isOpen`, `selected`. Closed is the `hidden` attribute; `data-state` is `opening` or `closing` in flight, and closing fades the panel's surface as its clip lands so the trigger shows through. Give rows an `id` and a little left padding for the marker; the field lies over the panel (it ignores the pointer) and draws only in that gutter, so the marker shows on top of the row's own highlight.
+Options: `trigger`, `input` (default `input`), `rows` (default `[role="option"]`), `open` (default: open unless the panel has `hidden`), `hotkey` (⌘K / Ctrl+K, default `'k'`, `false` for none), `manage` (arrow keys, Home, End, Enter, Escape, hover, outside clicks, `aria-selected` and `aria-activedescendant`; default true), `closeOnRun` (default true), `onRun(index, row)`, `onOpenChange(open)`, `highlight` (default true; `false` if your rows style `aria-selected` themselves), `ai` (rows that shimmer, default `[data-ai]`). Methods: `open(focus?)`, `close()`, `toggle()`, `select(i)`, `run(i?)`; getters `isOpen`, `selected`. Closed is the `hidden` attribute; `data-state` is `opening` or `closing` in flight, and closing fades the panel's surface as its clip lands so the trigger shows through. Give rows an `id`. The kit adds a `[data-ascii-cmd-highlight]` element as the panel's first child, sized to the selected row with its radius; colour it with `--ascii-cmd-highlight` (default 7% of the text colour). The panel becomes its own stacking context (`isolation: isolate`) and the field lies under the content and over the panel's fill (z-index -1, ignoring the pointer), so the characters never cover text. Rows are watched (a MutationObserver), so a framework re-rendering them after the input event is fine. Without WebGL2 the highlight, keys and the open and close clip still work.
 
 ### slideToConfirm
 
@@ -316,25 +333,25 @@ Options: `kind` (`'heart' | 'save'`), `icon` (default the first `svg`), `manage`
 
 ### blockChart
 
-A bar chart in columns of characters: the bars grow in staggered when it first comes into view, the last is emphasised, and hover or the arrow keys light one bar and dim the rest.
+A bar chart in columns of characters on a whole-cell grid: every bar is a crisp block of glyphs with one denser cap row, sitting on a dotted baseline. The bars grow in staggered when the chart first comes into view, the last ("today") is lit, and hover, touch or the arrow keys light one bar and fade the rest. `set()` morphs: bars whose label survives glide and resize into place, new ones grow in, dropped ones sink away.
 
 ```ts
-const chart = blockChart(plot, { values: visits, labels: days, onHover: (i, v, day) => readout(i === null ? total : v, day) });
-range.onchange = () => chart.set(nextVisits, nextDays);
+const chart = blockChart(plot, { values: visits, labels: days, onHover: (i, v, day) => headline.set(i === null ? total : v!) });
+range.onchange = () => chart.set(nextVisits, nextDays); // shared days glide, e.g. the last 7 of 30
 ```
 
-Options: `values`, `labels`, `max` (default the largest plus 4%), `duration` (ms, default 520), `stagger` (default 45ms up to 7 bars, else 9), `format` (for the screen-reader table), `intro` (grow the bars in when first seen, default true; `false` draws them in place, as in a view that is swapped in), `onHover(index, value, label)`. Methods: `set(values, labels?)`, `highlight(i | null)`; getters `active`, `values`. Adds a visually hidden table of the values and makes the plot focusable. Draw axes and the readout in HTML. Without WebGL2 the bars are plain blocks in the text colour, with the same emphasis.
+Options: `values`, `labels` (also how `set()` matches bars; without labels they match from the right), `max` (default the largest plus 4%), `duration` (ms for growing, gliding and resizing, default 560), `stagger` (default 45ms up to 7 bars, else 12), `format` (for the screen-reader table), `intro` (grow the bars in when first seen, default true; `false` draws them in place, as in a view that is swapped in), `onHover(index, value, label)`. Methods: `set(values, labels?)`, `highlight(i | null)`; getters `active`, `values`. Cells are square (`look.cellSize`, default 7px) and the canvas is trimmed to whole cells, centred on the plot's bottom edge, so every glyph lands exactly; bars take whole cells, with gaps of about half a bar, and drop the gaps only when there are more bars than fit (about `width / 2` cells): for 30 bars in a 300px plot pass `look: { cellSize: 4.5 }`. Adds a visually hidden table of the values and makes the plot focusable; set `touch-action: pan-y` on the plot so a finger can scrub. Draw the axis labels and the readout in HTML, and roll the readout with `odometer`. Without WebGL2 the bars are plain blocks in the text colour, with the same emphasis.
 
 ### pageDissolve
 
-The view breaks into its own characters from where the user clicked, the content swaps underneath, and the next view condenses out of characters: about 300ms end to end.
+One wave of characters from where the user clicked: the crisp view crossfades into its own characters and breaks up outward, the content swaps underneath once the old HTML has faded, the next view condenses in behind the same wave, and it crossfades back to crisp HTML. About 430ms end to end, never a frame with neither view on screen.
 
 ```ts
 const page = pageDissolve(body);
 tab.onclick = () => page.swap(() => render(tab.dataset.page), tab);
 ```
 
-Options: `origin` (an element or `{ x, y }`, default top centre), `dissolve` (ms, default 140), `condense` (ms, default 160). Methods: `swap(render, origin?)` (a promise; swaps queue, and `render` may be async); getter `busy`. The kit draws the view from its DOM (text in its own font, filled and bordered boxes, media as blocks), never from image pixels; another kit component inside the view, such as a `blockChart`, is drawn as its settled frame, and kit posters and screen-reader-only text are left out. Sets `data-state` (`out`, `in`). Under reduced motion or without WebGL2, `render` runs at once.
+Options: `origin` (an element or `{ x, y }`, default top centre), `dissolve` (ms the old view takes to break up, default 300), `condense` (ms the new view takes to land, default 300; it starts about 110ms in, once the old HTML has faded). Methods: `swap(render, origin?)` (a promise; swaps queue, and `render` may be async); getter `busy`. The kit draws the view from its DOM (text in its own font, filled and bordered boxes, media as blocks), never from image pixels; another kit component inside the view, such as a `blockChart`, is drawn as its settled frame, and kit posters and screen-reader-only text are left out. Sets `data-state` (`out`, `in`). Under reduced motion, without WebGL2, or while the field waits for a WebGL context, `render` runs at once. It shows no poster: at rest it is a blank layer over the live view. Mount a `blockChart` inside the view with `lazy: false`, so it has its context as the view lands.
 
 ### swipeDeck
 
@@ -376,7 +393,7 @@ const id = toasts.push({ title: 'Thread archived', body: 'Q3 planning · Ana', a
 toasts.dismiss(id);
 ```
 
-A toast is `{ title, body?, icon?, action?, duration? }`; `icon` is a node (such as an inline SVG) or a short text. Options: `max` (default 3; the oldest dissolves when another arrives), `duration` (ms each toast stays, default 6000, 0 keeps them; pointing at or focusing the stack holds them), `render(toast, id)` (your own `<li>`; mark parts with `data-paint` = `strong`, `text`, `meta`, `tile`, `icon` or `none` to set how they gather), `label` (the list's name, default `Notifications`), `glint` (default true: at rest a comet of characters runs round the newest toast's edge every 4.2s, outside its text; between passes the field draws nothing). Methods: `push(toast)` (returns an id), `dismiss(id)`, `clear()`; getter `toasts`. The kit adds an `<ol class="ascii-toasts">` and a `role="status"` region that announces each toast. Classes: `ascii-toast`, `-icon`, `-text`, `-title`, `-body`, `-action`, `-close`; `--ascii-toast-bg` and `--ascii-toast-ink` set the surface. The field reaches 24px past the container and lies above every toast, so the glint and gathering characters are never hidden behind one tucked away. A toast pushed before the field is drawing (still mounting, or released off screen) simply shows. The gathering characters are inked like the page, so a toast whose fill is too close to that ink to read them on (contrast under 3:1, such as an inverted dark pill on a light page) keeps its fill and shadow clear, inline and without a transition, until its text lands, then fills in with its own transition; no CSS is needed for it.
+A toast is `{ title, body?, icon?, action?, duration? }`; `icon` is a node (such as an inline SVG) or a short text. Options: `max` (default 3; the oldest dissolves when another arrives), `duration` (ms each toast stays, default 6000, 0 keeps them; pointing at or focusing the stack holds them), `render(toast, id)` (your own `<li>`; mark parts with `data-paint` = `strong`, `text`, `meta`, `tile`, `icon` or `none` to set how they gather), `label` (the list's name, default `Notifications`), `swipe` (default true: drag a toast sideways and it follows, fading; let go past 64px or on a flick and its characters carry on the way it was thrown). `glint` is deprecated and ignored: nothing draws round a toast at rest. Methods: `push(toast)` (returns an id), `dismiss(id)`, `clear()`; getter `toasts`. The kit adds an `<ol class="ascii-toasts">` and a `role="status"` region that announces each toast. Classes: `ascii-toast`, `-icon`, `-text`, `-title`, `-body`, `-action`, `-close`; `--ascii-toast-bg`, `--ascii-toast-ink` and `--ascii-toast-shadow` set the surface; there is no outline, and tucked-behind toasts dim a step each so the stack reads in layers. New toasts rise 14px as they gather; a dismissed toast's neighbours close up at once while its characters drift. Each toast bridges the 8px gap below it, so pointing between fanned toasts keeps the stack open. The field reaches 24px past the container and lies above every toast, so gathering and breaking characters are never hidden behind one tucked away. A toast pushed before the field is drawing (still mounting, or released off screen) simply shows. The gathering characters are inked like the page, so a toast whose fill is too close to that ink to read them on (contrast under 3:1, such as an inverted dark pill on a light page) keeps its fill and shadow clear, inline and without a transition, until its text lands, then fills in with its own transition; no CSS is needed for it.
 
 ### thinking
 
@@ -417,17 +434,17 @@ Options: `image` (a URL, or an `<img>`; one already inside the frame is used in 
 
 ### accordion
 
-A strip of image panels: the open one shows its photo, the closed ones the same photos in characters. Pointing at, pressing or focusing a panel opens it, and as it opens its characters flare denser for a beat, then give way to the photo.
+A strip of image panels: the open one shows its photo, the closed ones the same photos in characters. Pointing at, tapping or focusing a panel opens it. Each panel's width, photo and caption follow one critically damped spring, so the characters cross over to the photo with no gap or flash, and changing panels mid-move carries the motion on. A mouse sweeping fast across the strip waits about 90ms on a panel before opening it; a slow mouse, a tap or a key opens at once.
 
 ```ts
 const a = accordion(strip, { images: [{ src: '/stairwell.webp', title: 'Stairwell', meta: 'Silver print · $120' }, '/shell.webp'], open: 1 });
 ```
 
-Each image is a URL or `{ src, alt?, title?, meta?, focus? }`. Options: `images`, `open` (default 0), `duration` (ms to open, default 280), `label` (the group's name, default `Images`), `onChange(index)`. Method: `select(index, focus?)`; getter `open`. The kit adds a `<button class="ascii-acc-panel">` per image with `aria-expanded`, a roving `tabindex` and arrow, Home and End keys. Give the strip a height. Closed panels draw the photo as tone (inverted on light grounds); without WebGL2 they show the photo dimmed.
+Each image is a URL or `{ src, alt?, title?, meta?, focus? }`. Options: `images`, `open` (default 0), `duration` (ms the spring takes to settle, default 420), `label` (the group's name, default `Images`), `onChange(index)`. Method: `select(index, focus?)`; getter `open`. The kit adds a `<button class="ascii-acc-panel">` per image with `aria-expanded`, a roving `tabindex` and arrow, Home and End keys, and sets `--ascii-acc-open`, `--ascii-acc-photo` and `--ascii-acc-caption` (0–1) on each panel every frame for your own CSS. Give the strip a height. Closed panels draw the photo as tone (inverted on light grounds); without WebGL2 they show the photo dimmed.
 
 ### dropzone
 
-An image dropzone whose border is a quiet ring of characters that thickens and breathes while a file is dragged over it. A dropped image develops in characters, in its own colours, on a dark ground, and can be saved as a PNG.
+An image dropzone whose border is a quiet ring of the lightest characters. While a file is dragged over it, the ring lifts, packets of denser characters chase round it and a halo a few cells deep leans in on the side nearest the file. A dropped image opens out from the drop point in characters, in its own colours, on a dark ground, and can be saved as a PNG.
 
 ```ts
 const zone = dropzone(box, { onImage: ({ file, width, height }) => upload(file), onError: message => toast(message) });
@@ -435,7 +452,7 @@ zone.setImage('/sample.webp');
 saveButton.onclick = () => zone.download();
 ```
 
-Options: `onImage({ file, src, width, height })`, `onError(message, file)`, `maxBytes` (default 10 MB), `develop` (ms, default 720), `filename` (for `download()`, default `<name>-ascii.png`), `onState(state, name)`. Methods: `setImage(url | Blob)`, `clear()`, `pick()` (opens the file picker), `download(filename?)` (resolves with the PNG Blob, or null); getter `state` (`empty`, `developing`, `done`). Elements inside with `data-dropzone="pick"`, `"clear"` or `"download"` are wired to those actions. An empty element gets a title, hint and Choose file button (`.ascii-drop-empty`, hidden once an image shows); with your own content, style it from `data-state` and `data-over` on the zone. The ring is one even row of characters on every side: the canvas is trimmed to whole cells, centred, and the ring is drawn one block per cell, so no side doubles or thins at any size. Its ink defaults to `--ascii-ink`, else mid graphite. The image develops out of the dark after its levels are set, so it reads at full contrast. Give the zone a size and a background. Characters in the photo's own colours need a dark ground, so on a light zone the image is drawn on `#0b0b0a` (pass `look: { background }` for another); `download()` fills with the zone's background, or that ground.
+Options: `onImage({ file, src, width, height })`, `onError(message, file)`, `maxBytes` (default 10 MB), `develop` (ms, default 900), `filename` (for `download()`, default `<name>-ascii.png`), `onState(state, name)`. Methods: `setImage(url | Blob)`, `clear()`, `pick()` (opens the file picker), `download(filename?)` (resolves with the PNG Blob, or null); getter `state` (`empty`, `developing`, `done`). Elements inside with `data-dropzone="pick"`, `"clear"` or `"download"` are wired to those actions. An empty element gets a title, hint and Choose file button (`.ascii-drop-empty`, hidden once an image shows); with your own content, style it from `data-state` and `data-over` on the zone. The ring is one even row of characters on every side: the canvas is trimmed to whole cells, centred, and the ring is drawn one block per cell, so no side doubles or thins at any size. Its ink defaults to `--ascii-ink`, else mid graphite. The image develops in a soft circle from where it was dropped (the centre for `setImage()` and the picker), its wavefront lit; under reduced motion it shows at once and the drag look holds still. Give the zone a size and a background. Characters in the photo's own colours need a dark ground, so on a light zone the image is drawn on `#0b0b0a` (pass `look: { background }` for another); `download()` fills with the zone's background, or that ground.
 
 ### disintegrate
 
@@ -450,7 +467,7 @@ Options: `duration` (ms, default 620), `collapse` (close the row's height, defau
 
 ### pullRefresh
 
-Pull to refresh: dragging the content down at the top gathers an orb of characters in the gap, which tightens into a ring at the threshold. Let go past it and the ring spins while `onRefresh` runs, then draws a check and springs back.
+Pull to refresh: dragging the content down at the top draws a small ring of characters round in the gap (26px, the size of iOS's indicator), closing it with a small pop at the threshold. Let go past it and the content rests 48px down while the ring opens into a spinning arc as `onRefresh` runs; then it draws a check and springs back, the ring shrinking away with the gap.
 
 ```ts
 const pull = pullRefresh(screen, { onRefresh: () => loadNewPosts(), reveal: '[data-new]' });
@@ -458,7 +475,7 @@ refreshButton.onclick = () => pull.refresh();
 pull.revealRows(feed.querySelectorAll('.just-arrived')); // or reveal any rows yourself
 ```
 
-Options: `onRefresh` (may return a promise; the ring spins at least 600ms), `content` (the element that moves, default the first child), `threshold` (px, default 88), `messages` (`{ refreshing, done, failed }` for the live region), `reveal` (a selector for the rows `onRefresh` added: a frame after it resolves they are hidden behind the check, then resolve in from characters as the content springs back). Methods: `refresh()`, `revealRows(rows)` (each row appears as glyphs of its own text, with its photos drawn as tone rather than flat tiles, following a row that is still opening, then hands over to the HTML over about 760ms; a row is revealed once, and under reduced motion or without WebGL2 rows just show); getter `state` (`idle`, `pulling`, `refreshing`, `done`). Sets `aria-busy` while refreshing. It engages only when the element is scrolled to the top; give it `overflow: hidden` or `auto` and keep a Refresh button for keyboard users.
+Options: `onRefresh` (may return a promise; the ring spins at least 600ms), `content` (the element that moves, default the first child), `threshold` (px, default 64), `messages` (`{ refreshing, done, failed }` for the live region), `reveal` (a selector for the rows `onRefresh` added: a frame after it resolves they are hidden behind the check, then resolve in from characters as the content springs back). Methods: `refresh()`, `revealRows(rows)` (each row appears as glyphs of its own text, with its photos drawn as tone rather than flat tiles, following a row that is still opening, then hands over to the HTML over about 760ms; a row is revealed once, and under reduced motion or without WebGL2 rows just show); getter `state` (`idle`, `pulling`, `refreshing`, `done`). Sets `aria-busy` while refreshing. It engages only when the element is scrolled to the top; give it `overflow: hidden` or `auto` and keep a Refresh button for keyboard users.
 
 ## Backgrounds
 
@@ -472,9 +489,9 @@ bg.update({ palette: { light: '#5b4bd1', dark: '#8f80ff' }, cellSize: 10 });
 bg.setPreset(aurora);   // cross-fades, keeping your options
 ```
 
-Presets are separate exports, so a page pays only for the ones it imports: `background()` with one canvas preset is about 6.2 KB gzip (6.8 KB for `wave`), and each further canvas preset adds 0.2–0.9 KB (all 22 together: 13.9 KB). `drift`, `halftone`, `wordField` and `fluid` drive the GPU glyph field, so they cost about 7 KB (`fluid` 9.7 KB) plus the shared `asciify-engine/field` build, 17 KB gzip, that every field component uses (and take `lazy`, `poster`, `globalLook` and the context budget like every field component); the rest are 2D canvases and need no WebGL. To offer a menu of several, import those you list.
+Presets are separate exports, so a page pays only for the ones it imports: `background()` with one canvas preset is about 6.2 KB gzip (6.8 KB for `wave`), and each further canvas preset adds 0.2–0.9 KB (all 22 together: 13.9 KB). `drift`, `halftone`, `swell`, `wordField` and `fluid` drive the GPU glyph field, so they cost about 7 KB (`fluid` 9.7 KB) plus the shared `asciify-engine/field` build, 17 KB gzip, that every field component uses (and take `lazy`, `poster`, `globalLook` and the context budget like every field component); the rest are 2D canvases and need no WebGL. To offer a menu of several, import those you list.
 
-Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `accent` (heads, peaks and signals for the presets that draw them; default the preset's own, or one mixed from the ink), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for `halftone`; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `dots`), `cursor` (pointer response, default on for the presets that answer it; the GPU presets also take `'trail' | 'fluid' | 'lantern'`), `clear` (an element to keep clear: the field fades out round it), `opacity` (default 1, `fluid` 0.7), `dither` (ordered dither 0–1 for the tonal presets), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (glyph-field settings, GPU presets only) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`. `field` is the `GlyphField` for the GPU presets and `null` for canvas ones.
+Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `accent` (heads, peaks and signals for the presets that draw them; default the preset's own, or one mixed from the ink), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for `halftone` and `swell`; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `dots`), `cursor` (pointer response, default on for the presets that answer it; the GPU presets also take `'trail' | 'fluid' | 'lantern'`), `clear` (an element to keep clear: the field fades out round it), `opacity` (default 1, `fluid` 0.7, `swell` 0.6), `dither` (ordered dither 0–1 for the tonal presets), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (glyph-field settings, GPU presets only) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`. `field` is the `GlyphField` for the GPU presets and `null` for canvas ones.
 
 `fluid` lays its cells out as the site's hero does: a whole number of 7 × 12.07 px cells (`cellSize` / 0.58 tall) stretched to fill the stage exactly, so rows keep their place down a tall page, drawn at up to 1.5 device pixels per CSS pixel. It does this through the field's `cellFit: 'fill'` (see glyph-field.md).
 
@@ -484,6 +501,7 @@ The canvas templates draw in the page's fonts: load Geist Mono (and JetBrains Mo
 | --- | --- | --- | --- |
 | `drift` | GPU | Characters that drift slowly in broad soft lobes and clear round your content | 11, 1, trail |
 | `halftone` | GPU | The same drifting ground as dots | 14, 1, lantern |
+| `swell` | GPU | A fine dot grid whose dots swell in slow rolling waves, quiet in the middle and clear round your content; dots rise under the pointer and settle behind it | 10, 1, lantern |
 | `wordField` | GPU | Your word (`text`) as a flowing field of letters | 13, 1, trail |
 | `fluid` | GPU | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
 | `caustics` | canvas | Fine pools of light drifting like water across stone | 12, 1, no |

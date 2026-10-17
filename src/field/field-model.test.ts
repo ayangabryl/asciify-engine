@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FIELD_SETTINGS, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
+import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
 
 describe('glyph field settings', () => {
   it('keeps words and multi-code-point glyphs as single cells', () => {
@@ -96,6 +96,13 @@ describe('glyph field halftone and clear zones', () => {
     expect([settings.mark, settings.scene, settings.dotScale, settings.scale]).toEqual(['dot', 'drift', 1.4, 0.2]);
     expect(settings.clear).toMatchObject({ x: 0.2, y: 0.3, width: 0.5, height: 0.4, shape: 'rect' });
     expect(normalizeFieldSettings({ clear: false }, settings).clear).toBe(false);
+  });
+  it('accepts every Studio tile and print mark, and keeps the current mark for anything else', () => {
+    for (const mark of FIELD_MARKS) expect(normalizeFieldSettings({ mark }).mark).toBe(mark);
+    expect(FIELD_MARKS.slice(0, 2)).toEqual(['glyph', 'dot']);
+    const lego = normalizeFieldSettings({ mark: 'lego' });
+    expect(normalizeFieldSettings({ mark: 'bricks' as never }, lego).mark).toBe('lego');
+    expect(normalizeFieldSettings({ mark: 'toString' as never }).mark).toBe('glyph');
   });
   it('keeps the current zone when given an element, which only a mounted field can measure', () => {
     const base = normalizeFieldSettings({ clear: { x: 0.1 } });

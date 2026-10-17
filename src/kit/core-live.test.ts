@@ -6,7 +6,8 @@ vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyph
 import { beam } from './beam';
 import { statusOrb } from './status-orb';
 import { fieldBackground } from './field-background';
-import { balanceCharset, getFieldBudget, getGlobalLook, inkWeight, setFieldBudget, setGlobalLook, subscribeGlobalLook } from './core-live';
+import { KIT_STYLES, balanceCharset, getFieldBudget, getGlobalLook, inkWeight, setFieldBudget, setGlobalLook, subscribeGlobalLook } from './core-live';
+import { STUDIO_STYLES } from '../studio/model';
 import { FakeElement, FakeStyle, fakeField, useFakeDom } from './fake-dom-2a';
 
 const { env, advance, flush, element, as, canvases } = useFakeDom(mount, support);
@@ -273,6 +274,55 @@ describe('global look', () => {
     off();
     setGlobalLook({ charset: ' 01' });
     expect(seen).toHaveLength(2);
+    for (const h of [orb, dots, word, kept, late]) h.destroy();
+  });
+
+  it('offers every Studio render style, each as a mark the field draws', () => {
+    expect(Object.keys(KIT_STYLES)).toEqual([...STUDIO_STYLES]);
+    expect(KIT_STYLES.ascii).toEqual({ mark: 'glyph', charset: ' .:-=+*#%@' });
+    expect(KIT_STYLES.dots.mark).toBe('dot');
+    expect(KIT_STYLES.lego.mark).toBe('lego');
+  });
+
+  it('normalises the look: unknown styles and empty charsets are dropped', () => {
+    setGlobalLook({ style: 'bricks' as never, charset: '' });
+    expect(getGlobalLook()).toEqual({});
+    setGlobalLook({ style: 'toString' as never });
+    expect(getGlobalLook()).toEqual({});
+    setGlobalLook({ style: 'voxel', charset: ' 01' });
+    expect(getGlobalLook()).toEqual({ style: 'voxel', charset: ' 01' });
+  });
+
+  it('draws a style in every opted-in glyph field, skipping dots, letters and opt-outs, and puts each mark back', () => {
+    const orb = statusOrb(as(at(0))), dots = beam(as(at(0))), word = statusOrb(as(at(0)), { look: { charset: ' ABC' } });
+    const kept = statusOrb(as(at(0)), { globalLook: false });
+    setGlobalLook({ style: 'lego' });
+    // A tile style keeps the field's own charset, which decides the cells left empty.
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'lego', charset: ' .:-=+*#%@' }));
+    for (const f of fields.slice(1)) expect(f.update).not.toHaveBeenCalledWith(expect.objectContaining({ mark: 'lego' }));
+
+    // The component's own updates keep the style; a new field mounts with it.
+    orb.update({ look: { charset: ' -+' } });
+    expect(fields[0].update.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ mark: 'lego', charset: ' -+' });
+    const late = statusOrb(as(at(0)));
+    expect(optionsOf(4)).toMatchObject({ mark: 'lego' });
+
+    // A glyph-like style brings its ramp, balanced like any charset; a charset beside it wins.
+    setGlobalLook({ style: 'lines' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' -═╪╬' }));
+    setGlobalLook({ style: 'lines', charset: ' 01' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' 01' }));
+    setGlobalLook({ style: 'dots' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'dot' }));
+    // The same look again changes nothing.
+    const calls = fields[0].update.mock.calls.length;
+    setGlobalLook({ style: 'dots' });
+    expect(fields[0].update.mock.calls).toHaveLength(calls);
+
+    setGlobalLook(null);
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' -+' }));
+    expect(fields[4].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' .:-=+*#%@' }));
+    expect(fields[1].update).not.toHaveBeenCalledWith(expect.objectContaining({ mark: 'glyph' }));
     for (const h of [orb, dots, word, kept, late]) h.destroy();
   });
 

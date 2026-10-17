@@ -72,8 +72,10 @@ function word(pen: CanvasRenderingContext2D, text: string, x: number, y: number,
 /** Inside a visually hidden box (the 1px, overflow-hidden screen-reader pattern): read aloud, never drawn. */
 function clipped(el: Element | null, root: Element) {
   for (; el && el !== root; el = el.parentElement) {
-    const box = el as HTMLElement;
-    if (box.offsetWidth <= 1 && box.offsetHeight <= 1 && getComputedStyle(box).overflow === 'hidden') return true;
+    const box = el as HTMLElement, style = getComputedStyle(box);
+    if (box.offsetWidth <= 1 && box.offsetHeight <= 1 && style.overflow === 'hidden') return true;
+    // A table grows past its 1px to fit its cells, so the clip is what hides it.
+    if (style.clipPath === 'inset(50%)' || style.clip === 'rect(0px, 0px, 0px, 0px)') return true;
   }
   return false;
 }

@@ -3,9 +3,18 @@
 export type FieldColor = 'ink' | 'source';
 export type FieldFit = 'cover' | 'contain';
 /** Generated motion used when there is no media source. */
-export type FieldScene = 'none' | 'flow' | 'orb' | 'drift';
-/** `glyph` draws characters from the atlas; `dot` draws a halftone: one circle per cell, its area following the tone. */
-export type FieldMark = 'glyph' | 'dot';
+export type FieldScene = 'none' | 'flow' | 'orb' | 'drift' | 'swell';
+/**
+ * What each cell draws. `glyph` draws characters from the atlas; `dot` draws a halftone: one circle per cell, its area
+ * following the tone. The rest are the Studio's tile and print styles, drawn per cell from the cell's tone and colour:
+ * tiles (`pixel`, `mosaic`, `lego`, `voxel`, `disco`, `hex`, `led`) fade with the tone in ink colour and stay solid in source
+ * colour; `dither` lights whole cells through a 4x4 Bayer screen; `cmyk` separates the cell's colour into offset ink dots;
+ * the print marks (`stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) carry the tone in their size.
+ * Every mark but `dot` leaves empty the cells the charset would leave blank.
+ */
+export const FIELD_MARKS = ['glyph', 'dot', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dither', 'hex', 'led', 'cmyk',
+  'stipple', 'engraving', 'crosshatch', 'woodblock', 'risograph', 'pointillism'] as const;
+export type FieldMark = typeof FIELD_MARKS[number];
 /**
  * An area the field keeps quiet, so content above it stays readable. Coordinates are fractions of the field,
  * from the top left; `feather` is the soft edge, as a fraction of the field's shorter side.
@@ -81,6 +90,7 @@ export interface GlyphFieldSettings {
   fontWeight: number;
   /** Glyph height relative to the cell. */
   glyphScale: number;
+  /** See `FIELD_MARKS`. Only `glyph` reads the atlas; the others keep the charset for which cells stay empty. */
   mark: FieldMark;
   /** Largest dot as a fraction of the cell, for `mark: 'dot'`. */
   dotScale: number;
@@ -223,7 +233,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
       curl: clamp(next.curl, 0, 80, DEFAULT_FIELD_FLUID.curl),
     };
   })();
-  const scene = input.scene === 'none' || input.scene === 'flow' || input.scene === 'orb' || input.scene === 'drift' ? input.scene : base.scene;
+  const scene = input.scene === 'none' || input.scene === 'flow' || input.scene === 'orb' || input.scene === 'drift' || input.scene === 'swell' ? input.scene : base.scene;
   const elementLike = !!input.clear && typeof input.clear === 'object' && ('element' in input.clear || 'nodeType' in input.clear);
   const clearInput = input.clear === undefined || elementLike ? base.clear : input.clear as Partial<FieldClearZone> | false;
   const clear: FieldClearZone | false = !clearInput ? false : {
@@ -242,7 +252,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     font: typeof input.font === 'string' && input.font.trim() ? input.font : base.font,
     fontWeight: Math.round(clamp(input.fontWeight, 100, 900, base.fontWeight)),
     glyphScale: clamp(input.glyphScale, 0.3, 1.6, base.glyphScale),
-    mark: input.mark === 'dot' || input.mark === 'glyph' ? input.mark : base.mark,
+    mark: FIELD_MARKS.includes(input.mark as FieldMark) ? input.mark as FieldMark : base.mark,
     dotScale: clamp(input.dotScale, 0.1, 1.4, base.dotScale),
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),

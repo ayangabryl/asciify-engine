@@ -38,14 +38,14 @@ reply.then(() => orb.done());
 Category: AI
 
 Prompt:
-“Make a ⌘K command palette for [our app] with Asciify: it opens by condensing out of characters at the trigger, filters as you type, and a glyph column glides beside the selected row. Enter runs the action with a pulse.”
+“Make a ⌘K command palette for [our app] with Asciify: it opens by condensing out of characters at the trigger, a soft highlight glides between rows, rows a search brings in resolve out of characters, and the AI row shimmers as a crest turns its letters to characters and back. Enter runs the action with a pulse.”
 
 ```ts
 import { commandPalette } from 'asciify-engine/kit';
 
-// ⌘K or the trigger opens it; arrows, Enter and Escape are wired; rows are [role="option"] with an id
+// ⌘K or the trigger opens it; arrows, Enter and Escape are wired; rows are [role="option"] with an id, AI rows carry data-ai
 commandPalette(palettePanel, { trigger: paletteTrigger, onRun: (i, row) => commands[row.dataset.id!].run() });
-searchInput.oninput = () => renderRows(searchInput.value); // the kit re-selects the first row
+searchInput.oninput = () => renderRows(searchInput.value); // the kit re-selects the first row; new rows resolve out of characters
 ```
 
 ## button-loading: Button loading
@@ -68,15 +68,16 @@ deployButton.onclick = async () => {
 Category: Components
 
 Prompt:
-“Make [our status badges] Asciify pills: tinted pills whose live state is a three-character indicator that breathes, a New pill with a gradient glyph sheen on hover, and a count that rolls through glyphs. Clip every character inside its pill.”
+“Make [our status badges] Asciify pills: soft tinted pills with one glyph before the label, a dot in the status tone that breathes while live, turns as a half-filled spinner while syncing and blinks when a job fails; a solid ink New pill whose sparkle twinkles on hover; and a count that rolls through glyphs. Keep every character inside its pill and off the text.”
 
 ```ts
 import { pill } from 'asciify-engine/kit';
 
-// <span class="pill" data-tone="green" data-live><span data-dot></span>Live</span>, data-tone="new", data-count
+// <span class="pill" data-tone="green" data-live><span data-dot></span><span>Live</span></span>
+// <span class="pill" data-tone="new"><span data-dot></span><span>New</span></span>, <span class="pill" data-count>12</span>
 const pills = pill(document.querySelectorAll<HTMLElement>('.pill'));
-statusPill.dataset.tone = 'amber';
-pills.refresh(); // tone changes ease over 240ms
+statusPill.dataset.tone = 'red';
+pills.refresh(); // tone changes ease over 240ms; red blinks the dot
 pills.count(14); // only the changed digits roll
 ```
 
@@ -84,13 +85,14 @@ pills.count(14); // only the changed digits roll
 Category: Components
 
 Prompt:
-“Make [our segmented tabs] Asciify tabs: the active indicator is a pill of characters that streams across as a glyph trail and condenses under the new tab within 280ms. Panels crossfade; arrow keys, Home and End switch tabs.”
+“Make [our segmented tabs] Asciify tabs: a crisp pill glides to the active tab, its leading end first, with a row of characters along its foot that streaks toward the new tab and settles into a tapered line. The panel's figure rolls like an odometer and its text slides in from the direction of travel; arrow keys, Home and End switch tabs.”
 
 ```ts
-import { tabs } from 'asciify-engine/kit';
+import { odometer, tabs } from 'asciify-engine/kit';
 
-// role="tab" buttons with aria-controls; panels crossfade on [data-active] in your CSS
-const t = tabs(tablist, { duration: 280, panels: 'attribute' });
+// <span class="thumb"> in the tablist, placed from --tabs-x / --tabs-y / --tabs-w / --tabs-h; role="tab" buttons
+const figure = odometer(valueEl, { value: 1_280_000, format: compact });
+const t = tabs(tablist, { panels: 'none', onChange: i => figure.update({ value: VALUES[i], format: FORMATS[i] }) });
 t.select(2);
 ```
 
@@ -155,16 +157,19 @@ replayButton.onclick = () => d.replay();
 Category: Components
 
 Prompt:
-“Build [our visitors analytics card] with bars drawn in Asciify characters: they grow in left to right, grow again on a 7d/30d toggle, and brighten under a hover readout.”
+“Build [our visitors analytics card] with bars drawn in Asciify characters: crisp glyph columns with a denser cap, today lit, growing in left to right. Hover or touch scrubs the bars and rolls the headline to that day; the 7d/30d toggle glides the shared days into place while the rest grow in.”
 
 ```ts
-import { blockChart } from 'asciify-engine/kit';
+import { blockChart, odometer } from 'asciify-engine/kit';
 
+let range = '7d';
+const headline = odometer(totalEl, { value: total[range] });
+// plot: touch-action: pan-y; draw the axis labels in HTML below it.
 const chart = blockChart(plot, {
-  values: visits['7d'], labels: days['7d'],
-  onHover: (i, v, day) => { readout.textContent = i === null ? '' : `${day} · ${v!.toLocaleString()}`; },
+  values: visits['7d'], labels: days['7d'], look: { cellSize: 4.5 }, // small cells keep a gap between 30 bars
+  onHover: (i, v, day) => { label.textContent = day ?? 'Visitors'; headline.set(i === null ? total[range] : v!); },
 });
-rangeToggle.onchange = () => chart.set(visits[rangeToggle.value], days[rangeToggle.value]);
+rangeToggle.onchange = () => { range = rangeToggle.value; chart.set(visits[range], days[range]); headline.set(total[range]); };
 ```
 
 ## route-transition: Page transition
@@ -176,8 +181,8 @@ Prompt:
 ```ts
 import { pageDissolve, blockChart } from 'asciify-engine/kit';
 
-const page = pageDissolve(view, { dissolve: 180, condense: 220 }); // about 400ms, from the clicked tab
-const chart = blockChart(chartSlot, { values: series.overview }); // at rest the chart stays in characters
+const page = pageDissolve(view); // one wave from the clicked tab, about 430ms
+const chart = blockChart(chartSlot, { values: series.overview, lazy: false }); // at rest the chart stays in characters
 for (const tab of navTabs) tab.onclick = () => page.swap(() => { renderView(tab.dataset.page!); chart.set(series[tab.dataset.page!]); }, tab);
 ```
 
@@ -213,7 +218,7 @@ const code = codeInput(codeRow, { length: 6, onComplete: async c => code.verify(
 Category: Components
 
 Prompt:
-“Make [our toasts] with Asciify: each one gathers out of characters and stacks with depth, hover fans the stack out, and dismissing breaks a toast back into drifting glyphs. Include Undo.”
+“Make [our toasts] with Asciify: each one rises in and gathers out of characters, the stack layers by tone and soft shadow with no outlines, hover fans it out, and dismissing or swiping a toast away breaks it into glyphs that drift the way it went. Include Undo.”
 
 ```ts
 import { toastStack } from 'asciify-engine/kit';
@@ -308,15 +313,15 @@ resetButton.onclick = () => c.set(50, true);
 Category: Media
 
 Prompt:
-“Build an image accordion for [our prints]: [five photos] as panels drawn in Asciify characters. The hovered or focused panel widens and its characters give way to the full photo in 280ms, with a caption.”
+“Build an image accordion for [our prints]: [five photos] as panels drawn in Asciify characters. The hovered, tapped or focused panel widens on one smooth spring while its characters cross over to the full photo, with a caption; a quick sweep across the strip doesn't open every panel on the way.”
 
 ```ts
 import { accordion } from 'asciify-engine/kit';
 
-// give the strip a height; panels open on hover, press or focus
+// give the strip a height; panels open on hover (with intent), tap, press or focus
 accordion(printStrip, {
   images: [{ src: '/prints/stairwell.webp', title: 'Stairwell', meta: 'Silver print · $120' }, '/prints/shell.webp', '/prints/fern.webp', '/prints/dune.webp', '/prints/pier.webp'],
-  duration: 280,
+  duration: 420,
 });
 ```
 
@@ -324,7 +329,7 @@ accordion(printStrip, {
 Category: Media
 
 Prompt:
-“Make an image dropzone with Asciify: a quiet ring of characters frames the drop area and breathes on drag-over. A dropped image develops in characters, with Replace and Download PNG.”
+“Make an image dropzone with Asciify: a quiet ring of the lightest characters frames the drop area. On drag-over, packets of denser characters chase round it and a halo leans in toward the file. A dropped image opens out from the drop point in characters, with Replace and Download PNG.”
 
 ```ts
 import { dropzone } from 'asciify-engine/kit';
@@ -355,14 +360,14 @@ async function removeRow(row: HTMLElement, id: string) {
 Category: Components
 
 Prompt:
-“Add pull to refresh to [our feed]: pulling reveals an Asciify character orb that densifies with distance. Past the threshold it spins while refreshing, condenses into a check, and new [posts] resolve in from characters. Include a Refresh button.”
+“Add pull to refresh to [our feed]: pulling draws a small, iOS-sized ring of Asciify characters round in the gap, closing with a small pop at the threshold. Let go and it opens into a spinning arc while refreshing, draws a check, and new [posts] resolve in from characters. Include a Refresh button.”
 
 ```ts
 import { pullRefresh } from 'asciify-engine/kit';
 
-// feedScreen: overflow auto, content in its first child; the ring spins until onRefresh resolves, then draws a check
+// feedScreen: overflow auto, content in its first child; the 26px ring spins until onRefresh resolves, then draws a check
 // rows marked data-new resolve in from characters as the content springs back
-const pull = pullRefresh(feedScreen, { threshold: 88, reveal: '[data-new]', onRefresh: () => loadNewPosts() });
+const pull = pullRefresh(feedScreen, { threshold: 64, reveal: '[data-new]', onRefresh: () => loadNewPosts() });
 refreshButton.onclick = () => void pull.refresh();
 ```
 
@@ -399,7 +404,7 @@ refreshButton.onclick = async () => mrr.set(await fetchMrr());
 Category: Pages
 
 Prompt:
-“Make a split sign-in page with Asciify: [image] in characters on the left that trail under the cursor, and an email field, Continue and Continue with GitHub on the right. Continue pulses the art while the link sends.”
+“Make a split sign-in page with Asciify: [image] in characters on the left that trail under the cursor, and on the right a labelled email field (a filled pill with a mail icon, a focus ring on :focus-visible, the error in the label row so nothing reflows), Continue and Continue with GitHub. Continue pulses the art and shows a loading glyph while the link sends.”
 
 ```ts
 import { artPanel } from 'asciify-engine/kit';
@@ -473,29 +478,20 @@ const v = asciiVideo(player, { src: '/media/magnolia.mp4', poster: '/media/magno
 playButton.onclick = () => playButton.setAttribute('aria-label', v.toggle() ? 'Pause' : 'Play');
 ```
 
-## hero-background: Hero background
+## hero-background: Background
 Category: Backgrounds
 
 Prompt:
-“Put a calm ASCII background behind our hero with Asciify. Characters drift toward the headline and soften under a frosted veil, ripple under the cursor, and pulse when someone presses the main button.”
+“Put the Asciify Swell background behind our hero: a fine dot grid that swells in slow rolling waves, quiet in the middle. Keep it clear around the headline and let it answer the cursor.”
 
 ```ts
-import { fieldBackground } from 'asciify-engine/kit';
+import { background, swell } from 'asciify-engine/kit';
 
-const bg = fieldBackground(heroSection, { preset: 'hero', clear: heroText, ripple: true });
-subscribeButton.onclick = () => bg.pulse(subscribeButton, 1.4);
+// One of 27 presets. Import only the one you use; bg.setPreset(other) cross-fades to another.
+const bg = background(heroSection, { preset: swell, clear: heroText });
 ```
 
-```css
-/* The veil: characters blur and fade toward the words instead of stopping at a box edge. */
-.hero-text { position: relative; isolation: isolate; }
-.hero-text::before {
-  content: ""; position: absolute; z-index: -1; inset: -24px -40px; pointer-events: none;
-  background: color-mix(in oklab, var(--bg) 58%, transparent);
-  backdrop-filter: blur(9px);
-  mask-image: radial-gradient(closest-side, #000 52%, rgb(0 0 0 / .6) 74%, transparent);
-}
-```
+Any preset from [the kit reference](kit.md#backgrounds) fits the same call: `swell`, `drift`, `halftone`, `wordField` and `fluid` run on the GPU glyph field; the rest are 2D canvases. For asciify.org's own hero ground, with the frosted veil and `pulse()`, use `fieldBackground(heroSection, { preset: 'hero', clear: heroText })`.
 
 ## Advanced: raw field
 

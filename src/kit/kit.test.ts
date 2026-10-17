@@ -10,7 +10,7 @@ import { buttonLoading, letterCells, letterGlyph } from './button-loading';
 import { statusOrb } from './status-orb';
 import { skeleton, blockKind } from './skeleton';
 import { pill, pillTone, pillLane, laneClip } from './pill';
-import { tabs, streamSpan } from './tabs';
+import { tabs, streamSpan, indicatorRow } from './tabs';
 import { imageGenerate, elapsedLabel } from './image-generate';
 import { resolveColor, mixHex, handle, isDark } from './core';
 
@@ -408,6 +408,8 @@ describe('options', () => {
     expect(mid.right).toBeGreaterThan(100);
     expect(mid.left).toBeLessThan(100);
     expect(streamSpan(a, b, 1)).toMatchObject({ left: 100, right: 150 });
+    expect(indicatorRow(100, 4, 20)).toEqual({ n: 15, x0: 20 });
+    expect(indicatorRow(30, 4, 20)).toEqual({ n: 0, x0: 15 });
   });
   it('reads block kinds, pill tones and the elapsed clock', () => {
     const img = new FakeImage(), round = new FakeImage(), text = new FakeElement('SPAN'), named = new FakeElement('DIV');
@@ -465,14 +467,11 @@ describe('component behaviour', () => {
     expect(frames.size).toBe(1);
     b.destroy();
   });
-  it('gives each pill a lane of whole cells clear of its rounded ends', () => {
-    const lane = pillLane({ x: 10, y: 4, w: 80, h: 22 }, 4.8, 8);
-    expect(lane.x % 4.8).toBeCloseTo(0);
-    expect(lane.x).toBeGreaterThanOrEqual(15);
-    expect(lane.x + lane.w).toBeLessThanOrEqual(85);
-    expect(lane.y).toBe(8);
-    expect(laneClip([lane], 8)).toMatch(/^path\("M/);
-    expect(laneClip([{ x: 0, y: 0, w: 2 }], 8)).toBe('inset(50%)');
+  it('gives each pill a lane of one cell row inside its edge', () => {
+    const lane = pillLane({ x: 10, y: 4, w: 80, h: 24 }, 12, 12);
+    expect(lane).toEqual({ x: 12, y: 12, w: 76 });
+    expect(laneClip([lane], 12)).toMatch(/^path\("M18\.00 12\.00H82\.00A6/);
+    expect(laneClip([{ x: 0, y: 0, w: 2 }], 12)).toBe('inset(50%)');
   });
   it('adds the live indicator, lifts labels over a shared field, and rolls counts', () => {
     const list = element(), status = new FakeElement('SPAN'), count = new FakeElement('SPAN'), label = new FakeElement('SPAN');
@@ -518,8 +517,10 @@ describe('component behaviour', () => {
     expect(t.active).toBe(1);
     expect(tabsEls[1].tabIndex).toBe(0);
     expect(frames.size).toBe(1);
+    expect(list.style.getPropertyValue('--tabs-w')).toMatch(/px$/);
     t.destroy();
     expect(list.listeners.get('keydown')?.size).toBe(0);
+    expect(list.style.getPropertyValue('--tabs-w')).toBe('');
   });
   it('steps the button through its states and restores its label', () => {
     const button = element('BUTTON');

@@ -646,6 +646,15 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.18: 24 render styles in every live field, artwork looks, smoother components
+
+- Glyph fields draw the Studio's tile and print styles: `mark` accepts `pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph` and `pointillism` (see `FIELD_MARKS`), one shader branch each.
+- `setGlobalLook({ style })` re-skins every opted-in kit field in any of the 24 Studio styles (`KIT_STYLES`); `charset` still works alongside.
+- New background preset `swell`: a halftone dot field in slow crossing waves, quiet behind the content, swelling under the pointer.
+- Reworked kit components: `blockChart` (crisp glyph columns, scrubbing, morphing ranges), `commandPalette` (gliding selection, resolving rows, AI shimmer), `toastStack` (no outlines, layered stack, swipe to dismiss), `pill` and `tabs` (glyph status dots, gliding indicator, rolling figures), `pageDissolve` (one continuous wave), `imageGenerate` (one develop curve), `accordion` (one spring per panel, hover intent), `pullRefresh` (an iOS-sized ring), `dropzone` (a quiet ring that comes alive on drag-over).
+- The skill gains `references/looks.md`: 22 artwork looks with prompts and settings for wallpapers, posters and hero art.
+- Studio defaults are paper and graphite instead of yellow; the default characters are Classic ASCII.
+
 ## 4.17: a thinking label that rolls
 
 - `thinking` drops the dot bands and the dotted rule. A wave runs through the status label instead, each letter rolling up through glyphs and back in the label's own font; when the answer starts, the label rolls into `Thought for 2s`. New options `roll`, `wave` and `glyphs`; `lines` and `rule` are ignored.

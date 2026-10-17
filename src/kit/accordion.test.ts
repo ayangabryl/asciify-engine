@@ -38,7 +38,7 @@ describe('accordion', () => {
     const strip = dom.element(), onChange = vi.fn();
     const a = accordion(asElement(strip), { images: IMAGES, onChange });
     const panels = strip.querySelectorAll('button');
-    panels[2].dispatch('pointermove');
+    panels[2].dispatch('pointermove', { pointerType: 'mouse', clientX: 300, timeStamp: 10 });
     expect(a.open).toBe(2);
     expect(onChange).toHaveBeenCalledWith(2);
     panels[2].dispatch('keydown', { key: 'ArrowRight' });
@@ -49,6 +49,22 @@ describe('accordion', () => {
     a.select(1);
     expect(panels.map(p => p.attributes.get('aria-expanded'))).toEqual(['false', 'true', 'false']);
     expect(dom.frames.size).toBe(1);
+  });
+
+  it('waits for a sweeping mouse to rest before opening, and opens at once on a press', () => {
+    vi.useFakeTimers();
+    const strip = dom.element();
+    const a = accordion(asElement(strip), { images: IMAGES });
+    const panels = strip.querySelectorAll('button');
+    panels[1].dispatch('pointermove', { pointerType: 'mouse', clientX: 100, timeStamp: 10 });
+    expect(a.open).toBe(1);
+    panels[2].dispatch('pointermove', { pointerType: 'mouse', clientX: 160, timeStamp: 20 });
+    expect(a.open).toBe(1);
+    vi.advanceTimersByTime(120);
+    expect(a.open).toBe(2);
+    panels[0].dispatch('pointerdown', { pointerType: 'touch' });
+    expect(a.open).toBe(0);
+    vi.useRealTimers();
   });
 
   it('still works as a strip of photos without WebGL2', () => {
