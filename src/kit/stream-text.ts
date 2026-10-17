@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { handle, hash, mountSurface, prefersReduced, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, hash, house, mountSurface, prefersReduced, smoothstep, type KitHandle, type KitOptions, type Surface } from './core';
 import { injectStyle } from './capture';
 
 export type StreamState = 'idle' | 'streaming' | 'done' | 'stopped';
@@ -14,6 +14,15 @@ export interface StreamTextOptions extends KitOptions {
   onState?: (state: StreamState) => void;
   /** Reasoning lines `reasoning()` keeps in view above the reply; older ones scroll up and fade. Default 2. */
   reasoningLines?: number;
+  /**
+   * How characters land, set at creation. `flicker`: a glyph cell flickers, then resolves into the letter. `roll`: each
+   * character rolls up through glyphs in the text's own font and settles on the crisp letter, like the odometer. Default `flicker`.
+   */
+  transition?: 'flicker' | 'roll';
+  /** Ms one character rolls under `transition: 'roll'`; each next character starts `stagger` ms later. Default 300. */
+  roll?: number;
+  /** Glyphs a character rolls through. Default `#%*+=-:`. */
+  glyphs?: string;
 }
 
 export interface StreamTextHandle extends KitHandle<StreamTextOptions> {
@@ -31,7 +40,7 @@ export interface StreamTextHandle extends KitHandle<StreamTextOptions> {
   readonly text: string;
 }
 
-const DEFAULTS = { caret: true, settle: 60, stagger: 18, reasoningLines: 2 };
+const DEFAULTS = { caret: true, settle: 60, stagger: 18, reasoningLines: 2, transition: 'flicker' as 'flicker' | 'roll', roll: 300, glyphs: '#%*+=-:' };
 const EASE = 'cubic-bezier(.16, 1, .3, 1)';
 const CSS = `
 :where(.ascii-reasoning){display:grid;grid-template-rows:1fr;transition:grid-template-rows 260ms ${EASE},opacity 200ms ${EASE}}
@@ -44,7 +53,7 @@ const CSS = `
 `;
 const REST_TONE = 0.7, FLICKER_MS = 48;
 
-interface Char { span: HTMLElement; at: number; seed: number }
+interface Char { span: HTMLElement; from: number; at: number; seed: number }
 
 /** The kit's poster, which the element keeps when its own children are replaced. */
 const posterOf = (element: HTMLElement) => [...element.children].filter(c => c.tagName === 'IMG' && (c as HTMLElement).dataset?.asciiPoster !== undefined);
@@ -65,7 +74,13 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     // row of cells sits on its lowercase letters and a glyph reads like a typed character rather than a block over the line.
     return { size, line, ch: line / 2, cw: Math.max(2, Math.round(size * 0.44)) };
   };
+  const rolling = state.current.transition === 'roll';
   const look = (): GlyphFieldOptions => {
+    if (rolling) {
+      // Body text is small: finer cells than the odometer's keep a rolling letter legible rather than a smudge.
+      const cell = metrics().size < 24 ? 2 : 3;
+      return { mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500, cellSize: cell, cellAspect: 0.66, glyphScale: 1, shade: 0.2, contrast: 1.1, ...state.current.look };
+    }
     const { ch, cw } = metrics();
     return {
       mark: 'glyph', charset: '   :-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
@@ -115,12 +130,58 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     if (next === 'streaming') element.setAttribute('aria-busy', 'true'); else element.removeAttribute('aria-busy');
     state.current.onState?.(next);
   };
-  const land = (char: Char) => char.span.style.removeProperty('color');
+  const land = (char: Char) => { char.span.style.removeProperty('color'); char.span.style.removeProperty('opacity'); };
   const settleAll = () => {
     pending.forEach(land);
     pending = [];
     if (phase === 'streaming' && finish) move('done');
     finish?.(); finish = null;
+  };
+
+  /** Roll: each pending character's column runs up through glyphs to its letter, in the element's own font, then hands over to the text. */
+  const paintRoll = (pen: CanvasRenderingContext2D, now: number, still: boolean, box: (el: Element) => { x: number; y: number; w: number; h: number }, scale: number) => {
+    const style = getComputedStyle(element), size = parseFloat(style.fontSize) || 15, { line } = metrics();
+    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    pen.setTransform(scale, 0, 0, scale, 0, 0);
+    pen.textAlign = 'left'; pen.textBaseline = 'alphabetic';
+    pen.font = font;
+    const metric = pen.measureText('x'), ascent = metric.fontBoundingBoxAscent || size * 0.8, descent = metric.fontBoundingBoxDescent || size * 0.2;
+    if (still) { pending.forEach(land); pending = []; }
+    const o = state.current;
+    pending = pending.filter(char => {
+      if (now >= char.at) { land(char); return false; }
+      const p = clamp((now - char.from) / Math.max(1, char.at - char.from)), spin = house(p), b = box(char.span);
+      // The text holds the letter all along: hidden while it rolls, fading back in as the column settles, as the odometer does.
+      char.span.style.setProperty('opacity', smoothstep(0.72, 1, p).toFixed(3));
+      if (p <= 0) return true;
+      const top = b.y + (b.h - line) / 2, mid = top + (line - ascent - descent) / 2 + ascent;
+      const count = 3 + (char.seed % 3);
+      const column = [...Array.from({ length: count }, (_, j) => o.glyphs[Math.floor(hash(j, char.seed) * o.glyphs.length)] ?? ''), char.span.textContent ?? ''];
+      const offset = (1 - spin) * (column.length - 1) * line;
+      pen.save();
+      pen.beginPath(); pen.rect(b.x - 2, top, b.w + 4, line); pen.clip();
+      pen.globalAlpha = 1 - smoothstep(0.72, 1, p);
+      column.forEach((glyph, j) => {
+        const y = mid + (j - (column.length - 1)) * line + offset;
+        if (y < top - line || y > top + line * 2) return;
+        const last = j === column.length - 1;
+        pen.font = last ? font : `600 ${size * 0.84}px "Geist Mono", ui-monospace, monospace`;
+        pen.fillStyle = last ? '#fff' : '#d0d0d0';
+        pen.fillText(glyph, b.x + (last ? 0 : (b.w - pen.measureText(glyph).width) / 2), y);
+      });
+      pen.restore();
+      return true;
+    });
+    pen.globalAlpha = 1;
+    if (!pending.length && finish) settleAll();
+    if (o.caret && phase !== 'idle' && (last || phase === 'streaming')) {
+      // The caret rides the front of the roll: after the last character that has started, not the last one written.
+      const waiting = pending.find(char => char.from > now), front = waiting ? waiting.span.previousElementSibling as HTMLElement | null : last;
+      const b = front ? box(front) : { x: 0, y: 0, w: 0, h: line }, top = b.y + (b.h - line) / 2;
+      pen.fillStyle = phase === 'streaming' ? '#fff' : `rgb(${REST_TONE * 255} ${REST_TONE * 255} ${REST_TONE * 255})`;
+      pen.fillRect(b.x + b.w + size * 0.18, top + line * 0.2, Math.max(2, size * 0.5), line * 0.6);
+    }
+    return pending.length > 0;
   };
 
   surface = mountSurface({
@@ -130,7 +191,9 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
     kit: state,
     reducedMotion: () => state.current.reducedMotion,
     onFail: () => { surface = null; settleAll(); },
-    paint: ({ pen, now, still, box }) => {
+    resolution: rolling ? 2 : 1,
+    paint: ({ pen, now, still, box, scale }) => {
+      if (rolling) return paintRoll(pen, now, still, box, scale);
       const { line, ch, cw, size } = metrics(), step = Math.floor(now / FLICKER_MS), lead = line / 4;
       // Boxes come in canvas pixels, whose top is a quarter line above the text: each covers whole cells on its line's middle row.
       const cell = (b: { x: number; y: number; w: number; h: number }, tone: number) => {
@@ -180,7 +243,18 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
       if (/^\s/.test(part)) { add(document.createTextNode(part)); continue; }
       const span = document.createElement('span');
       span.textContent = part;
-      if (!still) { span.style.setProperty('color', 'transparent'); pending.push({ span, at: now + o.settle + j * o.stagger, seed: tokens * 31 + j }); }
+      if (!still) {
+        if (rolling) {
+          // Each character starts a stagger after the one before it, counted from the last still rolling, so tokens flow on.
+          const after = pending.length ? pending[pending.length - 1].from + o.stagger : now;
+          const from = Math.max(now, after);
+          span.style.setProperty('opacity', '0');
+          pending.push({ span, from, at: from + o.roll, seed: tokens * 31 + j });
+        } else {
+          span.style.setProperty('color', 'transparent');
+          pending.push({ span, from: now, at: now + o.settle + j * o.stagger, seed: tokens * 31 + j });
+        }
+      }
       add(span);
       last = span;
       j++;

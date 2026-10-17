@@ -257,12 +257,12 @@ regenerate.onclick = async () => { reply.think(); await reply.stream(await ask(q
 Category: AI
 
 Prompt:
-“Stream [our assistant]’s reply with an Asciify write head: an aria-hidden field over the text draws the caret and each token’s unresolved characters as flickering glyphs that settle into letters. Show reasoning lines, Stop and Regenerate.”
+“Stream [our assistant]’s reply with an Asciify write head: each character rolls up through glyphs in our own font and settles on the crisp letter, like an odometer, with the caret riding the front. Show reasoning lines, Stop and Regenerate.”
 
 ```ts
 import { streamText } from 'asciify-engine/kit';
 
-const out = streamText(answerText, { caret: true, settle: 60, stagger: 18, reasoningLines: 2 });
+const out = streamText(answerText, { transition: 'roll', caret: true, stagger: 18, reasoningLines: 2 });
 async function run() {
   out.reset();
   for await (const part of llm.stream(question)) {

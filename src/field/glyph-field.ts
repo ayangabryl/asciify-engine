@@ -119,6 +119,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let layout = fieldCellLayout(settings.cellSize, settings.cellAspect, 1, 2), glyphCount = 2;
   let simWidth = 0, simHeight = 0, read = 0;
   let source: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap | null = null;
+  // A photo or video source; drawn interface states (canvases, bitmaps) stay crisp under blend 'auto'.
+  let photographic = false;
   let ownedVideo: HTMLVideoElement | null = null, sourceWidth = 0, sourceHeight = 0, sourceToken = 0;
   // An image the field decoded itself, and the height it was uploaded at.
   let ownedBitmap: Bitmapish | null = null, textureHeight = 0;
@@ -546,6 +548,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const [pitchX, pitchY] = pitch();
     gl.uniform2f(u.uCell, pitchX, pitchY);
     gl.uniform1f(u.uCount, glyphCount);
+    gl.uniform1f(u.uBlend, settings.blend === 'on' || (glyphCount <= 9 && (settings.blend === 'coarse' || (settings.blend === 'auto' && photographic))) ? 1 : 0);
     gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
     gl.uniform1i(u.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : settings.scene === 'drift' ? 4 : 3);
     gl.uniform1i(u.uMark, settings.mark === 'dot' ? 1 : 0);
@@ -805,6 +808,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (!input) {
       dropVideo(); dropBitmap();
       source = null; sourceWidth = sourceHeight = textureHeight = 0;
+      photographic = false;
       dirty = true; wake();
       return;
     }
@@ -820,6 +824,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       ownedVideo = owned && element instanceof HTMLVideoElement ? element : null;
       if (owned && !(element instanceof HTMLVideoElement)) ownedBitmap = element as ImageBitmap;
       source = element;
+      photographic = typeof input === 'string' || input instanceof HTMLImageElement || input instanceof HTMLVideoElement;
       textureHeight = element instanceof HTMLVideoElement ? element.videoHeight : element instanceof HTMLImageElement ? element.naturalHeight : element.height;
       sourceWidth = loaded.natural?.[0] ?? (element instanceof HTMLVideoElement ? element.videoWidth : element instanceof HTMLImageElement ? element.naturalWidth : element.width);
       sourceHeight = loaded.natural?.[1] ?? textureHeight;

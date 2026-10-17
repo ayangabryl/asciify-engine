@@ -135,7 +135,7 @@ export function dropzone(element: HTMLElement, options: DropzoneOptions = {}): D
   const bare = !element.children.length;
   const look = (): GlyphFieldOptions => (phase === 'empty'
     ? { mark: 'glyph', charset: ' .:+*#', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500, cellSize: CELL, cellAspect: 1, glyphScale: 0.9, ...state.current.look }
-    : { mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 500, cellSize: CELL, cellAspect: 0.8, glyphScale: 0.8,
+    : { blend: 'coarse', mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 500, cellSize: CELL, cellAspect: 0.8, glyphScale: 0.8,
       // Characters in the photo's own colours read only on a dark ground: on a light zone the shadows would vanish into it.
       background: isDark(element) ? 'transparent' : PHOTO_GROUND,
       color: 'source', saturation: 1.15, contrast: 1.15, levels: 'auto', brightness: phase === 'developing' ? -1 : REST, hover: 'trail', trail: { strength: 0.6, radius: 0.3 }, ...state.current.look });

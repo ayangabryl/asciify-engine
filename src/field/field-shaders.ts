@@ -50,7 +50,8 @@ precision highp float;
 precision highp sampler2D;
 uniform sampler2D uSource, uFluid;
 uniform vec2 uResolution, uCell;
-uniform float uCount;
+uniform float uCount, uBlend;
+const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 uniform vec4 uSourceMap;
 uniform int uScene;
 uniform vec3 uInk, uHighlight;
@@ -187,7 +188,13 @@ void main(){
     else dz=(length(q/max(half_,vec2(1e-4)))-1.)*min(half_.x,half_.y);
     tone*=smoothstep(0.,uClearFeather,dz);
   }
-  float index=min(uCount-1.,floor(tone*(uCount-1.)+.5)+(flick>.5&&tone>.02?1.:0.));
+  // Blend: a shade between two characters takes the upper one in the share of cells a 4x4 Bayer pattern gives it.
+  float level=tone*(uCount-1.),upper=fract(level)>=.5?1.:0.;
+  if(uBlend>.5&&tone>.02&&tone<.98){
+    ivec2 q=ivec2(mod(gl_FragCoord.xy,4.));
+    upper=fract(level)>(BAYER[q.y*4+q.x]+.5)/16.?1.:0.;
+  }
+  float index=min(uCount-1.,floor(level)+upper+(flick>.5&&tone>.02?1.:0.));
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);

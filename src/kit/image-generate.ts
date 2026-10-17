@@ -56,7 +56,7 @@ export function imageGenerate(element: HTMLElement, options: ImageGenerateOption
   let phase: GenerateState = 'idle', start = 0, request = 0, objectUrl = '', surface: Surface | null = null;
   const view = { from: { img: null, k: 0, blur: 12 } as Layer, to: { img: null, k: 0, blur: 12 } as Layer, at: -1e6 };
   const photo = () => (state.current.image === undefined ? element.querySelector('img') : state.current.image);
-  const look = (): GlyphFieldOptions => ({
+  const look = (): GlyphFieldOptions => ({ blend: 'coarse',
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 500, cellSize: 7, cellAspect: 0.8, glyphScale: 0.8,
     contrast: 1.4, drift: 0.5, speed: 0.6, hover: 'trail', trail: { strength: 0.9, radius: 0.35 }, ...state.current.look,
   });

@@ -29,6 +29,14 @@ describe('glyph field settings', () => {
   });
 });
 
+describe('glyph field blend', () => {
+  it('defaults to auto and accepts only its four modes', () => {
+    expect(DEFAULT_FIELD_SETTINGS.blend).toBe('auto');
+    for (const mode of ['auto', 'coarse', 'on', 'off'] as const) expect(normalizeFieldSettings({ blend: mode }).blend).toBe(mode);
+    expect(normalizeFieldSettings({ blend: 'sometimes' as never }).blend).toBe('auto');
+  });
+});
+
 describe('glyph field geometry', () => {
   it('covers a wide field with a tall source by cropping vertically around the focus', () => {
     const { scale, offset } = fieldSourceRect(1600, 900, 1000, 1000, 'cover', { x: 0.5, y: 0.25 });

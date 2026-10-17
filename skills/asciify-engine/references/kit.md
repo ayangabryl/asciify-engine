@@ -395,14 +395,14 @@ Options: `lines` (bands while thinking, default 3; the element is held at that m
 Streamed text with a glyph write head: each token lands as flickering character cells that resolve into letters left to right, with a block caret after the last one. The real text is in the DOM all along, for selection and screen readers.
 
 ```ts
-const out = streamText(paragraph);
+const out = streamText(paragraph, { transition: 'roll' });
 for await (const step of llm.reasoning(prompt)) out.reasoning(step); // optional: a short tail of reasoning above the reply
 for await (const token of llm.stream(prompt)) out.write(token);
 await out.done();
 stopButton.onclick = () => out.stop();
 ```
 
-Options: `caret` (default true: bright while writing, dim at rest), `settle` (ms the first character of a token flickers, default 60), `stagger` (ms more per character, default 18), `reasoningLines` (reasoning lines kept in view, default 2), `onState(state)`. Methods: `write(token)`, `reasoning(line)` (adds a line to a tail the kit puts just before the element, `.ascii-reasoning`: the newest lines stay in view, older ones scroll up under a fade, and it collapses once the reply is done or stopped), `done()` (resolves once the last characters land), `stop()` (lands what was written at once; stopped while only reasoning, it folds the tail away), `reset()` (clears the text and the reasoning); getters `state` (`idle`, `streaming`, `done`, `stopped`) and `text`. Sets `aria-busy` while streaming. The field covers the content box from a quarter line above to a quarter line below, in cells half a line tall and about a letter wide, so each glyph sits on its line's lowercase letters like a typed character; give the element a fixed `line-height`. New reasoning lines slide in together with the old ones. Ink defaults to the text colour.
+Options: `transition` (set at creation: `'flicker'`, the default, or `'roll'`, where each character rolls up through glyphs in the text's own font and settles on the crisp letter like the odometer, the caret riding the front of the roll), `roll` (ms one character rolls, default 300), `glyphs` (what it rolls through, default `#%*+=-:`), `caret` (default true: bright while writing, dim at rest), `settle` (ms the first character of a token flickers, default 60), `stagger` (ms more per character, default 18; under `roll`, the gap between characters starting), `reasoningLines` (reasoning lines kept in view, default 2), `onState(state)`. Methods: `write(token)`, `reasoning(line)` (adds a line to a tail the kit puts just before the element, `.ascii-reasoning`: the newest lines stay in view, older ones scroll up under a fade, and it collapses once the reply is done or stopped), `done()` (resolves once the last characters land), `stop()` (lands what was written at once; stopped while only reasoning, it folds the tail away), `reset()` (clears the text and the reasoning); getters `state` (`idle`, `streaming`, `done`, `stopped`) and `text`. Sets `aria-busy` while streaming. The field covers the content box from a quarter line above to a quarter line below, in cells half a line tall and about a letter wide, so each glyph sits on its line's lowercase letters like a typed character; give the element a fixed `line-height`. New reasoning lines slide in together with the old ones. Ink defaults to the text colour.
 
 ### compare
 

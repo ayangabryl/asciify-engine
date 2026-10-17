@@ -39,7 +39,7 @@ export function compare(element: HTMLElement, options: CompareOptions): CompareH
   let glide = { from: position, to: position, at: -1e9 }, raf = 0, dragging = false;
   const added: Element[] = [];
   let optionPosition = state.current.position;
-  const look = (): GlyphFieldOptions => ({
+  const look = (): GlyphFieldOptions => ({ blend: 'coarse',
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist", Arial, sans-serif', fontWeight: 600, cellSize: 6, cellAspect: 0.8, glyphScale: 0.96,
     color: 'source', levels: 'auto', saturation: 1.3, contrast: 1.45, gamma: 0.85, brightness: 0.14, hover: 'trail', trail: { strength: 0.7, radius: 0.3 }, ...state.current.look,
   });

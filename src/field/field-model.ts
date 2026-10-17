@@ -96,6 +96,13 @@ export interface GlyphFieldSettings {
   invert: boolean;
   /** Stretch the source's tonal range so the whole charset is used. */
   levels: 'auto' | 'none';
+  /**
+   * Shades between two characters, drawn by mixing them across neighbouring cells in a fixed 4x4 pattern, as print
+   * halftones do. 'auto' turns it on for photo and video sources drawn in nine or fewer characters, whose steps are coarse;
+   * drawn interface shapes stay crisp, and ramps of ten and more are left as they are. 'coarse' does the same for any
+   * source, for a canvas that paints photos. The pattern is locked to the grid, so it never shimmers.
+   */
+  blend: 'auto' | 'coarse' | 'on' | 'off';
   /** Glyph color saturation in source color mode. */
   saturation: number;
   /** How far darker tones dim the ink, so same-density glyphs such as words still carry the image. 0 is one flat ink. */
@@ -156,6 +163,7 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   gamma: 1,
   invert: false,
   levels: 'auto',
+  blend: 'auto',
   saturation: 1.1,
   shade: 0.5,
   backdrop: 0,
@@ -245,6 +253,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     gamma: clamp(input.gamma, 0.2, 5, base.gamma),
     invert: typeof input.invert === 'boolean' ? input.invert : base.invert,
     levels: input.levels === 'none' || input.levels === 'auto' ? input.levels : base.levels,
+    blend: input.blend === 'auto' || input.blend === 'coarse' || input.blend === 'on' || input.blend === 'off' ? input.blend : base.blend,
     saturation: clamp(input.saturation, 0, 3, base.saturation),
     shade: clamp(input.shade, 0, 1, base.shade),
     backdrop: clamp(input.backdrop, 0, 1, base.backdrop),

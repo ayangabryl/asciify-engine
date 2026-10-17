@@ -77,7 +77,7 @@ export function swipeDeck(deck: HTMLElement, options: SwipeDeckOptions = {}): Sw
   let i = 0, dx = spring(0, 380, 0.72), dy = spring(0, 380, 0.8), promote = spring(0, 260, 0.9), held = false, gx = 0, gy = 0;
   let fly: null | { dir: 1 | -1; start: number; x0: number; y0: number } = null, samples: [number, number][] = [], raf = 0, last = 0, pointer = -1;
   let cut = new Map<HTMLElement, { key: string; canvas: HTMLCanvasElement }>(), grainCanvas: HTMLCanvasElement | null = null, surface: Surface | null = null;
-  const look = (): GlyphFieldOptions => ({
+  const look = (): GlyphFieldOptions => ({ blend: 'coarse',
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
     cellSize: 4, cellAspect: 0.62, glyphScale: 0.94, contrast: 1.3, ...state.current.look,
   });

@@ -49,6 +49,7 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 | `background` | `'transparent'` | Hex or `'transparent'`; the canvas is premultiplied. |
 | `backdrop` | `0` | Opacity of a soft, blurred copy of the source under the glyphs. It is sampled from the mip chain, so it costs nothing extra. |
 | `levels` | `'auto'` | Stretches the source's 2nd–98th luminance percentiles across the charset. Needs pixel access; tainted cross-origin media falls back to `'none'`. |
+| `blend` | `'auto'` | Shades between two characters, mixed across neighbouring cells in a fixed 4x4 pattern, as print halftones do. `'auto'` turns it on for photo and video sources drawn in nine or fewer characters; drawn interface shapes stay crisp. `'on'`, `'off'` force it. Locked to the grid, so it never shimmers; one comparison per cell. |
 | `brightness`, `contrast`, `gamma`, `invert` | `0`, `1`, `1`, `false` | Applied after levels. |
 | `fit`, `focus` | `'cover'`, centre | `focus` moves the cover crop (0–1 on each axis). |
 | `vignette` | `0` | Darkens toward the corners. |
