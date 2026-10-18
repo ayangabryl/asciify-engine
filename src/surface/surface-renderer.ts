@@ -30,8 +30,27 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
   const timeline = new AmbientTimeline();
   const glyphs=createTrailGlyphs();
   let glyphData: ReturnType<typeof glyphs.update>|null=null;
-  let cues: PhotoCues | null = null, cueSource: object | null = null, cueRgba = new Uint8Array(0), cuePixels = new Uint8Array(0);
+  let cues: PhotoCues | null = null, cueSource: object | null = null, cueDrift = false, cueRgba = new Uint8Array(0), cuePixels = new Uint8Array(0);
   let locations: Record<string, WebGLUniformLocation | null> = {};
+  // A redrawn cell replaces the artwork's whole cell, ground included; an opaque, even ground is put back under it.
+  const corners = document.createElement('canvas'), cornersCtx = corners.getContext('2d', { willReadFrequently: true });
+  corners.width = 8; corners.height = 1;
+  const readGround = (): number[] => {
+    if (!cornersCtx) return [0, 0, 0, 0];
+    const w = source.width, h = source.height;
+    cornersCtx.clearRect(0, 0, 8, 1);
+    [[1, 1], [w - 2, 1], [1, h - 2], [w - 2, h - 2], [w >> 1, 1], [w >> 1, h - 2], [1, h >> 1], [w - 2, h >> 1]].forEach(([x, y], i) => cornersCtx.drawImage(source, x, y, 1, 1, i, 0, 1, 1));
+    let d: Uint8ClampedArray;
+    try { d = cornersCtx.getImageData(0, 0, 8, 1).data; } catch { return [0, 0, 0, 0]; }
+    // Glyph ink can touch a border sample, so the ground is the opaque colour most samples agree on.
+    for (let i = 0; i < 32; i += 4) {
+      if (d[i + 3] < 250) continue;
+      let agree = 0;
+      for (let j = 0; j < 32; j += 4) if (d[j + 3] >= 250 && Math.abs(d[j] - d[i]) + Math.abs(d[j + 1] - d[i + 1]) + Math.abs(d[j + 2] - d[i + 2]) <= 18) agree++;
+      if (agree >= 5) return [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, 1];
+    }
+    return [0, 0, 0, 0];
+  };
   const attach = () => {
     canvas.className = 'ascii-hover-surface';
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
@@ -71,7 +90,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
       uniform sampler2D codes; uniform sampler2D cellColors; uniform sampler2D glyphAtlas;
       uniform vec2 gridSize; uniform vec2 atlasSize; uniform vec2 tileSize;
       uniform float atlasColumns; uniform float padding; uniform float glyphCount;
-      uniform float dots; uniform float dotSize; uniform float directGlyphs; uniform vec4 backdrop;
+      uniform float dots; uniform float dotSize; uniform float directGlyphs; uniform vec4 backdrop; uniform vec4 cellGround;
       uniform float edgeEffect; uniform sampler2D textMask; uniform float hasTextMask; uniform sampler2D cueMap;
       ${EDGE_FINISH_GLSL}
       ${INK_TRAIL_GLSL}
@@ -108,12 +127,15 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
         vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y) / resolution;
         vec2 pixel = uv * sceneSize;
         if (strength > 0.) {
-          vec4 normal = texture2D(surface, (uv * (surfaceSize - 1.) + .5) / surfaceSize) * 255.;
+          // Whole cells move, read at the cell centre, so characters are carried intact rather than smeared through.
+          vec2 home = (floor(pixel / cellSize) + .5) * cellSize / sceneSize;
+          vec4 normal = texture2D(surface, (home * (surfaceSize - 1.) + .5) / surfaceSize) * 255.;
           vec2 slope = (vec2(normal.r * 256. + normal.g, normal.b * 256. + normal.a) - 32768.) / 32767.;
-          vec2 edge = min(pixel, sceneSize - pixel) / cellSize;
+          vec2 edge = min(home * sceneSize, sceneSize - home * sceneSize) / cellSize;
           // Cursor hovers store a fraction of the scene, so they scale with it; stroke hovers store CSS pixels.
           vec2 unit = relativeStrength > .5 ? vec2(1.) : 1. / sceneSize;
-          uv -= slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) * hoverScope(uv) * unit;
+          vec2 shift = slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) * hoverScope(home) * unit * sceneSize / cellSize;
+          uv -= floor(shift + .5) * cellSize / sceneSize;
         }
         vec4 ambient=vec4(0.,0.,0.,1.);
         if(motionMode>.5) {
@@ -160,6 +182,12 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           float index=trailIndex(original,glyphCount,density,cell);
           if(original>.5) index=clamp(floor(index+ambient.z*(glyphCount-1.)+printGrain(cell)),0.,glyphCount-1.);
           vec4 color=texture2D(cellColors,address);
+          // Ripple and Emboss draw their own faint rings on an empty or near-black ground, where a tone lift barely shows.
+          if(trailKind>2.5 && density>.012 && (color.a<.01 ? scopeMode>1.5 : max(color.r,max(color.g,color.b))<.12)) {
+            float ring=smoothstep(.012,.132,density);
+            index=max(index,floor((.1+ring*.45)*(glyphCount-1.)+.5));
+            color=vec4(vec3(.84),.3+ring*.45);
+          }
           if((index!=original || motionMode>.5) && color.a>.01) {
             vec2 local=(pixel-cell*cellSize)*resolution/sceneSize;
             vec2 slot=vec2(mod(index,atlasColumns),floor(index/atlasColumns));
@@ -172,10 +200,12 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             // Replace the cell, rather than blending two glyphs into a ghost.
             vec3 rgb=trailInk(color.rgb,density);
             ink=vec4(rgb*alpha*color.a,alpha*color.a);
+            ink+=cellGround*(1.-ink.a);
           }
         }
         if(trailAmount>0. && trailKind<.5 && trailDensity((floor(pixel/cellSize)+.5)/gridSize)>.001) {
           ink=flowingCharacter(pixel,floor(pixel/cellSize),ambient);
+          ink+=cellGround*(1.-ink.a);
         }
         vec3 straightInk = ink.a > .0 ? ink.rgb / ink.a : vec3(.0);
         float value = max(straightInk.r, max(straightInk.g, straightInk.b));
@@ -192,7 +222,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
     buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
     const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount', 'cueMap', 'motionFocus'].map(k => [k,gl!.getUniformLocation(program!,k)]));
+    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','cellGround','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount', 'cueMap', 'motionFocus'].map(k => [k,gl!.getUniformLocation(program!,k)]));
     for (let unit=0; unit<8; unit++) {
       const texture=gl.createTexture()!; textures.push(texture); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
@@ -242,17 +272,19 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           gl.uniform1f(locations.dots,glyphData.dots?1:0); gl.uniform1f(locations.dotSize,glyphData.dotSize);
         }
       }
-      if (mode !== 'none' && glyphData && cueSource !== glyphData) {
+      if (mode !== 'none' && glyphData && (cueSource !== glyphData || cueDrift !== (mode === 'current'))) {
         // Cues come from the cell grid's own tone and coverage: accent ink or a palette never changes the light.
         const {packed}=glyphData, n=packed.cols*packed.rows;
         if (cueRgba.length !== n*4) cueRgba = new Uint8Array(n*4);
         for (let i=0;i<n;i++) { const t=packed.indices[i*4+2]; cueRgba[i*4]=cueRgba[i*4+1]=cueRgba[i*4+2]=t; cueRgba[i*4+3]=packed.colors[i*4+3]; }
-        cues=buildPhotoCues(cueRgba,packed.cols,packed.rows,cues); cueSource=glyphData;
+        // Hue (water, sky) is read from the cell colours; a single ink simply has none to read.
+        if (cueSource !== glyphData) cues=buildPhotoCues(cueRgba,packed.cols,packed.rows,cues,packed.colors);
+        cueSource=glyphData; cueDrift=mode === 'current';
         if (gl) {
-          cuePixels=packPhotoCues(cues,cuePixels);
+          cuePixels=packPhotoCues(cues!,cuePixels,cueDrift);
           gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D,textures[7]);
           gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,packed.cols,packed.rows,0,gl.RGBA,gl.UNSIGNED_BYTE,cuePixels);
-          gl.uniform2f(locations.motionFocus,cues[6] ?? .5,cues[7] ?? .5);
+          gl.uniform2f(locations.motionFocus,cues?.[6] ?? .5,cues?.[7] ?? .5);
         }
       }
       if (gl) {
@@ -268,7 +300,9 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
           gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+          gl.uniform4fv(locations.cellGround,readGround());
         }
+        if (direct) gl.uniform4fv(locations.cellGround,[0,0,0,0]);
         gl.uniform1f(locations.directGlyphs,direct?1:0);
         if(direct && (dirty || !uploaded)) gl.uniform4fv(locations.backdrop,(finish.textMask || hasSurfaceTransparency(frame!))?[0,0,0,0]:surfaceBackdrop(source));
         uploaded=true;

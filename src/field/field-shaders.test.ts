@@ -12,6 +12,11 @@ const draw = field.slice(field.indexOf('const draw = () =>'), field.indexOf('con
 const fluid = field.slice(field.indexOf('const stepFluid ='), field.indexOf('const draw = () =>'));
 
 describe('glyph field programs', () => {
+  it('weights every pointer response by the hover scope', () => {
+    const cell = fieldCellShader(false);
+    for (const use of ['vec2 v=raw.xy*uFluidTexel*vec2(aspect,1.)*hs', 'fluid.xyz*=hs', '.45*uLight.z*min(1.,uLightGain*1.6)*hs', 'spot=exp(-q2*1.6)*uLight.z*min(1.,uLightGain*1.6)*hs', 'glowL=min(glowL,1.)*hs', 'trailFold=t*t*(3.-2.*t)*hs'])
+      expect(cell).toContain(use);
+  });
   it('sets every uniform the cell pass declares, by its declared name', () => {
     const names = declared(fieldCellShader(false));
     expect([...used(draw, 'u')].filter(name => !names.has(name))).toEqual([]);

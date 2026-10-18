@@ -175,6 +175,85 @@ describe('context budget', () => {
     handle.destroy();
   });
 
+  it('gives an open modal dialog\'s fields the contexts of the covered page, and gives them back on close', () => {
+    setFieldBudget(2);
+    const grid = [beam(as(at(0))), beam(as(at(100)))];
+    expect(mount).toHaveBeenCalledTimes(2);
+    const dialog = element('DIALOG');
+    const modal = { open: [dialog] };
+    Object.assign(document, { querySelectorAll: (selector: string) => (selector === 'dialog:modal' ? modal.open : []) });
+    const inside = (top: number) => { const el = at(top); dialog.appendChild(el); return el; };
+    // Both on screen, both lazy: only being covered lets the dialog's fields in.
+    const shown = [beam(as(inside(200))), beam(as(inside(300)))];
+    expect(mount).toHaveBeenCalledTimes(4);
+    expect(fields[0].destroy).toHaveBeenCalledOnce();
+    expect(fields[1].destroy).toHaveBeenCalledOnce();
+    // A covered field coming near never takes one back while the dialog is open.
+    beam(as(at(50)));
+    expect(mount).toHaveBeenCalledTimes(4);
+
+    // Closing unmounts the dialog's demo: the page behind it mounts again.
+    modal.open = [];
+    shown.forEach(h => h.destroy());
+    expect(mount).toHaveBeenCalledTimes(6);
+    expect(mount.mock.calls.slice(4).map(call => call[0].parentElement?.parentElement)).not.toContain(dialog);
+    grid.forEach(h => h.destroy());
+  });
+
+  it('brings covered fields back when a dialog that drew none closes', () => {
+    setFieldBudget(1);
+    const dialog = element('DIALOG');
+    const modal = { open: [dialog] };
+    Object.assign(document, { querySelectorAll: (selector: string) => (selector === 'dialog:modal' ? modal.open : []) });
+    const near = at(0);
+    dialog.appendChild(near);
+    const shown = beam(as(near));
+    const page = beam(as(at(100)));
+    expect(mount).toHaveBeenCalledTimes(1);
+    // The dialog closes while its demo stays: it is hidden, and the close hands its context to the page.
+    modal.open = [];
+    Object.assign(near, { getClientRects: () => [] });
+    for (const fn of env.docListeners.get('close') ?? []) fn({ target: dialog });
+    expect(fields[0].destroy).toHaveBeenCalledOnce();
+    expect(mount).toHaveBeenCalledTimes(2);
+    shown.destroy(); page.destroy();
+  });
+
+  it('remounts a field whose context the browser took and did not restore, on a fresh canvas', () => {
+    const el = at(0);
+    const handle = beam(as(el));
+    expect(mount).toHaveBeenCalledTimes(1);
+    const [first] = canvases(el);
+    first.dispatch('webglcontextlost');
+    advance(400);
+    first.dispatch('webglcontextrestored');
+    advance(1000);
+    expect(mount).toHaveBeenCalledTimes(1);
+
+    first.dispatch('webglcontextlost');
+    advance(1000);
+    expect(fields[0].destroy).toHaveBeenCalledOnce();
+    expect(mount).toHaveBeenCalledTimes(2);
+    const [second] = canvases(el);
+    expect(second).not.toBe(first);
+    expect(mount.mock.calls[1][0]).toBe(second);
+    handle.destroy();
+  });
+
+  it('gives a released field\'s canvas up at once, so its lost context can be collected', () => {
+    const el = at(0);
+    const handle = beam(as(el));
+    const [first] = canvases(el);
+    scroll([el, 2000]);
+    expect(fields[0].destroy).toHaveBeenCalledOnce();
+    const [waiting] = canvases(el);
+    expect(waiting).not.toBe(first);
+    expect(first.parentElement).toBeNull();
+    scroll([el, 0]);
+    expect(mount.mock.calls[1][0]).toBe(waiting);
+    handle.destroy();
+  });
+
   it('lets a lazy: false field displace the farthest live one', () => {
     setFieldBudget(1);
     beam(as(at(0)));

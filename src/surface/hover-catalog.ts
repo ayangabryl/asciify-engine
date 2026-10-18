@@ -28,6 +28,15 @@ export type DeprecatedSurfaceHover = keyof typeof DEPRECATED_SURFACE_HOVERS;
 
 export type SurfaceHover = typeof SURFACE_HOVERS[number]['value'];
 
+/** Ranges, steps and defaults of the controls every hover shares, as the Studio and `mountHover` read them. */
+export const HOVER_CONTROLS = {
+  radius: { label: 'Hover size', min: .1, max: 1, step: .05, default: .2 },
+  strength: { label: 'Hover strength', min: 0, max: 1, step: .05, default: .55 },
+  decay: { label: 'Linger', min: 0, max: 1, step: .05, default: .5 },
+} as const;
+/** The Studio's default hover. `mountHover` matches it, except that Trail starts with a wider radius (.45). */
+export const DEFAULT_HOVER = { effect: 'trail', strength: .55, radius: .2, decay: .5, scope: 'all', edgeSafe: false } as const;
+
 /** A current hover ID for any saved or legacy value, or undefined when it is unknown. */
 export function resolveSurfaceHover(value: unknown): SurfaceHover | undefined {
   if (typeof value !== 'string') return undefined;

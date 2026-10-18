@@ -153,3 +153,13 @@ describe('fieldCellPitch', () => {
     expect(normalizeFieldSettings({ cellFit: 'nope' as 'fill' }).cellFit).toBe('pixel');
   });
 });
+
+describe('field hover scope', () => {
+  it('defaults to all, accepts subject and outside, and keeps the previous scope for unknown input', () => {
+    expect(DEFAULT_FIELD_SETTINGS.scope).toBe('all');
+    expect(normalizeFieldSettings({ scope: 'subject' }).scope).toBe('subject');
+    const outside = normalizeFieldSettings({ scope: 'outside' });
+    expect(normalizeFieldSettings({ hover: 'lantern' }, outside).scope).toBe('outside');
+    expect(normalizeFieldSettings({ scope: 'nope' as 'all' }).scope).toBe('all');
+  });
+});

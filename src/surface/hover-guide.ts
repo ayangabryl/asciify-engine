@@ -49,6 +49,7 @@ export function boxBlur(values: Float32Array, scratch: Float32Array, w: number, 
  * guide reports `none` and every scope behaves like `all` rather than guessing.
  * A drawn `mask` (0..1 per sample) is the person's own subject: it replaces ground keying and multiplies with alpha.
  */
+let blurScratch = new Float32Array(0);
 export function buildHoverGuide(rgba: ArrayLike<number>, width: number, height: number, mask?: ArrayLike<number> | null, previous?: HoverGuide | null): HoverGuide {
   const n = width * height;
   const guide = previous && previous.width === width && previous.height === height ? previous
@@ -81,7 +82,9 @@ export function buildHoverGuide(rgba: ArrayLike<number>, width: number, height: 
   }
   guide.key = key;
   // A feather of about 2% of the short side: soft at the boundary, never a hard clip.
-  const scratch = new Float32Array(n);
+  // Video rebuilds the guide a few times a second; the blur scratch is reused rather than reallocated.
+  if (blurScratch.length < n) blurScratch = new Float32Array(n);
+  const scratch = blurScratch;
   boxBlur(subject, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .02)));
   boxBlur(depth, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .035)));
   return guide;

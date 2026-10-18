@@ -646,6 +646,12 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.23: dialogs always render, sharper motion cues, cleaner hovers
+
+- Kit fields inside an open modal dialog always get a WebGL context: fields covered by the dialog give theirs up and come back when it closes. A released field hands its canvas back at once (Safari counts dead contexts toward its limit), and a field whose context is lost recovers onto a fresh canvas.
+- Depth is fused from focus, haze, a horizon prior, texture and saliency with an edge-aware filter; Drift finds water (including non-blue seas by reflection), sky, cloud and falling water, and holds everything else still. The classic core renderer shares the same motion code. Analysis follows grid changes and reads the ungraded photo.
+- Water settles cleanly; Ripple and Emboss draw their own rings on dark or transparent ground; glyph fields take `scope`; video subjects update as the video plays; the hover catalog (`HOVER_CONTROLS`, `DEFAULT_HOVER`, `resolveHover`) is exported once. On the GPU path, Trail keeps the artwork's ground and Water moves whole cells.
+
 ## 4.22: photo-aware motion and finish
 
 - A new set of still-image motions read the photo's own light, form, highlights, detail and estimated depth: `relight`, `sheen` (specular sweep), `glow` (highlight bloom), `shimmer` (glints), `parallax`, `push`, `focus`, `mist`, `current` (drift) and `develop`.

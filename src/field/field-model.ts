@@ -1,4 +1,5 @@
 /** Pure option handling for the GPU glyph field, kept free of DOM and WebGL so it can be tested in Node. */
+import { normalizeHoverScope, type HoverScope } from '../surface/hover-guide';
 
 export type FieldColor = 'ink' | 'source';
 export type FieldFit = 'cover' | 'contain';
@@ -147,6 +148,12 @@ export interface GlyphFieldSettings {
   lantern: FieldLanternOptions;
   /** Settings for the trail hover. */
   trail: FieldTrailOptions;
+  /**
+   * Where the pointer response acts: `all` (default) everywhere, `subject` only on the source's subject, `outside` only on
+   * the ground around it. The subject is the source's alpha, or for an opaque source on a plain, even ground, its distance
+   * from that ground; feathered at the edge. A busy photo and generated scenes have no subject, so every scope acts as `all`.
+   */
+  scope: HoverScope;
   maxPixelRatio: number;
   /** Stop ambient motion and soften the wake when the visitor prefers reduced motion. */
   respectReducedMotion: boolean;
@@ -197,6 +204,7 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   fluid: DEFAULT_FIELD_FLUID,
   lantern: DEFAULT_FIELD_LANTERN,
   trail: DEFAULT_FIELD_TRAIL,
+  scope: 'all',
   maxPixelRatio: 2,
   respectReducedMotion: true,
 };
@@ -298,6 +306,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
       strength: clamp(input.trail?.strength, 0, 1, base.trail.strength),
       radius: clamp(input.trail?.radius, 0.1, 1, base.trail.radius),
     },
+    scope: input.scope === undefined ? base.scope : normalizeHoverScope(input.scope),
     maxPixelRatio: clamp(input.maxPixelRatio, 0.5, 4, base.maxPixelRatio),
     respectReducedMotion: typeof input.respectReducedMotion === 'boolean' ? input.respectReducedMotion : base.respectReducedMotion,
   };

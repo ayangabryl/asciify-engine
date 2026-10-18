@@ -70,7 +70,8 @@ uniform int uHoverMode;
 uniform vec3 uLight;
 uniform vec3 uTrail[12];
 uniform float uLightRadius, uLightGain, uClock, uFlicker, uTrailAmount;
-uniform sampler2D uTrailMap;
+uniform sampler2D uTrailMap, uScope;
+uniform float uScopeMode;
 uniform vec2 uLevels;
 uniform int uMark;
 uniform float uScale, uClearFeather, uClearShape;
@@ -261,23 +262,32 @@ vec3 generated(vec2 uv,float aspect){
   }
   return vec3(0.);
 }
+// Hover scope: 1 where the pointer response may act. The map holds the source's soft subject coverage in alpha.
+float hoverScope(vec2 uv){
+  if(uScopeMode<.5||uScene!=0)return 1.;
+  vec2 s=uv*uSourceMap.xy+uSourceMap.zw;
+  float c=(s.x<0.||s.y<0.||s.x>1.||s.y>1.)?0.:texture(uScope,s).a;
+  return uScopeMode<1.5?c:1.-c;
+}
 void main(){
   vec2 cell=floor(gl_FragCoord.xy);
   vec2 uv=(cell+.5)*uCell/uResolution;
   float aspect=uResolution.x/uResolution.y;
+  float hs=hoverScope(uv);
   vec4 fluid=vec4(0.);
   // lift: signed tone change. The solver's flow brightens one side of each eddy and opens the other into gaps.
   float lift=0.,wake=0.,bend=1.,swirl=0.,speed=0.;
   if(uFluidOn>.5){
     vec4 raw=texture(uFluid,vec2(uv.x,1.-uv.y));
     if(uFluidMode>.5){
-      vec2 v=raw.xy*uFluidTexel*vec2(aspect,1.);
+      vec2 v=raw.xy*uFluidTexel*vec2(aspect,1.)*hs;
       fluid=vec4(v,0.,1.);
       swirl=clamp(dot(v,vec2(.4,.65))*uGlow*.32,-.65,.65);
       speed=clamp(length(v)*uGlow*.055,0.,.38);
       bend=.4;
     } else {
       fluid=decodeFluid(raw);
+      fluid.xyz*=hs;
       wake=clamp(fluid.z*uGlow,0.,1.);
       lift=wake*.55;
     }
@@ -289,8 +299,8 @@ void main(){
     vec2 d=(uv-uLight.xy)*vec2(aspect,1.);
     float q2=dot(d,d)/(uLightRadius*uLightRadius*2.2);
     // Loupe: flat-topped zoom with a soft rim. Reveal: a soft spot in the source's colours.
-    if(uHoverMode==4) sampleAt-=(uv-uLight.xy)*exp(-q2*q2)*.45*uLight.z*min(1.,uLightGain*1.6);
-    else spot=exp(-q2*1.6)*uLight.z*min(1.,uLightGain*1.6);
+    if(uHoverMode==4) sampleAt-=(uv-uLight.xy)*exp(-q2*q2)*.45*uLight.z*min(1.,uLightGain*1.6)*hs;
+    else spot=exp(-q2*1.6)*uLight.z*min(1.,uLightGain*1.6)*hs;
   }
   vec3 rgb,glow=vec3(0.);
   if(uScene==0){
@@ -315,7 +325,7 @@ void main(){
     vec2 ap=vec2(aspect,1.),d=(uv-uLight.xy)*ap;
     float r2=uLightRadius*uLightRadius,glowL=uLight.z*exp(-dot(d,d)/r2);
     for(int i=0;i<12;i++){vec2 e=(uv-uTrail[i].xy)*ap;glowL+=uTrail[i].z*exp(-dot(e,e)/(r2*.55));}
-    glowL=min(glowL,1.);
+    glowL=min(glowL,1.)*hs;
     float grain=fract(sin(dot(cell,vec2(12.9898,78.233)))*43758.5453);
     lift=glowL*uLightGain*(.7+.6*grain);
     wake=glowL*.4;
@@ -327,7 +337,7 @@ void main(){
     vec4 ink=texture(uTrailMap,uv);
     float density=(ink.r*65280.+ink.g*255.)/65535.*uTrailAmount;
     float t=clamp(density/.38,0.,1.);
-    trailFold=t*t*(3.-2.*t);
+    trailFold=t*t*(3.-2.*t)*hs;
   }
   if(uFluidMode>.5&&uHoverMode==1){
     // Dark ground: any motion lights the characters. Lit ground: the flow lights one side of each eddy and opens the other.

@@ -23,6 +23,7 @@ export type { LegacyAmbientMotion } from './surface/ambient-motion';
 export { SURFACE_HOVERS as STUDIO_HOVERS } from './surface/hover-catalog';
 export { HOVER_SCOPES } from './surface/hover-guide';
 export type { HoverScope } from './surface/hover-guide';
-export { DEPRECATED_SURFACE_HOVERS as DEPRECATED_STUDIO_HOVERS } from './surface/hover-catalog';
+export { DEPRECATED_SURFACE_HOVERS as DEPRECATED_STUDIO_HOVERS, HOVER_CONTROLS, DEFAULT_HOVER, resolveSurfaceHover as resolveHover } from './surface/hover-catalog';
+export type { SurfaceHover as HoverEffect, DeprecatedSurfaceHover as DeprecatedHoverEffect } from './surface/hover-catalog';
 export { STUDIO_ANIMATION_PRESETS } from './surface/animation-presets';
 export type { StudioAnimationPreset } from './surface/animation-presets';

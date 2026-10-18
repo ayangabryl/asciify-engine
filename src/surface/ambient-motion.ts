@@ -18,7 +18,7 @@ export const MOTION_STYLES = [
   { value: 'push', mode: 'push', group: 'Depth', label: 'Slow push', description: 'A gentle push toward the subject and back, with nearer areas moving slightly more.' },
   { value: 'focus', mode: 'focus', group: 'Depth', label: 'Focus pull', description: 'Focus racks from the subject to the background and back; the characters soften out of focus.' },
   { value: 'mist', mode: 'mist', group: 'Atmosphere', label: 'Mist', description: 'Soft mist drifts through the distance and plain areas, leaving the subject clear.' },
-  { value: 'current', mode: 'current', group: 'Atmosphere', label: 'Drift', description: 'Sky, water and smooth grounds flow slowly, like a cinemagraph; detailed areas hold still.' },
+  { value: 'current', mode: 'current', group: 'Atmosphere', label: 'Drift', description: 'Water swells and glints, falls stream down, sky and clouds drift slowly, like a cinemagraph. Subjects and buildings hold still.' },
   { value: 'develop', mode: 'develop', group: 'Reveal', label: 'Develop', description: 'The image holds, fades, then develops back in from its highlights to its shadows, like a print in the tray.' },
 ] as const;
 export function resolveMotion(style?: string): AmbientMotion {
@@ -87,19 +87,30 @@ export function sampleAmbient(mode: AmbientMotion, x: number, y: number, time: n
     const cx=cues ? cues[at+6] : .5, cy=cues ? cues[at+7] : .5;
     out[0]=(x-cx)*zoom; out[1]=(y-cy)*zoom;
   } else if(mode==='focus') {
-    const s=Math.sin(p), defocus=s*s*smooth(.15,.6,s>=0 ? 1-depth : depth);
-    out[2]=(light-tone)*defocus*.9;
+    const s=Math.sin(p), defocus=s*s*smooth(.35,.85,s>=0 ? 1-depth : depth);
+    out[2]=(light-tone)*defocus*.75;
   } else if(mode==='mist') {
     const far=Math.pow(1-depth,1.5)*(1-.6*detail);
     const veil=Math.sin(x*4.1-p+Math.sin(y*3.3+p)*.9)*.5+Math.sin(x*7.3+y*2.1-p*2+Math.sin(x*2.7-y*5.1+p)*1.1)*.3+Math.sin(y*5.7-x*1.9+p)*.2;
     out[2]=smooth(-.3,.9,veil)*far*.16*(1-.55*tone);
   } else if(mode==='current') {
     // Measured from the still at time zero: the flow starts from, and returns to, the photograph.
-    const fluid=(1-.4*detail)*(1-.8*depth)*envelope;
+    // Water swells sideways and glints; sky and cloud slide very slowly; everything else holds.
+    const water=cues?.[at+8] ?? 0, sky=cues?.[at+9] ?? 0, falls=cues?.[at+10] ?? 0, edge=smooth(0,.06,Math.min(x,1-x,y,1-y));
+    // Without cues (the bare CPU fallback) a smooth, far ground flows instead; with them only water and sky move.
+    const plain=cues ? 0 : (1-.4*detail)*(1-.8*depth)*envelope;
     const wave=(q: number) => y*14-q+Math.sin(x*3+q)*1.5;
-    out[0]=(Math.sin(wave(p))-Math.sin(wave(0))+(Math.sin(x*5-y*3+p)-Math.sin(x*5-y*3))*.43)*7*fluid;
-    out[1]=(Math.sin(x*11+p)-Math.sin(x*11))*2*fluid;
-    out[2]=(Math.cos(wave(p))-Math.cos(wave(0)))*.03*fluid;
+    const swell=(q: number) => y*16+x*2-q, chop=(q: number) => y*29-x*3-q*2;
+    const sheet=(q: number) => x*1.7+y*2.3-q, fall=(q: number) => y*26+Math.sin(x*40)*1.5-q*2;
+    out[0]=(Math.sin(wave(p))-Math.sin(wave(0))+(Math.sin(x*5-y*3+p)-Math.sin(x*5-y*3))*.43)*7*plain
+      +((Math.sin(swell(p))-Math.sin(swell(0)))*3.5+(Math.sin(chop(p))-Math.sin(chop(0)))*1.5)*water*edge
+      +(Math.sin(sheet(p))-Math.sin(sheet(0)))*5*sky*edge;
+    // Falling water: streaks travel downward through the fall.
+    out[1]=(Math.sin(x*11+p)-Math.sin(x*11))*2*plain+(Math.cos(swell(p))-Math.cos(swell(0)))*.8*water*edge+(Math.sin(fall(p))-Math.sin(fall(0)))*12*falls*edge;
+    const glint=Math.pow(.5+.5*Math.cos(p*2+x*9-y*4+printGrain(Math.floor(x*160),Math.floor(y*100))*6.2831853),24)
+      -Math.pow(.5+.5*Math.cos(x*9-y*4+printGrain(Math.floor(x*160),Math.floor(y*100))*6.2831853),24);
+    out[2]=(Math.cos(wave(p))-Math.cos(wave(0)))*.03*plain+(glint*smooth(.5,.85,tone)*.3+(Math.cos(swell(p))-Math.cos(swell(0)))*.025)*water*edge
+      +(Math.cos(fall(p))-Math.cos(fall(0)))*.08*falls*edge;
   } else if(mode==='develop') {
     const fade=smooth(7,8.5,cycle), k=clamp((cycle-8.5)/3.5);
     const shown=cycle<8.5 ? 1-fade : smooth(0,1,(k*1.45-(1-tone)+(printGrain(Math.floor(x*160),Math.floor(y*100))-.5)*.06)/.3);
@@ -139,8 +150,8 @@ export const AMBIENT_GLSL = `
     if(motionMode<5.5) { float near=cue.y-.45; return vec4(near*16.*sin(p)*edge,near*7.*sin(p*2.)*edge,0.,1.); }
     if(motionMode<6.5) return vec4((uv-motionFocus)*.045*(.5-.5*cos(p))*(.7+.6*cue.y)*960.,0.,1.);
     if(motionMode<7.5) {
-      float s=sin(p), defocus=s*s*smoothstep(.15,.6,s>=0.?1.-cue.y:cue.y);
-      return vec4(0.,0.,(cue.x-tone)*defocus*.9,1.);
+      float s=sin(p), defocus=s*s*smoothstep(.35,.85,s>=0.?1.-cue.y:cue.y);
+      return vec4(0.,0.,(cue.x-tone)*defocus*.75,1.);
     }
     if(motionMode<8.5) {
       float far=pow(1.-cue.y,1.5)*(1.-.6*cue.w);
@@ -148,14 +159,40 @@ export const AMBIENT_GLSL = `
       return vec4(0.,0.,smoothstep(-.3,.9,veil)*far*.16*(1.-.55*tone),1.);
     }
     if(motionMode<9.5) {
-      float fluid=(1.-.4*cue.w)*(1.-.8*cue.y)*edge, wave=uv.y*14.-p+sin(uv.x*3.+p)*1.5, still=uv.y*14.+sin(uv.x*3.)*1.5;
-      return vec4((sin(wave)-sin(still)+(sin(uv.x*5.-uv.y*3.+p)-sin(uv.x*5.-uv.y*3.))*.43)*7.*fluid,(sin(uv.x*11.+p)-sin(uv.x*11.))*2.*fluid,(cos(wave)-cos(still))*.03*fluid,1.);
+      // Drift is packed with water in z and sky in w (see packPhotoCues): only they move.
+      // w holds sky below one half and falling water above it.
+      float water=cue.z, sky=min(1.,cue.w*2.), falls=max(0.,cue.w*2.-1.), rim=smoothstep(0.,.06,min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)));
+      sky*=1.-step(.5,cue.w);
+      float swell=uv.y*16.+uv.x*2., chop=uv.y*29.-uv.x*3., sheet=uv.x*1.7+uv.y*2.3, fall=uv.y*26.+sin(uv.x*40.)*1.5;
+      float seed=printGrain(floor(uv*vec2(160.,100.)))*6.2831853+uv.x*9.-uv.y*4.;
+      float glint=pow(.5+.5*cos(p*2.+seed),24.)-pow(.5+.5*cos(seed),24.);
+      return vec4(
+        ((sin(swell-p)-sin(swell))*3.5+(sin(chop-p*2.)-sin(chop))*1.5)*water*rim+(sin(sheet-p)-sin(sheet))*5.*sky*rim,
+        (cos(swell-p)-cos(swell))*.8*water*rim+(sin(fall-p*2.)-sin(fall))*12.*falls*rim,
+        (glint*smoothstep(.5,.85,tone)*.3+(cos(swell-p)-cos(swell))*.025)*water*rim+(cos(fall-p*2.)-cos(fall))*.08*falls*rim,1.);
     }
     float fade=smoothstep(7.,8.5,cycle), k=clamp((cycle-8.5)/3.5,0.,1.);
     float shown=cycle<8.5?1.-fade:smoothstep(0.,1.,(k*1.45-(1.-tone)+(printGrain(floor(uv*vec2(160.,100.)))-.5)*.06)/.3);
     return vec4(0.,0.,-(1.-shown)*.3,1.-(1.-shown)*.9);
   }
 `;
+
+/** Motions whose tone is light: it mostly brightens the ink and changes character density only in part, so it glows rather than flickers. */
+export const isLightMotion = (mode: AmbientMotion) => mode === 'relight' || mode === 'sheen' || mode === 'glow' || mode === 'shimmer' || mode === 'mist';
+/** A cell-grid position whose blend between neighbours is brief, so moving tones stay crisp instead of averaging to mush. */
+export function crispCell(v: number) {
+  const i = Math.floor(v), t = Math.max(0, Math.min(1, (v - i - .2) / .6));
+  return i + t * t * (3 - 2 * t);
+}
+/**
+ * Displacing motions move the image through a fixed grid, so every character stays aligned and readable: the cell at
+ * (x, y) shows the still from `out`, in cells. Shared by the Studio and core renderers.
+ */
+export function motionSource(ambient: ArrayLike<number>, x: number, y: number, cols: number, rows: number, out: number[]) {
+  out[0] = crispCell(Math.max(0, Math.min(cols - 1, x - ambient[0] / 960 * cols)));
+  out[1] = crispCell(Math.max(0, Math.min(rows - 1, y - ambient[1] / 960 * rows)));
+  return out;
+}
 
 /** Scale motion without changing its phase or the stationary image. */
 export function scaleMotion(out: number[], amount: number) {

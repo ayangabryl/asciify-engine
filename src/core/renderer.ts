@@ -1,4 +1,4 @@
-import { resolveMotion, sampleAmbient } from '../surface/ambient-motion';
+import { resolveMotion, sampleAmbient, motionSource, isLightMotion } from '../surface/ambient-motion';
 import { frameCues, PHOTO_CUE_STRIDE } from '../surface/photo-cues';
 /**
  * Core frame-to-canvas renderer and source-to-frame converters.
@@ -1127,6 +1127,22 @@ function drawFrameToCanvas(
   const noAnimation = ambientMode === 'none';
   const ambient = [0, 0, 0, 1];
   const cues = noAnimation ? undefined : frameCues(frame);
+  // The same motion as the Studio: the image moves through the fixed grid, light changes tone, colour and density.
+  const moved = [0, 0], lightMotion = isLightMotion(ambientMode), shaded: AsciiCell = { char: ' ', r: 0, g: 0, b: 0, a: 0 };
+  const animate = (x: number, y: number, cell: AsciiCell, chars?: string[]) => {
+    sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255, cues, (y * cols + x) * PHOTO_CUE_STRIDE);
+    let from = cell;
+    if (ambient[0] || ambient[1]) { motionSource(ambient, x, y, cols, rows, moved); from = frame[Math.round(moved[1])][Math.round(moved[0])]; }
+    const shift = ambient[2] * 255;
+    if (Math.abs(shift) < .5 && ambient[3] === 1) return from;
+    shaded.r = Math.max(0, Math.min(255, from.r + shift)); shaded.g = Math.max(0, Math.min(255, from.g + shift)); shaded.b = Math.max(0, Math.min(255, from.b + shift));
+    shaded.a = from.a * ambient[3]; shaded.char = from.char; shaded.lum = from.lum;
+    if (from.lum != null) {
+      shaded.lum = Math.max(0, Math.min(255, from.lum + shift * (lightMotion ? .45 : 1)));
+      if (chars && Math.abs(shift) > 2) shaded.char = luminanceToCharFast(shaded.lum, chars, isInverted);
+    }
+    return shaded;
+  };
   const hoverStrength = options.hoverStrength;
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
@@ -1146,15 +1162,12 @@ function drawFrameToCanvas(
     for (let y = region?.y ?? 0; y < (region?.bottom ?? rows); y++) {
       const rowData = frame[y];
       for (let x = region?.x ?? 0; x < (region?.right ?? cols); x++) {
-        const cell = rowData[x];
+        const cell = noAnimation ? rowData[x] : animate(x, y, rowData[x]);
         if (cell.a < 10) continue;
 
         const lum = (0.299 * cell.r + 0.587 * cell.g + 0.114 * cell.b) * 0.00392156863;
         const intensity = isInverted ? 1 - lum : lum;
         if (intensity < 0.02) continue;
-
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255, cues, (y * cols + x) * PHOTO_CUE_STRIDE);
-        const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
 
         let hoverMul = 1;
         let hoverOffX = 0;
@@ -1174,11 +1187,11 @@ function drawFrameToCanvas(
           hoverBlend = fx.colorBlend;
         }
 
-        const radius = maxRadius * intensity * animMul * hoverMul;
+        const radius = maxRadius * intensity * hoverMul;
         if (radius < 0.3) continue;
 
-        const px = x * cellW + cellW * 0.5 + hoverOffX + ambient[0];
-        const py = y * cellH + cellH * 0.5 + hoverOffY + ambient[1];
+        const px = x * cellW + cellW * 0.5 + hoverOffX;
+        const py = y * cellH + cellH * 0.5 + hoverOffY;
 
         let color: string;
         if (hoverBlend > 0) {
@@ -1191,7 +1204,7 @@ function drawFrameToCanvas(
           color = getCellColorStr(cell, colorMode, acR, acG, acB, isInverted);
         }
 
-        const alpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow));
+        const alpha = Math.min(1, (cell.a * 0.00392156863) * (1 + hoverGlow));
 
         if (alpha !== lastAlpha) { ctx.globalAlpha = alpha; lastAlpha = alpha; }
         if (color !== lastFillStyle) { ctx.fillStyle = color; lastFillStyle = color; }
@@ -1310,16 +1323,13 @@ function drawFrameToCanvas(
     for (let y = region?.y ?? 0; y < (region?.bottom ?? rows); y++) {
       const rowData = frame[y];
       for (let x = region?.x ?? 0; x < (region?.right ?? cols); x++) {
-        const cell = rowData[x];
+        const cell = noAnimation ? rowData[x] : animate(x, y, rowData[x], options.customText ? undefined : getCharsetChars(dynCharset));
         if (cell.a < 10) continue;
         let drawChar = hasDyn && cell.lum != null
           ? luminanceToCharFast(cell.lum, getCharsetChars(dynCharset), isInverted)
           : cell.char;
         if (drawChar === ' ') continue;
 
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255, cues, (y * cols + x) * PHOTO_CUE_STRIDE);
-        const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
-        if (animMul < 0.05) continue;
 
         let hoverScale = 1;
         let hoverOffX = 0;
@@ -1379,8 +1389,8 @@ function drawFrameToCanvas(
           }
         }
 
-        const px = x * cellW + cellW * 0.5 + hoverOffX + ambient[0];
-        const py = y * cellH + cellH * 0.5 + hoverOffY + ambient[1];
+        const px = x * cellW + cellW * 0.5 + hoverOffX;
+        const py = y * cellH + cellH * 0.5 + hoverOffY;
 
         let color: string;
         if (hoverBlend > 0) {
@@ -1393,7 +1403,7 @@ function drawFrameToCanvas(
           color = getCellColorStr(cell, colorMode, acR, acG, acB, isInverted);
         }
 
-        const alpha = Math.min(1, (cell.a * 0.00392156863) * animMul * (1 + hoverGlow));
+        const alpha = Math.min(1, (cell.a * 0.00392156863) * (1 + hoverGlow));
         if (alpha !== lastAlpha) { ctx.globalAlpha = alpha; lastAlpha = alpha; }
         if (color !== lastFillStyle) { ctx.fillStyle = color; lastFillStyle = color; }
         if (hoverScale !== 1) {
