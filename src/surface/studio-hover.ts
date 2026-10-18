@@ -3,9 +3,11 @@ import { createTextMask } from './text-mask';
 import { resolveMotion, type AmbientMotion } from './ambient-motion';
 import type { AsciiFrame, AsciiOptions } from '../types';
 import { WaterSurface, type HeroHover } from './water-surface';
-import { createSurfaceRenderer } from './surface-renderer';
+import { createSurfaceRenderer, type SurfaceScope } from './surface-renderer';
+import type { DeprecatedSurfaceHover } from './hover-catalog';
+import { buildHoverGuide, type HoverGuide, type HoverScope } from './hover-guide';
 
-export type StudioHoverEffect = Exclude<HeroHover, 'light' | 'scan'>;
+export type StudioHoverEffect = Exclude<HeroHover, 'light' | 'scan'> | DeprecatedSurfaceHover;
 
 export interface StudioHoverOptions {
   effect?: StudioHoverEffect;
@@ -27,6 +29,13 @@ export interface StudioHoverOptions {
   ditherStrength?: number;
   strength?: number;
   radius?: number;
+  /** Where the hover acts: everywhere, only on the subject, or only around it. Default 'all'.
+   * The subject is read from the canvas: its transparency, or its distance from a plain ground. */
+  scope?: HoverScope;
+  /** 0..1 how long the effect lingers after the pointer moves on or leaves. Default .5. */
+  decay?: number;
+  /** Follow touch drags on phones. Scrolling still wins a vertical swipe. Default true. */
+  touch?: boolean;
   /** Pin outer glyph rows and soften displacement near borders. Default false. */
   edgeSafe?: boolean;
   /** Enable when the backing canvas is drawn by a video/animation renderer. */
@@ -48,13 +57,30 @@ export interface StudioHoverOptions {
  * Call invalidate() after drawing a new still; destroy() before removing the host.
  */
 export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, initial: StudioHoverOptions = {}) {
-  let options = { effect: 'trail' as HeroHover, strength: .55, radius: !initial.effect || initial.effect === 'trail' ? .45 : .2, animated: false, fps: 30, fontSize: 7, charAspect: .58, charSpacing: 1, paused: false, charset: ' .:-=+*#%@', customText: '', renderMode: 'ascii' as const, dotSizeRatio: .72, ...initial };
+  let options = { effect: 'trail' as StudioHoverEffect, scope: 'all' as HoverScope, decay: .5, touch: true, strength: .55, radius: !initial.effect || initial.effect === 'trail' ? .45 : .2, animated: false, fps: 30, fontSize: 7, charAspect: .58, charSpacing: 1, paused: false, charset: ' .:-=+*#%@', customText: '', renderMode: 'ascii' as const, dotSizeRatio: .72, ...initial };
   let field = new WaterSurface(source.clientWidth / Math.max(1, source.clientHeight)), disposed = false, visible = false, dirty = true;
   let raf = 0, last = 0, painted = -Infinity, elapsed = 0;
   let latestFrame: AsciiFrame | undefined;
   let textMask: ReturnType<typeof createTextMask> | undefined;
   let pointer: { x: number; y: number; time: number } | null = null, pointerDirty = false;
   let pointerSamples: { x: number; y: number; time: number }[] = [];
+  let guide: HoverGuide | null = null, scope: SurfaceScope | undefined, guideDirty = true;
+  const probe = document.createElement('canvas'), probeCtx = probe.getContext('2d', { willReadFrequently: true });
+  // Subject coverage from the drawn artwork, at the field's resolution. Rebuilt when the still changes.
+  const readGuide = () => {
+    guideDirty = false;
+    if (options.scope === 'all' && options.effect !== 'tilt') { scope = undefined; guide = null; field.setGuide(null); return; }
+    if (!probeCtx || !source.width || !source.height) return;
+    probe.width = field.columns; probe.height = field.rows;
+    probeCtx.clearRect(0, 0, probe.width, probe.height); probeCtx.drawImage(source, 0, 0, probe.width, probe.height);
+    try { guide = buildHoverGuide(probeCtx.getImageData(0, 0, probe.width, probe.height).data, probe.width, probe.height, null, guide); } catch { guide = null; }
+    field.setGuide(guide);
+    if (!guide || options.scope === 'all' || guide.key === 'none') { scope = undefined; return; }
+    // A fresh array per rebuild: the renderer re-uploads when the identity changes.
+    const pixels = new Uint8Array(guide.width * guide.height * 4);
+    for (let i = 0; i < guide.subject.length; i++) pixels[i * 4 + 3] = guide.subject[i] * 255;
+    scope = { pixels, width: guide.width, height: guide.height, mode: options.scope };
+  };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const wake = () => { if (!disposed && visible && !document.hidden && !raf) raf = requestAnimationFrame(tick); };
   const compositor = createSurfaceRenderer(host, source, () => queueMicrotask(() => { dirty = true; wake(); }));
@@ -64,7 +90,8 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     const width = source.clientWidth, height = source.clientHeight;
     if (!width || !height) return;
     const paused = reduced.matches || options.paused;
-    field.configure(options.effect, options.strength, options.radius, options.edgeSafe);
+    field.configure(options.effect, options.strength, options.radius, options.edgeSafe, options.decay);
+    if (guideDirty) readGuide();
     const active = field.active;
     if (!paused) {
       elapsed += last ? Math.min(.1,(now-last)/1000) : 0;
@@ -80,7 +107,7 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     const baseDue = dirty || options.animated && !paused && now-painted >= 1000/Math.max(1,Math.min(60,options.fps))-.5;
     if (baseDue || active || field.active || !paused && resolveMotion(options.motion) !== 'none') {
       if(baseDue) latestFrame=options.getFrame?.();
-      compositor.render(baseDue,field.refraction,width,height,options.fontSize*options.charSpacing,options.fontSize/options.charAspect*options.charSpacing,latestFrame,{charset:options.charset,customText:options.customText,renderMode:options.renderMode,dotSizeRatio:options.dotSizeRatio,colorMode:options.colorMode??'fullcolor',accentColor:options.accentColor??'#888888',animationStyle:options.motion,animationSpeed:options.motionSpeed ?? 1,artStyle:'classic',fineDither:options.fineDither,ditherStrength:options.ditherStrength ?? 1} as AsciiOptions,elapsed,{filter:options.filter,edgeEffect:options.edgeEffect,edgeSoftness:options.edgeSoftness,textMask:textMask?.read()});
+      compositor.render(baseDue,field.refraction,width,height,options.fontSize*options.charSpacing,options.fontSize/options.charAspect*options.charSpacing,latestFrame,{charset:options.charset,customText:options.customText,renderMode:options.renderMode,dotSizeRatio:options.dotSizeRatio,colorMode:options.colorMode??'fullcolor',accentColor:options.accentColor??'#888888',animationStyle:options.motion,animationSpeed:options.motionSpeed ?? 1,artStyle:'classic',fineDither:options.fineDither,ditherStrength:options.ditherStrength ?? 1} as AsciiOptions,elapsed,{filter:options.filter,edgeEffect:options.edgeEffect,edgeSoftness:options.edgeSoftness,textMask:textMask?.read(),scope});
       if(baseDue) painted=now; dirty=false;
     }
     last=now;
@@ -88,7 +115,7 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
   }
   const reset = () => { field.clear(); pointer=null; pointerSamples=[]; pointerDirty=false; last=0; dirty=true; cancelAnimationFrame(raf); raf=0; wake(); };
   const move = (event: PointerEvent) => {
-    if (event.pointerType==='touch' || options.paused || reduced.matches) return;
+    if ((event.pointerType==='touch' && !options.touch) || options.paused || reduced.matches) return;
     if(event.target instanceof Element && event.target.closest('button,a,input,summary,select')) { leave(); return; }
     const rect=source.getBoundingClientRect();
     if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom) { leave(); return; }
@@ -97,21 +124,25 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     pointerDirty=true; wake();
   };
   const leave = () => { pointer=null; pointerDirty=true; wake(); };
+  // A finger that lifts has left; a mouse button release has not.
+  const lift = (event: PointerEvent) => { if (event.pointerType==='touch') leave(); };
   const intersection = new IntersectionObserver(([entry])=>{ visible=entry.isIntersecting; reset(); }); intersection.observe(host);
-  const resize = new ResizeObserver(()=>{ field=new WaterSurface(source.clientWidth/Math.max(1,source.clientHeight)); reset(); }); resize.observe(source);
+  const resize = new ResizeObserver(()=>{ field=new WaterSurface(source.clientWidth/Math.max(1,source.clientHeight)); guideDirty=true; reset(); }); resize.observe(source);
+  host.addEventListener('pointerdown',move); host.addEventListener('pointerup',lift);
   host.addEventListener('pointermove',move); host.addEventListener('pointerleave',leave); host.addEventListener('pointercancel',leave);
   document.addEventListener('visibilitychange',reset); reduced.addEventListener('change',reset);
   return {
     /** Visible canvas; use this for CSS layering or snapshots. */
     get canvas() { return compositor.canvas; },
-    invalidate() { textMask?.invalidate(); dirty=true; wake(); },
+    invalidate() { textMask?.invalidate(); dirty=true; guideDirty=true; wake(); },
     update(next: StudioHoverOptions) {
       if('textMask' in next) {textMask?.destroy();textMask=next.textMask?createTextMask(host,next.textMask,()=>{dirty=true;wake();}):undefined;}
-      options={...options,...next};reset();
+      options={...options,...next};guideDirty=true;reset();
     },
     destroy() {
       if (disposed) return;
       disposed=true; cancelAnimationFrame(raf); intersection.disconnect(); resize.disconnect(); compositor.destroy();textMask?.destroy();
+      host.removeEventListener('pointerdown',move); host.removeEventListener('pointerup',lift);
       host.removeEventListener('pointermove',move); host.removeEventListener('pointerleave',leave); host.removeEventListener('pointercancel',leave);
       document.removeEventListener('visibilitychange',reset); reduced.removeEventListener('change',reset);
     },

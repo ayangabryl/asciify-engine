@@ -1,8 +1,11 @@
 import { surfaceEdgeWeight } from './surface-edge';
 
-export type AfterimageMode = 'dissolve' | 'silk' | 'vortex' | 'magnetic' | 'scatter' | 'etch' | 'elastic' | 'rake' | 'lens' | 'smudge';
+export type AfterimageMode = 'dissolve' | 'silk' | 'vortex' | 'magnetic' | 'scatter' | 'etch' | 'elastic' | 'lens' | 'smudge';
 export const isAfterimageMode = (mode: string): mode is AfterimageMode =>
-  ['dissolve', 'silk', 'vortex', 'magnetic', 'scatter', 'etch', 'elastic', 'rake', 'lens', 'smudge'].includes(mode);
+  ['dissolve', 'silk', 'vortex', 'magnetic', 'scatter', 'etch', 'elastic', 'lens', 'smudge'].includes(mode);
+const springy = (mode: AfterimageMode) => mode === 'elastic' || mode === 'scatter';
+/** Spring stiffness (omega squared) and decay rate per springy mode: one visible rebound, settled in about a second. */
+const SPRING = { elastic: [150, 4.2], scatter: [90, 3.6] } as const;
 
 /** A decaying stroke memory, not fluid advection. Fixed storage at every image size. */
 export class AfterimageField {
@@ -26,16 +29,18 @@ export class AfterimageField {
   }
   get active(){return this.peak>.0002;}
   setMode(mode:AfterimageMode){
-    if(mode==='elastic'&&!this.springX){
+    if(springy(mode)&&!this.springX){
       this.springX=new Float32Array(this.ink.length);this.springY=new Float32Array(this.ink.length);
     }
     if(mode==='scatter'&&!this.scatterDirections){
-      // Spatial noise belongs to the field, not the pointer event. Compute it
-      // once; rapid movement then only combines existing directions.
+      // Spatial noise belongs to the field, not the pointer event. Low-frequency
+      // directions scatter in soft drifts; per-cell noise read as broken grain.
       const directions=this.scatterDirections=new Float64Array(this.width*this.height*2);
+      const hash=(x:number,y:number)=>{const g=Math.sin(x*127.1+y*311.7)*43758.5453;return g-Math.floor(g);};
       for(let gy=0;gy<this.height;gy++)for(let gx=0;gx<this.width;gx++){
-        const grain=Math.sin(gx*127.1+gy*311.7)*43758.5453;
-        const angle=(grain-Math.floor(grain))*Math.PI*2, i=(gy*this.width+gx)*2;
+        const x=gx*.09,y=gy*.09,ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+        const n=(hash(ix,iy)*(1-u)+hash(ix+1,iy)*u)*(1-v)+(hash(ix,iy+1)*(1-u)+hash(ix+1,iy+1)*u)*v;
+        const angle=n*Math.PI*4, i=(gy*this.width+gx)*2;
         directions[i]=Math.cos(angle)*.7;directions[i+1]=Math.sin(angle)*.7;
       }
     }
@@ -70,8 +75,13 @@ export class AfterimageField {
         else if(this.mode==='elastic'){
           // Momentum is stored separately from displacement. Reversals add to
           // the existing velocity, and the spring can overshoot its rest point.
-          this.springX![i]=Math.max(-24,Math.min(24,this.springX![i]+tx*k*gain*8));
-          this.springY![i]=Math.max(-24,Math.min(24,this.springY![i]+ty*k*gain*8));
+          this.springX![i]=Math.max(-24,Math.min(24,this.springX![i]+tx*k*gain*12));
+          this.springY![i]=Math.max(-24,Math.min(24,this.springY![i]+ty*k*gain*12));
+        }
+        else if(this.mode==='scatter'){
+          const d=this.scatterDirections!;
+          this.springX![i]=Math.max(-24,Math.min(24,this.springX![i]+(rx*.6+d[i*2])*k*gain*7));
+          this.springY![i]=Math.max(-24,Math.min(24,this.springY![i]+(ry*.6+d[i*2+1])*k*gain*7));
         }
         else if(this.mode==='lens'){
           // Positive radial source offsets sample toward the stroke center,
@@ -86,8 +96,8 @@ export class AfterimageField {
         else {
           // Silk shears opposite sides of a stroke; Vortex turns around it.
           const fold=(-rx*ty+ry*tx)*k*2.8;
-          const fx=this.mode==='rake'?tx*Math.sin(gy*Math.PI/3)*k*2:this.mode==='magnetic'?-rx*k*2.5:this.mode==='scatter'?(rx+this.scatterDirections![i*2])*k*2:this.mode==='silk'?tx*fold:-ry*k*2.5;
-          const fy=this.mode==='rake'?ty*Math.sin(gx*Math.PI/3)*k*2:this.mode==='magnetic'?-ry*k*2.5:this.mode==='scatter'?(ry+this.scatterDirections![i*2+1])*k*2:this.mode==='silk'?ty*fold:rx*k*2.5;
+          const fx=this.mode==='magnetic'?-rx*k*2.5:this.mode==='silk'?tx*fold:-ry*k*2.5;
+          const fy=this.mode==='magnetic'?-ry*k*2.5:this.mode==='silk'?ty*fold:rx*k*2.5;
           this.targetX[i]=Math.max(-1,Math.min(1,this.targetX[i]+fx*gain));
           this.targetY[i]=Math.max(-1,Math.min(1,this.targetY[i]+fy*gain));
         }
@@ -103,7 +113,8 @@ export class AfterimageField {
     const decay=Math.exp(-rate*dt),follow=1-Math.exp(-response*dt);
     let peak=0;
     // Exact damped spring integration, independent of frame subdivision.
-    const damping=8,omega=Math.sqrt(400-damping*damping),attenuation=Math.exp(-damping*dt);
+    const [stiffness,damping]=this.mode==='scatter'?SPRING.scatter:SPRING.elastic;
+    const omega=Math.sqrt(stiffness-damping*damping),attenuation=Math.exp(-damping*dt);
     const cosine=Math.cos(omega*dt),sine=Math.sin(omega*dt)/omega;
     for(let i=0;i<this.ink.length;i++){
       if(this.mode==='etch'){
@@ -112,12 +123,12 @@ export class AfterimageField {
         this.ink[i]*=decay;peak=Math.max(peak,this.ink[i]);const v=Math.round(this.ink[i]*65535);
         this.pixels[i*4]=v>>>8;this.pixels[i*4+1]=v&255;
       } else {
-        if(this.mode==='elastic'){
+        if(springy(this.mode)){
           const x=this.offsetX[i],y=this.offsetY[i],vx=this.springX![i],vy=this.springY![i];
           this.offsetX[i]=Math.max(-1,Math.min(1,attenuation*(x*cosine+(vx+damping*x)*sine)));
           this.offsetY[i]=Math.max(-1,Math.min(1,attenuation*(y*cosine+(vy+damping*y)*sine)));
-          this.springX![i]=attenuation*(vx*cosine-(damping*vx+400*x)*sine);
-          this.springY![i]=attenuation*(vy*cosine-(damping*vy+400*y)*sine);
+          this.springX![i]=attenuation*(vx*cosine-(damping*vx+stiffness*x)*sine);
+          this.springY![i]=attenuation*(vy*cosine-(damping*vy+stiffness*y)*sine);
           peak=Math.max(peak,Math.abs(this.springX![i])*.05,Math.abs(this.springY![i])*.05);
         }else{
           if(this.mode==='lens'||this.mode==='smudge'){

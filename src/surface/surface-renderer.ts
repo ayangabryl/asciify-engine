@@ -7,6 +7,9 @@ import { createTrailGlyphs } from './trail-glyphs';
 import { supportsSurfaceGlyphs, hasSurfaceTransparency, surfaceBackdrop } from './surface-glyph-path';
 import { SURFACE_LIGHT_GLSL, type SurfaceRefraction } from './water-surface';
 
+/** Soft subject coverage (alpha channel) at any small size, and where the hover may act. */
+export interface SurfaceScope { pixels: Uint8Array; width: number; height: number; mode: 'all' | 'subject' | 'outside' }
+
 /** A cached artwork surface. Pointer-only frames never redraw or read back glyphs. */
 export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasElement, wake: () => void) {
   const previousVisibility=source.style.visibility;
@@ -19,6 +22,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
   let directPrevious = false;
   const maskPainter=createTextMaskPainter();
   let uploadedMask: TextMaskFrame | undefined;
+  let uploadedScope: Uint8Array | undefined;
   const bright = document.createElement('canvas'), lightLayer = document.createElement('canvas');
   const brightCtx = bright.getContext('2d')!, lightCtx = lightLayer.getContext('2d')!;
   let brightReady = false;
@@ -60,7 +64,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
       precision highp float;
       uniform sampler2D artwork; uniform sampler2D surface;
       uniform vec2 resolution; uniform vec2 sceneSize; uniform vec2 cellSize;
-      uniform vec2 surfaceSize; uniform float strength;
+      uniform vec2 surfaceSize; uniform float strength; uniform float relativeStrength;
       ${SURFACE_LIGHT_GLSL}
       uniform sampler2D codes; uniform sampler2D cellColors; uniform sampler2D glyphAtlas;
       uniform vec2 gridSize; uniform vec2 atlasSize; uniform vec2 tileSize;
@@ -84,7 +88,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
         vec2 encoded=flowGlyph(codes,source,gridSize);
         vec4 color=texture2D(cellColors,source);
         float original=encoded.x;
-        float density=trailFieldDensity(field)*trailPin(cell,gridSize),index=trailIndex(original,glyphCount,density,cell);
+        float density=trailFieldDensity(field)*hoverScope(address)*trailPin(cell,gridSize),index=trailIndex(original,glyphCount,density,cell);
         if(original>.5) index=clamp(floor(index+ambient.z*(glyphCount-1.)+printGrain(cell)),0.,glyphCount-1.);
         if(index<.5 || color.a<.01) return vec4(0.);
         vec2 slot=vec2(mod(index,atlasColumns),floor(index/atlasColumns));
@@ -105,7 +109,9 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           vec4 normal = texture2D(surface, (uv * (surfaceSize - 1.) + .5) / surfaceSize) * 255.;
           vec2 slope = (vec2(normal.r * 256. + normal.g, normal.b * 256. + normal.a) - 32768.) / 32767.;
           vec2 edge = min(pixel, sceneSize - pixel) / cellSize;
-          uv -= slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) / sceneSize;
+          // Cursor hovers store a fraction of the scene, so they scale with it; stroke hovers store CSS pixels.
+          vec2 unit = relativeStrength > .5 ? vec2(1.) : 1. / sceneSize;
+          uv -= slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) * hoverScope(uv) * unit;
         }
         vec4 ambient=ambientAt(uv,motionMode>9.5?toneAt(uv):.5);
         uv -= ambient.xy/sceneSize;
@@ -165,7 +171,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
         vec3 straightInk = ink.a > .0 ? ink.rgb / ink.a : vec3(.0);
         float value = max(straightInk.r, max(straightInk.g, straightInk.b));
         // Lighting belongs to character ink; black/transparent gaps stay empty.
-        float light = surfaceLight((floor(pixel / cellSize) + .5) * cellSize / sceneSize, sceneSize);
+        float light = surfaceLight((floor(pixel / cellSize) + .5) * cellSize / sceneSize, sceneSize) * hoverScope(pixel / sceneSize);
         vec3 lit = illuminate(straightInk, light * smoothstep(0., .22, value)) * ink.a;
         if(hasTextMask>.5) lit=mix(lit,vec3(.035)*ink.a,texture2D(textMask,vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y)/resolution).a);
         vec4 result = vec4(lit, ink.a)*ambient.w;
@@ -177,14 +183,14 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
     buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
     const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','trailKind', 'edgeSafe', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount'].map(k => [k,gl!.getUniformLocation(program!,k)]));
-    for (let unit=0; unit<6; unit++) {
+    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount'].map(k => [k,gl!.getUniformLocation(program!,k)]));
+    for (let unit=0; unit<7; unit++) {
       const texture=gl.createTexture()!; textures.push(texture); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
     }
-    gl.uniform1i(locations.textMask,5);
+    gl.uniform1i(locations.textMask,5); gl.uniform1i(locations.scopeMap,6);
     gl.uniform1i(locations.codes,2); gl.uniform1i(locations.cellColors,3); gl.uniform1i(locations.glyphAtlas,4);
     gl.uniform1i(locations.artwork,0); gl.uniform1i(locations.surface,1);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
@@ -197,7 +203,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
   return {
     get canvas() { return canvas; },
     canRenderGlyphs(options: AsciiOptions) { return !!gl && !disposed && supportsSurfaceGlyphs(options); },
-    render(dirty: boolean, field: SurfaceRefraction, width: number, height: number, cellWidth: number, cellHeight: number, frame?: AsciiFrame, options?: AsciiOptions, time = 0, finish: SurfaceFinish & { textMask?: TextMaskFrame } = {}) {
+    render(dirty: boolean, field: SurfaceRefraction, width: number, height: number, cellWidth: number, cellHeight: number, frame?: AsciiFrame, options?: AsciiOptions, time = 0, finish: SurfaceFinish & { textMask?: TextMaskFrame; scope?: SurfaceScope } = {}) {
       const mode=resolveMotion(options?.animationStyle), phase=timeline.update(time,mode,options?.animationSpeed);
       const dither=isFineDither(options);
       const direct=!!gl && !!frame && supportsSurfaceGlyphs(options);
@@ -251,7 +257,16 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
         gl.uniform2f(locations.resolution,w,h); gl.uniform2f(locations.sceneSize,width,height);
         gl.uniform2f(locations.cellSize,cellWidth,cellHeight); gl.uniform2f(locations.surfaceSize,field.width,field.height);
         gl.uniform1f(locations.strength,field.strength);
-        gl.uniform1f(locations.hoverMode,field.mode==='light'?1:field.mode==='scan'?2:0); gl.uniform4fv(locations.hoverFocus,field.focus);
+        gl.uniform1f(locations.relativeStrength,field.relative?1:0);
+        const scope=finish.scope;
+        gl.uniform1f(locations.scopeMode,scope && scope.mode!=='all'?(scope.mode==='subject'?1:2):0);
+        if(scope && scope.mode!=='all' && scope.pixels!==uploadedScope) {
+          gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,textures[6]);
+          gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,scope.width,scope.height,0,gl.RGBA,gl.UNSIGNED_BYTE,scope.pixels);uploadedScope=scope.pixels;
+        }
+        // Reveal has no photograph on this surface, so it lights the characters under a soft spot instead.
+        // Repel clears its core the same way, by dimming the characters it has pushed aside.
+        gl.uniform1f(locations.hoverMode,field.mode==='light'||field.mode==='reveal'?1:field.mode==='scan'?2:field.mode==='repel'?3:0); gl.uniform4fv(locations.hoverFocus,field.focus);
         if(finish.textMask && finish.textMask!==uploadedMask) {
           gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,textures[5]);
           gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,finish.textMask.canvas);uploadedMask=finish.textMask;
@@ -278,7 +293,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             const density=isDensityHover(field.mode)?decodeDensity(field.pixels,fi,field.mode,field.focus[2]):0;
             const original=packed.indices[i]+packed.indices[i+1]*256;
             if(field.mode==='trail') sampleFlowGlyph(packed.indices,packed.colors,packed.cols,packed.rows,x,y,density,(field.pixels[fi+2]-128)/127,(field.pixels[fi+3]-128)/127,plan.glyphs.length,flow,field.edgeSafe);
-            let index=field.mode==='trail'?flow[0]:(field.mode==='etch'||field.mode==='ripple')?Math.round(original+density*(plan.glyphs.length-1)*.35):field.mode==='dissolve'?original-Math.floor(density*plan.glyphs.length*1.8):original+Math.floor(density*plan.glyphs.length*.85);
+            let index=field.mode==='trail'?flow[0]:densityHoverKind(field.mode)===3?Math.round(original+density*(plan.glyphs.length-1)*.35):field.mode==='dissolve'?original-Math.floor(density*plan.glyphs.length*1.8):original+Math.floor(density*plan.glyphs.length*.85);
             if(original>0)index+=a[2]*(plan.glyphs.length-1);
             index=Math.max(0,Math.min(plan.glyphs.length-1,Math.floor(index+printGrain(x,y))));
             let dx=a[0],dy=a[1];
@@ -289,7 +304,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             const color=`rgb(${r/peak*255},${g/peak*255},${b/peak*255})`;
             ctx.fillStyle=color;
             if(dither) {
-              const tone=field.mode==='trail'?flowTrailIndex(Math.max(0,Math.min(1,flow[1]+a[2])),2,density):Math.max(0,Math.min(1,packed.indices[i+2]/255+a[2]+((field.mode==='etch'||field.mode==='ripple')?density*.35:(field.mode==='dissolve'?-density:density)*.65)));
+              const tone=field.mode==='trail'?flowTrailIndex(Math.max(0,Math.min(1,flow[1]+a[2])),2,density):Math.max(0,Math.min(1,packed.indices[i+2]/255+a[2]+(densityHoverKind(field.mode)===3?density*.35:(field.mode==='dissolve'?-density:density)*.65)));
               ctx.globalAlpha=alpha;
               for(let oy=0;oy<cellHeight;oy+=pitch)for(let ox=0;ox<cellWidth;ox+=pitch)
                 if(tone>.5+(printGrain(Math.floor((px+ox)/pitch),Math.floor((py+oy)/pitch))-.5)*Math.max(0,Math.min(2,options?.ditherStrength??1)))ctx.fillRect(px+ox,py+oy,Math.min(pitch,cellWidth-ox),Math.min(pitch,cellHeight-oy));
@@ -310,7 +325,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             const density=decodeDensity(field.pixels,fi,field.mode,field.focus[2]),i=(y*packed.cols+x)*4;
             const seed=(x*x*17+y*y*23+x*y*19)*.0137,grain=seed-Math.floor(seed);
             if(field.mode==='trail') sampleFlowGlyph(packed.indices,packed.colors,packed.cols,packed.rows,x,y,density,(field.pixels[fi+2]-128)/127,(field.pixels[fi+3]-128)/127,plan.glyphs.length,flow,field.edgeSafe);
-            const original=packed.indices[i]+packed.indices[i+1]*256,index=field.mode==='trail'?Math.round(flow[0]):(field.mode==='etch'||field.mode==='ripple')?Math.max(0,Math.min(plan.glyphs.length-1,Math.round(original+density*(plan.glyphs.length-1)*.35))):field.mode==='dissolve'?Math.max(0,original-Math.floor(density*plan.glyphs.length*(1.35+grain*.9))):Math.min(plan.glyphs.length-1,original+Math.floor(density*plan.glyphs.length*.85));
+            const original=packed.indices[i]+packed.indices[i+1]*256,index=field.mode==='trail'?Math.round(flow[0]):densityHoverKind(field.mode)===3?Math.max(0,Math.min(plan.glyphs.length-1,Math.round(original+density*(plan.glyphs.length-1)*.35))):field.mode==='dissolve'?Math.max(0,original-Math.floor(density*plan.glyphs.length*(1.35+grain*.9))):Math.min(plan.glyphs.length-1,original+Math.floor(density*plan.glyphs.length*.85));
             if((index===original && (field.mode!=='trail' || density<.0001)) || packed.colors[i+3]<10) continue;
             const px=x*cellWidth,py=y*cellHeight;
             ctx.clearRect(px,py,cellWidth,cellHeight);
@@ -322,11 +337,11 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             ctx.globalAlpha=1;
             ctx.globalCompositeOperation='source-atop';
             const r=field.mode==='trail'?flow[2]:packed.colors[i],g=field.mode==='trail'?flow[3]:packed.colors[i+1],b=field.mode==='trail'?flow[4]:packed.colors[i+2];
-            const peak=Math.max(r,g,b), raised=(field.mode==='dissolve'||field.mode==='trail'||(field.mode==='etch'||field.mode==='ripple'))?peak:Math.max(peak,Math.min(112,density*191)), gain=peak?raised/peak:0;
+            const peak=Math.max(r,g,b), raised=(field.mode==='dissolve'||field.mode==='trail'||densityHoverKind(field.mode)===3)?peak:Math.max(peak,Math.min(112,density*191)), gain=peak?raised/peak:0;
             ctx.fillStyle=`rgb(${peak?r*gain:raised},${peak?g*gain:raised},${peak?b*gain:raised})`;
             ctx.fillRect(px,py,cellWidth,cellHeight); ctx.globalCompositeOperation='source-over';
           }
-        } else if (field.mode === 'light' || field.mode === 'scan') {
+        } else if (field.mode === 'light' || field.mode === 'scan' || field.mode === 'reveal') {
           // Cache the brighter ink once per source frame. One masked composite
           // per pointer frame, rather than hundreds of filtered tile draws.
           if (dirty || !brightReady || bright.width !== w || bright.height !== h) {
@@ -351,8 +366,10 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
             const i=(iy*field.width+ix)*4,p=field.pixels;
             const edge=Math.min(x*tw/cellWidth,(width-(x+1)*tw)/cellWidth,y*th/cellHeight,(height-(y+1)*th)/cellHeight);
             const t=Math.max(0,Math.min(1,(edge-2)/6)), hold=field.edgeSafe?t*t*(3-2*t):1;
-            const dx=((p[i]*256+p[i+1]-32768)/32767)*field.strength*hold;
-            const dy=((p[i+2]*256+p[i+3]-32768)/32767)*field.strength*hold;
+            const sc=finish.scope && finish.scope.mode!=='all'?finish.scope.pixels[(Math.min(finish.scope.height-1,Math.floor(v*finish.scope.height))*finish.scope.width+Math.min(finish.scope.width-1,Math.floor(u*finish.scope.width)))*4+3]/255:1;
+            const weight=(finish.scope?.mode==='outside'?1-sc:sc)*hold;
+            const dx=((p[i]*256+p[i+1]-32768)/32767)*field.strength*weight*(field.relative?width:1);
+            const dy=((p[i+2]*256+p[i+3]-32768)/32767)*field.strength*weight*(field.relative?height:1);
             if(Math.abs(dx)+Math.abs(dy)<.02)continue;
             ctx.clearRect(x*tw,y*th,tw,th);
             ctx.drawImage(source,Math.max(0,Math.min(width-tw,x*tw-dx))*source.width/width,Math.max(0,Math.min(height-th,y*th-dy))*source.height/height,tw*source.width/width,th*source.height/height,x*tw,y*th,tw,th);

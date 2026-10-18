@@ -66,6 +66,7 @@ Hover choice by intent:
 - **Pure characters, the classic Asciify feel:** Trail. In the wake the characters fold their tone, sparse marks fill in and dense marks open up, then they settle; nothing bends. On `/field` use `hover: 'trail'` with `backdrop: 0` (GPU, 120 fps class); in `/studio` or `/hover` use `hover: { effect: 'trail' }` with a solid backdrop in the page color and `effects.characterBloom: 0`. Both run the same ink field with the same `strength` and `radius`, so the canvas renderer is a faithful fallback.
 - **Subtle but premium, no watery distortion:** field `hover: 'lantern'`. A soft light glides after the pointer and lifts the characters it passes, with a short fading tail. Good near text, on product imagery and on calm brands.
 - **Canvas pipelines (`/hover`, `/studio`):** Trail or Dissolve keep the image still; Water and Ripple are liquid; Magnetic and Scatter are playful; Lens magnifies detail.
+- **Premium, cursor-attached (`/hover`, `/studio`):** Loupe for products and detail, Reveal to show the photograph through the characters, Tilt for covers and posters, Repel for stickers and tiles, Heat haze for neon and dusk, Ink bleed for print and ink looks. For a cut-out or a subject on a plain ground add `scope: 'subject'` (or `'outside'` for an aura around it).
 - **Off:** when the art sits behind body text, in dense UIs, or when the user asks for none.
 
 ## Living or still

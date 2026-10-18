@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.20.0"
+  tested-engine: "4.21.0"
   updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.20.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.21.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
@@ -153,7 +153,7 @@ Preview it: letter glyph densities differ, so arbitrary words are not automatica
 
 The core `HoverEffect` IDs are `spotlight`, `magnify`, `repel`, `glow`, `colorShift`, `attract`, `shatter`, `trail`, and `glitchText`. Those remain valid APIs, but they are **not identical to the current website's enhanced interactions**.
 
-The website offers **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, Emboss, Elastic, Rake, Lens wake, Smudge, Ripple rings, and Off** through an optional studio surface module. Its fourteen still-image motions—Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, Living Grain, Parallax, Woven Flow, Print Shift, Contour Light, Relight, Shimmer, Breeze, Unfold—and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
+The website offers **Trail, Dissolve, Contour, Emboss, Ripple rings, Ink bleed, Water, Silk, Vortex, Magnetic Pull, Scatter, Elastic, Lens wake, Smudge, Loupe, Reveal, Repel, Tilt, Heat haze, and Off** through an optional studio surface module, each with `scope: 'all' | 'subject' | 'outside'` to keep it on a cut-out subject or around it (`rake` is retired and plays Silk). Its fourteen still-image motions—Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, Living Grain, Parallax, Woven Flow, Print Shift, Contour Light, Relight, Shimmer, Breeze, Unfold—and fine-dither treatments ship in the same `asciify-engine/hover` module. Use its typed options rather than converting display names into engine `hoverEffect` or `animationStyle` values.
 
 To reproduce those interactions, read [references/studio-effects.md](references/studio-effects.md). Import `mountHover` from `asciify-engine/hover`; no separate download is needed. Keep engine `hoverStrength: 0` and `animationStyle: 'none'` when using it, to avoid applying two effects. Trail is the site's default. Prefer a stationary-grid effect such as Trail or Dissolve when the user wants a wake without spatial displacement.
 

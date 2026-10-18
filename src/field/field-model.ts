@@ -29,13 +29,17 @@ export interface FieldClearZone { x: number; y: number; width: number; height: n
  * - `fluid`: an incompressible fluid that bends the image and swirls the characters. Bold, liquid.
  * - `lantern`: a soft light that glides after the pointer and lifts the characters it passes. Subtle, no distortion.
  * - `trail`: the Asciify Trail. The same ink field as the studio's Trail; the wake folds each character's tone, then settles.
+ * - `loupe`: a glass loupe glides after the pointer and magnifies what it covers, easing through a soft rim. Uses `lantern` for radius, gain and follow.
+ * - `reveal`: under a soft spotlight the characters take the source's own colours. Uses `lantern` settings.
  * - `none`: still under the pointer.
  */
-export type FieldHover = 'fluid' | 'lantern' | 'trail' | 'none';
+export type FieldHover = 'fluid' | 'lantern' | 'trail' | 'loupe' | 'reveal' | 'none';
 export const FIELD_HOVERS: readonly { value: FieldHover; label: string; description: string }[] = [
   { value: 'fluid', label: 'Fluid', description: 'An ink-in-water wake that bends the image and swirls the characters.' },
   { value: 'lantern', label: 'Lantern', description: 'A soft light follows the pointer and lifts the characters it passes, without distortion.' },
   { value: 'trail', label: 'Trail', description: 'The Asciify Trail: in the wake, sparse characters fill in and dense ones open up, then settle. No distortion.' },
+  { value: 'loupe', label: 'Loupe', description: 'A glass loupe glides after the pointer and magnifies the characters it covers.' },
+  { value: 'reveal', label: 'Reveal', description: 'Under a soft spotlight the characters take the source image\'s own colours. Best over a photo or video in one ink.' },
   { value: 'none', label: 'Off', description: 'The field stays still under the pointer.' },
 ];
 
@@ -282,7 +286,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     scale: clamp(input.scale, 0.2, 6, base.scale),
     clear,
     speed: clamp(input.speed, 0, 5, base.speed),
-    hover: input.hover === 'fluid' || input.hover === 'lantern' || input.hover === 'trail' || input.hover === 'none' ? input.hover : base.hover,
+    hover: FIELD_HOVERS.some(h => h.value === input.hover) ? input.hover! : base.hover,
     fluid,
     lantern: {
       radius: clamp(input.lantern?.radius, 0.02, 0.6, base.lantern.radius),

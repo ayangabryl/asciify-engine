@@ -142,6 +142,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     dirty = true;
   };
   // Lantern: the light glides toward the pointer, and its recent positions fade as a short tail.
+  // Loupe and Reveal ride the lantern's glide and fade; only the shader response differs.
+  const lanternLike = (hover: string) => hover === 'lantern' || hover === 'loupe' || hover === 'reveal';
   const lantern = { target: null as [number, number] | null, at: null as [number, number] | null, strength: 0, trail: [] as { x: number; y: number; born: number }[] };
   const trailUniform = new Float32Array(36);
   // Trail: the studio's own ink field, stepped on the CPU at 128 cells and uploaded as a small texture.
@@ -535,9 +537,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(u.uFluid, 2);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(u.uTrailMap, 3);
     gl.uniform1f(u.uFluidMode, stableOn ? 1 : 0);
-    gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : 0);
+    gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : hover === 'loupe' ? 4 : hover === 'reveal' ? 5 : 0);
     gl.uniform1f(u.uTrailAmount, settings.trail.strength);
-    gl.uniform3f(u.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, hover === 'lantern' ? lantern.strength : 0);
+    gl.uniform3f(u.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, lanternLike(hover) ? lantern.strength : 0);
     gl.uniform3fv(u.uTrail, trailUniform);
     gl.uniform1f(u.uLightRadius, settings.lantern.radius);
     gl.uniform1f(u.uLightGain, settings.lantern.strength);
@@ -633,7 +635,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       let simulating = hover === 'fluid' && (pending !== null || now < activeUntil);
       if (simulating) stepFluid(dt, now);
       else pending = null;
-      if (hover === 'lantern') simulating = stepLantern(dt, now) || simulating;
+      if (lanternLike(hover)) simulating = stepLantern(dt, now) || simulating;
       // Draw once more after the wake settles, so the last frame is clean.
       if (hover === 'trail') { const wasActive = !!inkTrail?.active; simulating = stepTrail(dt) || simulating; if (wasActive && !inkTrail?.active) dirty = true; }
       if (pulses.length) {
@@ -668,7 +670,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const moveTo = (point: [number, number] | null) => {
     const hover = activeFieldHover(settings);
     if (hover === 'none' || paused) { previous = null; lantern.target = null; return; }
-    if (hover === 'lantern') {
+    if (lanternLike(hover)) {
       lantern.target = point ? [point[0], 1 - point[1]] : null;
       previous = null;
       wake();

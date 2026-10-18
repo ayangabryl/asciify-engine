@@ -1,4 +1,5 @@
-import { SURFACE_HOVERS, type SurfaceHover } from '../surface/hover-catalog';
+import { resolveSurfaceHover, type DeprecatedSurfaceHover, type SurfaceHover } from '../surface/hover-catalog';
+import { normalizeHoverScope, type HoverScope } from '../surface/hover-guide';
 import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
 import { normalizeStudioCurves, type StudioCurves } from './curves';
 import { normalizeStudioWarps, type StudioWarp, type StudioWarpEdge } from './warps';
@@ -221,6 +222,10 @@ export interface StudioSettings {
     strength: number;
     radius: number;
     edgeSafe: boolean;
+    /** Where the hover acts: the whole artwork, only the subject, or only the ground around it. Default `all`. */
+    scope?: HoverScope;
+    /** 0..1 how long the effect lingers once the pointer moves on or leaves. Default .5. */
+    decay?: number;
   };
 }
 export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
@@ -483,14 +488,13 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       amount: n(a.amount, 1, 0, 2),
     },
     hover: {
-      effect: choice(
-        p.effect,
-        SURFACE_HOVERS.map(style => style.value),
-        "trail",
-      ),
+      effect: resolveSurfaceHover(p.effect) ?? "trail",
       strength: n(p.strength, 0.55, 0, 1),
       radius: n(p.radius, 0.2, 0.1, 1),
       edgeSafe: p.edgeSafe === true,
+      // Defaults are left out, so saved settings and share links from before these options stay byte-identical.
+      ...(normalizeHoverScope(p.scope) !== "all" && { scope: normalizeHoverScope(p.scope) }),
+      ...(n(p.decay, 0.5, 0, 1) !== 0.5 && { decay: n(p.decay, 0.5, 0, 1) }),
     },
   };
 }
@@ -539,11 +543,14 @@ export function studioDimensions(
 
 /** Partial configuration for mounting and incremental updates. Arrays replace previous arrays. */
 export type StudioInput = {
-  [K in keyof StudioSettings]?: StudioSettings[K] extends readonly unknown[]
+  [K in Exclude<keyof StudioSettings, "hover">]?: StudioSettings[K] extends readonly unknown[]
     ? StudioSettings[K]
     : StudioSettings[K] extends object
       ? Partial<StudioSettings[K]>
       : StudioSettings[K];
+} & {
+  /** Retired effect IDs are accepted and play their closest current effect. */
+  hover?: Partial<Omit<StudioSettings["hover"], "effect">> & { effect?: SurfaceHover | DeprecatedSurfaceHover };
 };
 export function updateStudioSettings(
   current: StudioSettings,

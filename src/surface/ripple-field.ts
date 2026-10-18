@@ -39,7 +39,7 @@ export class RippleField {
     const speed=distance/Math.max(1/240,Math.min(.1,time-previous.time||1/60));
     const i=this.slot*5;this.slot=(this.slot+1)%8;
     this.rings[i]=x;this.rings[i+1]=y;this.rings[i+2]=0;
-    this.rings[i+3]=Math.min(.82,.14+speed*.16);
+    this.rings[i+3]=Math.min(.9,.26+speed*.2);
     this.rings[i+4]=.035+Math.max(.1,Math.min(1,radius))*.13;
     this.alive=true;this.lastRing=this.clock;
   }
