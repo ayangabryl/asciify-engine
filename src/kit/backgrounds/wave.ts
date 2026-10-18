@@ -152,7 +152,10 @@ export function renderWaveBackground(
   }
 }
 
-/** An interference field with a soft vortex at the cursor and a slow breath. */
+/**
+ * An interference field with a soft vortex at the cursor and a slow breath.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `swell` is the closest current preset.
+ */
 export const wave: BackgroundPreset = {
   id: 'wave', name: 'Wave', description: 'An interference field with a soft vortex at the cursor and a slow breath.', cellSize: 13, speed: 0.6, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) => {

@@ -57,9 +57,9 @@ Rules:
 - **Never a new colour.** No hex that is not a token (map to the app's tokens as above), no black canvas on a light page, no white glow on a coloured image.
 
 ```ts
-import { background, halftone, statusOrb, beam } from 'asciify-engine/kit';
+import { background, swell, statusOrb, beam } from 'asciify-engine/kit';
 
-background(pricing, { preset: halftone, clear: pricingCopy, ink: '--ascii-ink' }); // the token, re-read per theme
+background(pricing, { preset: swell, clear: pricingCopy, ink: '--ascii-ink' }); // the token, re-read per theme
 const orb = statusOrb(orbSlot); // strong ink at rest; outcomes read --ascii-success, --ascii-warning, --ascii-error
 beam(planCard, { palette: 'mono', mode: 'pulse' }); // the quiet beam; 'colorful' only when asked for
 orb.loading();
@@ -93,8 +93,8 @@ Text never sits on raw characters, and never in a box. Two layers do the work:
 
 | Surface | Cell size | Characters | Site reference |
 | --- | --- | --- | --- |
-| Page hero ground | 10–12px, broad shapes | Sparse: `' .:+*#'` in the mono face | `fieldBackground` `hero` (10px), `drift` (11px), `halftone` (14px dot spacing), `swell` (10px dot spacing) |
-| Section band or card stage | 7–10px | Fuller ramp for images (`' .:-=+*#%@'`), quiet ramp for grounds | images 7px, character fields 10px, halftone 9px |
+| Page hero ground | 10–12px, broad shapes | Sparse: `' .:+*#'` in the mono face | `fieldBackground` `hero` (10px), `drift` (11px), `swell` (10px dot spacing), the scene presets (11px) |
+| Section band or card stage | 7–10px | Fuller ramp for images (`' .:-=+*#%@'`), quiet ramp for grounds | images 7px, character fields 10px, dots 9px |
 | Control: button, pill, tabs, code input, odometer | Leave it to the kit | The kit fits cells to the element's text | Use a monospaced label for `buttonLoading` |
 
 - One density per surface: a stage does not mix a 7px image and a 12px ground.
@@ -187,29 +187,27 @@ publishButton.addEventListener('click', async () => {
 
 ## 9. Backgrounds
 
-`background(element, { preset })` draws any of the 26 presets from asciify.org/backgrounds under the element's content. Choose by surface:
+`background(element, { preset })` draws any of the 13 curated presets from asciify.org/backgrounds under the element's content. Choose by surface:
 
 | Surface | Presets | Notes |
 | --- | --- | --- |
-| Product hero, pricing, docs landing, behind copy | `drift`, `halftone`, `swell`, or `fieldBackground` `hero` | GPU grounds that clear around `clear`. `halftone` is the calmest; `swell` is the finest, a dot grid in slow waves that stays quiet in the middle even without `clear`; `fieldBackground` `hero` is asciify.org's own hero, with ripples and `pulse()`. |
+| Product hero, pricing, docs landing, behind copy | `swell`, `drift`, `halo`, or `fieldBackground` `hero` | Grounds that clear around `clear`. `swell` is the finest, a grid in slow waves (dots, or characters with `mark: 'glyph'`) quiet in the middle even without `clear`; `halo` frames a single headline; `fieldBackground` `hero` is asciify.org's own hero, with ripples and `pulse()`. |
 | A brand or name moment | `wordField` (id `field`), `fieldBackground` `brand` | Your word in the field; keep copy off its centre. |
-| Art-first hero with little copy | `fluid` | The original Asciify hero, 7px cells at 0.7 opacity. Not behind reading text. |
-| Quiet texture: section bands, footers, empty states, side panels | `caustics`, `contour`, `facet`, `etch`, `moire`, `weave`, `veil`, `dune`, `silk` | Canvas, no cursor, slow. The safest behind text after `halftone`. |
-| An interactive moment the visitor plays with | `wave`, `aurora`, `noise`, `stars`, `pulse`, `voidWell` | They answer the cursor. Keep them away from forms and body copy. |
-| A themed subject the page is about | `rain`, `grid`, `morph`, `fire`, `dna`, `terrain`, `circuit` | Loud. Use only when the subject matches (DNA for a biotech page), with low opacity and copy beside, not over. |
+| Art-first hero with little copy | `fluid`, `mesh` | `fluid` is the original Asciify hero, 7px cells at 0.7 opacity; `mesh` is a soft gradient in characters. Not behind reading text. |
+| Quiet texture: section bands, footers, empty states, side panels | `caustics`, `contour`, `interference`, `constellation` | Fine lines, slow. Safe behind text with `clear`. |
+| An ambient or interactive moment | `aurora`, `ripple`, `cascade` | `aurora` sits above the copy; `ripple` drops rings where the pointer moves; `cascade` falls in three depths. Keep them away from forms and body copy. |
 
 Keep them calm:
 
 - `speed` at or below the preset's default; `cursor: false` near forms and copy.
-- On canvas presets behind text, `opacity` 0.5–0.8; GPU grounds already draw quietly.
-- Always `clear` the copy and add the veil from section 3; on the /backgrounds page the copy also sits on the side the field fades toward.
+- Every preset keeps a quiet zone; still `clear` the copy and add the veil from section 3.
 - One background per page section, under one `isolation: isolate` host with its own background colour.
 - `setPreset()` cross-fades in place for a picker; do not mount a second background.
 
 ```ts
 import { background, contour, caustics } from 'asciify-engine/kit';
 
-const section = background(features, { preset: contour, clear: featuresCopy, opacity: 0.6, cursor: false });
+const section = background(features, { preset: contour, clear: featuresCopy, opacity: 0.8, cursor: false });
 themePicker.addEventListener('change', () => section.setPreset(caustics)); // keeps clear, opacity and cursor
 ```
 

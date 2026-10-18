@@ -482,16 +482,16 @@ playButton.onclick = () => playButton.setAttribute('aria-label', v.toggle() ? 'P
 Category: Backgrounds
 
 Prompt:
-“Put the Asciify Swell background behind our hero: a fine dot grid that swells in slow rolling waves, quiet in the middle. Keep it clear around the headline and let it answer the cursor.”
+“Put the Asciify Swell background behind our hero: a fine grid that swells in slow rolling waves, quiet in the middle. Dots by default, or characters. Keep it clear around the headline and let it answer the cursor.”
 
 ```ts
 import { background, swell } from 'asciify-engine/kit';
 
-// One of 27 presets. Import only the one you use; bg.setPreset(other) cross-fades to another.
+// One of 13 presets. Import only the one you use; bg.setPreset(other) cross-fades to another.
 const bg = background(heroSection, { preset: swell, clear: heroText });
 ```
 
-Any preset from [the kit reference](kit.md#backgrounds) fits the same call: `swell`, `drift`, `halftone`, `wordField` and `fluid` run on the GPU glyph field; the rest are 2D canvases. For asciify.org's own hero ground, with the frosted veil and `pulse()`, use `fieldBackground(heroSection, { preset: 'hero', clear: heroText })`.
+Any preset from [the kit reference](kit.md#backgrounds) fits the same call: `swell`, `drift`, `halo`, `caustics`, `contour`, `aurora`, `ripple`, `mesh`, `interference`, `constellation`, `cascade`, `wordField` and `fluid`, all on the GPU glyph field. `cursor: false` turns the pointer response off; `swell` takes `mark: 'glyph'` or a `charset` for characters instead of dots. For asciify.org's own hero ground, with the frosted veil and `pulse()`, use `fieldBackground(heroSection, { preset: 'hero', clear: heroText })`.
 
 ## Advanced: raw field
 

@@ -9,7 +9,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
   return (.65 * warp + .35 * weft) * (.4 + .6 * Math.sin(v * 2 + .4));
 };
 
-/** Interlaced threads with a subtle change in tension. */
+/**
+ * Interlaced threads with a subtle change in tension.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `interference` is the closest current preset.
+ */
 export const weave: BackgroundPreset = {
   id: 'weave', name: 'Weave', description: 'Interlaced threads with a subtle change in tension.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

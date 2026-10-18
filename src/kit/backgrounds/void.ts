@@ -112,7 +112,10 @@ export function renderVoidBackground(
   }
 }
 
-/** A gravity well that spirals characters around the cursor. */
+/**
+ * A gravity well that spirals characters around the cursor.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `halo` is the closest current preset.
+ */
 export const voidWell: BackgroundPreset = {
   id: 'void', name: 'Void', description: 'A gravity well that spirals characters around the cursor.', cellSize: 13, speed: 1, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) =>

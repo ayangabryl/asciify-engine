@@ -267,6 +267,8 @@ export interface LiveConfig {
   place: string;
   /** The component draws a poster of its own. */
   ownPoster?: boolean;
+  /** A field drawn in another mark (a halftone) that still takes the global look: what it draws with once a look gives it characters. */
+  glyphs?: () => GlyphFieldOptions;
   onMount?: (field: GlyphField, canvas: HTMLCanvasElement) => void;
   onRelease?: () => void;
   /** The field failed: the live field has already removed its canvas. Not called when the first mount fails inside `start()`. */
@@ -284,12 +286,12 @@ export interface Live {
   destroy(): void;
 }
 
-const leftovers = new WeakMap<object, () => void>();
-const posters = new WeakMap<object, HTMLImageElement>();
-/** Points a kit's poster at a new still, such as the other theme's, without remounting. */
-export function setPosterSource(kit: object, src: string) { const img = posters.get(kit); if (img && img.getAttribute('src') !== src) img.src = src; }
-/** Removes what outlived a failed or unsupported field (its poster), once the handle is destroyed. */
-export function disposeKit(kit: object) { leftovers.get(kit)?.(); leftovers.delete(kit); }
+/** Every poster a kit still has in the page: a component that swaps fields (`background().setPreset`) mounts one per field. */
+const leftovers = new WeakMap<object, Map<HTMLImageElement, () => void>>();
+/** Points a kit's posters at a new still, such as the other theme's, without remounting. */
+export function setPosterSource(kit: object, src: string) { for (const img of leftovers.get(kit)?.keys() ?? []) if (img.getAttribute('src') !== src) img.src = src; }
+/** Removes what outlived a failed or unsupported field (its posters), once the handle is destroyed. */
+export function disposeKit(kit: object) { const list = leftovers.get(kit); leftovers.delete(kit); list?.forEach(remove => remove()); }
 
 const quiet = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** A still under the field: shown until the first frame, while released, and in place of the field without WebGL. */
@@ -311,14 +313,20 @@ export function poster(host: HTMLElement, src: string, place: string, kit: objec
   const isolated = /z-index:\s*-1/.test(place) && typeof getComputedStyle === 'function' && getComputedStyle(host).isolation === 'auto';
   if (isolated) host.style.setProperty('isolation', 'isolate');
   if (before?.parentElement === host) host.insertBefore(img, before); else host.appendChild(img);
+  let gone = false;
   const remove = () => {
+    if (gone) return;
+    gone = true;
     img.remove();
+    leftovers.get(kit)?.delete(img);
     if (positioned) { if (saved) host.style.setProperty('position', saved); else host.style.removeProperty('position'); }
     if (isolated) { if (savedIsolation) host.style.setProperty('isolation', savedIsolation); else host.style.removeProperty('isolation'); }
   };
-  leftovers.set(kit, remove);
-  posters.set(kit, img);
-  return { show(on: boolean) { img.style.opacity = on ? '1' : '0'; }, remove: () => disposeKit(kit) };
+  const own = leftovers.get(kit) ?? new Map<HTMLImageElement, () => void>();
+  own.set(img, remove);
+  leftovers.set(kit, own);
+  // Only this field's poster: an outgoing field must not take the incoming one's, nor leave its own over it.
+  return { show(on: boolean) { img.style.opacity = on ? '1' : '0'; }, remove };
 }
 
 const SWEEP_EASE = 'cubic-bezier(.23,1,.32,1)';
@@ -387,18 +395,23 @@ export function liveField(config: LiveConfig): Live {
 
   /** The global look applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). */
   const wanted = (): { mark: FieldMark; charset?: string } | undefined => {
-    if (!look || kit?.current.globalLook === false || (merged.mark ?? 'glyph') !== 'glyph' || LETTER.test(merged.charset ?? '')) return undefined;
+    if (!look || kit?.current.globalLook === false || ((merged.mark ?? 'glyph') !== 'glyph' && !config.glyphs) || LETTER.test(merged.charset ?? '')) return undefined;
     const style = look.style ? KIT_STYLES[look.style] : undefined;
     const mark: FieldMark = style?.mark ?? 'glyph';
     const charset = mark === 'glyph' ? look.charset || (style && 'charset' in style ? style.charset : undefined) : undefined;
     return style || charset ? { mark, charset } : undefined;
   };
   const own = (): GlyphFieldOptions => ({
+    ...(config.glyphs ? Object.fromEntries(Object.keys(config.glyphs()).map(key => [key, merged[key as keyof GlyphFieldOptions]]).filter(([, value]) => value !== undefined)) : {}),
     mark: merged.mark ?? 'glyph', charset: merged.charset ?? ENGINE_CHARSET,
     glyphScale: merged.glyphScale ?? 0.8, gamma: merged.gamma ?? 1, fontWeight: merged.fontWeight ?? 500,
   });
-  const lookOptions = (want: { mark: FieldMark; charset?: string }): GlyphFieldOptions =>
-    want.charset ? { mark: want.mark, charset: want.charset, ...balanceCharset(want.charset, merged) } : { ...own(), mark: want.mark };
+  const lookOptions = (want: { mark: FieldMark; charset?: string }): GlyphFieldOptions => {
+    if (!want.charset) return { ...own(), mark: want.mark };
+    // A halftone given characters lays them out as the glyph fields do: its own cells are square and spaced for dots.
+    const cells = config.glyphs && (merged.mark ?? 'glyph') !== 'glyph' ? config.glyphs() : {};
+    return { ...cells, mark: want.mark, charset: want.charset, ...balanceCharset(want.charset, { ...merged, ...cells }) };
+  };
   /** What changes since the look last applied: the look's options, the field's own back, or null for nothing. */
   const lookPatch = (): GlyphFieldOptions | null => {
     const want = wanted(), key = want && `${want.mark}\u0000${want.charset ?? ''}`;

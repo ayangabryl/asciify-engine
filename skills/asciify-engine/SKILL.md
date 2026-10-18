@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.18.0"
+  tested-engine: "4.19.0"
   updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.18.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.19.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
@@ -36,7 +36,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | The user wants | Use |
 | --- | --- |
 | A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404 | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
-| A background behind a hero, pricing, docs or a section, light or dark | Kit `fieldBackground(el, { preset: 'hero', clear })` (asciify.org's hero) or `background(el, { preset, clear })` with one of the 26 presets below |
+| A background behind a hero, pricing, docs or a section, light or dark | Kit `fieldBackground(el, { preset: 'hero', clear })` (asciify.org's hero) or `background(el, { preset, clear })` with one of the 13 curated presets below |
 | Their word or brand in characters | Kit `wordmark`, or `background()` with `wordField` |
 | Their video in characters on the page | Kit `asciiVideo` |
 | Their photo, video or GIF converted, optionally answering the cursor | Advanced: `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` |
@@ -57,25 +57,22 @@ const b = beam(card, { palette: 'mono', mode: 'pulse' });
 // On unmount: b.destroy();
 ```
 
-`background()`, the 26 presets, `lazy`, `poster`, `setFieldBudget` and `setGlobalLook` are new in 4.14.0. Check that the installed `asciify-engine/kit` exports them; if not, upgrade ([upgrading.md](references/upgrading.md)).
+`background()`, its presets, `lazy`, `poster`, `setFieldBudget` and `setGlobalLook` are new in 4.14.0; `halo`, `ripple`, `mesh`, `interference`, `constellation`, `cascade`, the GPU `caustics`, `contour` and `aurora`, and the `mark` option are new in 4.19.0. Check that the installed `asciify-engine/kit` exports them; if not, upgrade ([upgrading.md](references/upgrading.md)).
 
 ## Backgrounds
 
-`background(element, { preset })` draws every background on asciify.org/backgrounds with the site's own renderers and graphite inks. Import presets by name; a page pays only for those it imports. Which one suits which surface, and how to keep it calm, is in [applying-asciify.md](references/applying-asciify.md#9-backgrounds).
+`background(element, { preset })` draws every background on asciify.org/backgrounds as a scene of the GPU glyph field, in the site's graphite inks and following the global look. Import presets by name; a page pays only for those it imports. `cursor: false` turns the pointer response off for any of them. Which one suits which surface, and how to keep it calm, is in [applying-asciify.md](references/applying-asciify.md#9-backgrounds).
 
 ```ts
-import { background, halftone } from 'asciify-engine/kit';
-const bg = background(pricing, { preset: halftone, clear: pricingCopy });
+import { background, swell } from 'asciify-engine/kit';
+const bg = background(pricing, { preset: swell, clear: pricingCopy });
 ```
 
-The 26 presets, as export → `id` (name):
+The 13 curated presets, as export → `id` (name), all on the GPU glyph field (WebGL2, sharing the context budget): `swell` (Swell, dots or characters), `drift` (Drift), `halo` (Halo), `caustics` (Caustics), `contour` (Contour), `aurora` (Aurora), `ripple` (Ripple), `mesh` (Mesh), `interference` (Interference), `constellation` (Constellation), `cascade` (Cascade), `wordField` → `field` (Field), `fluid` (Fluid).
 
-- GPU glyph field (WebGL2, shares the context budget): `drift` → `drift` (Drift), `halftone` → `halftone` (Halftone), `swell` → `swell` (Swell), `wordField` → `field` (Field), `fluid` → `fluid` (Fluid).
-- 2D canvas (no WebGL): `caustics` → `caustics` (Caustics), `contour` → `contour` (Contour), `facet` → `facet` (Facet), `etch` → `etch` (Etch), `moire` → `moire` (Moiré), `weave` → `weave` (Weave), `veil` → `veil` (Veil), `dune` → `dune` (Dune), `wave` → `wave` (Wave), `aurora` → `aurora` (Aurora), `noise` → `noise` (Noise), `silk` → `silk` (Silk), `rain` → `rain` (Rain), `stars` → `stars` (Stars), `pulse` → `pulse` (Pulse), `grid` → `grid` (Grid), `voidWell` → `void` (Void), `morph` → `morph` (Morph), `fire` → `fire` (Fire), `dna` → `dna` (DNA), `terrain` → `terrain` (Terrain), `circuit` → `circuit` (Circuit).
+The retired presets (`halftone`, `dna`, `circuit`, `fire`, `grid`, `morph`, `noise`, `pulse`, `rain`, `silk`, `stars`, `terrain`, `veil`, `voidWell`, `wave`, `weave`, `dune`, `etch`, `facet`, `moire`) are still exported and marked `@deprecated` so old code runs; do not reach for them in new work. [kit.md](references/kit.md#backgrounds) maps each to its replacement. `fieldBackground` is separate: its `hero`, `brand` and `notFound` presets are the asciify.org hero ground, the same ground in the brand colour, and the 404.
 
-`voidWell` is the export for the `void` preset, because `void` is reserved in JavaScript. `wordField`'s id is `field`, the name the site uses. `fieldBackground` is separate: its `hero`, `brand` and `notFound` presets are the asciify.org hero ground, the same ground in the brand colour, and the 404.
-
-Downloaded templates from asciify.org/backgrounds (`asciiBackground` from a local `./wave.js`) still work in apps that already use them; new work uses `background()`.
+Templates already downloaded from asciify.org/backgrounds (`asciiBackground` from a local `./wave.js`) keep working in apps that ship them, but the site no longer offers them; move those apps to `background()` with the closest preset (kit.md maps each).
 
 ## Install the agent skill
 

@@ -12,6 +12,8 @@ export interface PageFieldConfig {
   kit?: { current: KitOptions };
   /** The component draws a poster of its own, so `kit.current.poster` is left to it. */
   ownPoster?: boolean;
+  /** A halftone field that takes the global look: what it draws with once a look gives it characters. */
+  glyphs?: () => GlyphFieldOptions;
   /** After each mount, the first included. */
   onMount?: () => void;
   /** After the field is released off screen or past the context budget. */
@@ -68,7 +70,7 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
   };
   const ink = () => resolveColor(config.ink(dark), host, dark ? '#d8d6cf' : '#1d1d1b') ?? '#888888';
   const live = liveField({
-    host, canvas, kit, place, ownPoster: config.ownPoster, source: config.source ?? null,
+    host, canvas, kit, place, ownPoster: config.ownPoster, glyphs: config.glyphs, source: config.source ?? null,
     options: () => ({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink(), interactionTarget: host, label: config.label ?? '' }),
     onMount: (_, mounted) => {
       if (!config.label) { mounted.removeAttribute('role'); mounted.removeAttribute('aria-label'); mounted.setAttribute('aria-hidden', 'true'); }

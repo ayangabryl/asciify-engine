@@ -1,10 +1,10 @@
 # Asciify looks
 
-Finished artwork looks for a person's own photo, video or GIF: wallpapers, posters, album and cover art, hero artwork, prints and social images. Each look has the prompt a person gives you and the exact `/studio` settings that reproduce it. Every look is shown live at https://asciify.org/looks on the site's sample images, and opens in the editor at https://asciify.org/editor with the same settings.
+Finished artwork looks for a person's own photo, video or GIF: wallpapers, posters, album and cover art, hero artwork, prints and social images. Each look has the prompt a person gives you and the exact `/studio` settings that reproduce it. Every look is shown live at https://asciify.org/looks on a source image made for it, and opens in the editor at https://asciify.org/editor with the same settings. Every Studio render style has at least one look.
 
 These are artworks, not interface components. For a loading state, a background behind text or another UI piece, use [components.md](components.md) and the kit instead.
 
-Twelve looks are the engine's curated presets: apply them with `studioLook(id)` and enumerate `STUDIO_LOOKS` rather than copying their values. The others are written out in full settings for render styles the presets do not cover. All of them use the `asciify-engine/studio` entry ([studio-workspace.md](studio-workspace.md), [print-styles.md](print-styles.md)); nothing is uploaded, and the person's media stays in the browser.
+Twelve looks are the engine's curated presets: apply them with `studioLook(id)` and enumerate `STUDIO_LOOKS` rather than copying their values. The others are written out in full settings: render styles the presets do not cover, Composed looks that use the backdrop (blur, the photo itself, gradients, transparency) and masks, and Finished looks that turn on the optical finish (vignette, grain, bloom, scanlines, fringe, blur). All of them use the `asciify-engine/studio` entry ([studio-workspace.md](studio-workspace.md), [print-styles.md](print-styles.md)); nothing is uploaded, and the person's media stays in the browser.
 
 ## Reproduce a look
 
@@ -58,11 +58,416 @@ Common sizes: desktop 3840×2160 (`referenceWidth: 960`), phone 1290×2796 (`430
 
 ## How to choose
 
-- The person names a look, or describes one ("newsprint", "riso", "phosphor", "Lego", "engraving"): use the entry, then adjust only what they asked for.
-- Dark, contrasty sources (a subject on black, night scenes) suit character looks and source-color tiles. Bright, high-key sources (white architecture, paper, daylight) suit the paper-ground looks: Newsprint, Two inks, Banknote, Four-color press.
-- Subjects with strong local color (fruit, fish, birds, a painting) suit source-color looks: Mosaic study, Brickwork, Pixel, Honeycomb, Pointillist.
+- The person names a look, or describes one ("newsprint", "riso", "phosphor", "Lego", "engraving", "film still"): use the entry, then adjust only what they asked for.
+- Dark, contrasty sources (a subject on black, night scenes) suit character looks and source-color tiles. Bright, high-key sources (white architecture, paper, daylight) suit the paper-ground looks: Newsprint, Two inks, Banknote, Four-color press, Riso duotone, Woodcut, Overprint.
+- Subjects with strong local color (fruit, fish, birds, a painting) suit source-color looks: Mosaic study, Brickwork, Pixel, Honeycomb, Pointillist, ANSI blocks, Jewel box.
+- The artwork goes over something else (video, a gradient, a brand color, a product page): use a transparent look (Cutout, Halo overlay) and export PNG, which keeps the alpha.
+- The person wants the photo itself to stay present: Frosted glass and Bokeh draw over its blur, Overprint over the sharp original.
+- The person asks for a grade, film, broadcast or vintage feel: use a Finished look. Finish effects need WebGL; check `art.capabilities.gpuFinish` and say so when it is unavailable.
 - Keep artwork with motion off for video sources unless asked; the footage already moves.
 - Say in one line which look you chose and offer one alternative from this file.
+
+## frost: Frosted glass
+Category: Composed
+Use it for: sunsets, skylines and silhouettes as white frost characters over a soft, full-color blur of the photo; premium wallpapers and covers.
+Settings: ASCII, 5px cells, ink `#121110` with the tone curve inverted so shadows carry the characters, over the source blurred 24px at full opacity.
+
+Prompt:
+“Frost [my photo] like glass with asciify-engine: fine white characters where the photo is bright, over a soft, full-color blur of the same photo, so dark shapes stay clean silhouettes. Export a 3840×2160 PNG wallpaper and a 1290×2796 phone version.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, ink: '#fff7ef',
+    backdrop: { mode: 'blurred', blur: 10, opacity: 1 },
+    color: { contrast: 1.2, brightness: .05 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+// The blur is the untouched photo; color adjustments only change the characters.
+```
+
+## bokeh: Bokeh
+Category: Composed
+Use it for: flowers, gardens and lights as glowing color dots over their own soft focus; spring campaigns, calm wallpapers, music covers.
+Settings: dots, 6px cells, source color at saturation 1.3, brightness .12, over the source blurred 32px, character glow .25.
+
+Prompt:
+“Turn [my photo] into a bokeh artwork with asciify-engine: halftone dots in the photo's own colors, slightly brighter, floating over a deep blur of the same photo with a soft glow. Export a 2160×2700 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'dots', cellSize: 6, colorMode: 'source',
+    backdrop: { mode: 'blurred', blur: 32, opacity: 1 },
+    color: { saturation: 1.3, brightness: .12, contrast: 1.1 },
+    effects: { characterBloom: .25 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## cutout: Cutout
+Category: Composed
+Use it for: a subject on a dark or plain background as a sticker with a transparent ground; overlays on any color, product cut-outs, layered heroes.
+Settings: mixed type, 4px cells, source color at saturation 1.4, brightness .15, transparent backdrop.
+
+Prompt:
+“Cut [my subject on a dark background] out as an ASCII sticker with asciify-engine: fine mixed type in the photo's colors on a transparent ground, so only the subject remains. Place it over [our brand color] in the hero and export a transparent 2160×2160 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'mixed', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'transparent' },
+    color: { saturation: 1.4, contrast: 1.2, brightness: .15 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+// Export as PNG to keep the transparency; JPEG and MP4 fill it with black.
+```
+
+## halo: Halo overlay
+Category: Composed
+Use it for: a glowing white dot artwork with a transparent ground, to lay over video, gradients or brand color; launch heroes and title cards.
+Settings: dots, 5px cells, `#f4f1ea` ink, transparent backdrop, character glow .4.
+
+Prompt:
+“Make [my photo] a glowing dot overlay with asciify-engine: white halftone dots with a soft halo on a transparent ground, so it sits over [our hero gradient]. Keep the canvas pointer-events free and export a transparent 3840×2160 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'dots', cellSize: 5, ink: '#f4f1ea',
+    backdrop: { mode: 'transparent' },
+    color: { contrast: 1.2 },
+    effects: { characterBloom: .4 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+// canvas { position: absolute; inset: 0; pointer-events: none } over the layer it decorates.
+```
+
+## afterglow: Afterglow
+Category: Composed
+Use it for: a bright figure or object on black, redrawn in warm light characters over a dusk gradient; event posters, music and campaign heroes.
+Settings: ASCII, 4px cells, black point .25, `#fff0dc` ink over a gradient from `#1c1433` to `#b4492f`, character glow .3.
+
+Prompt:
+“Draw [my photo] in warm light characters over a dusk gradient with asciify-engine: violet into ember, the characters glowing softly. Export a 2160×2700 PNG poster and let me swap the two gradient colors for [our palette].”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, ink: '#fff0dc',
+    backdrop: { mode: 'gradient', color: '#1c1433', color2: '#b4492f' },
+    color: { contrast: 1.2, blackPoint: .25 },
+    effects: { characterBloom: .3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+art.update({ backdrop: { color: '#0e2a3a', color2: '#d98f3c' } }); // the gradient runs top left to bottom right
+```
+
+## neon: Neon
+Category: Composed
+Use it for: night photos with bright, saturated lights, redrawn as glowing colored characters; nightlife, festival and music artwork.
+Settings: ASCII, 4px cells, source color at saturation 1.3 on `#07070a`, character glow .6.
+
+Prompt:
+“Light [my night photo] up as neon with asciify-engine: fine characters in the photo's own saturated colors, each glowing like a lit tube, on black. Play it live in [the hero] and export a 2160×2700 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#07070a' },
+    color: { saturation: 1.3 },
+    effects: { characterBloom: .6 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## cobalt: Cobalt
+Category: Composed
+Use it for: a pale sculpture, portrait or product on a dark ground, set in cream characters on saturated ultramarine; gallery posters and confident brand heroes.
+Settings: ASCII, 3px cells, `#f2ede2` ink on solid `#1f3ea8`, contrast 1.3, black point .15.
+
+Prompt:
+“Set [my photo] in cream characters on deep cobalt blue with asciify-engine, like a gallery poster. Export a 2480×3508 PNG, and let me swap the blue for [our brand color] without changing the ink.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 3, ink: '#f2ede2',
+    backdrop: { mode: 'solid', color: '#1f3ea8' },
+    color: { contrast: 1.3, blackPoint: .15 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+art.update({ backdrop: { color: '#0f5c4a' } });
+```
+
+## cameo: Cameo
+Category: Composed
+Use it for: a portrait engraved inside an oval on warm paper, like a stamp or banknote vignette; invitations, about pages, memorial and heritage artwork.
+Settings: engraving, 4px cells, `#2a2620` on `#ece6d8`, `print.invert: true`, angle −30, inside an ellipse mask.
+
+Prompt:
+“Engrave [my portrait] inside an oval cameo with asciify-engine: fine parallel cuts in dark ink on warm paper, only within a centered oval, the paper plain around it. Export a 2480×3508 PNG for an invitation.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'engraving', cellSize: 4, ink: '#2a2620',
+    backdrop: { mode: 'solid', color: '#ece6d8' },
+    print: { invert: true, angle: -30, weight: 1.05 },
+    mask: { enabled: true, shapes: [{ kind: 'ellipse', x: .31, y: .1, width: .38, height: .8 }] },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
+});
+// Mask shapes are 0–1 of the frame (left, top, width, height); move the oval to frame the face.
+```
+
+## gilded: Gilded
+Category: Composed
+Use it for: jewelry, watches, metalwork and ornament as gold engraving on black; luxury product pages, labels and premium dark heroes.
+Settings: engraving, 4px cells, gold `#d9b26a` on `#0b0a08`, angle −35, weight 1.1, contrast 1.35, character glow .2.
+
+Prompt:
+“Engrave [my product photo] in gold on black with asciify-engine: fine parallel cuts in warm gold whose weight follows the light, with a faint glow. Export a 2160×2160 PNG and a 3840×2160 wallpaper.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'engraving', cellSize: 4, ink: '#d9b26a',
+    backdrop: { mode: 'solid', color: '#0b0a08' },
+    print: { angle: -35, weight: 1.1 },
+    color: { contrast: 1.35, brightness: .05 },
+    effects: { characterBloom: .2 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
+});
+```
+
+## overprint: Overprint
+Category: Composed
+Use it for: bright, airy photos with dark characters printed straight over the sharp original; travel, editorial and summer campaign artwork.
+Settings: ASCII, 5px cells, deep teal `#0f2a33` ink, contrast 1.2, over the source photo at full opacity.
+
+Prompt:
+“Overprint [my bright photo] with asciify-engine: keep the photo sharp underneath and print deep teal characters over its light areas, like a type screen inked onto the print. Export a 2160×2700 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 5, ink: '#0f2a33',
+    backdrop: { mode: 'source', opacity: 1 },
+    color: { contrast: 1.2 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## cinema: Cinema
+Category: Finished
+Use it for: landscapes, roads and wide scenes as a film still: warm-white characters over the photo's own soft color, with a vignette, film grain and a little bloom; trailers, story heroes and posters.
+Settings: ASCII, 4px cells, warm-white `#fff1de` ink over the source blurred 14px, contrast 1.15, vignette .45, grain .22, bloom .15.
+
+Prompt:
+“Grade [my photo] like a film still with asciify-engine: fine warm-white characters over a soft blur of the photo's own colors, finished with a vignette, a little bloom and film grain. Export a 3840×1646 PNG in 21:9 and keep it live in [the hero].”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, ink: '#fff1de',
+    backdrop: { mode: 'blurred', blur: 14, opacity: 1 },
+    color: { contrast: 1.15 },
+    effects: { vignette: .45, grain: .22, bloom: .15 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+// Finish effects need WebGL: check art.capabilities.gpuFinish before saying they were applied.
+```
+
+## darkroom: Darkroom
+Category: Finished
+Use it for: still lifes, portraits and low-key photos as a print glowing out of the dark; book covers, gallery walls and quiet dark heroes.
+Settings: ASCII, 5px cells, `#efe6d6` on `#080706`, contrast 1.2, brightness .3, midtones 1.7, vignette .55, bloom .35, grain .12.
+
+Prompt:
+“Print [my photo] like it is coming up in a darkroom with asciify-engine: warm paper-white characters on black, a heavy vignette, a soft glow on the highlights and a little grain. Export a 2480×3508 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 5, ink: '#efe6d6',
+    backdrop: { mode: 'solid', color: '#080706' },
+    color: { contrast: 1.2, brightness: .3, gamma: 1.7 },
+    effects: { vignette: .55, bloom: .35, grain: .12 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## broadcast: Broadcast
+Category: Finished
+Use it for: space, sport and news-like photos as a live transmission: a fine pixel picture with scanlines, a chromatic fringe, RGB split and a slight tube curve; launch and live-event artwork.
+Settings: pixel, 3px cells, source color at saturation 1.15, scanlines .35, prism .3, RGB split .25, CRT .15, vignette .25.
+
+Prompt:
+“Make [my photo] look like a live broadcast with asciify-engine: a fine pixel picture in the photo's colors on a screen with scanlines, a chromatic fringe, a little RGB split and a slight tube curve. Show it live in [the hero] and export a 1920×1080 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'pixel', cellSize: 3, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#06080b' },
+    color: { saturation: 1.15, contrast: 1.05 },
+    effects: { scanlines: .35, prism: .3, rgbSplit: .25, crt: .15, vignette: .25 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
+});
+```
+
+## tape: Tape
+Category: Finished
+Use it for: action, skate and music photos as a worn tape frame: halftone dots in source color with glitch bands, color split, scanlines and grain; merch, flyers and social cuts.
+Settings: dots, 4px cells, source color at saturation 1.3, brightness .15, glitch .15, RGB split .35, scanlines .2, grain .25.
+
+Prompt:
+“Run [my photo] through an old tape with asciify-engine: halftone dots in the photo's colors with glitch bands, an RGB split, faint scanlines and grain. Export a 1080×1350 PNG and a 6-second 1080×1350 MP4 loop.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'dots', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0a0c' },
+    color: { saturation: 1.3, contrast: 1.1, brightness: .15 },
+    effects: { glitch: .15, rgbSplit: .35, scanlines: .2, grain: .25 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+// Glitch bands move over time; mountStudio holds still under prefers-reduced-motion.
+```
+
+## miniature: Miniature
+Category: Finished
+Use it for: aerial views of towns, harbors and crowds as a tilt-shift model, sharp in a band and softly blurred above and below; travel and city artwork.
+Settings: pixel, 4px cells, source color at saturation 1.35, progressive blur 6 focused at .55, sharpen .3.
+
+Prompt:
+“Turn [my aerial photo] into a tilt-shift miniature with asciify-engine: small square pixels in boosted source colors, sharp through the middle band and blurring toward the top and bottom. Export a 3840×2160 PNG wallpaper.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'pixel', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0b0a' },
+    color: { saturation: 1.35, contrast: 1.1 },
+    effects: { blur: 6, blurType: 'progressive', focus: .55, sharpen: .3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+art.update({ effects: { focus: .4 } }); // moves the sharp band
+```
+
+## archive: Archive
+Category: Finished
+Use it for: historic, travel and heritage photos as an aged print, with sepia ink, dust, grain and a vignette; anniversaries, museums and about pages.
+Settings: ASCII, 4px cells, sepia ink `#e9d8b4` on `#17130e`, contrast 1.4, dust .45, grain .3, vignette .4.
+
+Prompt:
+“Age [my photo] into an archive print with asciify-engine: warm sepia characters on dark brown with dust, film grain and a vignette, like a print found in a drawer. Export a 2480×3508 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, ink: '#e9d8b4',
+    backdrop: { mode: 'solid', color: '#17130e' },
+    color: { contrast: 1.4 },
+    effects: { dust: .45, grain: .3, vignette: .4 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## velocity: Velocity
+Category: Finished
+Use it for: headlights, tunnels and anything rushing toward the camera, with a radial speed blur and glowing highlights; automotive, sport and launch heroes.
+Settings: ASCII, 4px cells, source color at saturation 1.25 lifted (brightness .2, midtones 1.3), radial blur 4 around the center, bloom .3, vignette .25.
+
+Prompt:
+“Give [my photo] speed with asciify-engine: characters in the photo's colors streaking out from the center with a radial blur, glowing highlights and a vignette. Export a 1920×1080 PNG and keep it live in [the hero].”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'ascii', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#08080a' },
+    color: { saturation: 1.25, brightness: .2, gamma: 1.3 },
+    effects: { blur: 4, blurType: 'radial', focus: .5, bloom: .3, vignette: .25 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## poppress: Pop press
+Category: Finished
+Use it for: bold, saturated product and car photos as a comic-print page, with a halftone screen over shaded blocks in source color; packaging, merch and pop posters.
+Settings: blocks, 4px cells, source color at saturation 1.4 lifted (brightness .2, midtones 1.3), halftone screen .35, sharpen .4.
+
+Prompt:
+“Print [my photo] as a pop comic page with asciify-engine: shaded blocks in the photo's saturated colors under a halftone screen, sharpened. Export a 2480×3508 PNG poster.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'blocks', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0b0a' },
+    color: { saturation: 1.4, contrast: 1.15, brightness: .2, gamma: 1.3 },
+    effects: { halftone: .35, sharpen: .4 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
 
 ## ascii: Signature ASCII
 Category: Characters
@@ -177,6 +582,112 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
 });
 ```
 
+## blocks: ANSI blocks
+Category: Characters
+Use it for: bold, colorful subjects as shaded block characters, like ANSI art from a BBS; retro, game and music artwork.
+Settings: blocks style (` ░▒▓█`), 5px cells, source color at saturation 1.15, contrast 1.1 on `#0b0b0a`.
+
+Prompt:
+“Draw [my photo] in ANSI blocks with asciify-engine: shaded block characters in the photo's own colors on black, like a BBS splash screen. Export a 2160×2160 PNG and a 3840×2160 wallpaper.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'blocks', cellSize: 5, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0b0a' },
+    color: { saturation: 1.15, contrast: 1.1 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## braille: Braille
+Category: Characters
+Use it for: fine, graphic subjects on black (leaves, feathers, line-like forms) drawn in tiny braille dots; delicate dark wallpapers and editorial openers.
+Settings: braille style (` ⠁⠃⠇⡇⣇⣧⣷⣿`), 3px cells, source color at saturation 1.3 on `#0b0b0a`, contrast 1.4, brightness .15, midtones 1.3.
+
+Prompt:
+“Draw [my photo] in braille dots with asciify-engine: fine braille characters in the photo's own colors on black, so the light shapes read as clusters of dots. Export a 3840×2160 PNG wallpaper.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'braille', cellSize: 3, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0b0a' },
+    color: { contrast: 1.4, brightness: .15, saturation: 1.3, gamma: 1.3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## cross: Cross-stitch
+Category: Characters
+Use it for: birds, flowers and folk subjects as colored stitches on dark cloth; craft, seasonal and gift artwork.
+Settings: cross style (` ·+xX#`), 4px cells, source color at saturation 1.5, brightness .2, contrast 1.2 on indigo cloth `#191d26`.
+
+Prompt:
+“Stitch [my photo] in cross-stitch with asciify-engine: small crosses in the photo's colors on dark indigo cloth, like an embroidered sampler. Export a 2160×2160 PNG for a card.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'cross', cellSize: 4, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#191d26' },
+    color: { saturation: 1.5, brightness: .2, contrast: 1.2 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## diagonal: Storm
+Category: Characters
+Use it for: rain, wind and streaks of light drawn in slanted strokes; moody posters, weather stories and dark section artwork.
+Settings: diagonal style (` /╱╳`), 4px cells, `#dfe7ea` on `#0c1013`, contrast 1.3, midtones 1.3.
+
+Prompt:
+“Draw [my photo] in slanted strokes with asciify-engine: diagonal line characters in cool grey on blue-black, like rain across the image. Export a 2160×2700 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'diagonal', cellSize: 4, ink: '#dfe7ea',
+    backdrop: { mode: 'solid', color: '#0c1013' },
+    color: { contrast: 1.3, gamma: 1.3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
+## diamond: Jewel box
+Category: Characters
+Use it for: iridescent, richly colored subjects (feathers, gems, beetles, fabric) set in diamond characters; fashion, beauty and jewelry artwork.
+Settings: diamond style (` ·◇◈◆`), 7px cells, source color at saturation 1.5, brightness .35, midtones 1.5 on `#0b0b0a`, character glow .3.
+
+Prompt:
+“Set [my photo] in diamond characters with asciify-engine: diamonds in the photo's jewel colors on black with a soft sparkle, solid where it is bright and outlined where it is dim. Export a 2160×2700 PNG.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'diamond', cellSize: 7, colorMode: 'source',
+    backdrop: { mode: 'solid', color: '#0b0b0a' },
+    color: { saturation: 1.5, brightness: .35, gamma: 1.5 },
+    effects: { characterBloom: .3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
+});
+```
+
 ## print: Newsprint
 Category: Dither
 Use it for: bright, high-key photos as an editorial print; zines, press pages, quiet light-theme heroes.
@@ -233,7 +744,7 @@ art.update({ ink: '#1f3b73', dither: { colors: ['#f0ece3', '#e0674a', '#1f3b73']
 ## dots: Halftone
 Category: Print
 Use it for: a bold, graphic portrait; band posters, covers and dark heroes that read from far away.
-Settings: dots style, 6px cells, `#e6e3da` on `#0b0b0a`, contrast 1.15, brightness .05.
+Settings: dots style, 5px cells, `#e6e3da` on `#0b0b0a`, contrast 1.3, brightness .15.
 
 Prompt:
 “Make [my photo] a halftone artwork with asciify-engine: round dots in paper white on near black whose size carries the image. Export a 2160×2700 PNG and a 3840×2160 wallpaper at the same dot size.”
@@ -243,9 +754,9 @@ import { mountStudio } from 'asciify-engine/studio';
 
 const art = await mountStudio(canvas, '/your-photo.jpg', {
   settings: {
-    style: 'dots', cellSize: 6, ink: '#e6e3da',
+    style: 'dots', cellSize: 5, ink: '#e6e3da',
     backdrop: { mode: 'solid', color: '#0b0b0a' },
-    color: { contrast: 1.15, brightness: .05 },
+    color: { contrast: 1.3, brightness: .15 },
   },
   width: frame.clientWidth, height: frame.clientHeight, maxCells: 65536,
 });
@@ -271,7 +782,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
 ## stipple: Stipple
 Category: Print
 Use it for: a quiet, drawn portrait in fine dots; book covers, editorial portraits, dark wallpapers.
-Settings: stipple style, 4px cells, `#e6e3da` on `#0b0b0a`, contrast 1.25, brightness .08.
+Settings: stipple style, 4px cells, `#e6e3da` on `#0b0b0a`, contrast 1.35, brightness .2, midtones 1.3.
 
 Prompt:
 “Draw [my portrait] in stipple with asciify-engine: thousands of fine paper-white dots on near black, scattered so the light shapes the face. Export a 2480×3508 PNG for a book cover.”
@@ -283,7 +794,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
   settings: {
     style: 'stipple', cellSize: 4, ink: '#e6e3da',
     backdrop: { mode: 'solid', color: '#0b0b0a' },
-    color: { contrast: 1.25, brightness: .08 },
+    color: { contrast: 1.35, brightness: .2, gamma: 1.3 },
   },
   width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
 });
@@ -292,7 +803,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
 ## engraving: Banknote
 Category: Print
 Use it for: architecture, portraits and objects as a steel engraving; certificates, invitations, premium light-theme heroes.
-Settings: engraving style, 5px cells, dark ink `#22201c` on paper `#ece8de`, `print.invert: true`, angle −35, weight 1.1.
+Settings: engraving style, 5px cells, dark ink `#22201c` on paper `#ece8de`, `print.invert: true`, angle −35, weight 1.1, contrast 1.25.
 
 Prompt:
 “Engrave [my photo] like a banknote with asciify-engine: parallel cuts in dark ink on warm paper whose weight follows the shadows. Export a 2480×3508 PNG, and keep the line angle adjustable.”
@@ -305,6 +816,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
     style: 'engraving', cellSize: 5, ink: '#22201c',
     backdrop: { mode: 'solid', color: '#ece8de' },
     print: { invert: true, angle: -35, weight: 1.1 },
+    color: { contrast: 1.25 },
   },
   width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
 });
@@ -335,7 +847,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
 ## pointillism: Pointillist
 Category: Print
 Use it for: still lifes, fruit, flowers and landscapes as a painted canvas; gallery-style wallpapers.
-Settings: pointillism style, 3px cells, source color, brightness .1, saturation 1.1 on `#0b0b0a`.
+Settings: pointillism style, 3px cells, source color, brightness .25, saturation 1.3 on `#0b0b0a`.
 
 Prompt:
 “Paint [my photo] in pointillist strokes with asciify-engine: small dabs of the photo's own colors on black, like a Seurat up close. Export a 3840×2160 PNG wallpaper.”
@@ -347,10 +859,55 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
   settings: {
     style: 'pointillism', cellSize: 3, colorMode: 'source', print: { weight: 1.6, density: 1.3 },
     backdrop: { mode: 'solid', color: '#0b0b0a' },
-    color: { brightness: .1, saturation: 1.1 },
+    color: { brightness: .25, saturation: 1.3 },
   },
   width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
 });
+```
+
+## woodblock: Woodcut
+Category: Print
+Use it for: landscapes and silhouettes with big tonal masses as a carved woodblock print on paper; book covers, labels and outdoor brand artwork.
+Settings: woodblock style, 8px cells, `#1d1a16` on `#ebe3d2`, `print.invert: true`, level bands (angle 0), roughness .3, weight .9, contrast 1.2, white point .7 so the sky stays bare paper, midtones 1.6 and shadows .3 so each ridge keeps its own band.
+
+Prompt:
+“Carve [my landscape photo] as a woodcut with asciify-engine: broad, rough-edged bands in dark ink on warm paper, stepping through a few tones. Export a 2480×3508 PNG print.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'woodblock', cellSize: 8, ink: '#1d1a16',
+    backdrop: { mode: 'solid', color: '#ebe3d2' },
+    print: { invert: true, angle: 0, roughness: .3, weight: .9 },
+    color: { contrast: 1.2, whitePoint: .7, gamma: 1.6, shadows: .3 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
+});
+```
+
+## risograph: Riso duotone
+Category: Print
+Use it for: bright, saturated photos (pools, sport, summer) as a two-screen riso print with offset registration; zines, gig posters and summer campaigns.
+Settings: risograph style, 5px cells, source color for the first screen, a coral `#f2594b` second screen overprinted on warm areas, on `#f4ebd0`, density 1.2, registration .35.
+
+Prompt:
+“Print [my photo] as a riso duotone with asciify-engine: a dot screen in the photo's own colors with a coral second screen overprinted slightly out of register on the warm areas, on cream paper. Export a 2480×3508 PNG poster.”
+
+```ts
+import { mountStudio } from 'asciify-engine/studio';
+
+const art = await mountStudio(canvas, '/your-photo.jpg', {
+  settings: {
+    style: 'risograph', cellSize: 5, colorMode: 'source', ink: '#2853a5',
+    backdrop: { mode: 'solid', color: '#f4ebd0' },
+    print: { secondaryInk: '#f2594b', registration: .35, density: 1.2 },
+  },
+  width: frame.clientWidth, height: frame.clientHeight, maxCells: 131072,
+});
+// With colorMode 'accent' both screens use ink and secondaryInk; print.invert puts the ink in the shadows.
+art.update({ print: { registration: .1 } }); // tighter registration
 ```
 
 ## mosaic: Mosaic study
@@ -467,7 +1024,7 @@ const art = await mountStudio(canvas, '/your-photo.jpg', {
 ## led: Scoreboard
 Category: Tiles
 Use it for: cities, stages and night photos as a wall of round emitters; event, sport and music artwork.
-Settings: LED style, 6px cells, source color at saturation .7, contrast 1.1 on `#0b0b0a`.
+Settings: LED style, 5px cells, source color at saturation 1.2, contrast 1.1, brightness .2 on `#0b0b0a`.
 
 Prompt:
 “Show [my photo] on an LED wall with asciify-engine: round emitters in the photo's colors on black, like a stadium scoreboard. Play [my video] through it live in [the hero], and export a 1920×1080 MP4.”
@@ -477,9 +1034,9 @@ import { mountStudio } from 'asciify-engine/studio';
 
 const art = await mountStudio(canvas, '/your-video.mp4', {
   settings: {
-    style: 'led', cellSize: 6, colorMode: 'source',
+    style: 'led', cellSize: 5, colorMode: 'source',
     backdrop: { mode: 'solid', color: '#0b0b0a' },
-    color: { saturation: .7, contrast: 1.1 },
+    color: { saturation: 1.2, contrast: 1.1, brightness: .2 },
   },
   width: frame.clientWidth, height: frame.clientHeight, maxCells: 32768,
 });

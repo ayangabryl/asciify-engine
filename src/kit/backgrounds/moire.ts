@@ -9,7 +9,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
   return Math.pow((first + second + 2) / 4, 3) * .8;
 };
 
-/** Two fine line fields overlap into broad, shifting bands. */
+/**
+ * Two fine line fields overlap into broad, shifting bands.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `interference` is the closest current preset.
+ */
 export const moire: BackgroundPreset = {
   id: 'moire', name: 'Moiré', description: 'Two fine line fields overlap into broad, shifting bands.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

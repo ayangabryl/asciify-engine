@@ -9,7 +9,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
   return crest * (.35 + .65 * v) + .08 * Math.pow(.5 + .5 * Math.sin(ridge * 17), 3) * slope;
 };
 
-/** Layered sand ridges with slow-moving light and fine grain. */
+/**
+ * Layered sand ridges with slow-moving light and fine grain.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `contour` is the closest current preset.
+ */
 export const dune: BackgroundPreset = {
   id: 'dune', name: 'Dune', description: 'Layered sand ridges with slow-moving light and fine grain.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

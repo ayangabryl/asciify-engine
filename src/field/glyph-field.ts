@@ -1,4 +1,4 @@
-import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader } from './field-shaders';
+import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { InkTrail } from '../surface/ink-trail';
 import {
@@ -550,7 +550,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(u.uCount, glyphCount);
     gl.uniform1f(u.uBlend, settings.blend === 'on' || (glyphCount <= 9 && (settings.blend === 'coarse' || (settings.blend === 'auto' && photographic))) ? 1 : 0);
     gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
-    gl.uniform1i(u.uScene, source ? 0 : settings.scene === 'flow' ? 1 : settings.scene === 'orb' ? 2 : settings.scene === 'drift' ? 4 : settings.scene === 'swell' ? 5 : 3);
+    gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
     gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(u.uScale, settings.scale);
     const zone = settings.clear;

@@ -125,7 +125,10 @@ export function renderFireBackground(
   ctx.globalAlpha = 1;
 }
 
-/** A cellular flame rising from the bottom edge. */
+/**
+ * A cellular flame rising from the bottom edge.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ */
 export const fire: BackgroundPreset = {
   id: 'fire', name: 'Fire', description: 'A cellular flame rising from the bottom edge.', cellSize: 13, speed: 1, cursor: false,
   // Fire keeps its own clock and builds up over frames, so it warms 48 frames on mount and resize. The site passes it no scheme.

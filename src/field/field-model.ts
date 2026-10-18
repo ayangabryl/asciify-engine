@@ -2,8 +2,12 @@
 
 export type FieldColor = 'ink' | 'source';
 export type FieldFit = 'cover' | 'contain';
-/** Generated motion used when there is no media source. */
-export type FieldScene = 'none' | 'flow' | 'orb' | 'drift' | 'swell';
+/**
+ * Generated motion used when there is no media source. The later ones are the kit's background scenes: caustic light, drifting contour lines, aurora ribbons, water rings, a halo,
+ * two interfering ring grids, a gradient mesh, falling streaks in three depths, and linked points.
+ */
+export const FIELD_SCENES = ['none', 'flow', 'orb', 'drift', 'swell', 'caustics', 'contour', 'aurora', 'ripple', 'halo', 'interference', 'mesh', 'cascade', 'constellation'] as const;
+export type FieldScene = typeof FIELD_SCENES[number];
 /**
  * What each cell draws. `glyph` draws characters from the atlas; `dot` draws a halftone: one circle per cell, its area
  * following the tone. The rest are the Studio's tile and print styles, drawn per cell from the cell's tone and colour:
@@ -233,7 +237,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
       curl: clamp(next.curl, 0, 80, DEFAULT_FIELD_FLUID.curl),
     };
   })();
-  const scene = input.scene === 'none' || input.scene === 'flow' || input.scene === 'orb' || input.scene === 'drift' || input.scene === 'swell' ? input.scene : base.scene;
+  const scene = FIELD_SCENES.includes(input.scene as FieldScene) ? input.scene as FieldScene : base.scene;
   const elementLike = !!input.clear && typeof input.clear === 'object' && ('element' in input.clear || 'nodeType' in input.clear);
   const clearInput = input.clear === undefined || elementLike ? base.clear : input.clear as Partial<FieldClearZone> | false;
   const clear: FieldClearZone | false = !clearInput ? false : {
