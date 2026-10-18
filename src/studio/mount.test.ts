@@ -81,10 +81,24 @@ it('lowers the live budget only on a sustained frame-budget miss, then restores 
   // A slow hover: every frame misses 60 fps.
   const now=vi.spyOn(performance,'now').mockImplementation((()=>{let t=0;return ()=>(t+=25);})());
   renderer.active=true;
-  for(let i=0;i<50;i++){listeners.pointermove({clientX:50,clientY:50,timeStamp:i} as unknown as Event);advance();}
+  // A slow hover draws every other budget's worth of time, so it takes more frames to count 50 slow renders.
+  for(let i=0;i<200;i++){listeners.pointermove({clientX:50,clientY:50,timeStamp:i} as unknown as Event);advance();}
   expect(renderer.maxCells).toBeLessThan(20000);
   // The hover settles: the still is drawn again at the requested budget.
   renderer.active=false;advance();
   expect(renderer.maxCells).toBe(20000);
   now.mockRestore();player.destroy();
+});
+it('draws a hover at most 60 times a second on a 120 Hz screen, and ends on its settled frame',()=>{
+  const {canvas,media}=fixture();
+  const player=mountStudioMedia(canvas,media);
+  advance();renderer.render.mockClear();
+  renderer.active=true;
+  // 120 frames a second for one second.
+  for(let i=0;i<120;i++){listeners.pointermove({clientX:50,clientY:50,timeStamp:i} as unknown as Event);clock-=8.67;advance();}
+  expect(renderer.render.mock.calls.length).toBeLessThanOrEqual(61);
+  expect(renderer.render.mock.calls.length).toBeGreaterThanOrEqual(55);
+  renderer.render.mockClear();renderer.active=false;clock-=8.67;advance();
+  expect(renderer.render).toHaveBeenCalledTimes(1);
+  player.destroy();
 });

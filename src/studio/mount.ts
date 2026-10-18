@@ -55,7 +55,8 @@ export function mountStudioMedia(
     renderedMotionTime = 0,
     last = 0,
     painted = 0,
-    videoFrame = -1;
+    videoFrame = -1,
+    drewActive = false;
   let adaptive = options.adaptive !== false;
   let samples = 0,
     costAverage = 0,
@@ -104,13 +105,15 @@ export function mountStudioMedia(
     const animated = moving && (media.animated || needsMotion);
     const decoded = video?.getVideoPlaybackQuality?.().totalVideoFrames ?? -1;
     const sourceChanged = !video || decoded < 0 || decoded !== videoFrame;
+    const interval = 1000 / Math.max(1, Math.min(60, options.fps ?? 60)) - 0.5;
+    // Every frame is drawn on the CPU: at most 60 a second (a 120 Hz screen would double the work for no visible gain),
+    // and a slow look leaves the page at least half of the main thread instead of drawing back to back.
     const due =
       dirty ||
-      renderer.active ||
+      (renderer.active ? now - painted >= Math.max(interval, costAverage * 2) : drewActive) ||
       (animated &&
         (sourceChanged || needsMotion) &&
-        now - painted >=
-          1000 / Math.max(1, Math.min(60, options.fps ?? 60)) - 0.5);
+        now - painted >= interval);
     if (due) {
       const start = performance.now();
       try {
@@ -146,6 +149,8 @@ export function mountStudioMedia(
       }
       dirty = false;
       painted = now;
+      // A throttled hover still ends on its settled frame.
+      drewActive = renderer.active;
       videoFrame = decoded;
     }
     if (moving && (animated || renderer.active)) wake();

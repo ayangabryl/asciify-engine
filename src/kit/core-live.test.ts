@@ -254,6 +254,63 @@ describe('context budget', () => {
     handle.destroy();
   });
 
+  it('paints a self-animating component at most 60 times a second on a 120 Hz screen, and every frame under the pointer', async () => {
+    const el = at(0);
+    const handle = beam(as(el));
+    await flush();
+    const paints = () => fields[0].setSource.mock.calls.length;
+    advance(); advance();
+    let before = paints();
+    for (let i = 0; i < 120; i++) advance(1000 / 120);
+    expect(paints() - before).toBeLessThanOrEqual(61);
+    expect(paints() - before).toBeGreaterThanOrEqual(55);
+    before = paints();
+    for (let i = 0; i < 60; i++) { el.dispatch('pointermove', { timeStamp: env.clock }); advance(1000 / 120); }
+    expect(paints() - before).toBeGreaterThanOrEqual(58);
+    handle.destroy();
+  });
+
+  it('never mounts a field whose host has left the document before its handle is destroyed', () => {
+    setFieldBudget(1);
+    const shown = beam(as(at(0)));
+    const gone = at(100);
+    const waiting = beam(as(gone));
+    expect(mount).toHaveBeenCalledTimes(1);
+    gone.remove();
+    shown.destroy();
+    advance(); advance();
+    expect(mount).toHaveBeenCalledTimes(1);
+    waiting.destroy();
+  });
+
+  it('mounts one field per frame when a host starts many in one long task', () => {
+    // Each mount takes 10ms and the host renders for 20ms between them, all in one task: the frame clock stands still.
+    Object.assign(document, { timeline: { currentTime: 1000 } });
+    mount.mockImplementation(() => { env.clock += 10; const f = fakeField(); fields.push(f); return f; });
+    const handles = Array.from({ length: 4 }, (_, i) => { env.clock += 20; return beam(as(at(i * 50))); });
+    expect(mount).toHaveBeenCalledTimes(1);
+    for (let frame = 2; frame <= 4; frame++) {
+      (document as unknown as { timeline: { currentTime: number } }).timeline.currentTime += 16;
+      advance();
+      expect(mount).toHaveBeenCalledTimes(frame);
+    }
+    handles.forEach(h => h.destroy());
+    delete (document as { timeline?: unknown }).timeline;
+  });
+
+  it('leaves no listener behind on its canvases or the document once the last field goes', () => {
+    const el = at(0);
+    const handle = beam(as(el));
+    const [first] = canvases(el);
+    expect(first.listeners.get('webglcontextlost')?.size).toBe(1);
+    scroll([el, 2000]);
+    scroll([el, 0]);
+    const [second] = canvases(el);
+    handle.destroy();
+    for (const canvas of [first, second]) for (const type of ['webglcontextlost', 'webglcontextrestored']) expect(canvas.listeners.get(type)?.size ?? 0).toBe(0);
+    expect(env.docListeners.get('close')?.size ?? 0).toBe(0);
+  });
+
   it('lets a lazy: false field displace the farthest live one', () => {
     setFieldBudget(1);
     beam(as(at(0)));

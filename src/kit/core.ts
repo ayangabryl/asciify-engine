@@ -116,6 +116,13 @@ export const house = (x: number) => {
   return axis(t, 1, 1);
 };
 
+let ambient: number | undefined;
+const ambientMs = () => ambient ??= (() => {
+  const nav = typeof navigator === 'undefined' ? undefined : navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  const low = !!nav && ((nav.hardwareConcurrency > 0 && nav.hardwareConcurrency <= 2) || (!!nav.deviceMemory && nav.deviceMemory <= 2) || !!nav.connection?.saveData);
+  return 1000 / (low ? 30 : 60) - 2;
+})();
+
 export const prefersReduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const reducedFrom = (option: boolean | undefined) => option ?? prefersReduced();
 
@@ -256,7 +263,10 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   let dark = isDark(host);
   // An unset token falls back to the host's own text colour, which already follows the page's design tokens.
   const ink = () => resolveColor(config.ink(dark), host) ?? resolveColor(getComputedStyle(host).color, host) ?? (dark ? '#d8d6cf' : '#1d1d1b');
-  let raf = 0, paused = false, visible = true, destroyed = false;
+  let raf = 0, paused = false, visible = true, destroyed = false, paintedAt = -Infinity, inputAt = -Infinity;
+  const onInput = (event: Event) => { inputAt = event.timeStamp; };
+  host.addEventListener('pointermove', onInput, { passive: true });
+  host.addEventListener('pointerdown', onInput, { passive: true });
   const live = liveField({
     host, canvas: first, kit, place,
     options: () => ({ ...BASE_LOOK, ...config.look(), ink: ink(), interactionTarget: host, label: '' }),
@@ -313,6 +323,10 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   const step = (now: number) => {
     raf = 0;
     if (destroyed || paused || !live.live) return;
+    // A component animating by itself paints at most 60 times a second (30 on a low-end device or with Save-Data);
+    // for a second after the pointer moves over it, every frame, so a drag or a press keeps the screen's full rate.
+    if (now - paintedAt < ambientMs() && now - inputAt > 1000) { raf = requestAnimationFrame(step); return; }
+    paintedAt = now;
     const more = paintNow(now);
     if (more && !still() && visible && !(typeof document !== 'undefined' && document.hidden)) raf = requestAnimationFrame(step);
   };
@@ -363,6 +377,8 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     view?.disconnect();
     themes?.disconnect();
     document.removeEventListener('visibilitychange', onVisibility);
+    host.removeEventListener('pointermove', onInput);
+    host.removeEventListener('pointerdown', onInput);
     scheme?.removeEventListener?.('change', retheme);
     motion?.removeEventListener?.('change', kick);
     live.destroy();

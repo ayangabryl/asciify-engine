@@ -1154,11 +1154,13 @@ export async function asciifyVideo(
         return withCanvasLayoutCleanup(cleanup);
       }
 
-      let cancelled = false, animId: number, i = 0, last = performance.now();
+      let cancelled = false, animId = 0, i = 0, last = performance.now(), visible = true;
       let firstFrame = true;
       const interval = 1000 / extractedFps;
       const tick = (now: number) => {
-        if (cancelled) return;
+        animId = 0;
+        // Off screen the loop rests after the first frame and picks up where it was when the canvas returns.
+        if (cancelled || (!visible && !firstFrame)) return;
         if (now - last >= interval) {
           renderFrame(i);
           i = (i + 1) % frames.length;
@@ -1167,8 +1169,13 @@ export async function asciifyVideo(
         }
         animId = requestAnimationFrame(tick);
       };
+      const view = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        if (visible && !animId && !cancelled) animId = requestAnimationFrame(tick);
+      }) : null;
+      view?.observe(canvas);
       animId = requestAnimationFrame(tick);
-      return withCanvasLayoutCleanup(() => { cancelled = true; cancelAnimationFrame(animId); });
+      return withCanvasLayoutCleanup(() => { cancelled = true; cancelAnimationFrame(animId); view?.disconnect(); });
     }
 
     const { frames, fps: extractedFps } = await videoToAsciiFrames(video, merged, renderW, renderH, extractFps, maxDur, undefined, trimStart);
@@ -1351,7 +1358,7 @@ export async function asciifyVideo(
     let desiredIndex = 0;
     let desiredProgress = 0;
     let lastPaintedIndex = -1;
-    let raf = 0;
+    let raf = 0, visible = true;
     let cancelledCache = false;
     let extracting = false;
     let ready = false;
@@ -1456,7 +1463,8 @@ export async function asciifyVideo(
     };
 
     const paint = () => {
-      if (cancelledCache) return;
+      raf = 0;
+      if (cancelledCache || (!visible && ready)) return;
       const index = nearestCachedIndex(desiredIndex);
       if (index >= 0 && index !== lastPaintedIndex) {
         const frame = frames[index];
@@ -1499,11 +1507,18 @@ export async function asciifyVideo(
 
     requestIndex(0);
     requestIndex(1);
+    // Off screen nothing is painted; frames keep caching, and the latest one is painted when the canvas returns.
+    const view = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible && !raf && !cancelledCache) raf = requestAnimationFrame(paint);
+    }) : null;
+    view?.observe(canvas);
     raf = requestAnimationFrame(paint);
 
     return withCanvasLayoutCleanup(() => {
       cancelledCache = true;
       cancelAnimationFrame(raf);
+      view?.disconnect();
       scrollCleanup?.();
       ro?.disconnect();
       queued.clear();
