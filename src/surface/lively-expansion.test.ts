@@ -73,12 +73,6 @@ describe('lively images and responsive fields',()=>{
     const mid=sampleAmbient('relight',.7,.3,2,[],.5)[2];
     expect(Math.abs(mid)).toBeGreaterThan(Math.abs(sampleAmbient('relight',.7,.3,2,[],1)[2]));
   });
-  it('gives Unfold a readable hold and independent column timing',()=>{
-    sampleAmbient('unfold',.32,.5,0,[]).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
-    sampleAmbient('unfold',.32,.5,10,[]).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
-    expect(sampleAmbient('unfold',.32,.5,4,[])[3]).toBeLessThan(.5);
-    expect(sampleAmbient('unfold',.1,.5,2,[])[3]).not.toBe(sampleAmbient('unfold',.9,.5,2,[])[3]);
-  });
   it('round-trips starting combinations without changing media, styling, edge preference or colors',()=>{
     const original=normalizeStudioSettings({style:'dither',ink:'#123456',hover:{edgeSafe:true},dither:{pixelSize:2}});
     for(const preset of STUDIO_ANIMATION_PRESETS){

@@ -82,7 +82,7 @@ A still photo can be made to feel alive, and many users want that. Others want i
 | API | Living | Still |
 | --- | --- | --- |
 | `/field` | `drift: 0.15–0.35` so a photo breathes; or a video `source`; or `scene: 'flow' \| 'orb'` with no media | A media `source`, `drift: 0`, and `hover: 'lantern'` or `'none'`. With no pointer it draws once and stops working |
-| `/studio` | `motion: { type: 'sheen' \| 'breeze' \| 'relight' \| 'shimmer', speed: 0.4–0.8, amount: 0.3–0.6 }` for calm life; `'current'`, `'tidal'`, `'caustics'` for stronger; or a `STUDIO_ANIMATION_PRESETS` entry such as `quiet-light` | `motion: { type: 'none' }`, and `hover.effect: 'none'` or a stationary one such as `'trail'` |
+| `/studio` | `motion: { type: 'relight' \| 'sheen' \| 'glow' \| 'mist', speed: 0.4–0.8, amount: 0.5–0.9 }` for calm life; `'parallax'`, `'push'`, `'focus'`, `'current'` for depth; or a `STUDIO_ANIMATION_PRESETS` entry such as `quiet-light` | `motion: { type: 'none' }`, and `hover.effect: 'none'` or a stationary one such as `'trail'` |
 | `/hover` over a core render | `motion: 'sheen'` (any `AmbientMotion`) | `motion: 'none'`; core `animationStyle: 'none'` |
 
 Autonomous motion that lasts longer than five seconds needs a visible pause control (WCAG 2.2.2). Prefer slow speeds; motion should be noticed on the second look, not the first.

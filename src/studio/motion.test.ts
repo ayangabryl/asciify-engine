@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { normalizeStudioSettings } from './model';
-import { MOTION_STYLES, sampleAmbient, scaleMotion } from '../surface/ambient-motion';
+import { normalizeStudioSettings, parseStudioSettings, serializeStudioSettings } from './model';
+import { DEPRECATED_MOTIONS, MOTION_STYLES, sampleAmbient, scaleMotion } from '../surface/ambient-motion';
 
 it('restores every retired Studio motion as Off without losing other settings', () => {
   for (const type of ['breathe','wave','reveal','glitch','rainbow','hologram','fire','chrome','ripple','vapor']) {
@@ -38,8 +38,25 @@ it('scales displacement and opacity without changing animation phase', () => {
 
 it('preserves all motion choices through saved settings and keeps tonal effects anchored', () => {
   for (const {mode} of MOTION_STYLES) expect(normalizeStudioSettings({motion:{type:mode}}).motion.type).toBe(mode);
-  for (const mode of ['sheen','grain'] as const) for(let t=0;t<12;t+=.2) {
+  for (const mode of ['relight','sheen','glow','shimmer','focus','mist','develop'] as const) for(let t=0;t<12;t+=.2) {
     expect(sampleAmbient(mode,.37,.48,t,[]).slice(0,2)).toEqual([0,0]);
   }
   for(const effect of ['magnetic','scatter'] as const) expect(normalizeStudioSettings({hover:{effect}}).hover.effect).toBe(effect);
+});
+
+it('loads every retired motion as its photo-aware replacement, in saved settings and share links', () => {
+  for (const [legacy, mode] of Object.entries(DEPRECATED_MOTIONS)) {
+    const state = normalizeStudioSettings({ motion: { type: legacy, speed: .7, amount: .6 } });
+    expect(state.motion).toEqual({ type: mode, speed: .7, amount: .6 });
+    expect(parseStudioSettings(serializeStudioSettings(state)).motion.type).toBe(mode);
+  }
+});
+
+it('shows the still image at time zero, so reduced motion and paused previews stay faithful', () => {
+  const cues = [.6, .7, .5, .4, .3, -.2, .5, .5];
+  for (const { mode } of MOTION_STYLES) for (const tone of [.1, .5, .9]) {
+    const a = sampleAmbient(mode, .4, .6, 0, [], tone, cues);
+    if (mode === 'shimmer' || mode === 'mist' || mode === 'relight') continue;
+    a.forEach((v, i) => expect(v).toBeCloseTo(i === 3 ? 1 : 0, 3));
+  }
 });

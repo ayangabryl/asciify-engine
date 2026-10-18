@@ -5,7 +5,8 @@ import { SourceWarpProcessor } from './warps';
 import { isStudioPrintStyle } from './print-model';
 import { createPrintPainter } from './print-renderer';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
-import { sampleAmbient, scaleMotion, isAnchoredMotion } from '../surface/ambient-motion';
+import { sampleAmbient, scaleMotion } from '../surface/ambient-motion';
+import { buildPhotoCues, PHOTO_CUE_STRIDE, type PhotoCues } from '../surface/photo-cues';
 import {
   normalizeStudioSettings,
   studioCrop,
@@ -160,6 +161,11 @@ function paintMask(mc: CanvasRenderingContext2D, w: number, h: number, shapes: S
   }
 }
 /** Reusable bounded renderer. Call configure only when settings change; render owns no RAF. */
+/** A cell-grid position whose blend between neighbours is brief, so moving tones stay crisp instead of averaging to mush. */
+function crisp(v: number) {
+  const i = Math.floor(v), t = Math.max(0, Math.min(1, (v - i - .2) / .6));
+  return i + t * t * (3 - 2 * t);
+}
 export function createStudioRenderer(
   canvas: HTMLCanvasElement,
   settings: unknown = {},
@@ -193,6 +199,8 @@ export function createStudioRenderer(
     compositionCacheKey = "",
     pixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     motionPixels: Uint8ClampedArray = new Uint8ClampedArray(0),
+    cues: PhotoCues | null = null,
+    cuesKey = "",
     cols = 0,
     rows = 0,
     last = 0;
@@ -381,7 +389,10 @@ export function createStudioRenderer(
       art.ctx.globalCompositeOperation = "source-over";
       const phase = motionTime;
       const motion = stillMotion ? state.motion.type : "none";
-      const anchoredMotion = isAnchoredMotion(motion);
+      const motionAmount = state.motion.amount ?? 1;
+      const lightMotion = ["relight", "sheen", "glow", "shimmer", "mist"].includes(motion);
+      // Motion reads the photo's own light and depth: built once per source frame, not per tick.
+      if (motion !== "none" && cuesKey !== prepared) { cues = buildPhotoCues(pixels, cols, rows, cues); cuesKey = prepared; }
       if (isDither) {
         const stableDither = stableComposition;
         if (!stableDither || ditherCacheKey !== key) {
@@ -396,7 +407,7 @@ export function createStudioRenderer(
                 let sx = x,
                   sy = y,
                   energy = 0,
-                  gain = 1,
+                  shift = 0,
                   alpha = 1;
                 if (live) {
                   flow.sample(u, v, field);
@@ -408,18 +419,17 @@ export function createStudioRenderer(
                   else energy = field[2] / 3 * weight;
                 }
                 const toneIndex = (y * cols + x) * 4;
-                sampleAmbient(motion, u, v, phase, ambient, (pixels[toneIndex]*.299+pixels[toneIndex+1]*.587+pixels[toneIndex+2]*.114)/255);
-                scaleMotion(ambient, state.motion.amount ?? 1);
-                sx -= ambient[0] / 960 * cols;
-                sy -= ambient[1] / 960 * rows;
-                gain = 1 + ambient[2];
+                sampleAmbient(motion, u, v, phase, ambient, (pixels[toneIndex]*.299+pixels[toneIndex+1]*.587+pixels[toneIndex+2]*.114)/255, cues ?? undefined, (y * cols + x) * PHOTO_CUE_STRIDE);
+                scaleMotion(ambient, motionAmount);
+                if (ambient[0] || ambient[1]) { sx = crisp(sx - ambient[0] / 960 * cols); sy = crisp(sy - ambient[1] / 960 * rows); }
+                shift = ambient[2];
                 alpha *= ambient[3];
                 // Sub-cell advection must interpolate; rounding creates visible stepping.
                 const i = (y * cols + x) * 4;
                 samplePixel(pixels,cols,rows,sx,sy,sampled);
                 for (let c = 0; c < 3; c++) {
                   const tone = sampled[c] / 255;
-                  let value = hoverTone(effect, tone, energy) * gain;
+                  let value = hoverTone(effect, tone, energy) + shift;
                   data[i + c] = value * 255;
                 }
                 data[i + 3] = sampled[3] * alpha;
@@ -508,6 +518,16 @@ export function createStudioRenderer(
               else if (effect === "repel") fade = -Math.max(-1, field[2]) * weight;
               else energy = field[2] / 3 * weight;
             }
+            if (motion !== "none") {
+              // Displacing motions move the image through a fixed grid, so every character stays aligned and readable.
+              const ti = (y * cols + x) * 4;
+              sampleAmbient(motion, x / cols, y / rows, phase, ambient, (pixels[ti] * .299 + pixels[ti + 1] * .587 + pixels[ti + 2] * .114) / 255, cues ?? undefined, (y * cols + x) * PHOTO_CUE_STRIDE);
+              scaleMotion(ambient, motionAmount);
+              if (ambient[0] || ambient[1]) {
+                sx = crisp(Math.max(0, Math.min(cols - 1, sx - ambient[0] / 960 * cols)));
+                sy = crisp(Math.max(0, Math.min(rows - 1, sy - ambient[1] / 960 * rows)));
+              }
+            }
             samplePixel(pixels, cols, rows, sx, sy, sampled);
             if (!sampled[3]) {
               // Scoped "Around": tone hovers draw their own marks on a transparent ground, in the ink colour.
@@ -519,15 +539,18 @@ export function createStudioRenderer(
             const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
             let lum = autoTone ? Math.max(0, Math.min(1, (sourceLum - levelLow) / levelSpan)) : sourceLum;
             lum = hoverTone(effect, lum, energy, !!printStyle && printPainter.settings.invert);
-            let px = x * cell,
-              py = y * ch,
-              alpha = 1;
-            sampleAmbient(motion, x / cols, y / rows, phase, ambient, sourceLum);
-            scaleMotion(ambient, state.motion.amount ?? 1);
-            px += ambient[0] * w / 960;
-            py += ambient[1] * h / 960;
-            lum = Math.max(0, Math.min(1, lum + ambient[2]));
-            alpha = ambient[3] * sampled[3] / 255 * (1 - fade);
+            const px = x * cell,
+              py = y * ch;
+            let alpha = 1;
+            // Tone shifts are in source units; auto levels stretch them with the image's own range.
+            let glyphLum = lum;
+            if (motion !== "none") {
+              const shift = ambient[2] / (autoTone ? Math.max(.5, levelSpan) : 1);
+              lum = Math.max(0, Math.min(1, lum + shift));
+              // Light mostly brightens the ink; characters change density only for part of it, so light glows rather than flickers.
+              glyphLum = Math.max(0, Math.min(1, glyphLum + shift * (lightMotion ? .45 : 1)));
+            } else glyphLum = lum;
+            alpha = (motion !== "none" ? ambient[3] : 1) * sampled[3] / 255 * (1 - fade);
             if (!glyphMode && !printStyle && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
             // With one ink, density alone carries tone and a lit subject flattens into a uniform wash. Auto levels
             // let brightness carry it too: quiet glyphs in the shadows, full ink on the lights.
@@ -548,8 +571,8 @@ export function createStudioRenderer(
                 state.colorMode === 'gray' ? lum * 255 : b + toneDelta, state.colorMode);
             } else if (glyphMode) {
               const index = autoTone && inkLookup
-                ? inkLookup[Math.round(lum * 255)]
-                : Math.max(0, Math.min(chars.length - 1, Math.round(lum * (chars.length - 1))));
+                ? inkLookup[Math.round(glyphLum * 255)]
+                : Math.max(0, Math.min(chars.length - 1, Math.round(glyphLum * (chars.length - 1))));
               if (state.colorMode === "accent")
                 ac.drawImage(
                   atlas.canvas,
@@ -557,8 +580,8 @@ export function createStudioRenderer(
                   0,
                   aw,
                   ah,
-                  anchoredMotion ? Math.round(px + (cell - aw) / 2) : px + (cell - aw) / 2,
-                  anchoredMotion ? Math.round(py + (ch - ah) / 2) : py + (ch - ah) / 2,
+                  Math.round(px + (cell - aw) / 2),
+                  Math.round(py + (ch - ah) / 2),
                   aw,
                   ah,
                 );
@@ -857,6 +880,8 @@ export function createStudioRenderer(
       sourceIdentity = null;
       pixels = new Uint8ClampedArray(0);
       motionPixels = new Uint8ClampedArray(0);
+      cues = null;
+      cuesKey = "";
     },
   };
 }

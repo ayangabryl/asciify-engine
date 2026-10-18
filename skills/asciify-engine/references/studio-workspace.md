@@ -113,7 +113,7 @@ For PNG/JPEG, pass `time: player.time` and `motionTime: player.motionTime` to `e
 
 ## Still-image motion (3.0)
 
-Import `STUDIO_MOTIONS` from `/studio` to populate controls; each item has `value`, `label`, and `description`. Use `motion: { type: 'caustics' | 'current' | 'reform' | 'none', speed: 1 }`. Off is the default. Caustics preserves the grid, Current introduces fluid displacement, and Reform uses a staggered dissolve with a readable hold. Loops last 12 / speed seconds and preserve source/accent/gray color choice. Speed is 0.1–3. Do not combine source video with ambient motion unless requested. Hover remains independently configurable. Retired saved motion names normalize to Off. See [upgrading.md](upgrading.md) before moving an existing integration to 3.0.
+Import `STUDIO_MOTIONS` from `/studio` to populate controls; each item has `value`, `label`, and `description`. Use `motion: { type: 'relight' | 'sheen' | 'glow' | 'shimmer' | 'parallax' | 'push' | 'focus' | 'mist' | 'current' | 'develop' | 'none', speed: 1 }`. Off is the default. Every motion reads the photo's own light and depth ([studio-effects.md](studio-effects.md#still-image-motion-and-dither)); retired IDs such as `caustics` load as their closest replacement. Loops last 12 / speed seconds and preserve source/accent/gray color choice. Speed is 0.1–3. Do not combine source video with ambient motion unless requested. Hover remains independently configurable. Names retired in 3.0 normalize to Off; later retired names map to a current motion. See [upgrading.md](upgrading.md) before moving an existing integration to 3.0.
 
 ## Sharp previews (3.0.1)
 
@@ -166,9 +166,8 @@ and `scatter` (radial, spatially varied scatter that relaxes). Both retain a
 bounded field after cursor exit; radius and strength control the response.
 Use `hover.effect` in Studio and `effect` in mountHover. Defaults remain unchanged.
 
-Still-image motion now has six active choices: `caustics`, `current`, `reform`,
-`sheen`, `tidal`, and `grain`, plus `none`. Sheen and Living Grain change tone
-without displacement; Tidal Rings moves the image with protected edges.
+Still-image motion: see the current catalog in [studio-effects.md](studio-effects.md#still-image-motion-and-dither).
+Light motions change tone without displacement; depth motions move the image through a fixed grid.
 Set Studio `motion: { type: 'sheen', speed: 0.7, amount: 0.6 }`.
 Core uses `animationStyle`; mountHover uses `motion` and `motionSpeed`.
 Base cycles last 12 seconds; speed scales duration. Studio amount scales strength.
@@ -182,9 +181,9 @@ Stationary artwork, masks, lights, backdrops and character bloom are cached whil
 
 ## Expanded motion library (4.4)
 
-Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all available hovers and still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; new motion IDs are `parallax`, `weave`, `print`, `trace`. `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
+Use `STUDIO_HOVERS` and `STUDIO_MOTIONS` to show all available hovers and still-image motions, plus Off, grouped by behavior. New hover IDs are `etch`, `elastic`, `rake`; the 4.4 motions were later replaced by photo-aware ones (see [upgrading.md](upgrading.md)). `hover.radius` and `hover.strength` are independent of `motion.speed` and `motion.amount`. All remain serialized in look links and saved projects. A static photo needs no video input or AI service to animate.
 
-Example: `player.update({ motion: { type: 'trace', speed: 1, amount: .7 }, hover: { effect: 'etch', radius: .45, strength: .65 } })`. Tone and character choices remain yours. See [effect behaviors and combinations](studio-effects.md#catalogs-and-useful-combinations-44). Do not run several looping thumbnail canvases just to display this catalog; apply the selected treatment to one shared preview.
+Example: `player.update({ motion: { type: 'relight', speed: 1, amount: .7 }, hover: { effect: 'etch', radius: .45, strength: .65 } })`. Tone and character choices remain yours. See [effect behaviors and combinations](studio-effects.md#catalogs-and-useful-combinations-44). Do not run several looping thumbnail canvases just to display this catalog; apply the selected treatment to one shared preview.
 
 ## Tonal detail and blue noise (4.5)
 
@@ -202,7 +201,7 @@ const player = await mountStudio(canvas, '/portrait.jpg', {
     style: 'dither',
     color: { gamma: 1.12, shadows: .15, highlights: -.12 },
     dither: { algorithm: 'blue-noise', palette: 'gray8', scale: 3 },
-    motion: { type: 'trace', speed: .7, amount: .25 },
+    motion: { type: 'relight', speed: .7, amount: .4 },
   },
   maxDimension: 960,
   maxCells: 65536,

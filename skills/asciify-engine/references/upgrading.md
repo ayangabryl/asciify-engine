@@ -85,3 +85,9 @@ Six additional `STUDIO_STYLES` use optional `print` settings. Existing v1 settin
 ## 4.10 interaction expansion
 
 Adds `lens`, `smudge`, `ripple` hover and `relight`, `shimmer`, `breeze`, `unfold` ambient motion. No IDs are removed and existing defaults remain. `STUDIO_ANIMATION_PRESETS` is exported by Studio and hover; its nested settings are shaped for `player.update`. Core accepts the new ambient IDs through `animationStyle`, with its existing simpler opacity treatment. Do not pass the new surface hover IDs to core `hoverEffect`. Update the npm dependency and refresh the agent skill separately; older packages do not implement these IDs.
+
+## Photo-aware motion and finish (after 4.21)
+
+The still-image motions are rebuilt to read the photograph's own light, relief, highlights, detail and depth instead of laying a pattern over it. The catalog is `relight`, `sheen` (Specular sweep), `glow` (Highlight bloom, new), `shimmer` (Glints), `parallax`, `push` (Slow push, new), `focus` (Focus pull, new), `mist` (new), `current` (Drift) and `develop` (new), plus `none`. Retired IDs keep working everywhere (Studio settings, share links, `mountHover` `motion`, core `animationStyle`) and load as their closest replacement, listed in `DEPRECATED_STUDIO_MOTIONS`: `caustics` → `sheen`, `grain` → `shimmer`, `trace` → `relight`, `tidal`, `weave`, `breeze` → `current`, `reform`, `print`, `unfold` → `develop`. Normalized settings store the new ID. Depth motions now move the image through a fixed character grid instead of moving glyphs. `STUDIO_ANIMATION_PRESETS` keeps its six IDs with new pairings and adds `depth-study`; the `wallpaper` look uses Relight.
+
+The optical finish's `bloom` is now a wide, soft-kneed halation screened over the image (no offset ghosts), and `grain` is fine triangular film grain weighted to the midtones. IDs and ranges are unchanged; existing looks render slightly softer and cleaner.

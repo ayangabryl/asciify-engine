@@ -17,7 +17,8 @@ export * from './studio/project-mount';
 export * from './studio/project-export';
 export type { StudioProjectSource, StudioProjectSources, StudioProjectMedia, StudioProjectTextSource } from './studio/project-media';
 
-export { MOTION_STYLES as STUDIO_MOTIONS } from './surface/ambient-motion';
+export { MOTION_STYLES as STUDIO_MOTIONS, DEPRECATED_MOTIONS as DEPRECATED_STUDIO_MOTIONS } from './surface/ambient-motion';
+export type { LegacyAmbientMotion } from './surface/ambient-motion';
 
 export { SURFACE_HOVERS as STUDIO_HOVERS } from './surface/hover-catalog';
 export { HOVER_SCOPES } from './surface/hover-guide';

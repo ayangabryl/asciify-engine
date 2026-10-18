@@ -1,4 +1,5 @@
 import { resolveMotion, sampleAmbient } from '../surface/ambient-motion';
+import { frameCues, PHOTO_CUE_STRIDE } from '../surface/photo-cues';
 /**
  * Core frame-to-canvas renderer and source-to-frame converters.
  */
@@ -1125,6 +1126,7 @@ function drawFrameToCanvas(
   const ambientMode = resolveMotion(animStyle);
   const noAnimation = ambientMode === 'none';
   const ambient = [0, 0, 0, 1];
+  const cues = noAnimation ? undefined : frameCues(frame);
   const hoverStrength = options.hoverStrength;
   const hoverEffect = options.hoverEffect;
   const hoverRadiusFactor = effectiveHoverRadius;
@@ -1151,7 +1153,7 @@ function drawFrameToCanvas(
         const intensity = isInverted ? 1 - lum : lum;
         if (intensity < 0.02) continue;
 
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255, cues, (y * cols + x) * PHOTO_CUE_STRIDE);
         const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
 
         let hoverMul = 1;
@@ -1315,7 +1317,7 @@ function drawFrameToCanvas(
           : cell.char;
         if (drawChar === ' ') continue;
 
-        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255);
+        if (!noAnimation) sampleAmbient(ambientMode, x / cols, y / rows, time * animSpeed, ambient, (cell.r*.299+cell.g*.587+cell.b*.114)/255, cues, (y * cols + x) * PHOTO_CUE_STRIDE);
         const animMul = Math.max(0, Math.min(1, (1 + ambient[2]) * ambient[3]));
         if (animMul < 0.05) continue;
 

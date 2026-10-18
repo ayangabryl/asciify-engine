@@ -858,7 +858,7 @@ const art = await mountStudio(canvas, '/your-video.mp4', {
 ## wallpaper: Wallpaper
 Category: Characters
 Use it for: a living desktop or phone wallpaper, a screensaver, or a full-bleed artwork that moves on its own.
-Settings: `studioLook('wallpaper')`: ASCII, `#e6e3da` ink over the source blurred 18px at .4 opacity on `#0b0b0a`, caustics motion at speed .35.
+Settings: `studioLook('wallpaper')`: ASCII, `#e6e3da` ink over the source blurred 18px at .4 opacity on `#0b0b0a`, Relight motion at speed .35 and strength .8.
 
 Prompt:
 “Make [my photo] into a living wallpaper with asciify-engine: ASCII characters over a softened, blurred copy of the photo, with slow caustic light moving through them. Export one seamless loop as a 1920×1440 MP4 and a 3200×2400 PNG still.”
@@ -871,7 +871,7 @@ const media = await loadStudioMedia(file);
 try {
   const loop = await exportStudio({ frame: () => media.frame(0) }, settings, {
     format: 'mp4', width: 1920, height: 1440, referenceWidth: 960, fps: 30,
-    duration: 12 / settings.motion.speed, maxCells: 131072, // one full caustics cycle loops cleanly
+    duration: 12 / settings.motion.speed, maxCells: 131072, // one full Relight orbit loops cleanly
   });
 } finally { media.destroy(); }
 ```
