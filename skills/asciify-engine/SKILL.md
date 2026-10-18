@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.23.0"
+  tested-engine: "4.24.0"
   updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.23.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.24.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
@@ -84,7 +84,7 @@ This uses the Vercel Skills CLI to install the repository skill and its linked r
 
 ## Verify before handing off
 
-Run the checklist at the end of [applying-asciify.md](references/applying-asciify.md#10-checklist-before-you-finish) for kit work. For any integration, check the real page: readable subject and text in both themes, no stretching or unintended margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, WebGL off, and cleanup after navigation. Observe several seconds of motion and a loop boundary. State the measured device and settings with any FPS figure; screenshots alone do not establish performance.
+Run the checklist at the end of [applying-asciify.md](references/applying-asciify.md#10-checklist-before-you-finish) for kit work. For any integration, check the real page: readable subject and text in both themes, no stretching or unintended margins, working pointer and keyboard controls, mobile crop, reduced motion, autoplay failure, WebGL off, and cleanup after navigation. Observe several seconds of motion and a loop boundary. State the measured device and settings with any FPS figure; screenshots alone do not establish performance. What the engine guarantees a host page, and its default budgets, are in [performance.md](references/performance.md).
 
 Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload`.
 

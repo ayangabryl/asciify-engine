@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.24: lighter on the host page
+
+- The kit is split per component: a host importing one component ships about 33 KB gzip instead of 99 KB. Existing imports are unchanged.
+- Animating components draw once per frame (they drew twice), ambient motion is capped at 60 fps (30 on low-end devices or Save-Data) while interactions keep the full rate, and at most one field mounts per frame, so mounts never stack into a long task.
+- Studio hover redraws at most 60 times a second and never takes more than half the main thread. Off-screen core video loops stop, zero-size fields stop, the backing store is capped at one 4K screen, and `destroy()` removes every listener.
+- See `references/performance.md` in the skill for what the engine promises host apps.
+
 ## 4.23: dialogs always render, sharper motion cues, cleaner hovers
 
 - Kit fields inside an open modal dialog always get a WebGL context: fields covered by the dialog give theirs up and come back when it closes. A released field hands its canvas back at once (Safari counts dead contexts toward its limit), and a field whose context is lost recovers onto a fresh canvas.

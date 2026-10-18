@@ -54,6 +54,16 @@ type Program = FieldProgram & { fragment: WebGLShader };
 type Bitmapish = { width: number; height: number; close(): void };
 
 let tier: 'gpu' | 'software' | 'none' | undefined;
+// Ambient motion (a drift, a scene, a playing video's redraws) is slow: 60 frames a second, 30 on a low-end device or
+// with Save-Data, whatever the screen's refresh rate. The wake, lantern, trail and pulses still draw every frame.
+const ambientInterval = () => {
+  const nav = typeof navigator === 'undefined' ? undefined : navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  const low = !!nav && ((nav.hardwareConcurrency > 0 && nav.hardwareConcurrency <= 2) || (!!nav.deviceMemory && nav.deviceMemory <= 2) || !!nav.connection?.saveData);
+  return 1000 / (low ? 30 : 60) - 2;
+};
+// Backing pixels per field are capped near one 4K screen: past that, a full-bleed field on a 5K or 6K display draws the
+// same cells at a lower pixel ratio instead of shading tens of millions of pixels a frame.
+const MAX_BACKING_PIXELS = 3840 * 2160;
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render/i;
 /** 'gpu', 'software' (WebGL2 emulated on the CPU, such as SwiftShader or llvmpipe) or 'none'. Probed once per page. */
 export function glyphFieldTier(): 'gpu' | 'software' | 'none' {
@@ -126,6 +136,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // An image the field decoded itself, and the height it was uploaded at.
   let ownedBitmap: Bitmapish | null = null, textureHeight = 0;
   let videoFresh = true, videoCallback = 0, levels: [number, number] = [0, 1], levelsAt = -Infinity;
+  let drawnAt = -Infinity, empty = false;
+  const ambientMs = ambientInterval();
   let raf = 0, last = 0, time = 0, dirty = true, destroyed = false, lost = false, failed = false, paused = false, visible = true;
   let previous: [number, number] | null = null, pending: { from: [number, number]; to: [number, number] } | null = null;
   // Slow frames for about a second drop the field to 1x pixels, then to no ambient motion; the wake keeps working.
@@ -469,7 +481,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   function measure() {
     // Layout size, not getBoundingClientRect: a transform (a dialog scaling open) must not bake a stretched size in.
     const rect = canvas.clientWidth || canvas.clientHeight ? { width: canvas.clientWidth, height: canvas.clientHeight } : canvas.getBoundingClientRect();
-    const ratio = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio);
+    // A zero-size canvas (a collapsed panel, an element not laid out yet) draws nothing until it has a size.
+    empty = !rect.width || !rect.height;
+    const ratio = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio, Math.sqrt(MAX_BACKING_PIXELS / Math.max(1, rect.width * rect.height)));
     const nextWidth = Math.max(1, Math.round(rect.width * ratio)), nextHeight = Math.max(1, Math.round(rect.height * ratio));
     if (nextWidth === width && nextHeight === height && ratio === pixelRatio) return false;
     const aspectChanged = !width || Math.abs(nextWidth / nextHeight - width / height) > 0.01;
@@ -637,7 +651,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
 
   // The first frame draws even off screen, so a field mounted ahead of the viewport is ready when it scrolls in.
-  const live = () => !destroyed && !lost && !failed && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
+  const live = () => !destroyed && !lost && !failed && !empty && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
   const frame = (now: number) => {
     raf = 0;
     if (!live()) return;
@@ -673,8 +687,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         simulating = true;
         if (!pulses.length) dirty = true;
       }
-      if (compiled && (moving || simulating || dirty)) {
+      if (compiled && (simulating || dirty || (moving && now - drawnAt >= ambientMs))) {
         draw();
+        drawnAt = now;
         dirty = false;
         if (readyPending && (!sourceToken || source)) { readyPending = false; resolveReady(); }
       }
@@ -916,7 +931,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     redraw() {
       if (destroyed || lost || failed || !width) return;
       try {
-        if (programsReady(true)) draw();
+        // This frame is now on the canvas: the frame loop need not draw it again (a kit surface redraws each frame it paints).
+        if (programsReady(true)) { draw(); if (!readyPending) dirty = false; }
       } catch (error) {
         failed = true;
         report(error);

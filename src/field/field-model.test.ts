@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
 
 describe('glyph field settings', () => {
@@ -6,6 +6,28 @@ describe('glyph field settings', () => {
     expect(fieldGlyphs(' .:ASCIIFY')).toEqual([' ', '.', ':', 'A', 'S', 'C', 'I', 'I', 'F', 'Y']);
     expect(fieldGlyphs(' ░▒▓█')).toHaveLength(5);
     expect(fieldGlyphs(' 👍🏽x')).toEqual([' ', '👍🏽', 'x']);
+  });
+  it('splits common charsets without the grapheme segmenter, exactly as the segmenter would', () => {
+    type Segments = { segment(input: string): Iterable<{ segment: string }> };
+    const Segmenter = (Intl as unknown as { Segmenter: { new (locale: undefined, options: { granularity: 'grapheme' }): Segments; prototype: Segments } }).Segmenter;
+    const graphemes = new Segmenter(undefined, { granularity: 'grapheme' });
+    const segment = (charset: string) => Array.from(graphemes.segment(charset), part => part.segment);
+    const common = [' .:-=+*#%@', ' ░▒▓█', ' ⠁⠃⠇⡇⣇⣧⣷⣿', ' -═╪╬', ' /╱╳', ' ·◇◈◆', ' .:+/◇#@', ' αβγδ', ' жщъ', ' ←↑→↓∑√'];
+    const expected = common.map(segment);
+    const spy = vi.spyOn(Segmenter.prototype, 'segment');
+    try {
+      expect(common.map(fieldGlyphs)).toEqual(expected);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    // No code point the fast path takes joins a neighbour or a twin.
+    const wrong: string[] = [];
+    for (let c = 0x20; c < 0x2c00; c++) {
+      const glyph = String.fromCodePoint(c);
+      for (const text of [`a${glyph}a`, glyph + glyph]) if (fieldGlyphs(text).join('|') !== segment(text).join('|')) wrong.push(c.toString(16));
+    }
+    expect(wrong).toEqual([]);
   });
   it('falls back to safe values and clamps ranges', () => {
     const settings = normalizeFieldSettings({ charset: 'x', cellSize: 1000, ink: 'red', contrast: -3, fluid: { radius: 9 } });

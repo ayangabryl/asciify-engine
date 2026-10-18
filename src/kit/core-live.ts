@@ -98,6 +98,8 @@ let budget = DEFAULT_BUDGET;
 const slots = new Set<Slot>();
 let watch: { ctor: unknown; list: IntersectionObserver[] } | null = null;
 let doc: Document | null = null, frame = 0, windowAt = -1e9, spent = 0, pumping = false, again = false;
+// The current frame's timestamp: the same for every task until the next frame, unlike the clock.
+const frameTime = () => { const at = (doc as { timeline?: { currentTime?: unknown } } | null)?.timeline?.currentTime; return typeof at === 'number' ? at : null; };
 
 /**
  * At most `n` kit fields hold a WebGL context at once (default 12; browsers drop the oldest past about 16).
@@ -156,13 +158,20 @@ function observers() {
   return watch.list;
 }
 
+// Closing a modal uncovers the page behind it: what it displaced comes back, even when the dialog drew no field.
+const onClose = () => pump();
+let closeOn: Document | null = null;
+const watchClose = (next: Document | null) => {
+  if (closeOn === next) return;
+  closeOn?.removeEventListener?.('close', onClose, true);
+  next?.addEventListener?.('close', onClose, true);
+  closeOn = next;
+};
+
 function claim(slot: Slot) {
   // A field from another document (a test, a replaced iframe) no longer shares this page's contexts.
-  if (doc !== slot.doc) {
-    doc = slot.doc; slots.clear(); frame = spent = 0;
-    // Closing a modal uncovers the page behind it: what it displaced comes back, even when the dialog drew no field.
-    doc.addEventListener?.('close', () => pump(), true);
-  }
+  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = 0; windowAt = -1e9; }
+  watchClose(doc);
   slots.add(slot);
   const list = observers();
   list?.forEach(o => o.observe(slot.host));
@@ -173,6 +182,7 @@ function unclaim(slot: Slot) {
   if (!slots.delete(slot)) return;
   if (![...slots].some(other => other.host === slot.host)) watch?.list.forEach(o => o.unobserve(slot.host));
   if (!slots.size && watch) { watch.list.forEach(o => o.disconnect()); watch = null; }
+  if (!slots.size) watchClose(null);
   pump();
 }
 
@@ -183,8 +193,12 @@ function pump(fromFrame = false) {
   try {
     do {
       again = false;
-      const t = now();
-      if (fromFrame || t - windowAt > 16 || t < windowAt) { windowAt = t; spent = 0; }
+      // The budget renews with a frame, never within one task: a host that mounts many components in one commit (a
+      // route change, a long list) gets one field mounted then, and the rest one per frame after it.
+      const t = now(), at = frameTime();
+      if (fromFrame || (at === null ? t - windowAt > 16 || t < windowAt : at !== windowAt)) { windowAt = at ?? t; spent = 0; }
+      // A host taken out of the document (a route left, a list row recycled) before its handle is destroyed waits.
+      for (const slot of slots) if (slot.host.isConnected === false) slot.wanted = false;
       for (const slot of slots) if (slot.live && !slot.wanted) slot.release();
       const live = [...slots].filter(s => s.live);
       const modal = topModal();
@@ -414,7 +428,7 @@ export function liveField(config: LiveConfig): Live {
   let recorded: GlyphFieldOptions = {}, merged: GlyphFieldOptions = {}, source = config.source, paused = false, shown: string | undefined;
   let settings = {} as GlyphField['settings'];
   let resolveReady: (() => void) | null = null, nextReady: Promise<void> | null = null;
-  let shownReady = false, wiping: ReturnType<typeof sweep> = null;
+  let shownReady = false, wiping: ReturnType<typeof sweep> = null, unwatch = () => {};
   const still = !config.ownPoster && kit?.current.poster ? poster(host, kit.current.poster, config.place, kit, canvas) : null;
 
   /** The global look applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). */
@@ -469,12 +483,15 @@ export function liveField(config: LiveConfig): Live {
       // the field is released to its poster and mounts again on a fresh canvas when the budget allows.
       const drawn = canvas;
       let gone = 0;
-      drawn.addEventListener?.('webglcontextlost', () => {
+      const onLost = () => {
         if (real !== field) return;
         clearTimeout(gone);
         gone = setTimeout(() => { if (real === field && canvas === drawn) { slot.release(); pump(); } }, LOST_MS) as unknown as number;
-      });
-      drawn.addEventListener?.('webglcontextrestored', () => clearTimeout(gone));
+      };
+      const onRestored = () => clearTimeout(gone);
+      drawn.addEventListener?.('webglcontextlost', onLost);
+      drawn.addEventListener?.('webglcontextrestored', onRestored);
+      unwatch = () => { clearTimeout(gone); drawn.removeEventListener?.('webglcontextlost', onLost); drawn.removeEventListener?.('webglcontextrestored', onRestored); };
       if (paused) field.pause();
       void field.ready.then(() => {
         if (real !== field) return;
@@ -491,6 +508,7 @@ export function liveField(config: LiveConfig): Live {
       real = null;
       slot.live = false;
       shownReady = false;
+      unwatch();
       wiping?.clear();
       wiping = null;
       settings = field.settings;

@@ -222,12 +222,17 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 const hex = (value: unknown, fallback: string) =>
   typeof value === 'string' && /^#([\da-f]{3}|[\da-f]{6})$/i.test(value.trim()) ? value.trim().toLowerCase() : fallback;
 
+// Code points that never join a neighbour into one grapheme: Latin, Greek, Cyrillic, punctuation, symbols, box drawing,
+// blocks, braille. Charsets made only of them skip the segmenter, whose first use loads ICU data for a few milliseconds.
+const SINGLE_CODE_POINTS = /^[\u0020-\u007e\u00a0-\u02ff\u0370-\u0482\u048a-\u052f\u2010-\u20cf\u2100-\u2bff]*$/;
+let segmenter: { segment(input: string): Iterable<{ segment: string }> } | null | undefined;
 /** Splits a charset into graphemes so emoji, block elements and accented letters each take one cell. */
 export function fieldGlyphs(charset: string): string[] {
-  const Segmenter = (Intl as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => { segment(input: string): Iterable<{ segment: string }> } }).Segmenter;
-  const glyphs = Segmenter
-    ? Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(charset), part => part.segment)
-    : Array.from(charset);
+  if (!SINGLE_CODE_POINTS.test(charset) && segmenter === undefined) {
+    const Segmenter = (Intl as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => NonNullable<typeof segmenter> }).Segmenter;
+    segmenter = Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;
+  }
+  const glyphs = segmenter && !SINGLE_CODE_POINTS.test(charset) ? Array.from(segmenter.segment(charset), part => part.segment) : Array.from(charset);
   return glyphs.filter(glyph => glyph !== '\n' && glyph !== '\r' && glyph !== '\t').slice(0, 256);
 }
 
