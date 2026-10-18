@@ -8,7 +8,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
   return line * (.35 + .55 * Math.pow(Math.sin(v * 2 + .4), 2));
 };
 
-/** Cut-grain lines follow a slow, sculpted current. */
+/**
+ * Cut-grain lines follow a slow, sculpted current.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `contour` is the closest current preset.
+ */
 export const etch: BackgroundPreset = {
   id: 'etch', name: 'Etch', description: 'Cut-grain lines follow a slow, sculpted current.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

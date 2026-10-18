@@ -6,6 +6,8 @@ vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyph
 import { beam } from './beam';
 import { statusOrb } from './status-orb';
 import { fieldBackground } from './field-background';
+import { background } from './background';
+import { swell } from './backgrounds/swell';
 import { KIT_STYLES, balanceCharset, getFieldBudget, getGlobalLook, inkWeight, setFieldBudget, setGlobalLook, subscribeGlobalLook } from './core-live';
 import { STUDIO_STYLES } from '../studio/model';
 import { FakeElement, FakeStyle, fakeField, useFakeDom } from './fake-dom-2a';
@@ -324,6 +326,18 @@ describe('global look', () => {
     expect(fields[4].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' .:-=+*#%@' }));
     expect(fields[1].update).not.toHaveBeenCalledWith(expect.objectContaining({ mark: 'glyph' }));
     for (const h of [orb, dots, word, kept, late]) h.destroy();
+  });
+
+  it('gives a halftone background characters under a look, laid out as glyph cells, and its dots back after', () => {
+    const bg = background(as(at(0)), { preset: swell });
+    expect(optionsOf(0)).toMatchObject({ mark: 'dot', cellAspect: 1 });
+    setGlobalLook({ charset: ' .oO@' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'glyph', charset: ' .oO@', cellAspect: 0.62 }));
+    setGlobalLook({ style: 'stipple' });
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'stipple' }));
+    setGlobalLook(null);
+    expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'dot', cellAspect: 1 }));
+    bg.destroy();
   });
 
   it('survives a remount and follows a change of globalLook', () => {

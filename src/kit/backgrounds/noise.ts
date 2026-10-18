@@ -121,7 +121,10 @@ export function renderNoiseBackground(
   }
 }
 
-/** A slow fractal noise field that warps around the cursor. */
+/**
+ * A slow fractal noise field that warps around the cursor.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `mesh` is the closest current preset.
+ */
 export const noise: BackgroundPreset = {
   id: 'noise', name: 'Noise', description: 'A slow fractal noise field that warps around the cursor.', cellSize: 13, speed: 0.5, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) =>

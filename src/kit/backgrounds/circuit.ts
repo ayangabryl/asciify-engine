@@ -122,7 +122,10 @@ export function renderCircuitBackground(
   ctx.globalAlpha = 1;
 }
 
-/** Circuit traces with signals running along them. */
+/**
+ * Circuit traces with signals running along them.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `constellation` is the closest current preset.
+ */
 export const circuit: BackgroundPreset = {
   id: 'circuit', name: 'Circuit', description: 'Circuit traces with signals running along them.', cellSize: 13, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

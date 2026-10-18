@@ -1,4 +1,11 @@
 /** GLSL ES 3.00 programs for the glyph field. Each draws one fullscreen triangle without vertex buffers. */
+import type { FieldScene } from './field-model';
+
+/** The cell shader's `uScene` for each generated scene; 0 is a media source and 3 draws nothing. */
+const SCENE_IDS: Record<FieldScene, number> = {
+  none: 3, flow: 1, orb: 2, drift: 4, swell: 5, caustics: 6, contour: 7, aurora: 8, ripple: 9, halo: 10, interference: 11, mesh: 12, cascade: 13, constellation: 14,
+};
+export const sceneId = (scene: FieldScene) => SCENE_IDS[scene] ?? 3;
 
 export const FIELD_VERTEX = `#version 300 es
 void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}`;
@@ -110,6 +117,139 @@ vec3 generated(vec2 uv,float aspect){
     float c=sin((dot(p,vec2(.6,-.8))/.58-t/13.)*6.2831853+s*.9);
     float k=sin((dot(p,vec2(-.29,.96))/.36+t/17.)*6.2831853);
     return vec3(smoothstep(.3,.9,.5+.5*(s*.5+c*.35+k*.15)));
+  }
+  // The kit's background scenes. Each starts a little way in, so a reduced-motion still is already composed.
+  float t=uTime+40.,px=uCell.y/uResolution.y*uScale;
+  if(uScene==6){
+    // Caustics: light focused by a moving water surface. Two layers of warped sine waves drift against each other; each draws
+    // smooth filaments along its zero line, about a character wide, and where filaments of the two layers cross the light pools.
+    float tt=t*.12,light=0.;
+    for(int l=0;l<2;l++){
+      float f=float(l),sc=5.4+f*2.4;
+      vec2 q=(l==0?p:mat2(.8,-.6,.6,.8)*p)*sc;
+      q+=vec2(sin(q.y*.45+tt*(1.+f*.3)),cos(q.x*.4-tt*(.8+f*.4)))*1.3;
+      float v=sin(q.x+1.4*sin(q.y*.7+tt))+sin(q.y*1.1+1.2*sin(q.x*.8-tt*1.3))*.9;
+      float wv=max(fwidth(v),1e-4);
+      light+=(1.-smoothstep(.2,1.5,abs(v)/wv))*(l==0?.62:.5)+exp(-abs(v)/(wv*5.))*.18;
+    }
+    float pulse=.82+.18*sin(tt*3.+p.x*1.7-p.y*1.1);
+    return vec3(clamp(light*light*pulse,0.,1.));
+  }
+  if(uScene==7){
+    // Contour: a slow terrain read as survey lines about a character wide at any size; every fifth is an index line.
+    float tt=t*.02;
+    vec2 q=p*1.15+vec2(tt,-tt*.6);
+    float h=noise(q)*.62+noise(q*2.07+3.1)*.27+noise(q*4.3-tt+7.)*.11;
+    h+=.08*sin(tt*2.+p.x*.8);
+    float k=h*13.,w=max(fwidth(k),1e-4),d=abs(fract(k+.5)-.5)/w;
+    float major=mod(floor(k+.5),5.)<.5?1.:0.;
+    return vec3((1.-smoothstep(.35,1.25-major*.25,d))*mix(.55,1.,major));
+  }
+  if(uScene==8){
+    // Aurora: two curtains hang from the top in tall vertical folds that ripple slowly sideways. Each is brightest along its
+    // lower hem and fades upward; below the hem the page stays clear.
+    float tt=t*.045,a=0.;
+    for(int n=0;n<2;n++){
+      float f=float(n);
+      float x=p.x+.05*sin(p.y*5.+tt*2.3+f*2.)+.03*sin(p.y*11.-tt*3.1);
+      float hem=-.12+f*.09+.07*sin(x*(1.9+f*.6)+tt*(1.+f*.4)+f*2.4)+.03*sin(x*4.7-tt*1.4);
+      float d=hem-p.y;
+      float body=d>0.?exp(-d/(.26+.06*f))*(.5+.5*exp(-d/.035)):exp(-d*d/.0006);
+      float folds=smoothstep(.3,.8,noise(vec2(x*(3.2+f*1.6)+tt*1.2+f*9.,f*5.+tt*.25)))*.8+.2*smoothstep(.2,.9,noise(vec2(x*11.+tt*2.,f)));
+      float rays=.45+.55*smoothstep(.3,.75,noise(vec2(x*26.+f*17.,tt*.4+f)));
+      a+=body*folds*rays*(1.-f*.3)*2.6;
+    }
+    return vec3(smoothstep(.04,.9,a));
+  }
+  if(uScene==9){
+    // Ripple: still water. Drops land here and there, each a few rings that widen and fade; the pointer drops its own.
+    float tone=0.,g=.72;
+    vec2 q=p/g,id=floor(q);
+    for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+      vec2 c=id+vec2(i,j),h=vec2(hash(c),hash(c+7.3));
+      float period=5.+h.x*5.,age=fract(t*.3/period*4.+h.y);
+      vec2 at=(c+.2+.6*h)*g;
+      float d=length(p-at),r=age*.62;
+      float rings=max(0.,cos((d-r)*34.))*exp(-pow((d-r)/.11,2.));
+      tone+=rings*pow(1.-age,1.8)*smoothstep(0.,.06,age)*(.7+.3*h.x);
+    }
+    return vec3(clamp(tone*1.25,0.,1.));
+  }
+  if(uScene==10){
+    // Halo: a slow breathing corona round the centre, its rays turning; the middle stays empty for a headline.
+    vec2 e=p*vec2(.74,1.);
+    float d=length(e),a=atan(e.y,e.x),tt=t*.07;
+    float r=.34+.014*sin(tt*3.1);
+    float rays=.5+.5*noise(vec2(a*3.2+tt,tt*.5))*(.6+.4*noise(vec2(a*7.-tt*1.2,3.+tt*.4)));
+    float rim=exp(-pow((d-r)/.03,2.));
+    float corona=exp(-max(0.,d-r)/(.1+.08*rays))*smoothstep(r-.04,r+.015,d)*rays*smoothstep(r+.36,r+.12,d);
+    return vec3(clamp(rim*(.55+.45*rays)+corona*.85,0.,1.));
+  }
+  if(uScene==11){
+    // Interference: two ring grids from slowly orbiting centres. Where they cross, broad moire bands open and close.
+    float tt=t*.05;
+    vec2 a=vec2(-.3+.12*sin(tt),.07*cos(tt*1.3)),b=vec2(.3+.1*cos(tt*.8),-.06*sin(tt*1.1));
+    float f=6.2831853/max(px*4.6,.004);
+    float m=cos(length(p-a)*f)+cos(length(p-b)*f);
+    return vec3(smoothstep(.7,2.,m));
+  }
+  if(uScene==12){
+    // Mesh: four soft lights on slow Lissajous paths, a gradient mesh written in characters.
+    float tt=t*.07,m=0.;
+    for(int n=0;n<4;n++){
+      float f=float(n)*1.7;
+      vec2 c=vec2(.66*sin(tt*(.7+f*.13)+f),.34*cos(tt*(.9-f*.07)+f*1.3));
+      float s=.3+.07*sin(tt+f);
+      m+=exp(-dot(p-c,p-c)/(s*s))*(.8-float(n)*.1);
+    }
+    return vec3(smoothstep(.06,1.1,m));
+  }
+  if(uScene==13){
+    // Cascade: streaks fall in three depths. Far ones are frequent, faint, short and slow; near ones rare, long, bright and
+    // quick. Each has a bright head and a tail that fades behind it, and a column can carry two streaks at once.
+    float tone=0.,cw=uCell.x/uResolution.x,ch=uCell.y/uResolution.y;
+    float col=floor(uv.x/cw+.5);
+    for(int n=0;n<3;n++){
+      float f=float(n);
+      for(int k=0;k<2;k++){
+        float seed=f*13.1+float(k)*41.7,h=hash(vec2(col,seed));
+        if(h<1.-(.5-f*.15))continue;
+        float speed=(.045+f*.07)*(.75+.5*hash(vec2(col,seed+2.)));
+        float tail=.12+f*.16,y=fract(t*speed+hash(vec2(col,seed+5.)))*(1.+tail*2.)-tail;
+        float d=y-uv.y;
+        if(d<0.||d>tail)continue;
+        float head=d<ch*1.2?1.:0.;
+        tone=max(tone,max(head*(.55+f*.22),pow(1.-d/tail,1.7)*(.28+f*.3)));
+      }
+    }
+    return vec3(clamp(tone,0.,1.));
+  }
+  if(uScene==14){
+    // Constellation: points wander in their own cells; neighbours close enough are linked by fine lines. Each point is a
+    // bright core in a soft halo, so it reads at card size as well as full width.
+    float g=.23,tt=t*.18;
+    vec2 q=p/g,id=floor(q);
+    vec2 pts[9];
+    for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+      vec2 c=id+vec2(i,j);
+      float h=hash(c),k=hash(c+3.7);
+      pts[(j+1)*3+i+1]=c+.5+.36*vec2(sin(tt*(.6+h)+h*6.28),cos(tt*(.5+k)+k*6.28));
+    }
+    float line=0.,star=0.,lw=max(px/g,.02);
+    for(int n=0;n<9;n++){
+      vec2 e=q-pts[n];
+      float d2=dot(e,e),tw=.8+.2*sin(tt*3.+float(n)*1.7);
+      star=max(star,max(exp(-d2/(lw*lw*1.6)),.38*exp(-d2/(lw*lw*7.)))*tw);
+      for(int m=n+1;m<9;m++){
+        vec2 a=pts[n],ba=pts[m]-a;
+        float len=length(ba);
+        if(len>1.35)continue;
+        float hh=clamp(dot(q-a,ba)/dot(ba,ba),0.,1.);
+        float d=length(q-a-ba*hh);
+        line=max(line,(1.-smoothstep(lw*.3,lw*.75,d))*smoothstep(1.35,.6,len)*.72);
+      }
+    }
+    return vec3(clamp(max(line,star),0.,1.));
   }
   return vec3(0.);
 }

@@ -66,16 +66,24 @@ export { pullRefresh } from './kit/pull-refresh';
 export type { PullRefreshOptions, PullRefreshHandle, PullState } from './kit/pull-refresh';
 // backgrounds
 export { background, backgroundCharset } from './kit/background';
-export type { BackgroundOptions, BackgroundHandle, BackgroundPreset, BackgroundContext, BackgroundRun, BackgroundSettings, BackgroundCursor, BackgroundCharset } from './kit/background';
-export { drift } from './kit/backgrounds/drift';
-export { halftone } from './kit/backgrounds/halftone';
+export type { BackgroundOptions, BackgroundHandle, BackgroundPreset, BackgroundContext, BackgroundRun, BackgroundSettings, BackgroundCursor, BackgroundCharset, BackgroundMark } from './kit/background';
+// The curated set: GPU scenes that follow setGlobalLook and take `cursor: false`.
 export { swell } from './kit/backgrounds/swell';
+export { drift } from './kit/backgrounds/drift';
 export { wordField } from './kit/backgrounds/word-field';
 export { fluid } from './kit/backgrounds/fluid';
-export { aurora } from './kit/backgrounds/aurora';
 export { caustics } from './kit/backgrounds/caustics';
-export { circuit } from './kit/backgrounds/circuit';
 export { contour } from './kit/backgrounds/contour';
+export { aurora } from './kit/backgrounds/aurora';
+export { ripple } from './kit/backgrounds/ripple';
+export { halo } from './kit/backgrounds/halo';
+export { interference } from './kit/backgrounds/interference';
+export { mesh } from './kit/backgrounds/mesh';
+export { cascade } from './kit/backgrounds/cascade';
+export { constellation } from './kit/backgrounds/constellation';
+// Retired (@deprecated): still exported so existing code runs, hidden from the site and docs.
+export { halftone } from './kit/backgrounds/halftone';
+export { circuit } from './kit/backgrounds/circuit';
 export { dna } from './kit/backgrounds/dna';
 export { dune } from './kit/backgrounds/dune';
 export { etch } from './kit/backgrounds/etch';

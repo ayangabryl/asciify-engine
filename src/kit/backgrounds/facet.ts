@@ -10,7 +10,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
   return Math.pow(Math.min(foldA, foldB), 1.8) * .85;
 };
 
-/** Quiet folded planes catch light along their edges. */
+/**
+ * Quiet folded planes catch light along their edges.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `caustics` is the closest current preset.
+ */
 export const facet: BackgroundPreset = {
   id: 'facet', name: 'Facet', description: 'Quiet folded planes catch light along their edges.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

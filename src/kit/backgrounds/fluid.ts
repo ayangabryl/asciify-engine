@@ -30,6 +30,8 @@ function mountFluid(context: BackgroundContext): BackgroundRun | null {
         // The hero's grid: a whole number of 7 x 12.07 px cells stretched to fill the stage, drawn at up to 1.5 device pixels per px.
         cellFit: 'fill', maxPixelRatio: 1.5,
         // asciify-engine's contrast 0.1, then its floor onto the ramp, which the field's rounding meets half a step lower.
+        // The folds part round a `clear` element, so the hero's copy reads over them.
+        clear: s.clear ? { element: s.clear, padding: 8, feather: 0.22, shape: 'ellipse' } : false,
         color: 'ink', shade: 0, levels: 'none', fit: 'cover', gamma: 1, contrast: CONTRAST, brightness: (0.5 - 128 / 255) * (CONTRAST - 1) - 0.5 / Math.max(1, Array.from(s.charset ?? RAMP).length - 1), ...s.look,
       };
     },

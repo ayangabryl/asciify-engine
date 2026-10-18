@@ -1,10 +1,12 @@
 import type { GlyphField, GlyphFieldOptions } from '../field';
 import { CHARACTER_SETS } from '../studio/characters';
 import { mergeOptions, prefersReduced, type KitHandle, type KitOptions } from './core';
-import { disposeKit } from './core-live';
+import { disposeKit, setPosterSource } from './core-live';
 
 /** `true` follows the pointer with the preset's own response; the GPU presets also take a named hover. */
 export type BackgroundCursor = boolean | 'trail' | 'fluid' | 'lantern';
+/** What the GPU presets draw in each cell: characters, or halftone dots sized by the tone. */
+export type BackgroundMark = 'glyph' | 'dot';
 /** A named ramp from the engine's character sets, `'dots'`, or your own characters from empty to dense. */
 export type BackgroundCharset = keyof typeof CHARACTER_SETS | 'dots' | (string & {});
 
@@ -23,8 +25,13 @@ export interface BackgroundOptions extends KitOptions {
   cellSize?: number;
   /** Characters from empty to dense, or a named set (`blocks`, `braille`, `dots`, ...). Default: the preset's own. */
   charset?: BackgroundCharset;
-  /** Pointer response. Default: on for the presets that answer the cursor. */
+  /**
+   * Pointer response. `false` turns it off: the background never reacts to the pointer. `true` keeps the preset's own response;
+   * the GPU presets also take a named hover. Default: on for the presets that answer the cursor.
+   */
   cursor?: BackgroundCursor;
+  /** GPU presets: characters (`'glyph'`) or halftone dots (`'dot'`). Default: the preset's own; a `charset` asks for characters. */
+  mark?: BackgroundMark;
   /** An element to keep clear: the field fades out around it so text over it stays readable. */
   clear?: HTMLElement | false;
   /** Canvas opacity, 0–1. Default 1 (`fluid` 0.7). */
@@ -41,6 +48,7 @@ export interface BackgroundSettings {
   cellSize: number;
   charset: string | undefined;
   cursor: BackgroundCursor;
+  mark: BackgroundMark | undefined;
   clear: HTMLElement | false;
   dither: number;
   accent: string | undefined;
@@ -112,13 +120,17 @@ export function backgroundCharset(charset: string | undefined): string | undefin
 
 /**
  * An animated ASCII background under an element's content: any of the /backgrounds presets, drawn the same way as on the site.
- * Canvas templates draw with a 2D canvas; `drift`, `halftone`, `wordField` and `fluid` drive the GPU glyph field.
+ * The curated presets drive the GPU glyph field, so they follow `setGlobalLook`; the deprecated canvas templates draw with a 2D canvas.
  */
 export function background(element: HTMLElement, options: BackgroundOptions): BackgroundHandle {
   if (!options || !options.preset || typeof options.preset.mount !== 'function') {
     throw new TypeError('background() needs a preset, such as `aurora` imported from asciify-engine/kit.');
   }
-  const state = { current: { ...options } };
+  // A poster is a still of one preset: once another is on screen it would cover it whenever a field waits or is released.
+  const pictured = options.preset;
+  let picture = options.poster;
+  const framed = (next: BackgroundOptions): BackgroundOptions => ({ ...next, poster: next.preset === pictured ? picture : undefined });
+  const state = { current: framed({ ...options }) };
   let run: BackgroundRun | null = null, paused = false, destroyed = false;
   const leaving = new Set<{ run: BackgroundRun; timer: ReturnType<typeof setTimeout> }>();
 
@@ -128,7 +140,9 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
       speed: num(o.speed, p.speed, 0, 5),
       cellSize: num(o.cellSize, p.cellSize, 3, 96),
       charset: backgroundCharset(o.charset),
-      cursor: o.cursor ?? p.cursor,
+      // A `look.hover` of 'none' (the components dialog's Cursor: Off) turns the response off for every preset, canvas ones too.
+      cursor: o.look?.hover === 'none' ? false : o.cursor ?? p.cursor,
+      mark: o.mark === 'glyph' || o.mark === 'dot' ? o.mark : undefined,
       clear: o.clear ?? false,
       dither: num(o.dither, 0, 0, 1),
       accent: o.accent,
@@ -184,7 +198,7 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
   };
   const setPreset = (preset: BackgroundPreset) => {
     if (destroyed || !preset || typeof preset.mount !== 'function' || preset === state.current.preset) return;
-    state.current = { ...state.current, preset };
+    state.current = framed({ ...state.current, preset });
     const old = run;
     run = mount(!!old && !still());
     if (old) retire(old);
@@ -199,7 +213,9 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
     update(next) {
       if (destroyed || !next) return;
       const { preset, ...rest } = next;
-      state.current = mergeOptions(state.current, rest);
+      if ('poster' in rest) picture = rest.poster;
+      state.current = framed(mergeOptions(state.current, rest));
+      if (rest.poster && state.current.poster) setPosterSource(state, rest.poster);
       if (preset && preset !== state.current.preset) { setPreset(preset); return; }
       if (!run) return;
       run.canvas.style.opacity = opacity();

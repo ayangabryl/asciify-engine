@@ -122,7 +122,10 @@ export function renderDnaBackground(
   ctx.globalAlpha = 1;
 }
 
-/** Double helices scroll past with base-pair letters. */
+/**
+ * Double helices scroll past with base-pair letters.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `halo` is the closest current preset.
+ */
 export const dna: BackgroundPreset = {
   id: 'dna', name: 'DNA', description: 'Double helices scroll past with base-pair letters.', cellSize: 13, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

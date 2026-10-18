@@ -646,6 +646,15 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.19: a curated set of premium backgrounds
+
+- New presets `halo`, `ripple`, `mesh`, `interference`, `constellation` and `cascade`; `caustics`, `contour` and `aurora` are rebuilt on the GPU. All follow `setGlobalLook`, keep a quiet zone behind content and hold a still frame under reduced motion.
+- `cursor: false` turns pointer interaction off for every preset. `mark: 'glyph' | 'dot'` draws any preset in characters or dots; `swell` keeps dots by default.
+- Dated presets (`dna`, `circuit`, `fire`, `grid`, `morph`, `noise`, `pulse`, `rain`, `silk`, `stars`, `terrain`, `veil`, `void`, `wave`, `weave`, `dune`, `etch`, `facet`, `moire`, `halftone`) stay exported but are deprecated; the kit reference names the closest current preset for each.
+- Switching presets no longer leaves the previous preset's poster covering the new one.
+- `pageDissolve` draws its settled blocks in one masked pass and snapshots at 1x on touch devices, so the wave stays light on phones.
+- The skill's `looks.md` now covers 47 artwork looks, every render style, plus composed (blur, transparent, gradient) and finished (vignette, grain, bloom, scanlines) looks.
+
 ## 4.18: 24 render styles in every live field, artwork looks, smoother components
 
 - Glyph fields draw the Studio's tile and print styles: `mark` accepts `pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph` and `pointillism` (see `FIELD_MARKS`), one shader branch each.

@@ -108,7 +108,10 @@ export function renderGridBackground(
   }
 }
 
-/** Scan bands roll down a character grid and glitch near the cursor. */
+/**
+ * Scan bands roll down a character grid and glitch near the cursor.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `interference` is the closest current preset.
+ */
 export const grid: BackgroundPreset = {
   id: 'grid', name: 'Grid', description: 'Scan bands roll down a character grid and glitch near the cursor.', cellSize: 12, speed: 1, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) =>

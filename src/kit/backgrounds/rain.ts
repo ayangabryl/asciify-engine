@@ -92,7 +92,10 @@ export function renderRainBackground(
   }
 }
 
-/** Columns of falling characters with bright heads. */
+/**
+ * Columns of falling characters with bright heads.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `cascade` is the closest current preset.
+ */
 export const rain: BackgroundPreset = {
   id: 'rain', name: 'Rain', description: 'Columns of falling characters with bright heads.', cellSize: 13, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

@@ -190,7 +190,7 @@ const off = subscribeGlobalLook(look => menu.value = look?.charset ?? '');
 orb.update({ ink: '--brand', look: { cellSize: 6 } });
 ```
 
-`setGlobalLook({ style })` takes one of the Studio's 24 render styles (`KIT_STYLES`, typed `KitStyle`, in `STUDIO_STYLES` order). Glyph-like styles (`ascii`, `blocks`, `braille`, `lines`, `cross`, `diagonal`, `diamond`, `mixed`) bring their ramp, which a `charset` beside them overrides; `dots` is the halftone mark; the rest (`pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) switch the field's `mark` and keep each field's own charset, which decides the cells left blank. Unknown styles and empty charsets are dropped. `setGlobalLook(null)` gives each field its own mark and characters back.
+`setGlobalLook({ style })` takes one of the Studio's 24 render styles (`KIT_STYLES`, typed `KitStyle`, in `STUDIO_STYLES` order). Glyph-like styles (`ascii`, `blocks`, `braille`, `lines`, `cross`, `diagonal`, `diamond`, `mixed`) bring their ramp, which a `charset` beside them overrides; `dots` is the halftone mark; the rest (`pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) switch the field's `mark` and keep each field's own charset, which decides the cells left blank. Unknown styles and empty charsets are dropped. Dot fields skip the look, except backgrounds such as `swell` that are made to take characters. `setGlobalLook(null)` gives each field its own mark and characters back.
 
 `setGlobalLook({ charset })` balances the set's weight against classic ASCII: block and solid sets draw smaller glyphs so they keep detail, sets without light glyphs (binary) ease off, and faint sets (minimal, braille, code) draw larger, bolder glyphs; tones are untouched. A look applies to every glyph field, live or released, except dot marks, fields whose own `charset` holds letters (a word or a brand, such as `wordmark`), and fields created with `globalLook: false` (use it for a locked region). An empty `charset` keeps each field's own. `getGlobalLook()` reads the current look, so `subscribeGlobalLook` pairs with React's `useSyncExternalStore`.
 
@@ -479,52 +479,41 @@ Options: `onRefresh` (may return a promise; the ring spins at least 600ms), `con
 
 ## Backgrounds
 
-Every background on asciify.org/backgrounds as one call, drawn the same way as the site's stage: the same renderers, clock, pointer smoothing, pixel ratio and graphite inks, so a preset with the same settings matches it in light and dark. The canvas sits under the element's content (`isolation: isolate`, `z-index: -1`), follows the theme, pauses off screen and in hidden tabs, and holds one still frame under reduced motion.
+The curated backgrounds on asciify.org/backgrounds as one call each. They are scenes of the GPU glyph field, so they follow `setGlobalLook` (the header's characters and the 24 render styles) like every field component, keep a quiet zone for your copy, take `lazy`, `poster`, `globalLook` and the context budget, and hold one still frame under reduced motion. The canvas sits under the element's content (`isolation: isolate`, `z-index: -1`), follows the theme and pauses off screen and in hidden tabs.
 
 ```ts
-import { background, caustics, aurora } from 'asciify-engine/kit';
+import { background, halo, swell } from 'asciify-engine/kit';
 
-const bg = background(hero, { preset: caustics, clear: headline, speed: 0.8 });
+const bg = background(hero, { preset: halo, clear: headline, speed: 0.8 });
 bg.update({ palette: { light: '#5b4bd1', dark: '#8f80ff' }, cellSize: 10 });
-bg.setPreset(aurora);   // cross-fades, keeping your options
+bg.setPreset(swell);              // cross-fades, keeping your options
+bg.update({ cursor: false });     // no pointer response, for any preset
 ```
 
-Presets are separate exports, so a page pays only for the ones it imports: `background()` with one canvas preset is about 6.2 KB gzip (6.8 KB for `wave`), and each further canvas preset adds 0.2–0.9 KB (all 22 together: 13.9 KB). `drift`, `halftone`, `swell`, `wordField` and `fluid` drive the GPU glyph field, so they cost about 7 KB (`fluid` 9.7 KB) plus the shared `asciify-engine/field` build, 17 KB gzip, that every field component uses (and take `lazy`, `poster`, `globalLook` and the context budget like every field component); the rest are 2D canvases and need no WebGL. To offer a menu of several, import those you list.
+Presets are separate exports, so a page pays only for the ones it imports. Each GPU preset is a small object over the shared `asciify-engine/field` build (about 23 KB gzip) that every field component uses; `fluid` adds its solver (about 3 KB). To offer a menu of several, import those you list.
 
-Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `accent` (heads, peaks and signals for the presets that draw them; default the preset's own, or one mixed from the ink), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for `halftone` and `swell`; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `dots`), `cursor` (pointer response, default on for the presets that answer it; the GPU presets also take `'trail' | 'fluid' | 'lantern'`), `clear` (an element to keep clear: the field fades out round it), `opacity` (default 1, `fluid` 0.7, `swell` 0.6), `dither` (ordered dither 0–1 for the tonal presets), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (glyph-field settings, GPU presets only) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`. `field` is the `GlyphField` for the GPU presets and `null` for canvas ones.
+Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for dots; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `dots`; on a dot preset it asks for characters), `mark` (`'glyph'` or `'dot'`; default the preset's own), `cursor` (pointer response: `false` turns it off, `true` keeps the preset's own, or name `'trail' | 'fluid' | 'lantern'`; a `look.hover` of `'none'` also turns it off), `clear` (an element to keep clear: the field fades out round it; without one each preset keeps its own quiet middle), `opacity` (default 1, `fluid` 0.7, `swell` 0.6), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (raw glyph-field settings on top, such as `{ mark: 'stipple' }` for a render style) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`; `field` is the preset's `GlyphField` (for `field.pulse()`).
 
-`fluid` lays its cells out as the site's hero does: a whole number of 7 × 12.07 px cells (`cellSize` / 0.58 tall) stretched to fill the stage exactly, so rows keep their place down a tall page, drawn at up to 1.5 device pixels per CSS pixel. It does this through the field's `cellFit: 'fill'` (see glyph-field.md).
+`swell` draws halftone dots by default. `mark: 'glyph'` or a `charset` writes the same waves in characters (Geist Mono cells, 0.62 wide), and a global look does the same while it is set: a charset or glyph-like style gives it characters, a tile or print style its mark, and `setGlobalLook(null)` gives it its dots back. Every other preset draws characters by default and takes `mark: 'dot'` for a halftone.
 
-The canvas templates draw in the page's fonts: load Geist Mono (and JetBrains Mono for `fluid`) as the site does, and note that the page's `-webkit-font-smoothing` changes their weight on macOS just as it does on the site.
+`fluid` lays its cells out as the site's hero does: a whole number of 7 × 12.07 px cells (`cellSize` / 0.58 tall) stretched to fill the stage exactly, so rows keep their place down a tall page, drawn at up to 1.5 device pixels per CSS pixel. It does this through the field's `cellFit: 'fill'` (see glyph-field.md), and parts round `clear`.
 
-| Preset | Kind | Looks like | Size, speed, cursor |
-| --- | --- | --- | --- |
-| `drift` | GPU | Characters that drift slowly in broad soft lobes and clear round your content | 11, 1, trail |
-| `halftone` | GPU | The same drifting ground as dots | 14, 1, lantern |
-| `swell` | GPU | A fine dot grid whose dots swell in slow rolling waves, quiet in the middle and clear round your content; dots rise under the pointer and settle behind it | 10, 1, lantern |
-| `wordField` | GPU | Your word (`text`) as a flowing field of letters | 13, 1, trail |
-| `fluid` | GPU | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
-| `caustics` | canvas | Fine pools of light drifting like water across stone | 12, 1, no |
-| `contour` | canvas | Fine topographic lines with a slow, rolling drift | 12, 1, no |
-| `facet` | canvas | Folded planes catching light along their edges | 12, 1, no |
-| `etch` | canvas | Cut-grain lines following a sculpted current | 12, 1, no |
-| `moire` | canvas | Two fine line fields overlapping into broad bands | 12, 1, no |
-| `weave` | canvas | Interlaced threads with a subtle change in tension | 12, 1, no |
-| `veil` | canvas | Tall folds of light across a quiet ground | 12, 1, no |
-| `dune` | canvas | Layered sand ridges with slow light and fine grain | 12, 1, no |
-| `wave` | canvas | An interference field with a soft vortex at the cursor | 13, 0.6, yes |
-| `aurora` | canvas | Soft bands of light that ripple under the cursor | 13, 0.6, yes |
-| `noise` | canvas | A slow fractal noise field that warps round the cursor | 13, 0.5, yes |
-| `silk` | canvas | Long ribbons following a slow flow field | 13, 1, no |
-| `rain` | canvas | Columns of falling characters with bright heads | 13, 1, no |
-| `stars` | canvas | A sparse starfield that twinkles and leans to the cursor | 14, 1, yes |
-| `pulse` | canvas | Rings of characters rippling out from the cursor | 14, 1, yes |
-| `grid` | canvas | Scan bands rolling down a grid, glitching near the cursor | 12, 1, yes |
-| `voidWell` | canvas | A gravity well spiralling characters round the cursor (`void` is reserved in JS) | 13, 1, yes |
-| `morph` | canvas | Every cell shimmering at its own frequencies | 14, 1, no |
-| `fire` | canvas | A cellular flame rising from the bottom edge | 13, 1, no |
-| `dna` | canvas | Double helices scrolling past with base-pair letters | 13, 1, no |
-| `terrain` | canvas | A side-scrolling landscape in density characters | 13, 1, no |
-| `circuit` | canvas | Circuit traces with signals running along them | 13, 1, no |
+| Preset | Looks like | Size, speed, pointer |
+| --- | --- | --- |
+| `swell` | A fine grid swelling in slow rolling waves, quiet in the middle; dots by default, or characters | 10, 1, lantern |
+| `drift` | Characters drifting slowly in broad soft lobes, clear round your content | 11, 1, trail |
+| `halo` | A corona breathing slowly round the middle, its rays turning; the centre stays empty for a headline | 11, 1, lantern |
+| `caustics` | Light focused by moving water: fine bright lines that fold, part and meet | 11, 1, lantern |
+| `contour` | Survey lines over a slowly shifting terrain, one character wide, every fifth an index line | 11, 1, lantern |
+| `aurora` | Curtains of light folding across the top, sharp along their hems | 11, 1, lantern |
+| `ripple` | Still water: drops ring outward here and there; the pointer drops its own (`field.pulse`) | 11, 1, drops |
+| `mesh` | Four soft lights on slow paths, a gradient mesh across the whole ramp | 11, 1, trail |
+| `interference` | Two ring grids from orbiting centres; moiré bands open and close where they cross | 11, 1, lantern |
+| `constellation` | Points wandering in their cells, close neighbours linked by fine lines | 11, 1, lantern |
+| `cascade` | Streaks falling in three depths: far ones faint and slow, near ones bright and quick | 11, 1, lantern |
+| `wordField` | Your word (`text`) as a flowing field of letters | 13, 1, trail |
+| `fluid` | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
+
+Retired presets are still exported, marked `@deprecated`, so code that imports them keeps running unchanged; they are no longer shown on the site or in these docs. Move to the closest current one: `halftone` → `drift` with `mark: 'dot'` (`cellSize: 14`), `dna` and `voidWell` → `halo`, `circuit` and `stars` → `constellation`, `fire`, `silk` and `veil` → `aurora`, `grid`, `weave` and `moire` → `interference`, `morph` and `noise` → `mesh`, `pulse` → `ripple`, `rain` → `cascade`, `terrain`, `dune` and `etch` → `contour`, `facet` → `caustics`, `wave` → `swell`. The retired canvas presets draw on a 2D canvas and also take `accent` and `dither`.
 
 Your own preset is an object with `id`, `name`, `description`, `cellSize`, `speed`, `cursor` and `mount(context)`; `mountCanvas(context, draw)` runs a 2D template with the same clock and pointer as the built-ins.

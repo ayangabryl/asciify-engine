@@ -71,8 +71,8 @@ describe('pageDissolve', () => {
     art.width = 40; art.height = 32;
     const pen = new FakeElement('CANVAS').getContext('2d') as unknown as CanvasRenderingContext2D & { drawImage: ReturnType<typeof vi.fn> };
     dissolveFrame(pen, art as unknown as HTMLCanvasElement, -0.2, { x: 0, y: 0 }, 0);
-    const all = pen.drawImage.mock.calls.length;
-    expect(all).toBe(8);
+    // Settled blocks go in one masked draw rather than one draw each.
+    expect(pen.drawImage).toHaveBeenCalledTimes(1);
     pen.drawImage.mockClear();
     dissolveFrame(pen, art as unknown as HTMLCanvasElement, 1.2, { x: 0, y: 0 }, 0);
     expect(pen.drawImage).not.toHaveBeenCalled();

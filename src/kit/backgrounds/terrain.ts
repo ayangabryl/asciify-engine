@@ -114,7 +114,10 @@ export function renderTerrainBackground(
   ctx.globalAlpha = 1;
 }
 
-/** A side-scrolling landscape drawn in density characters. */
+/**
+ * A side-scrolling landscape drawn in density characters.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `contour` is the closest current preset.
+ */
 export const terrain: BackgroundPreset = {
   id: 'terrain', name: 'Terrain', description: 'A side-scrolling landscape drawn in density characters.', cellSize: 13, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

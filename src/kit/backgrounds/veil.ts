@@ -8,7 +8,10 @@ const sample: MaterialSample = (u, v, aspect, t) => {
     * (.45 + .55 * Math.sin(v * 2.4 + .2));
 };
 
-/** Tall folds of light drifting across a quiet ground. */
+/**
+ * Tall folds of light drifting across a quiet ground.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ */
 export const veil: BackgroundPreset = {
   id: 'veil', name: 'Veil', description: 'Tall folds of light drifting across a quiet ground.', cellSize: 12, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

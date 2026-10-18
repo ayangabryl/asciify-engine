@@ -117,7 +117,10 @@ export function renderSilkBackground(
   }
 }
 
-/** Long ribbons that follow a slow flow field. */
+/**
+ * Long ribbons that follow a slow flow field.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ */
 export const silk: BackgroundPreset = {
   id: 'silk', name: 'Silk', description: 'Long ribbons that follow a slow flow field.', cellSize: 13, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

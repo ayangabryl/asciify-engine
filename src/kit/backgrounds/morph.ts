@@ -93,7 +93,10 @@ export function renderMorphBackground(
   }
 }
 
-/** Every cell shimmers at its own frequencies. */
+/**
+ * Every cell shimmers at its own frequencies.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `mesh` is the closest current preset.
+ */
 export const morph: BackgroundPreset = {
   id: 'morph', name: 'Morph', description: 'Every cell shimmers at its own frequencies.', cellSize: 14, speed: 1, cursor: false,
   mount: context => mountCanvas(context, (ctx, w, h, t, _mouse, o) =>

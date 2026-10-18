@@ -1,8 +1,8 @@
 // @ts-ignore The engine has no Node types; Vitest runs this in Node.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { FIELD_COMPOSITE, fieldCellShader, fieldFluidShader } from './field-shaders';
-import { FIELD_MARKS } from './field-model';
+import { FIELD_COMPOSITE, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
+import { FIELD_MARKS, FIELD_SCENES, normalizeFieldSettings } from './field-model';
 
 // Uniform locations are read from the linked program, so a misspelt name would be silently ignored by WebGL.
 const declared = (shader: string) => new Set([...shader.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(([, names]) => names.split(',').map(name => name.trim().replace(/\[\d+\]$/, ''))));
@@ -35,6 +35,17 @@ describe('glyph field programs', () => {
     expect(draw).toContain('gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark))');
     // No mark samples anything but its own cell, so styles cost no extra passes or textures.
     expect(FIELD_COMPOSITE.match(/texelFetch\(uCells/g)).toHaveLength(1);
+  });
+  it('generates every scene in its own branch of the cell pass, and keeps every scene a setting', () => {
+    const cell = fieldCellShader(false);
+    const ids = FIELD_SCENES.map(sceneId);
+    expect(new Set(ids).size).toBe(FIELD_SCENES.length);
+    for (const scene of FIELD_SCENES) {
+      expect(normalizeFieldSettings({ scene }).scene).toBe(scene);
+      // 'none' draws nothing; every other scene has a branch.
+      if (scene !== 'none') expect(cell).toContain(`uScene==${sceneId(scene)}){`);
+    }
+    expect(field).toContain('gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene))');
   });
   it('writes ink and what lies under it from the cell pass, which the pixel pass reads per cell', () => {
     for (const packed of [false, true]) {

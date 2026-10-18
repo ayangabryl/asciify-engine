@@ -89,7 +89,10 @@ export function renderStarsBackground(
   ctx.textAlign = 'left';
 }
 
-/** A sparse starfield that twinkles, drifts and leans toward the cursor. */
+/**
+ * A sparse starfield that twinkles, drifts and leans toward the cursor.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `constellation` is the closest current preset.
+ */
 export const stars: BackgroundPreset = {
   id: 'stars', name: 'Stars', description: 'A sparse starfield that twinkles, drifts and leans toward the cursor.', cellSize: 14, speed: 1, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) =>

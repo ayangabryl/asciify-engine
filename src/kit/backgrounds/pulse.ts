@@ -103,7 +103,10 @@ export function renderPulseBackground(
   ctx.textAlign = 'left';
 }
 
-/** Rings of characters ripple out from the cursor. */
+/**
+ * Rings of characters ripple out from the cursor.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `ripple` is the closest current preset.
+ */
 export const pulse: BackgroundPreset = {
   id: 'pulse', name: 'Pulse', description: 'Rings of characters ripple out from the cursor.', cellSize: 14, speed: 1, cursor: true,
   mount: context => mountCanvas(context, (ctx, w, h, t, mouse, o) =>

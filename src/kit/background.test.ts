@@ -5,11 +5,14 @@ vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyph
 
 import { background, backgroundCharset, type BackgroundPreset } from './background';
 import { aurora } from './backgrounds/aurora';
+import { facet } from './backgrounds/facet';
 import { caustics } from './backgrounds/caustics';
+import { halo } from './backgrounds/halo';
 import { fire } from './backgrounds/fire';
 import { wave } from './backgrounds/wave';
 import { drift } from './backgrounds/drift';
 import { swell } from './backgrounds/swell';
+import { halftone } from './backgrounds/halftone';
 import { mountCanvas } from './backgrounds/canvas';
 
 /* A small DOM: elements with styles and listeners, 2D canvases that record what they draw, and manual frames. */
@@ -125,10 +128,10 @@ describe('background options', () => {
 
   it('draws a canvas preset under the content with its defaults and graphite ink', () => {
     const el = host();
-    const bg = background(as(el), { preset: caustics });
+    const bg = background(as(el), { preset: facet });
     expect(bg.supported).toBe(true);
     expect(bg.field).toBeNull();
-    expect(bg.preset).toBe(caustics);
+    expect(bg.preset).toBe(facet);
     const [canvas] = kitCanvases(el);
     expect(canvas.getAttribute('aria-hidden')).toBe('true');
     expect(canvas.getAttribute('style')).toContain('z-index:-1');
@@ -146,7 +149,7 @@ describe('background options', () => {
 
   it('takes palette over color over ink, size, charset and opacity', () => {
     const el = host();
-    const bg = background(as(el), { preset: caustics, ink: '#00ff00', color: '#0000ff', palette: { light: '#ff0000' }, cellSize: 20, charset: 'blocks', opacity: 0.4 });
+    const bg = background(as(el), { preset: facet, ink: '#00ff00', color: '#0000ff', palette: { light: '#ff0000' }, cellSize: 20, charset: 'blocks', opacity: 0.4 });
     runFrames(1);
     expect(drawn.every(d => String(d.fill).startsWith('rgba(255,0,0,'))).toBe(true);
     expect(String(drawn[0].font).startsWith('20px')).toBe(true);
@@ -281,7 +284,7 @@ describe('GPU presets', () => {
     await flush();
     expect(mount).toHaveBeenCalledTimes(1);
     const look = mount.mock.calls[0][1];
-    expect(look).toMatchObject({ scene: 'drift', mark: 'glyph', cellSize: 9, cellAspect: 0.62, charset: ' .:-=+*#', hover: 'fluid', levels: 'auto', speed: 0, respectReducedMotion: true, ink: '#8f8d86' });
+    expect(look).toMatchObject({ scene: 'drift', mark: 'glyph', cellSize: 9, cellAspect: 0.62, charset: ' .:-=+*#', hover: 'fluid', speed: 0, respectReducedMotion: true, ink: '#8f8d86' });
     expect(bg.supported).toBe(true);
     bg.destroy();
     expect(field.destroy).toHaveBeenCalled();
@@ -305,6 +308,57 @@ describe('GPU presets', () => {
     bg.destroy();
     expect(el.style.getPropertyValue('isolation')).toBe('');
     expect(el.style.getPropertyValue('position')).toBe('');
+  });
+
+  it('draw swell in characters when asked, by mark or by charset, and the drift as dots', async () => {
+    const el = host();
+    const bg = background(as(el), { preset: swell, lazy: false, mark: 'glyph' });
+    await flush();
+    expect(mount.mock.calls[0][1]).toMatchObject({ scene: 'swell', mark: 'glyph', charset: ' .:-=+*#', cellAspect: 0.62 });
+    bg.destroy();
+    const dots = background(as(host()), { preset: drift, lazy: false, mark: 'dot' });
+    await flush();
+    expect(mount.mock.calls[1][1]).toMatchObject({ scene: 'drift', mark: 'dot', cellAspect: 1 });
+    dots.destroy();
+    const blocks = background(as(host()), { preset: swell, lazy: false, charset: 'blocks' });
+    await flush();
+    expect(mount.mock.calls[2][1]).toMatchObject({ mark: 'glyph', charset: ' ░▒▓█' });
+    blocks.destroy();
+  });
+
+  it('turn the pointer off with cursor: false, or a look hover of none, and keep a quiet middle', async () => {
+    const bg = background(as(host()), { preset: halo, lazy: false, cursor: false });
+    await flush();
+    expect(mount.mock.calls[0][1]).toMatchObject({ scene: 'halo', hover: 'none' });
+    bg.destroy();
+    const quiet = background(as(host()), { preset: caustics, lazy: false, look: { hover: 'none' } });
+    await flush();
+    expect(mount.mock.calls[1][1]).toMatchObject({ scene: 'caustics', hover: 'none', clear: { shape: 'ellipse', width: 0.64 } });
+    quiet.destroy();
+  });
+
+  it('keep the poster to the preset it pictures, so a swapped preset is never covered by it', async () => {
+    const el = host();
+    const posters = () => el.childNodes.filter(n => n.tagName === 'IMG');
+    const bg = background(as(el), { preset: swell, lazy: false, poster: '/swell.webp' });
+    await flush();
+    expect(posters()).toHaveLength(1);
+    expect(posters()[0].style.opacity).toBe('0');
+    bg.setPreset(drift);
+    await flush();
+    bg.setPreset(halftone);
+    await flush();
+    bg.update({ poster: '/swell-dark.webp' });
+    timers.splice(0).forEach(fn => fn());
+    expect(posters()).toHaveLength(0);
+    bg.setPreset(caustics);
+    timers.splice(0).forEach(fn => fn());
+    expect(posters()).toHaveLength(0);
+    bg.setPreset(swell);
+    await flush();
+    expect(posters().map(img => (img as unknown as { src: string }).src)).toEqual(['/swell-dark.webp']);
+    bg.destroy();
+    expect(posters()).toHaveLength(0);
   });
 
   it('return an inert handle without WebGL2 and leave the element alone', () => {
