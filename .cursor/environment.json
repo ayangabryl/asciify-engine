@@ -1,5 +1,0 @@
-{
-  "name": "asciify-engine",
-  "install": "npm ci",
-  "repositoryDependencies": ["https://github.com/ayangabryl/asciify"]
-}

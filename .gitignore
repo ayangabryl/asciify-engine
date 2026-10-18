@@ -1,3 +1,14 @@
 node_modules/
 dist/
 *.bak
+
+# OS
+.DS_Store
+
+# Editor and agent folders
+.cursor/
+.vscode/
+.idea/
+.claude/
+.windsurf/
+.seenry/
