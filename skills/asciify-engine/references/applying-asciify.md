@@ -187,7 +187,7 @@ publishButton.addEventListener('click', async () => {
 
 ## 9. Backgrounds
 
-`background(element, { preset })` draws any of the 13 curated presets from asciify.org/backgrounds under the element's content. Choose by surface:
+`background(element, { preset })` draws any of the 12 curated presets from asciify.org/backgrounds under the element's content. Choose by surface:
 
 | Surface | Presets | Notes |
 | --- | --- | --- |
@@ -195,7 +195,7 @@ publishButton.addEventListener('click', async () => {
 | A brand or name moment | `wordField` (id `field`), `fieldBackground` `brand` | Your word in the field; keep copy off its centre. |
 | Art-first hero with little copy | `fluid`, `mesh` | `fluid` is the original Asciify hero, 7px cells at 0.7 opacity; `mesh` is a soft gradient in characters. Not behind reading text. |
 | Quiet texture: section bands, footers, empty states, side panels | `caustics`, `contour`, `interference`, `constellation` | Fine lines, slow. Safe behind text with `clear`. |
-| An ambient or interactive moment | `aurora`, `ripple`, `cascade` | `aurora` sits above the copy; `ripple` drops rings where the pointer moves; `cascade` falls in three depths. Keep them away from forms and body copy. |
+| An ambient or interactive moment | `ripple`, `cascade` | `ripple` drops rings where the pointer moves; `cascade` falls in three depths. Keep them away from forms and body copy. |
 
 Keep them calm:
 

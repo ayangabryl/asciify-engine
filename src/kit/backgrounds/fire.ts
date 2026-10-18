@@ -127,7 +127,7 @@ export function renderFireBackground(
 
 /**
  * A cellular flame rising from the bottom edge.
- * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `mesh` is the closest current preset.
  */
 export const fire: BackgroundPreset = {
   id: 'fire', name: 'Fire', description: 'A cellular flame rising from the bottom edge.', cellSize: 13, speed: 1, cursor: false,

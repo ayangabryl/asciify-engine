@@ -122,18 +122,20 @@ vec3 generated(vec2 uv,float aspect){
   float t=uTime+40.,px=uCell.y/uResolution.y*uScale;
   if(uScene==6){
     // Caustics: light focused by a moving water surface. Two layers of warped sine waves drift against each other; each draws
-    // smooth filaments along its zero line, about a character wide, and where filaments of the two layers cross the light pools.
-    float tt=t*.12,light=0.;
+    // smooth filaments along its zero line, about a character wide. Where they cross the light lifts a little, never to a blot.
+    float tt=t*.12,a=0.,b=0.;
     for(int l=0;l<2;l++){
       float f=float(l),sc=5.4+f*2.4;
       vec2 q=(l==0?p:mat2(.8,-.6,.6,.8)*p)*sc;
       q+=vec2(sin(q.y*.45+tt*(1.+f*.3)),cos(q.x*.4-tt*(.8+f*.4)))*1.3;
       float v=sin(q.x+1.4*sin(q.y*.7+tt))+sin(q.y*1.1+1.2*sin(q.x*.8-tt*1.3))*.9;
       float wv=max(fwidth(v),1e-4);
-      light+=(1.-smoothstep(.2,1.5,abs(v)/wv))*(l==0?.62:.5)+exp(-abs(v)/(wv*5.))*.18;
+      float line=(1.-smoothstep(.2,1.5,abs(v)/wv))*(l==0?.78:.62)+exp(-abs(v)/(wv*5.))*.16;
+      if(l==0)a=line;else b=line;
     }
-    float pulse=.82+.18*sin(tt*3.+p.x*1.7-p.y*1.1);
-    return vec3(clamp(light*light*pulse,0.,1.));
+    float pulse=.85+.15*sin(tt*3.+p.x*1.7-p.y*1.1);
+    float light=max(a,b)+.3*min(a,b);
+    return vec3(clamp(light*light*pulse,0.,.78));
   }
   if(uScene==7){
     // Contour: a slow terrain read as survey lines about a character wide at any size; every fifth is an index line.
@@ -146,20 +148,23 @@ vec3 generated(vec2 uv,float aspect){
     return vec3((1.-smoothstep(.35,1.25-major*.25,d))*mix(.55,1.,major));
   }
   if(uScene==8){
-    // Aurora: two curtains hang from the top in tall vertical folds that ripple slowly sideways. Each is brightest along its
-    // lower hem and fades upward; below the hem the page stays clear.
-    float tt=t*.045,a=0.;
-    for(int n=0;n<2;n++){
-      float f=float(n);
-      float x=p.x+.05*sin(p.y*5.+tt*2.3+f*2.)+.03*sin(p.y*11.-tt*3.1);
-      float hem=-.12+f*.09+.07*sin(x*(1.9+f*.6)+tt*(1.+f*.4)+f*2.4)+.03*sin(x*4.7-tt*1.4);
+    // Aurora: three curtains at different distances hang from the top. Far ones sit higher and dimmer; the nearest is tallest
+    // and brightest. Each folds slowly and is brightest along its lower hem, fading upward. The rays are set per character
+    // column, so the curtains read as vertical strokes at any stage size, from a small card to a phone.
+    float tt=t*.05,a=0.,cw=uCell.x/uResolution.x;
+    float col=floor(uv.x/cw+.5);
+    for(int n=0;n<3;n++){
+      float f=float(n),near=f/2.;
+      float x=p.x*(1.3-near*.4)+f*3.7;
+      float hem=-.28+near*.3+.16*sin(x*1.3+tt*(.9+f*.25)+f*2.)+.045*sin(x*3.4-tt*1.5+f);
       float d=hem-p.y;
-      float body=d>0.?exp(-d/(.26+.06*f))*(.5+.5*exp(-d/.035)):exp(-d*d/.0006);
-      float folds=smoothstep(.3,.8,noise(vec2(x*(3.2+f*1.6)+tt*1.2+f*9.,f*5.+tt*.25)))*.8+.2*smoothstep(.2,.9,noise(vec2(x*11.+tt*2.,f)));
-      float rays=.45+.55*smoothstep(.3,.75,noise(vec2(x*26.+f*17.,tt*.4+f)));
-      a+=body*folds*rays*(1.-f*.3)*2.6;
+      float body=d>0.?exp(-d/(.14+near*.26))*(.45+.55*exp(-d/.03)):exp(-d*d/.0002);
+      float fold=.5+.5*sin(x*2.1+tt*.9+f*1.7+.7*sin(x*.8-tt*.6));
+      float ray=mix(hash(vec2(col,f*7.1)),noise(vec2(col*.18+f*9.,tt*.7+f)),.55);
+      float layer=clamp(body*(.1+.9*fold*fold)*(.2+.8*ray)*(.4+near*.6)*4.2,0.,1.);
+      a=1.-(1.-a)*(1.-layer);
     }
-    return vec3(smoothstep(.04,.9,a));
+    return vec3(smoothstep(.12,.9,a));
   }
   if(uScene==9){
     // Ripple: still water. Drops land here and there, each a few rings that widen and fade; the pointer drops its own.
@@ -176,13 +181,16 @@ vec3 generated(vec2 uv,float aspect){
     return vec3(clamp(tone*1.25,0.,1.));
   }
   if(uScene==10){
-    // Halo: a slow breathing corona round the centre, its rays turning; the middle stays empty for a headline.
-    vec2 e=p*vec2(.74,1.);
-    float d=length(e),a=atan(e.y,e.x),tt=t*.07;
-    float r=.34+.014*sin(tt*3.1);
+    // Halo: a slow breathing corona that frames the content, its rays turning. The ring fits the stage: wide on a desktop
+    // hero, tall on a phone, so the whole halo stays on screen; the middle stays empty for a headline.
+    vec2 r=vec2(min(.46,aspect*.4),min(.34,.36/max(aspect,.01)*.5+.2));
+    vec2 e=p/r;
+    float d=length(e),a=atan(e.y,e.x),tt=t*.07,k=min(r.x,r.y);
+    float breathe=1.+.04*sin(tt*3.1);
     float rays=.5+.5*noise(vec2(a*3.2+tt,tt*.5))*(.6+.4*noise(vec2(a*7.-tt*1.2,3.+tt*.4)));
-    float rim=exp(-pow((d-r)/.03,2.));
-    float corona=exp(-max(0.,d-r)/(.1+.08*rays))*smoothstep(r-.04,r+.015,d)*rays*smoothstep(r+.36,r+.12,d);
+    float s=(d-breathe)*k;
+    float rim=exp(-pow(s/.03,2.));
+    float corona=exp(-max(0.,s)/(.1+.08*rays))*smoothstep(-.04,.015,s)*rays*smoothstep(.36,.12,s);
     return vec3(clamp(rim*(.55+.45*rays)+corona*.85,0.,1.));
   }
   if(uScene==11){

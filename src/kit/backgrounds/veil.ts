@@ -10,7 +10,7 @@ const sample: MaterialSample = (u, v, aspect, t) => {
 
 /**
  * Tall folds of light drifting across a quiet ground.
- * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `mesh` is the closest current preset.
  */
 export const veil: BackgroundPreset = {
   id: 'veil', name: 'Veil', description: 'Tall folds of light drifting across a quiet ground.', cellSize: 12, speed: 1, cursor: false,

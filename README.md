@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.20: sharper presets, 61 looks, twelve backgrounds
+
+- Studio presets `ascii` (Signature ASCII) and `night` (Night signal) are retuned: finer 4px cells, brighter inks, lifted midtones and a faint glow.
+- The woodblock print style no longer leaves pale seams between cells.
+- `aurora` joins the deprecated backgrounds (closest current preset: `mesh`), leaving twelve curated presets; `halo` fits tall stages, `caustics` is calmer in small cards and `wordField` reads on small dark stages.
+- The skill's `looks.md` covers 61 looks, adding Projects looks for album covers, editorial portraits, product heroes, posters, postcards, botanical plates, lookbooks, game box art, stickers and phone wallpapers, each with its export size and frame.
+
 ## 4.19: a curated set of premium backgrounds
 
 - New presets `halo`, `ripple`, `mesh`, `interference`, `constellation` and `cascade`; `caustics`, `contour` and `aurora` are rebuilt on the GPU. All follow `setGlobalLook`, keep a quiet zone behind content and hold a still frame under reduced motion.

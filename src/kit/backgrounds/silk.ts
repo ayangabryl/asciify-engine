@@ -119,7 +119,7 @@ export function renderSilkBackground(
 
 /**
  * Long ribbons that follow a slow flow field.
- * @deprecated Retired from the curated set; kept so existing code still runs. `aurora` is the closest current preset.
+ * @deprecated Retired from the curated set; kept so existing code still runs. `mesh` is the closest current preset.
  */
 export const silk: BackgroundPreset = {
   id: 'silk', name: 'Silk', description: 'Long ribbons that follow a slow flow field.', cellSize: 13, speed: 1, cursor: false,
