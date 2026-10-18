@@ -5,7 +5,7 @@ import { SourceWarpProcessor } from './warps';
 import { isStudioPrintStyle } from './print-model';
 import { createPrintPainter } from './print-renderer';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
-import { sampleAmbient, scaleMotion } from '../surface/ambient-motion';
+import { sampleAmbient, scaleMotion, motionSource, isLightMotion } from '../surface/ambient-motion';
 import { buildPhotoCues, PHOTO_CUE_STRIDE, type PhotoCues } from '../surface/photo-cues';
 import {
   normalizeStudioSettings,
@@ -161,11 +161,6 @@ function paintMask(mc: CanvasRenderingContext2D, w: number, h: number, shapes: S
   }
 }
 /** Reusable bounded renderer. Call configure only when settings change; render owns no RAF. */
-/** A cell-grid position whose blend between neighbours is brief, so moving tones stay crisp instead of averaging to mush. */
-function crisp(v: number) {
-  const i = Math.floor(v), t = Math.max(0, Math.min(1, (v - i - .2) / .6));
-  return i + t * t * (3 - 2 * t);
-}
 export function createStudioRenderer(
   canvas: HTMLCanvasElement,
   settings: unknown = {},
@@ -198,6 +193,7 @@ export function createStudioRenderer(
     ditherCacheKey = "",
     compositionCacheKey = "",
     pixels: Uint8ClampedArray = new Uint8ClampedArray(0),
+    photo: Uint8ClampedArray = new Uint8ClampedArray(0),
     motionPixels: Uint8ClampedArray = new Uint8ClampedArray(0),
     cues: PhotoCues | null = null,
     cuesKey = "",
@@ -212,7 +208,7 @@ export function createStudioRenderer(
   const maskSample = surface(true), scopeLayer = surface(), revealLayer = surface();
   let aspect = 0;
   const field = [0, 0, 0];
-  const ambient = [0, 0, 0, 1];
+  const ambient = [0, 0, 0, 1], moved = [0, 0];
   const sampled = [0, 0, 0, 0];
   let toneLookup = createColorLookups(state.color);
   let printPainter = createPrintPainter(state.print);
@@ -304,6 +300,8 @@ export function createStudioRenderer(
     ) {
       sourceIdentity = source;
       prepared = key;
+      // A new grid (an adaptive budget change keeps the key) needs its own photo cues.
+      cuesKey = "";
       ditherCacheKey = "";
       compositionCacheKey = "";
       cols = nextCols;
@@ -326,6 +324,9 @@ export function createStudioRenderer(
       sample.ctx.drawImage(scene.canvas, 0, 0, cols, rows);
       pixels = sample.ctx.getImageData(0, 0, cols, rows).data;
       denoiser.apply(pixels, cols, rows);
+      // Motion reads the photograph before grading: contrast can clip a waterfall or a sky to flat white.
+      if (photo.length !== pixels.length) photo = new Uint8ClampedArray(pixels.length);
+      photo.set(pixels);
       const g = state.color;
       for (let i = 0; i < pixels.length; i += 4) {
         const lum =
@@ -390,9 +391,9 @@ export function createStudioRenderer(
       const phase = motionTime;
       const motion = stillMotion ? state.motion.type : "none";
       const motionAmount = state.motion.amount ?? 1;
-      const lightMotion = ["relight", "sheen", "glow", "shimmer", "mist"].includes(motion);
+      const lightMotion = isLightMotion(motion);
       // Motion reads the photo's own light and depth: built once per source frame, not per tick.
-      if (motion !== "none" && cuesKey !== prepared) { cues = buildPhotoCues(pixels, cols, rows, cues); cuesKey = prepared; }
+      if (motion !== "none" && cuesKey !== prepared) { cues = buildPhotoCues(photo, cols, rows, cues); cuesKey = prepared; }
       if (isDither) {
         const stableDither = stableComposition;
         if (!stableDither || ditherCacheKey !== key) {
@@ -421,7 +422,7 @@ export function createStudioRenderer(
                 const toneIndex = (y * cols + x) * 4;
                 sampleAmbient(motion, u, v, phase, ambient, (pixels[toneIndex]*.299+pixels[toneIndex+1]*.587+pixels[toneIndex+2]*.114)/255, cues ?? undefined, (y * cols + x) * PHOTO_CUE_STRIDE);
                 scaleMotion(ambient, motionAmount);
-                if (ambient[0] || ambient[1]) { sx = crisp(sx - ambient[0] / 960 * cols); sy = crisp(sy - ambient[1] / 960 * rows); }
+                if (ambient[0] || ambient[1]) { motionSource(ambient, sx, sy, cols, rows, moved); sx = moved[0]; sy = moved[1]; }
                 shift = ambient[2];
                 alpha *= ambient[3];
                 // Sub-cell advection must interpolate; rounding creates visible stepping.
@@ -445,6 +446,8 @@ export function createStudioRenderer(
         const chars = Array.from(ramps[state.style] ?? state.charset),
           ac = art.ctx;
         const accent = rgb(state.ink);
+        const rings = effect === "ripple" || effect === "etch";
+        const ringInk = rings && accent[0] * .299 + accent[1] * .587 + accent[2] * .114 < 90 ? [214, 214, 214] : accent;
         const glyphMode = state.style === "ascii" || !!ramps[state.style];
         const printStyle = isStudioPrintStyle(state.style) ? state.style : null;
         const font = Math.max(3, Math.round(ch * 0.92)),
@@ -524,16 +527,20 @@ export function createStudioRenderer(
               sampleAmbient(motion, x / cols, y / rows, phase, ambient, (pixels[ti] * .299 + pixels[ti + 1] * .587 + pixels[ti + 2] * .114) / 255, cues ?? undefined, (y * cols + x) * PHOTO_CUE_STRIDE);
               scaleMotion(ambient, motionAmount);
               if (ambient[0] || ambient[1]) {
-                sx = crisp(Math.max(0, Math.min(cols - 1, sx - ambient[0] / 960 * cols)));
-                sy = crisp(Math.max(0, Math.min(rows - 1, sy - ambient[1] / 960 * rows)));
+                motionSource(ambient, sx, sy, cols, rows, moved); sx = moved[0]; sy = moved[1];
               }
             }
             samplePixel(pixels, cols, rows, sx, sy, sampled);
+            // Rings drawn on an empty or near-black ground, where a tone lift alone would barely show.
+            let ring = 0;
+            if (rings && energy > .012 && (sampled[3] ? sampled[3] > 250 && sampled[0] * .299 + sampled[1] * .587 + sampled[2] * .114 < 30 : state.hover.scope === "outside")) {
+              const t = Math.min(1, (energy - .012) / .12); ring = t * t * (3 - 2 * t);
+            }
             if (!sampled[3]) {
               // Scoped "Around": tone hovers draw their own marks on a transparent ground, in the ink colour.
-              if (!(energy > .03 && state.hover.scope === "outside" && marksGround(effect))) continue;
-              sampled[0] = accent[0]; sampled[1] = accent[1]; sampled[2] = accent[2];
-              sampled[3] = Math.min(255, energy * 640);
+              if (!((ring || energy > .03) && state.hover.scope === "outside" && marksGround(effect))) continue;
+              sampled[0] = ringInk[0]; sampled[1] = ringInk[1]; sampled[2] = ringInk[2];
+              sampled[3] = ring ? 255 : Math.min(255, energy * 640);
             }
             const r = sampled[0], g = sampled[1], b = sampled[2];
             const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
@@ -550,7 +557,8 @@ export function createStudioRenderer(
               // Light mostly brightens the ink; characters change density only for part of it, so light glows rather than flickers.
               glyphLum = Math.max(0, Math.min(1, glyphLum + shift * (lightMotion ? .45 : 1)));
             } else glyphLum = lum;
-            alpha = (motion !== "none" ? ambient[3] : 1) * sampled[3] / 255 * (1 - fade);
+            if (ring) { lum = glyphLum = Math.max(lum, .1 + ring * .45); }
+            alpha = (motion !== "none" ? ambient[3] : 1) * sampled[3] / 255 * (1 - fade) * (ring ? .3 + ring * .45 : 1);
             if (!glyphMode && !printStyle && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
             // With one ink, density alone carries tone and a lit subject flattens into a uniform wash. Auto levels
             // let brightness carry it too: quiet glyphs in the shadows, full ink on the lights.

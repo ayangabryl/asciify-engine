@@ -64,20 +64,24 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
   let textMask: ReturnType<typeof createTextMask> | undefined;
   let pointer: { x: number; y: number; time: number } | null = null, pointerDirty = false;
   let pointerSamples: { x: number; y: number; time: number }[] = [];
-  let guide: HoverGuide | null = null, scope: SurfaceScope | undefined, guideDirty = true;
+  let guide: HoverGuide | null = null, scope: SurfaceScope | undefined, guideDirty = true, guidedAt = -Infinity;
+  // Two scope buffers in turn: the renderer re-uploads when the identity changes, and video rebuilds never allocate.
+  const scopeBuffers: Uint8Array[] = [new Uint8Array(0), new Uint8Array(0)];
+  let scopeBuffer = 0;
   const probe = document.createElement('canvas'), probeCtx = probe.getContext('2d', { willReadFrequently: true });
   // Subject coverage from the drawn artwork, at the field's resolution. Rebuilt when the still changes.
   const readGuide = () => {
     guideDirty = false;
     if (options.scope === 'all' && options.effect !== 'tilt') { scope = undefined; guide = null; field.setGuide(null); return; }
     if (!probeCtx || !source.width || !source.height) return;
-    probe.width = field.columns; probe.height = field.rows;
+    if (probe.width !== field.columns || probe.height !== field.rows) { probe.width = field.columns; probe.height = field.rows; }
     probeCtx.clearRect(0, 0, probe.width, probe.height); probeCtx.drawImage(source, 0, 0, probe.width, probe.height);
     try { guide = buildHoverGuide(probeCtx.getImageData(0, 0, probe.width, probe.height).data, probe.width, probe.height, null, guide); } catch { guide = null; }
     field.setGuide(guide);
     if (!guide || options.scope === 'all' || guide.key === 'none') { scope = undefined; return; }
-    // A fresh array per rebuild: the renderer re-uploads when the identity changes.
-    const pixels = new Uint8Array(guide.width * guide.height * 4);
+    scopeBuffer ^= 1;
+    if (scopeBuffers[scopeBuffer].length !== guide.width * guide.height * 4) scopeBuffers[scopeBuffer] = new Uint8Array(guide.width * guide.height * 4);
+    const pixels = scopeBuffers[scopeBuffer];
     for (let i = 0; i < guide.subject.length; i++) pixels[i * 4 + 3] = guide.subject[i] * 255;
     scope = { pixels, width: guide.width, height: guide.height, mode: options.scope };
   };
@@ -91,7 +95,7 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     if (!width || !height) return;
     const paused = reduced.matches || options.paused;
     field.configure(options.effect, options.strength, options.radius, options.edgeSafe, options.decay);
-    if (guideDirty) readGuide();
+    if (guideDirty) { readGuide(); guidedAt=now; }
     const active = field.active;
     if (!paused) {
       elapsed += last ? Math.min(.1,(now-last)/1000) : 0;
@@ -107,6 +111,8 @@ export function mountStudioHover(host: HTMLElement, source: HTMLCanvasElement, i
     const baseDue = dirty || options.animated && !paused && now-painted >= 1000/Math.max(1,Math.min(60,options.fps))-.5;
     if (baseDue || active || field.active || !paused && resolveMotion(options.motion) !== 'none') {
       if(baseDue) latestFrame=options.getFrame?.();
+      // A moving source moves its subject: re-read it with new frames, a few times a second.
+      if(baseDue && options.animated && guide && now-guidedAt>=160) { readGuide(); guidedAt=now; }
       compositor.render(baseDue,field.refraction,width,height,options.fontSize*options.charSpacing,options.fontSize/options.charAspect*options.charSpacing,latestFrame,{charset:options.charset,customText:options.customText,renderMode:options.renderMode,dotSizeRatio:options.dotSizeRatio,colorMode:options.colorMode??'fullcolor',accentColor:options.accentColor??'#888888',animationStyle:options.motion,animationSpeed:options.motionSpeed ?? 1,artStyle:'classic',fineDither:options.fineDither,ditherStrength:options.ditherStrength ?? 1} as AsciiOptions,elapsed,{filter:options.filter,edgeEffect:options.edgeEffect,edgeSoftness:options.edgeSoftness,textMask:textMask?.read(),scope});
       if(baseDue) painted=now; dirty=false;
     }

@@ -26,6 +26,21 @@ describe('water-surface hero interaction', () => {
     expect(surface.active).toBe(false);
     expect(sample(surface, .5, .5)).toEqual([0, 0, 0]);
   });
+  it('settles clearly: most of the wake is gone by one second and it is still by 1.8 s at the default decay', () => {
+    const peakOf = (surface: WaterSurface) => { let peak = 0; for (let y = 0; y <= 20; y++) for (let x = 0; x <= 20; x++) { const v = sample(surface, x / 20, y / 20); peak = Math.max(peak, Math.hypot(v[0], v[1])); } return peak; };
+    const run = (decay: number) => {
+      const surface = new WaterSurface(1.6); surface.configure('water', .55, .45, false, decay);
+      for (let n = 0; n <= 24; n++) { surface.move(.2 + n * .025, .5, n * 16); surface.step(1 / 60); }
+      surface.leave();
+      let peak = 0, atOne = 0, still = Infinity;
+      for (let n = 1; n <= 240; n++) { surface.step(1 / 60); const p = peakOf(surface); peak = Math.max(peak, p); if (n === 60) atOne = p / peak; if (!surface.active && still === Infinity) still = n / 60; }
+      return { atOne, still };
+    };
+    const standard = run(.5);
+    expect(standard.atOne).toBeLessThan(.08);
+    expect(standard.still).toBeLessThan(1.8);
+    expect(run(1).still).toBeGreaterThan(standard.still * 1.5);
+  });
   it('has consistent timing at different display rates', () => {
     const surfaces = [30, 60, 120].map(hz => {
       const surface = new WaterSurface();
@@ -89,5 +104,18 @@ describe('shared fixed-grid illumination', () => {
     surface.setMode('light'); expect(surface.active).toBe(false); expect(sample(surface,.5,.5)).toEqual([0,0,0]);
     surface.configure('none',1,1); surface.move(.5,.5); surface.step(1/60); expect(surface.active).toBe(false);
     surface.configure('water',0,1); surface.move(.3,.5); surface.move(.6,.5); surface.step(1/60); expect(surface.active).toBe(false);
+  });
+});
+
+describe('shared hover catalog', () => {
+  it('exports the catalog, controls and retired IDs from the light hover entry and the studio', async () => {
+    const hover = await import('../hover'), studio = await import('../studio');
+    for (const entry of [hover, studio]) {
+      expect(entry.STUDIO_HOVERS.map(h => h.value)).toContain('ripple');
+      expect(entry.DEPRECATED_STUDIO_HOVERS.rake).toBe('silk');
+      expect(entry.resolveHover('rake')).toBe('silk');
+      expect(entry.HOVER_CONTROLS.decay.default).toBe(.5);
+      expect(entry.DEFAULT_HOVER.radius).toBe(entry.HOVER_CONTROLS.radius.default);
+    }
   });
 });

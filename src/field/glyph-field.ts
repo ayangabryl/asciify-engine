@@ -1,6 +1,7 @@
 import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { InkTrail } from '../surface/ink-trail';
+import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
 import {
   FIELD_MARKS, activeFieldHover, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
@@ -407,10 +408,37 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       levels = [0, 1];
     }
   };
+  // Hover scope: the source's subject on a small grid, rebuilt with a still and a few times a second for video.
+  let scopeTexture: WebGLTexture | null = null, scopeGuide: HoverGuide | null = null, scopeOn = false, scopeAt = -Infinity;
+  let scopePixels = new Uint8Array(0), scopeContext: CanvasRenderingContext2D | null = null;
+  const measureScope = () => {
+    scopeOn = false;
+    if (!source || settings.scope === 'all') return;
+    const sw = sourceWidth || 1, sh = sourceHeight || 1;
+    const w = Math.max(8, Math.round(sw >= sh ? 96 : 96 * sw / sh)), h = Math.max(8, Math.round(sh >= sw ? 96 : 96 * sh / sw));
+    try {
+      scopeContext ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      if (!scopeContext) return;
+      const probe = scopeContext.canvas;
+      if (probe.width !== w || probe.height !== h) { probe.width = w; probe.height = h; } else scopeContext.clearRect(0, 0, w, h);
+      scopeContext.drawImage(source as CanvasImageSource, 0, 0, w, h);
+      scopeGuide = buildHoverGuide(scopeContext.getImageData(0, 0, w, h).data, w, h, null, scopeGuide);
+    } catch { return; }
+    if (scopeGuide.key === 'none') return;
+    if (scopePixels.length !== w * h * 4) scopePixels = new Uint8Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) scopePixels[i * 4 + 3] = Math.round(scopeGuide.subject[i] * 255);
+    scopeTexture ??= texture(gl.LINEAR);
+    gl.bindTexture(gl.TEXTURE_2D, scopeTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, scopePixels);
+    scopeOn = true;
+  };
   const uploadSource = () => {
     if (!source) return;
     const now = performance.now();
     if (!(source instanceof HTMLVideoElement) || now - levelsAt > 1500) { measureLevels(); levelsAt = now; }
+    if (!(source instanceof HTMLVideoElement) || now - scopeAt > 160) { measureScope(); scopeAt = now; }
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -536,6 +564,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); gl.uniform1i(u.uSource, 0);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(u.uFluid, 2);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(u.uTrailMap, 3);
+    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, scopeTexture ?? sourceTexture); gl.uniform1i(u.uScope, 6);
+    gl.uniform1f(u.uScopeMode, scopeOn && settings.scope !== 'all' ? (settings.scope === 'subject' ? 1 : 2) : 0);
     gl.uniform1f(u.uFluidMode, stableOn ? 1 : 0);
     gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : hover === 'loupe' ? 4 : hover === 'reveal' ? 5 : 0);
     gl.uniform1f(u.uTrailAmount, settings.trail.strength);
@@ -716,7 +746,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     lost = false;
     shaders.length = 0; vertexShader = null;
     cellProgram = pixelProgram = fluidProgram = null; cells = null;
-    fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false;
+    fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false; scopeTexture = null; scopeOn = false;
     try { init(); dirty = true; wake(); } catch (error) { report(error); }
   };
   canvas.addEventListener('webglcontextlost', onLost);
@@ -869,6 +899,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         awaitFont();
       }
       if (settings.levels !== before.levels) { measureLevels(); }
+      if (settings.scope !== before.scope && !lost) { measureScope(); scopeAt = performance.now(); }
       const wasFluid = !!before.fluid && activeFieldHover(before) === 'fluid';
       const fluidChanged = wasFluid !== wantsFluid() || (settings.fluid && before.fluid && settings.fluid.resolution !== before.fluid.resolution);
       if (fluidChanged) resizeFluid();
@@ -939,6 +970,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         for (const entry of [cellProgram, pixelProgram, fluidProgram]) if (entry) gl.deleteProgram(entry.program);
         stable?.dispose();
         if (trailTexture) gl.deleteTexture(trailTexture);
+        if (scopeTexture) gl.deleteTexture(scopeTexture);
         shaders.forEach(shader => gl.deleteShader(shader));
         if (vertexArray) gl.deleteVertexArray(vertexArray);
       }

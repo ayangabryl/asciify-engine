@@ -119,6 +119,16 @@ function offscreen(host: HTMLElement, box: { top: number; bottom: number } = hos
   const d = box.bottom < 0 ? -box.bottom : box.top - viewport();
   return d > 0 ? d : 0;
 }
+/**
+ * The top-most open modal dialog, or null. Everything outside it is covered however near the screen it lies, so it ranks
+ * behind every field the dialog shows. `:modal` lists dialogs in document order; the last is the top one for all but
+ * modals opened out of order, which a page rarely stacks.
+ */
+function topModal(): Element | null {
+  try { const open = doc?.querySelectorAll?.('dialog:modal'); return open?.length ? open[open.length - 1] : null; } catch { return null; }
+}
+// Covered fields rank this far beyond any real distance, behind every uncovered one but ahead of a detached one.
+const COVERED = 1e8;
 function judge(slot: Slot, box?: { top: number; bottom: number }) {
   if (slot.eager) { slot.wanted = true; return; }
   const vh = viewport(), d = offscreen(slot.host, box);
@@ -148,7 +158,11 @@ function observers() {
 
 function claim(slot: Slot) {
   // A field from another document (a test, a replaced iframe) no longer shares this page's contexts.
-  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = 0; }
+  if (doc !== slot.doc) {
+    doc = slot.doc; slots.clear(); frame = spent = 0;
+    // Closing a modal uncovers the page behind it: what it displaced comes back, even when the dialog drew no field.
+    doc.addEventListener?.('close', () => pump(), true);
+  }
   slots.add(slot);
   const list = observers();
   list?.forEach(o => o.observe(slot.host));
@@ -173,18 +187,23 @@ function pump(fromFrame = false) {
       if (fromFrame || t - windowAt > 16 || t < windowAt) { windowAt = t; spent = 0; }
       for (const slot of slots) if (slot.live && !slot.wanted) slot.release();
       const live = [...slots].filter(s => s.live);
-      const far = () => live.filter(s => s.live).map(s => [s, offscreen(s.host) + (s.eager ? 0 : 1e9)] as const).sort((a, b) => b[1] - a[1]);
+      const modal = topModal();
+      const covered = (s: Slot) => !!modal && !modal.contains(s.host);
+      const rank = (s: Slot) => offscreen(s.host) + (covered(s) ? COVERED : 0);
+      // A covered `lazy: false` field keeps no claim over one the open dialog shows.
+      const held = (s: Slot) => s.eager && !covered(s);
+      const far = () => live.filter(s => s.live).map(s => [s, rank(s) + (held(s) ? 0 : 1e9)] as const).sort((a, b) => b[1] - a[1]);
       // A lower budget releases the farthest at once.
       for (let over = live.length - budget, order = over > 0 ? far() : []; over > 0; over--) order.shift()?.[0].release();
-      const waiting = [...slots].filter(s => s.wanted && !s.live).map(s => [s, s.eager ? -1 : offscreen(s.host)] as const).sort((a, b) => a[1] - b[1]);
+      const waiting = [...slots].filter(s => s.wanted && !s.live).map(s => [s, s.eager ? -1 : rank(s)] as const).sort((a, b) => a[1] - b[1]);
       let mounted = 0;
       for (const [slot, d] of waiting) {
         if (!slots.has(slot) || slot.live) continue;
         if (!slot.eager && spent >= FRAME_MS && !(fromFrame && !mounted)) { frame ||= requestAnimationFrame(() => { frame = 0; pump(true); }); break; }
         if (live.filter(s => s.live).length >= budget) {
           const victim = far()[0]?.[0];
-          // The rest are farther still, so they wait too. Only another `lazy: false` field displaces one.
-          if (!victim || (!slot.eager && (victim.eager || offscreen(victim.host) <= d))) break;
+          // The rest are farther still, so they wait too. Only another `lazy: false` field displaces one on view.
+          if (!victim || (!slot.eager && (held(victim) || rank(victim) <= d))) break;
           victim.release();
         }
         const start = now();
@@ -370,6 +389,8 @@ function sweep(canvas: HTMLCanvasElement, place: string) {
   };
 }
 
+// How long a field waits for the browser to restore a lost context before it remounts on a fresh one.
+const LOST_MS = 1000;
 function freshCanvas(old: HTMLCanvasElement) {
   const next = document.createElement('canvas');
   for (const name of old.getAttributeNames?.() ?? []) if (name !== 'width' && name !== 'height') next.setAttribute(name, old.getAttribute(name)!);
@@ -381,7 +402,10 @@ function freshCanvas(old: HTMLCanvasElement) {
 }
 // Browsers keep about 16 WebGL contexts; give this one back now rather than when the canvas is collected.
 const loseContext = (canvas: HTMLCanvasElement) => {
-  try { (canvas.getContext('webgl2') as WebGL2RenderingContext | null)?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* already gone */ }
+  try {
+    const gl = canvas.getContext('webgl2') as WebGL2RenderingContext | null;
+    if (gl && !gl.isContextLost?.()) gl.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch { /* already gone */ }
 };
 
 export function liveField(config: LiveConfig): Live {
@@ -424,7 +448,7 @@ export function liveField(config: LiveConfig): Live {
     host, doc: document, eager: kit?.current.lazy === false, wanted: false, live: false,
     mount() {
       if (destroyed || real) return;
-      if (used) canvas = freshCanvas(canvas);
+      if (used) canvas = config.canvas = freshCanvas(canvas);
       used = true;
       merged = { ...config.options(), ...recorded };
       shown = undefined;
@@ -441,6 +465,16 @@ export function liveField(config: LiveConfig): Live {
       }
       real = field;
       slot.live = true;
+      // A context the browser takes back (Safari past its 16, a GPU reset) and does not restore leaves a blank canvas:
+      // the field is released to its poster and mounts again on a fresh canvas when the budget allows.
+      const drawn = canvas;
+      let gone = 0;
+      drawn.addEventListener?.('webglcontextlost', () => {
+        if (real !== field) return;
+        clearTimeout(gone);
+        gone = setTimeout(() => { if (real === field && canvas === drawn) { slot.release(); pump(); } }, LOST_MS) as unknown as number;
+      });
+      drawn.addEventListener?.('webglcontextrestored', () => clearTimeout(gone));
       if (paused) field.pause();
       void field.ready.then(() => {
         if (real !== field) return;
@@ -462,6 +496,9 @@ export function liveField(config: LiveConfig): Live {
       settings = field.settings;
       field.destroy();
       loseContext(canvas);
+      // Safari counts a lost context against its 16 for as long as its canvas lives, and past them loses the oldest
+      // live one: a released field gives its canvas up at once (a blank one waits in its place), so it can be collected.
+      if (!destroyed) { canvas = config.canvas = freshCanvas(canvas); used = false; }
       still?.show(true);
       config.onRelease?.();
     },

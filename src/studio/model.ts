@@ -1,4 +1,4 @@
-import { resolveSurfaceHover, type DeprecatedSurfaceHover, type SurfaceHover } from '../surface/hover-catalog';
+import { DEFAULT_HOVER, HOVER_CONTROLS, resolveSurfaceHover, type DeprecatedSurfaceHover, type SurfaceHover } from '../surface/hover-catalog';
 import { normalizeHoverScope, type HoverScope } from '../surface/hover-guide';
 import { MOTION_STYLES, resolveMotion, type AmbientMotion } from '../surface/ambient-motion';
 import { normalizeStudioCurves, type StudioCurves } from './curves';
@@ -489,9 +489,9 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       amount: n(a.amount, 1, 0, 2),
     },
     hover: {
-      effect: resolveSurfaceHover(p.effect) ?? "trail",
-      strength: n(p.strength, 0.55, 0, 1),
-      radius: n(p.radius, 0.2, 0.1, 1),
+      effect: resolveSurfaceHover(p.effect) ?? DEFAULT_HOVER.effect,
+      strength: n(p.strength, HOVER_CONTROLS.strength.default, HOVER_CONTROLS.strength.min, HOVER_CONTROLS.strength.max),
+      radius: n(p.radius, HOVER_CONTROLS.radius.default, HOVER_CONTROLS.radius.min, HOVER_CONTROLS.radius.max),
       edgeSafe: p.edgeSafe === true,
       // Defaults are left out, so saved settings and share links from before these options stay byte-identical.
       ...(normalizeHoverScope(p.scope) !== "all" && { scope: normalizeHoverScope(p.scope) }),

@@ -11,6 +11,7 @@ import type { HoverGuide } from './hover-guide';
 export type HeroHover = SurfaceHover | 'light' | 'scan';
 /** Any accepted hover input, including retired IDs that now play their closest current effect. */
 export type HoverInput = HeroHover | DeprecatedSurfaceHover;
+const QUIET_START = .2, QUIET_RAMP = .6, VELOCITY_GAIN = 3, HEIGHT_LEAK = 7;
 const displacementStrength = (mode: HeroHover, amount: number) =>
   mode === 'water' ? 30 * amount / .55 : mode === 'silk' ? 28 * amount : mode === 'vortex' ? 38 * amount :
   ['magnetic','scatter','elastic','lens','smudge'].includes(mode) ? 32 * amount :
@@ -80,6 +81,7 @@ export class WaterSurface implements PointerField {
   private energy = 0;
   private pending = false;
   private remainder = 0;
+  private quiet = 0;
   private readonly xScale: number;
   private readonly yScale: number;
 
@@ -185,14 +187,14 @@ export class WaterSurface implements PointerField {
         this.velocity[i] = Math.max(-12, this.velocity[i] - force);
       }
     }
-    this.pending = true;
+    this.pending = true; this.quiet = 0;
   }
   leave() { this.cursor?.leave(); this.ripple?.leave(); this.afterimage.leave(); this.contour.leave(); this.trail.leave(); this.previous = null; if (this.mode !== 'water' && this.lensStrength) this.pending = true; }
   clear() {
     this.trail.clear(); this.contour.clear(); this.afterimage.clear(); this.ripple?.clear(); this.cursor?.clear();
     this.heights.fill(0); this.velocity.fill(0); this.next.fill(0); this.normals.fill(0);
     this.refraction.focus[2] = 0;
-    this.previous = null; this.lensStrength = 0; this.energy = 0; this.pending = false; this.remainder = 0;
+    this.previous = null; this.lensStrength = 0; this.energy = 0; this.pending = false; this.remainder = 0; this.quiet = 0;
     for (let i = 0; i < this.waterPixels.length; i += 4) {
       this.waterPixels[i] = this.waterPixels[i + 2] = 128;
       this.waterPixels[i + 1] = this.waterPixels[i + 3] = 0;
@@ -209,10 +211,14 @@ export class WaterSurface implements PointerField {
     if (this.mode === 'trail') { this.trail.step(seconds); return; }
     if (this.mode !== 'water') { this.stepLight(Math.max(0, Math.min(.05, seconds))); return; }
     this.remainder += Math.max(0, Math.min(.05, seconds));
-    const dt = 1 / 120, damping = Math.exp(-3.8 * dt);
+    const dt = 1 / 120;
     const waveSpeed = Math.min(this.columns, this.rows) * .30;
     while (this.remainder + 1e-8 >= dt) {
       this.remainder -= dt;
+      // Damping firms up once the stroke stops, so the wake reads as one clear settle rather than a long low wobble.
+      this.quiet += dt;
+      const t = Math.max(0, Math.min(1, (this.quiet - QUIET_START) / QUIET_RAMP)), firm = t * t * (3 - 2 * t);
+      const damping = Math.exp(-(3.8 + firm * VELOCITY_GAIN) * dt), leak = Math.exp(-firm * HEIGHT_LEAK * dt);
       let peak = 0;
       for (let y = 1; y < this.rows - 1; y++) for (let x = 1; x < this.columns - 1; x++) {
         const i = y * this.columns + x, h = this.heights[i];
@@ -221,7 +227,7 @@ export class WaterSurface implements PointerField {
         const absorption = edge < 5 ? .88 + edge * .024 : 1;
         const speed = (this.velocity[i] + (laplacian * waveSpeed * waveSpeed - h * 8) * dt) * damping * absorption;
         this.velocity[i] = speed;
-        this.next[i] = (h + speed * dt) * absorption;
+        this.next[i] = (h + speed * dt) * absorption * leak;
         peak = Math.max(peak, Math.abs(this.next[i]), Math.abs(speed) * .1);
       }
       this.heights.set(this.next); this.energy = peak; this.pending = false;

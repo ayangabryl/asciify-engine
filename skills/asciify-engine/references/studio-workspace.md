@@ -93,7 +93,7 @@ Bounds: 4096 pixels per side and 16 megapixels for stills; video at most 3840×2
 
 ## Curated characters and the primary editor (2.0)
 
-The site opens the workspace directly at `/editor`. Upload media, choose Style, then use Canvas for framing/backdrops/masks, Effects for motion/hover/finishing, Looks for reuse, and Export for downloads/code. Optical finish and Lighting expand on demand; they keep applied values when collapsed. The prior editor remains at `/editor/classic` for earlier workflows.
+The site opens the workspace directly at `/editor`. Upload media, choose Style, then use Canvas for framing/backdrops/masks, Effects for motion/hover/finishing, Looks for reuse, and Export for downloads/code. Optical finish and Lighting expand on demand; they keep applied values when collapsed. The prior editor remains at `/editor/classic` for earlier workflows, including posting to the community. Its motion menu is the same Studio catalog, drawn by the core renderer through `animationStyle`.
 
 ```ts
 import { STUDIO_CHARACTER_SETS, updateStudioSettings } from 'asciify-engine/studio';

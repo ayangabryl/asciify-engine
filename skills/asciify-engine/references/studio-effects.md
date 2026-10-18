@@ -40,7 +40,7 @@ Nineteen hovers plus Off, in three families. All share `strength` (0–1), `radi
 | `etch` | Change characters | Signed light-and-shadow impression (“Emboss”). | Engraving, paper. |
 | `ripple` | Change characters | Expanding signed tonal wave packets; faster strokes ring stronger. | Dot, LED and tile looks. |
 | `bleed` | Change characters | Ink bleed: ink wells up where the cursor rests, spreads along a fibrous paper grain, then dries back from its edges. | Sumi, woodcut, stipple, pen and ink. |
-| `water` | Move the image | Damped height-field refraction that settles after the stroke. | Frosted glass, water, calm heroes. |
+| `water` | Move the image | Damped height-field refraction. Once the stroke stops the damping firms up: most of the wake is gone within about a second and it is still by about 1.7 s at the default `decay` (raise `decay` to linger). | Frosted glass, water, calm heroes. |
 | `silk` | Move the image | Directional folds that follow the hand. | Fabric, fashion, slow motion. |
 | `vortex` | Move the image | A swirling wake. | Playful, music. |
 | `magnetic` | Move the image | The image gathers toward the stroke, then relaxes. | Product details. |
@@ -55,7 +55,9 @@ Nineteen hovers plus Off, in three families. All share `strength` (0–1), `radi
 | `haze` | Follow the cursor | Heat haze: a rising shimmer bends the characters above the cursor, livelier while moving, calm at rest. | Neon, broadcast, dusk gradients. |
 | `none` | | No hover effect. | |
 
-Retired: `rake` (its combed strips tore the image) now plays `silk`. Saved settings and old integrations keep working; `DEPRECATED_STUDIO_HOVERS` lists the mapping. Cursor hovers (`loupe`, `reveal`, `repel`, `tilt`, `haze`) store a fraction of the artwork, so they scale with it; stroke hovers keep their CSS-pixel reach.
+The catalog lives in the engine: `STUDIO_HOVERS` (IDs, labels, groups, descriptions), `HOVER_SCOPES`, `HOVER_CONTROLS` (label, `min`, `max`, `step` and `default` of `radius`, `strength` and `decay`), `DEFAULT_HOVER`, `DEPRECATED_STUDIO_HOVERS`, `resolveHover(value)` and the `HoverEffect` type, exported from both `asciify-engine/hover` and `asciify-engine/studio`. Build pickers and sliders from these rather than copying them.
+
+Retired: `rake` (its combed strips tore the image) now plays `silk`. Saved settings and old integrations keep working; `DEPRECATED_STUDIO_HOVERS` lists the mapping. Cursor hovers (`loupe`, `reveal`, `repel`, `tilt`, `haze`) store a fraction of the artwork, so they scale with it; stroke hovers keep their CSS-pixel reach. On `/hover` the image moves in whole cells, read at each cell's centre, so characters are carried intact rather than smeared; a redrawn cell keeps the artwork's plain ground under it. Match `fontSize`, `charAspect` and `charSpacing` to the backing canvas's cells (for a Studio canvas: `fontSize` = cell size, `charAspect` = 1 / 1.65 for character styles).
 
 These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEffect` values. For example, passing `hoverEffect: 'water'` to the published engine is invalid.
 
@@ -76,7 +78,7 @@ How the subject is found, in order:
 3. **A plain ground.** An opaque image whose border is one even tone (a product or figure on black or white, as the Cutout, Halo overlay and Mascot sticker looks expect) is keyed by each area's distance from that tone.
 4. **Otherwise** (a busy edge-to-edge photo) there is no reliable subject, so every scope behaves like `'all'` rather than guessing.
 
-Coverage is feathered over about 2% of the short side, so a scoped hover fades softly at the boundary and never clips hard. Displacement, tone and light are all weighted by it. With `'outside'` on a transparent ground, tone hovers (Trail, Contour, Emboss, Ripple, Ink bleed, Heat haze) draw their own marks in the ink colour on the empty ground. In `/hover` the subject is read from the drawn canvas once per still (`invalidate()` rereads it); for video the first frame's subject is kept.
+Coverage is feathered over about 2% of the short side, so a scoped hover fades softly at the boundary and never clips hard. Displacement, tone and light are all weighted by it. With `'outside'` on a transparent ground, tone hovers (Trail, Contour, Emboss, Ripple, Ink bleed, Heat haze) draw their own marks in the ink colour on the empty ground. Ripple and Emboss also draw their own faint rings on a near-black opaque ground (in any scope that reaches it), where a tone lift alone barely shows. In `/hover` the subject is read from the drawn canvas once per still (`invalidate()` rereads it); with `animated: true` (video, GIF) it is re-read from new frames about six times a second on a small grid, reusing its buffers.
 
 ## Smart behaviour
 
@@ -86,7 +88,7 @@ Coverage is feathered over about 2% of the short side, so a scoped hover fades s
 
 ## Still-image motion and dither
 
-Still-image motion reads the photograph itself (its soft luminance, a relief normal, highlight nearness, local detail and an estimated depth, rebuilt per source frame) so light and movement are motivated by the image instead of laid over it. The `motion` IDs:
+Still-image motion reads the photograph itself (its soft luminance, a relief normal, highlight nearness, local detail, an estimated depth and where its water and sky are, rebuilt once per source frame) so light and movement are motivated by the image instead of laid over it. The `motion` IDs:
 
 | ID | Label | Group | What moves | Grid |
 |---|---|---|---|---|
@@ -98,7 +100,7 @@ Still-image motion reads the photograph itself (its soft luminance, a relief nor
 | `push` | Slow push | Depth | Ken Burns push toward the subject's center and back; nearer areas move slightly more. Never samples outside the frame. | resampled |
 | `focus` | Focus pull | Depth | Focus racks from subject to background and back; out-of-focus areas flatten toward their neighbourhood. | anchored |
 | `mist` | Mist | Atmosphere | Soft mist drifts through the distance and plain areas only. | anchored |
-| `current` | Drift | Atmosphere | Cinemagraph flow in smooth, distant areas; the detailed subject holds. | resampled |
+| `current` | Drift | Atmosphere | Cinemagraph: water swells sideways and glints, falling water streams down, sky and clouds slide very slowly. Subjects, buildings and land hold perfectly still. | resampled |
 | `develop` | Develop | Reveal | Holds, fades, then develops back in from highlights to shadows. | anchored |
 
 "Anchored" motions change light only. "Resampled" motions move the image through a fixed character grid, so every glyph stays aligned and readable. Light motions mostly brighten the ink and change character density for only part of the shift, so light glows instead of flickering. Every motion except Relight, Glints and Mist shows the untouched still at time 0, which is what reduced motion and a paused preview display. Retired IDs still load as their closest replacement (`DEPRECATED_STUDIO_MOTIONS`): `caustics` → `sheen`, `grain` → `shimmer`, `trace` → `relight`, `tidal`/`weave`/`breeze` → `current`, `reform`/`print`/`unfold` → `develop`. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
@@ -130,7 +132,11 @@ The pointer simulations have bounded storage. Elastic allocates its two velocity
 
 ## Lively images
 
-The catalogs contain nineteen active hover effects and ten active ambient motions, plus Off for each (see the table above). All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` (0–2) changes strength. These are local image treatments driven by the photo's own light and depth estimate, not AI-generated scene or subject motion; the depth estimate favours a subject found from alpha or a plain ground, then sharp, central, lower detail.
+The catalogs contain nineteen active hover effects and ten active ambient motions, plus Off for each (see the table above). All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` (0–2) changes strength. These are local image treatments driven by the photo's own light and depth estimate, not AI-generated scene or subject motion.
+
+**Depth** is a monocular estimate on a small analysis grid (up to 12,000 cells; larger grids are averaged down first), about 2–6 ms per source frame with no model or network. It fuses focus (fine and mid detail survive where the lens was focused; defocus is far), atmospheric perspective (haze lifts the darkest channel, lowers contrast and cools; dark areas abstain), a ground-plane prior (nearer toward the bottom, trusted only when the frame has a horizon: a long colour step across the width with rougher ground below), texture gradient (finer texture is farther on a receding surface) and colour saliency (a distinct, saturated, central region is near), each weighted by its own confidence. Sky is pushed far, and objects standing against it (a palm, a tower, a cable car) are left to the other cues. A subject cut out by alpha or a plain ground still wins. The fused map is smoothed with a colour guided filter, so it follows object edges instead of bleeding across them. Parallax, Slow push, Focus pull and Mist read it.
+
+**Water, sky and falls** (Drift) come from colour, texture, direction and position, read from the photograph before grading (contrast can clip a fall or a sky to flat white). Sky is smooth blue, a warm gradient or (with a horizon) night or cloud-white, reached from the top edge; a night sky must be plainer than the lit city under it, and clouds extend only a few cells out from the sky, so snow and pale walls touching it stay put. Water is blue-green to cyan in a real expanse (below the horizon when there is a sky), grown through foam, spray, glints and dark water and stopped by clearly hued objects (skin, a shell, a hull). A sea of any other colour (sunset, night harbour) is found by its reflection: below a ruler-straight waterline, each cell echoes the hue of the cell mirrored above it, is clearly darker, and itself looks like water (fine level ripples, or the dark of a night sea); every straight line is tried and the one whose echo explains the most cells wins. Falling water (a waterfall, a fountain) is bright, nearly colourless, streaked up and down, churning along its length (a column or a pleat is smooth top to bottom) and tall; it flows downward. All masks are snapped to the photo and eroded so the flow never samples across a subject's edge. A grayscale or single-ink grid has no hue to read, so Drift then finds less. Known gaps: rain is not treated as falling water, and a sea is found only where its waterline is straight and its sky is visible.
 
 `STUDIO_ANIMATION_PRESETS` is exported by `/studio` and `/hover`. Its seven entries have `id`, `label`, `description`, `motion: {type,speed,amount}`, and `hover: {effect,radius,strength}`. These are editable combinations, not additional renderer styles. Do not overwrite the rest of a user's settings to apply one:
 

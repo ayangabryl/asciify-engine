@@ -95,18 +95,18 @@ it.each(STUDIO_STYLES)('warps the sampled source before %s, caches during intera
 it('dither motion interpolates alpha and keeps hidden transparent RGB out of visible edges',()=>{
   // Inspect the resampling boundary before palette quantization changes RGB in place.
   vi.mocked(ditherPixels).mockImplementationOnce(()=>{});
-  const renderer=createStudioRenderer(canvas(),{style:'dither',dither:{amount:0,scale:1},motion:{type:'current',amount:2}}, {maxCells:12000});
+  const renderer=createStudioRenderer(canvas(),{style:'dither',dither:{amount:0,scale:1},motion:{type:'push',amount:2}}, {maxCells:12000});
   const source=canvas(),sample=contexts[2];
   sample.getImageData.mockImplementation((_x,_y,w,h)=>{
     const data=new Uint8ClampedArray(w*h*4);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++)data.set(x<w/2?[20,80,200,255]:[255,0,30,0],(y*w+x)*4);
     return {data};
   });
-  renderer.render(source,2,40,24);
+  renderer.render(source,5,40,24);
   const data=vi.mocked(ditherPixels).mock.calls.at(-1)![0];
   let partial=0;
   for(let i=0;i<data.length;i+=4)if(data[i+3]>0&&data[i+3]<255) {
-    // Drift adds a faint light ripple; hidden red must still never leak in.
+    // Drift holds subject edges still now, so the slow push carries the edge; hidden red must never leak in.
     partial++;[20,80,200].forEach((v,c)=>expect(Math.abs(data[i+c]-v)).toBeLessThanOrEqual(10));
   }
   expect(partial).toBeGreaterThan(0);renderer.destroy();

@@ -15,7 +15,7 @@ Every function takes these options:
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `ink` | per component | A CSS colour, a custom property (`'--brand'`) or `'var(--brand, #888)'`. Re-read when the theme changes (media query, or `class`/`data-theme` on `<html>` or `<body>`). Defaults pick light or dark ink from the element's own opaque background, else from its text colour. |
-| `look` | none | Raw glyph-field settings layered over the component's look: `charset`, `cellSize`, `font` and so on. |
+| `look` | none | Raw glyph-field settings layered over the component's look: `charset`, `cellSize`, `font` and so on. Pointer settings go here too: `hover`, `trail`, `lantern` and `scope` (`'all'` default, `'subject'`, `'outside'`), e.g. `look: { scope: 'outside' }` keeps a component's wake off a cut-out subject. |
 | `reducedMotion` | the visitor's setting | `true` or `false` to override `prefers-reduced-motion`. Reduced motion draws each state settled, in one frame. |
 | `lazy` | `true` | Mount the field only near the viewport and release it far from it. `false` mounts at once, wherever the element is. See Performance and integration. |
 | `poster` | none | A still image under the field: shown until the first GPU frame, while the field is released, and in its place without WebGL. |
