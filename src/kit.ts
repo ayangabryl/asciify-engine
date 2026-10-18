@@ -74,7 +74,6 @@ export { wordField } from './kit/backgrounds/word-field';
 export { fluid } from './kit/backgrounds/fluid';
 export { caustics } from './kit/backgrounds/caustics';
 export { contour } from './kit/backgrounds/contour';
-export { aurora } from './kit/backgrounds/aurora';
 export { ripple } from './kit/backgrounds/ripple';
 export { halo } from './kit/backgrounds/halo';
 export { interference } from './kit/backgrounds/interference';
@@ -82,6 +81,7 @@ export { mesh } from './kit/backgrounds/mesh';
 export { cascade } from './kit/backgrounds/cascade';
 export { constellation } from './kit/backgrounds/constellation';
 // Retired (@deprecated): still exported so existing code runs, hidden from the site and docs.
+export { aurora } from './kit/backgrounds/aurora';
 export { halftone } from './kit/backgrounds/halftone';
 export { circuit } from './kit/backgrounds/circuit';
 export { dna } from './kit/backgrounds/dna';

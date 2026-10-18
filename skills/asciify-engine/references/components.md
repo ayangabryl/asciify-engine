@@ -487,11 +487,11 @@ Prompt:
 ```ts
 import { background, swell } from 'asciify-engine/kit';
 
-// One of 13 presets. Import only the one you use; bg.setPreset(other) cross-fades to another.
+// One of 12 presets. Import only the one you use; bg.setPreset(other) cross-fades to another.
 const bg = background(heroSection, { preset: swell, clear: heroText });
 ```
 
-Any preset from [the kit reference](kit.md#backgrounds) fits the same call: `swell`, `drift`, `halo`, `caustics`, `contour`, `aurora`, `ripple`, `mesh`, `interference`, `constellation`, `cascade`, `wordField` and `fluid`, all on the GPU glyph field. `cursor: false` turns the pointer response off; `swell` takes `mark: 'glyph'` or a `charset` for characters instead of dots. For asciify.org's own hero ground, with the frosted veil and `pulse()`, use `fieldBackground(heroSection, { preset: 'hero', clear: heroText })`.
+Any preset from [the kit reference](kit.md#backgrounds) fits the same call: `swell`, `drift`, `halo`, `caustics`, `contour`, `ripple`, `mesh`, `interference`, `constellation`, `cascade`, `wordField` and `fluid`, all on the GPU glyph field. `cursor: false` turns the pointer response off; `swell` takes `mark: 'glyph'` or a `charset` for characters instead of dots. For asciify.org's own hero ground, with the frosted veil and `pulse()`, use `fieldBackground(heroSection, { preset: 'hero', clear: heroText })`.
 
 ## Advanced: raw field
 

@@ -86,3 +86,10 @@ it('varies local pigment colors only in source mode and keeps spatial grain stab
   expect(drawing('stipple',{seed:8}).commands).not.toEqual(drawing('stipple',{seed:9}).commands);
   expect(drawing('pointillism',{roughness:0}).commands).not.toEqual(drawing('pointillism',{roughness:1}).commands);
 });
+it('overlaps woodblock bands across cell borders so solid areas show no seams',()=>{
+  const {commands}=drawing('woodblock',{angle:0,roughness:0},1);
+  const shapes:number[][]=[];
+  for(const c of commands){if(c[0]==='move')shapes.push([c[1] as number]);else if(c[0]==='line')shapes[shapes.length - 1].push(c[1] as number);}
+  expect(shapes.length).toBeGreaterThan(0);
+  for(const xs of shapes){const left=Math.floor((Math.min(...xs)+1.5)/10)*10;expect(Math.min(...xs)).toBeLessThan(left);expect(Math.max(...xs)).toBeGreaterThan(left+10);}
+});

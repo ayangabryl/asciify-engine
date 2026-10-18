@@ -2,6 +2,9 @@ import { normalizeStudioPrint, type StudioPrintStyle } from './print-model';
 
 const TAU = Math.PI * 2;
 const clamp = (x: number) => Math.max(0, Math.min(1, x));
+/** Carved bands overlap their neighbors by a tenth of a cell: abutting antialiased edges otherwise leave a pale seam at every cell border. */
+const SEAM = .1;
+const bleed = (x: number) => Math.max(-SEAM, Math.min(1 + SEAM, x));
 // The carved edge is stationary texture, not motion. A bounded lookup avoids
 // millions of trigonometric evaluations while hovering dense woodblock grids.
 const sine = Float32Array.from({length:2048},(_,i)=>Math.sin(i / 2048 * TAU));
@@ -44,6 +47,7 @@ export function createPrintPainter(input: unknown) {
       if (Math.abs(dy) > 1e-8) { const a = -cy / dy, b = (1 - cy) / dy; start = Math.max(start, Math.min(a, b)); end = Math.min(end, Math.max(a, b)); }
       else if (cy < 0 || cy > 1) continue;
       if (end <= start) continue;
+      if (carved) { start -= SEAM; end += SEAM; }
       if (!carved) {
         // Roughness changes width, not screen placement, preserving line continuity.
         ctx.moveTo(px + (cx + dx * start) * cell, py + (cy + dy * start) * cell);
@@ -59,9 +63,9 @@ export function createPrintPainter(input: unknown) {
           const t = start + (end - start) * (side ? 5 - step : step) / 5;
           const cut = cuts[side ? 5-step : step];
           const edge = width * .5 * (1 + roughness * cut * .5) * (side ? -1 : 1);
-          // Clamping keeps broad carved strokes inside their sampled cell.
-          const vx = px + clamp(cx + dx * t + nx * edge) * cell;
-          const vy = py + clamp(cy + dy * t + ny * edge) * cell;
+          // Clamping keeps broad carved strokes inside their sampled cell, plus the seam overlap.
+          const vx = px + bleed(cx + dx * t + nx * edge) * cell;
+          const vy = py + bleed(cy + dy * t + ny * edge) * cell;
           if (!side && !step) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
         }
         ctx.closePath();

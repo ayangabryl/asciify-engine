@@ -12,10 +12,11 @@ export const STUDIO_LOOKS: {
     "Signature ASCII",
     "Clean characters in paper white on near black.",
     {
-      cellSize: 5,
-      ink: "#e6e3da",
+      cellSize: 4,
+      ink: "#ece9e0",
       backdrop: { mode: "solid", color: "#0b0b0a" },
-      color: { contrast: 1.12 },
+      color: { contrast: 1.25, gamma: 1.25 },
+      effects: { characterBloom: 0.12 },
     },
   ],
   [
@@ -74,10 +75,11 @@ export const STUDIO_LOOKS: {
     "Night signal",
     "Graphite characters with a faint optical fringe.",
     {
-      cellSize: 5,
-      ink: "#a9a69d",
+      cellSize: 4,
+      ink: "#cdc9be",
       backdrop: { mode: "solid", color: "#0b0b0a" },
-      effects: { prism: 0.18, scanlines: 0.08, vignette: 0.25 },
+      color: { contrast: 1.2, gamma: 1.2 },
+      effects: { prism: 0.2, scanlines: 0.08, vignette: 0.3, bloom: 0.12 },
     },
   ],
   [

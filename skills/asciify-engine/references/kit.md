@@ -502,10 +502,9 @@ Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning o
 | --- | --- | --- |
 | `swell` | A fine grid swelling in slow rolling waves, quiet in the middle; dots by default, or characters | 10, 1, lantern |
 | `drift` | Characters drifting slowly in broad soft lobes, clear round your content | 11, 1, trail |
-| `halo` | A corona breathing slowly round the middle, its rays turning; the centre stays empty for a headline | 11, 1, lantern |
-| `caustics` | Light focused by moving water: fine bright lines that fold, part and meet | 11, 1, lantern |
+| `halo` | A corona breathing slowly round the middle, shaped to the stage (wide on desktop, tall on a phone); the centre stays empty for a headline | 11, 1, lantern |
+| `caustics` | Light through moving water: soft filaments that interlace and lift a little where they cross | 11, 1, lantern |
 | `contour` | Survey lines over a slowly shifting terrain, one character wide, every fifth an index line | 11, 1, lantern |
-| `aurora` | Curtains of light folding across the top, sharp along their hems | 11, 1, lantern |
 | `ripple` | Still water: drops ring outward here and there; the pointer drops its own (`field.pulse`) | 11, 1, drops |
 | `mesh` | Four soft lights on slow paths, a gradient mesh across the whole ramp | 11, 1, trail |
 | `interference` | Two ring grids from orbiting centres; moiré bands open and close where they cross | 11, 1, lantern |
@@ -514,6 +513,6 @@ Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning o
 | `wordField` | Your word (`text`) as a flowing field of letters | 13, 1, trail |
 | `fluid` | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
 
-Retired presets are still exported, marked `@deprecated`, so code that imports them keeps running unchanged; they are no longer shown on the site or in these docs. Move to the closest current one: `halftone` → `drift` with `mark: 'dot'` (`cellSize: 14`), `dna` and `voidWell` → `halo`, `circuit` and `stars` → `constellation`, `fire`, `silk` and `veil` → `aurora`, `grid`, `weave` and `moire` → `interference`, `morph` and `noise` → `mesh`, `pulse` → `ripple`, `rain` → `cascade`, `terrain`, `dune` and `etch` → `contour`, `facet` → `caustics`, `wave` → `swell`. The retired canvas presets draw on a 2D canvas and also take `accent` and `dither`.
+Retired presets are still exported, marked `@deprecated`, so code that imports them keeps running unchanged; they are no longer shown on the site or in these docs. Move to the closest current one: `halftone` → `drift` with `mark: 'dot'` (`cellSize: 14`), `dna` and `voidWell` → `halo`, `circuit` and `stars` → `constellation`, `aurora`, `fire`, `silk` and `veil` → `mesh`, `grid`, `weave` and `moire` → `interference`, `morph` and `noise` → `mesh`, `pulse` → `ripple`, `rain` → `cascade`, `terrain`, `dune` and `etch` → `contour`, `facet` → `caustics`, `wave` → `swell`. The retired canvas presets draw on a 2D canvas and also take `accent` and `dither`.
 
 Your own preset is an object with `id`, `name`, `description`, `cellSize`, `speed`, `cursor` and `mount(context)`; `mountCanvas(context, draw)` runs a 2D template with the same clock and pointer as the built-ins.
