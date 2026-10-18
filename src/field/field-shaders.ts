@@ -284,6 +284,14 @@ void main(){
   }
   vec2 drift=uDrift*.006*vec2(sin(uv.y*5.3+uTime*.6),cos(uv.x*4.1-uTime*.5));
   vec2 sampleAt=uv-vec2(fluid.x/aspect,-fluid.y)*uRefraction*bend+drift;
+  float spot=0.;
+  if(uHoverMode==4||uHoverMode==5){
+    vec2 d=(uv-uLight.xy)*vec2(aspect,1.);
+    float q2=dot(d,d)/(uLightRadius*uLightRadius*2.2);
+    // Loupe: flat-topped zoom with a soft rim. Reveal: a soft spot in the source's colours.
+    if(uHoverMode==4) sampleAt-=(uv-uLight.xy)*exp(-q2*q2)*.45*uLight.z*min(1.,uLightGain*1.6);
+    else spot=exp(-q2*1.6)*uLight.z*min(1.,uLightGain*1.6);
+  }
   vec3 rgb,glow=vec3(0.);
   if(uScene==0){
     vec2 s=sampleAt*uSourceMap.xy+uSourceMap.zw;
@@ -300,6 +308,8 @@ void main(){
   tone=pow(tone,1./uGamma);
   if(uInvert>.5)tone=1.-tone;
   float flick=0.,trailFold=0.;
+  // Reveal: under the spot the characters take the source's own colour and a little more ink.
+  if(spot>0.)lift=spot*.22;
   if(uHoverMode==2){
     // Lantern: a soft light and its fading tail lift the characters they pass. Nothing moves the image.
     vec2 ap=vec2(aspect,1.),d=(uv-uLight.xy)*ap;
@@ -356,6 +366,7 @@ void main(){
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
   vec3 lifted=uHighlightAuto>.5?ink/max(max(ink.r,ink.g),max(ink.b,.06)):uHighlight;
   ink=mix(ink,lifted,wake*.7);
+  if(spot>0.)ink=mix(ink,clamp(rgb/max(max(rgb.r,rgb.g),max(rgb.b,.08))*(.45+.55*tone),0.,1.),spot);
   float underAlpha=max(uBackground.a,min(1.,max(glow.r,max(glow.g,glow.b))));
   vec3 under=min(uBackground.rgb*uBackground.a+glow,vec3(underAlpha));
   // Glyphs keep their atlas index, exact in 8 bits; the other marks keep the tone, and empty where the charset is blank.

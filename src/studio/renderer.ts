@@ -14,8 +14,8 @@ import {
 } from "./model";
 import { ditherPixels, noise, rgb } from "./dither";
 import { createStudioFinish } from "./finish";
-import { WaterSurface } from "../surface/water-surface";
-import { invertTrailTone } from "../surface/ink-trail";
+import { WaterSurface, hoverTone, marksGround } from "../surface/water-surface";
+import { buildHoverGuide, scopeWeight, type HoverGuide } from "../surface/hover-guide";
 export type StudioSource =
   HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap;
 export function studioSourceSize(s: StudioSource): [number, number] {
@@ -116,6 +116,49 @@ export function inkIndexLookup(coverage: number[], gamma = INK_GAMMA_MAX): Uint8
   }
   return lookup;
 }
+/** Draws mask shapes in white at w×h. */
+function paintMask(mc: CanvasRenderingContext2D, w: number, h: number, shapes: StudioSettings["mask"]["shapes"]) {
+  mc.clearRect(0, 0, w, h);
+  mc.fillStyle = "#fff";
+  mc.strokeStyle = "#fff";
+  mc.lineCap = "round";
+  mc.lineJoin = "round";
+  for (const s of shapes) {
+    mc.beginPath();
+    if (s.kind === "ellipse")
+      mc.ellipse(
+        (s.x + s.width / 2) * w,
+        (s.y + s.height / 2) * h,
+        (s.width * w) / 2,
+        (s.height * h) / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+    else if (s.kind === "rectangle")
+      mc.rect(s.x * w, s.y * h, s.width * w, s.height * h);
+    else {
+      mc.lineWidth = (s.size ?? 0.05) * w;
+      if (s.points?.length === 1) {
+        mc.arc(
+          s.points[0][0] * w,
+          s.points[0][1] * h,
+          mc.lineWidth / 2,
+          0,
+          Math.PI * 2,
+        );
+        mc.fill();
+        continue;
+      }
+      s.points?.forEach(([x, y], i) =>
+        i ? mc.lineTo(x * w, y * h) : mc.moveTo(x * w, y * h),
+      );
+      mc.stroke();
+      continue;
+    }
+    mc.fill();
+  }
+}
 /** Reusable bounded renderer. Call configure only when settings change; render owns no RAF. */
 export function createStudioRenderer(
   canvas: HTMLCanvasElement,
@@ -156,6 +199,9 @@ export function createStudioRenderer(
   let sourceIdentity: StudioSource | null = null,
     atlasKey = "";
   let flow = new WaterSurface();
+  // Subject coverage for scoped hovers and depth for Tilt, at the cell grid. Built only when a hover needs it.
+  let guide: HoverGuide | null = null, guideCells = new Float32Array(0);
+  const maskSample = surface(true), scopeLayer = surface(), revealLayer = surface();
   let aspect = 0;
   const field = [0, 0, 0];
   const ambient = [0, 0, 0, 1];
@@ -186,6 +232,7 @@ export function createStudioRenderer(
       state.hover.strength,
       state.hover.radius,
       state.hover.edgeSafe,
+      state.hover.decay,
     );
     flow.move(x, y, time);
   };
@@ -220,12 +267,14 @@ export function createStudioRenderer(
     if (aspect !== w / h) {
       aspect = w / h;
       flow = new WaterSurface(aspect);
+      flow.setGuide(guide);
     }
     flow.configure(
       state.hover.effect,
       state.hover.strength,
       state.hover.radius,
       state.hover.edgeSafe,
+      state.hover.decay,
     );
     flow.step(Math.max(0, Math.min(0.05, time - last)));
     last = time;
@@ -295,13 +344,37 @@ export function createStudioRenderer(
         levelHigh += (high - levelHigh) * ease;
         levelGamma += (gamma - levelGamma) * ease;
       }
+      const hv = state.hover, scope = hv.scope ?? "all";
+      if (hv.effect !== "none" && (scope !== "all" || hv.effect === "tilt")) {
+        let cover: Float32Array | null = null;
+        if (state.mask.enabled && state.mask.shapes.length) {
+          resize(maskSample.canvas, cols, rows);
+          maskSample.ctx.clearRect(0, 0, cols, rows);
+          paintMask(maskSample.ctx, cols, rows, state.mask.shapes);
+          const m = maskSample.ctx.getImageData(0, 0, cols, rows).data;
+          cover = new Float32Array(cols * rows);
+          for (let i = 0; i < cover.length; i++) cover[i] = state.mask.invert ? 1 - m[i * 4 + 3] / 255 : m[i * 4 + 3] / 255;
+        }
+        guide = buildHoverGuide(pixels, cols, rows, cover, guide);
+        if (guideCells.length !== cols * rows) guideCells = new Float32Array(cols * rows);
+        for (let i = 0; i < guideCells.length; i++) guideCells[i] = scopeWeight(scope, guide.subject[i], guide.key);
+        if (hv.effect === "reveal") {
+          resize(scopeLayer.canvas, cols, rows);
+          const layer = new ImageData(cols, rows);
+          for (let i = 0; i < guideCells.length; i++) layer.data[i * 4 + 3] = guideCells[i] * 255;
+          scopeLayer.ctx.putImageData(layer, 0, 0);
+        }
+      } else guide = null;
+      flow.setGuide(guide);
     }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
     const stillMotion = hasAmbientMotion(state);
     const patternMotion = hasPatternMotion(state);
     const stableComposition = !flow.active && !stillMotion && !patternMotion;
-    const compositionKey = [key, cols, rows, cell, ch, pixelRatio].join(":");
+    // A resting cursor hover (a loupe held still) stays drawn, so its pose is part of the cached composition.
+    const compositionKey = [key, cols, rows, cell, ch, pixelRatio, flow.signature].join(":");
+    const live = flow.engaged, effect = flow.effect;
     if (!stableComposition || compositionCacheKey !== compositionKey) {
       art.ctx.clearRect(0, 0, w, h);
       art.ctx.globalAlpha = 1;
@@ -315,7 +388,7 @@ export function createStudioRenderer(
           if (motionPixels.length !== pixels.length) motionPixels = new Uint8ClampedArray(pixels.length);
           const data = motionPixels;
           data.set(pixels);
-          if (flow.active || motion !== "none") {
+          if (live || motion !== "none") {
             for (let y = 0; y < rows; y++)
               for (let x = 0; x < cols; x++) {
                 const u = x / cols,
@@ -325,11 +398,14 @@ export function createStudioRenderer(
                   energy = 0,
                   gain = 1,
                   alpha = 1;
-                if (flow.active) {
+                if (live) {
                   flow.sample(u, v, field);
-                  sx -= field[0] * cols;
-                  sy -= field[1] * rows;
-                  energy = field[2] / 3;
+                  const weight = guide ? guideCells[y * cols + x] : 1;
+                  sx -= field[0] * weight * cols;
+                  sy -= field[1] * weight * rows;
+                  if (effect === "reveal") alpha = 1 - .72 * Math.min(1, field[2] * weight);
+                  else if (effect === "repel") alpha = 1 + Math.max(-1, field[2]) * weight;
+                  else energy = field[2] / 3 * weight;
                 }
                 const toneIndex = (y * cols + x) * 4;
                 sampleAmbient(motion, u, v, phase, ambient, (pixels[toneIndex]*.299+pixels[toneIndex+1]*.587+pixels[toneIndex+2]*.114)/255);
@@ -337,19 +413,13 @@ export function createStudioRenderer(
                 sx -= ambient[0] / 960 * cols;
                 sy -= ambient[1] / 960 * rows;
                 gain = 1 + ambient[2];
-                alpha = ambient[3];
+                alpha *= ambient[3];
                 // Sub-cell advection must interpolate; rounding creates visible stepping.
                 const i = (y * cols + x) * 4;
                 samplePixel(pixels,cols,rows,sx,sy,sampled);
                 for (let c = 0; c < 3; c++) {
                   const tone = sampled[c] / 255;
-                  let value =
-                    (["trail", "contour"].includes(state.hover.effect)
-                      ? invertTrailTone(tone, energy)
-                      : (state.hover.effect === "etch" || state.hover.effect === "ripple") ? Math.max(0, Math.min(1, tone + energy * .35))
-                      : state.hover.effect === "dissolve"
-                        ? tone * Math.max(0, 1 + energy)
-                        : tone) * gain;
+                  let value = hoverTone(effect, tone, energy) * gain;
                   data[i + c] = value * 255;
                 }
                 data[i + 3] = sampled[3] * alpha;
@@ -427,26 +497,28 @@ export function createStudioRenderer(
           for (let x = 0; x < cols; x++) {
             let sx = x,
               sy = y,
-              energy = 0;
-            if (flow.active) {
+              energy = 0,
+              fade = 0;
+            if (live) {
               flow.sample(x / cols, y / rows, field);
-              sx = Math.max(0, Math.min(cols - 1, x - field[0] * cols));
-              sy = Math.max(0, Math.min(rows - 1, y - field[1] * rows));
-              energy = field[2] / 3;
+              const weight = guide ? guideCells[y * cols + x] : 1;
+              sx = Math.max(0, Math.min(cols - 1, x - field[0] * weight * cols));
+              sy = Math.max(0, Math.min(rows - 1, y - field[1] * weight * rows));
+              if (effect === "reveal") fade = Math.min(1, field[2] * weight) * .72;
+              else if (effect === "repel") fade = -Math.max(-1, field[2]) * weight;
+              else energy = field[2] / 3 * weight;
             }
             samplePixel(pixels, cols, rows, sx, sy, sampled);
-            if (!sampled[3]) continue;
+            if (!sampled[3]) {
+              // Scoped "Around": tone hovers draw their own marks on a transparent ground, in the ink colour.
+              if (!(energy > .03 && state.hover.scope === "outside" && marksGround(effect))) continue;
+              sampled[0] = accent[0]; sampled[1] = accent[1]; sampled[2] = accent[2];
+              sampled[3] = Math.min(255, energy * 640);
+            }
             const r = sampled[0], g = sampled[1], b = sampled[2];
             const sourceLum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
             let lum = autoTone ? Math.max(0, Math.min(1, (sourceLum - levelLow) / levelSpan)) : sourceLum;
-            if (["trail", "contour"].includes(state.hover.effect) && energy)
-              lum = invertTrailTone(lum, energy);
-            else if ((state.hover.effect === "etch" || state.hover.effect === "ripple"))
-              lum = Math.max(0, Math.min(1, lum + energy * .35));
-            else if (state.hover.effect === "dissolve") {
-              const gain = Math.max(0, 1 + energy);
-              lum = printStyle && printPainter.settings.invert ? 1 - (1 - lum) * gain : lum * gain;
-            }
+            lum = hoverTone(effect, lum, energy, !!printStyle && printPainter.settings.invert);
             let px = x * cell,
               py = y * ch,
               alpha = 1;
@@ -455,7 +527,7 @@ export function createStudioRenderer(
             px += ambient[0] * w / 960;
             py += ambient[1] * h / 960;
             lum = Math.max(0, Math.min(1, lum + ambient[2]));
-            alpha = ambient[3] * sampled[3] / 255;
+            alpha = ambient[3] * sampled[3] / 255 * (1 - fade);
             if (!glyphMode && !printStyle && state.colorMode === "accent" && state.style !== "cmyk") alpha *= lum;
             // With one ink, density alone carries tone and a lit subject flattens into a uniform wash. Auto levels
             // let brightness carry it too: quiet glyphs in the shadows, full ink on the lights.
@@ -619,47 +691,7 @@ export function createStudioRenderer(
         art.ctx.globalCompositeOperation = "source-over";
       }
       if (state.mask.enabled && state.mask.shapes.length) {
-        const mc = mask.ctx;
-        mc.clearRect(0, 0, w, h);
-        mc.fillStyle = "#fff";
-        mc.strokeStyle = "#fff";
-        mc.lineCap = "round";
-        mc.lineJoin = "round";
-        for (const s of state.mask.shapes) {
-          mc.beginPath();
-          if (s.kind === "ellipse")
-            mc.ellipse(
-              (s.x + s.width / 2) * w,
-              (s.y + s.height / 2) * h,
-              (s.width * w) / 2,
-              (s.height * h) / 2,
-              0,
-              0,
-              Math.PI * 2,
-            );
-          else if (s.kind === "rectangle")
-            mc.rect(s.x * w, s.y * h, s.width * w, s.height * h);
-          else {
-            mc.lineWidth = (s.size ?? 0.05) * w;
-            if (s.points?.length === 1) {
-              mc.arc(
-                s.points[0][0] * w,
-                s.points[0][1] * h,
-                mc.lineWidth / 2,
-                0,
-                Math.PI * 2,
-              );
-              mc.fill();
-              continue;
-            }
-            s.points?.forEach(([x, y], i) =>
-              i ? mc.lineTo(x * w, y * h) : mc.moveTo(x * w, y * h),
-            );
-            mc.stroke();
-            continue;
-          }
-          mc.fill();
-        }
+        paintMask(mask.ctx, w, h, state.mask.shapes);
         art.ctx.globalCompositeOperation = state.mask.invert
           ? "destination-out"
           : "destination-in";
@@ -720,6 +752,24 @@ export function createStudioRenderer(
         out.filter = `blur(${1 + state.effects.characterBloom * 4}px)`;
         out.drawImage(glow.canvas, 0, 0, w, h);
         out.restore();
+      }
+      const spot = flow.spotlight;
+      if (spot && spot[2] > .002) {
+        // Reveal: the photograph under the characters, through a soft spotlight and the hover's scope.
+        resize(revealLayer.canvas, w, h);
+        const rc = revealLayer.ctx, r = spot[3] * Math.min(w, h) * 1.6;
+        rc.globalCompositeOperation = "source-over";
+        rc.clearRect(0, 0, w, h);
+        rc.drawImage(scene.canvas, 0, 0);
+        rc.globalCompositeOperation = "destination-in";
+        const g = rc.createRadialGradient(spot[0] * w, spot[1] * h, 0, spot[0] * w, spot[1] * h, r);
+        const a = Math.min(1, spot[2] * state.hover.strength / .55);
+        for (const q of [0, .2, .4, .6, .8, 1]) g.addColorStop(q, `rgba(0,0,0,${a * Math.exp(-2.4 * (q * 1.6) ** 2) * (1 - q)})`);
+        rc.fillStyle = g;
+        rc.fillRect(0, 0, w, h);
+        if (guide && (state.hover.scope ?? "all") !== "all") { rc.imageSmoothingEnabled = true; rc.drawImage(scopeLayer.canvas, 0, 0, w, h); }
+        rc.globalCompositeOperation = "source-over";
+        out.drawImage(revealLayer.canvas, 0, 0);
       }
       out.drawImage(art.canvas, 0, 0);
       compositionCacheKey = stableComposition ? compositionKey : "";
@@ -799,6 +849,9 @@ export function createStudioRenderer(
         inkMask,
         glow,
         stud,
+        maskSample,
+        scopeLayer,
+        revealLayer,
       ])
         s.canvas.width = s.canvas.height = 1;
       sourceIdentity = null;

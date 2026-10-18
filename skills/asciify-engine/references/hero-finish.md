@@ -59,6 +59,9 @@ For live video, coordinate the source loop with `animated: true, fps: 30` (or th
 | `colorMode` | `fullcolor` | Match source frame rendering: `fullcolor`, `grayscale`, `accent`, or `matrix`. |
 | `accentColor` | `#888888` | Six-digit hex ink color for `colorMode: 'accent'`. |
 | `effect` | `trail` | Trail transports cached source detail and remaps character density on a fixed grid. Other hover modes retain their own behavior. |
+| `scope` | `all` | `subject` keeps the hover on the subject, `outside` on the ground around it; read from the canvas's transparency or a plain ground. See studio-effects.md. |
+| `decay` | `0.5` | How long the effect lingers after the pointer moves on or leaves, 0–1. |
+| `touch` | `true` | Follow touch drags; scrolling still wins a vertical swipe. |
 
 `createTextMask(host, elements, onChange)` is also exported for custom integrations. Its `read()` returns a cached `{ canvas, revision }`; `invalidate()` refreshes it and `destroy()` releases observers. This helper does not itself draw ASCII.
 

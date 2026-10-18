@@ -30,25 +30,59 @@ The positioned host must fit the displayed source canvas. The surface appends a 
 
 ## Hover choices
 
-| Module `effect` | Behavior |
-| --- | --- |
-| `trail` | Density wake with a fading tail; glyph grid remains fixed. |
-| `water` | Local refraction; opt into protected boundaries with `edgeSafe: true`. |
-| `contour` | Expanding ring echoes along the pointer path. |
-| `dissolve` | Fading/reforming density trace with a lingering tail. |
-| `silk` | Directional folds following the stroke. |
-| `vortex` | Local rotational wake. |
-| `magnetic` | Attracts the field toward a stroke, then relaxes. |
-| `scatter` | Spatially varied radial scatter with a decaying wake. |
-| `etch` | Signed light-and-shadow impression; the glyph grid stays fixed. |
-| `elastic` | Directional momentum, damped recoil and a return to rest. |
-| `rake` | Alternating strips shear with the pointer, then align again. |
-| `lens` | Smooth local magnification, relaxing when the pointer stops. |
-| `smudge` | Directional source drag with a non-oscillating release. |
-| `ripple` | Expanding signed tonal wave packets; speed-sensitive and fixed-grid. |
-| `none` | No hover effect. |
+Nineteen hovers plus Off, in three families. All share `strength` (0–1), `radius` (0.1–1), `decay` (0–1, default .5: lower snaps back, higher lingers), `edgeSafe` and `scope` (below), in both `mountStudio` settings (`hover: {...}`) and `mountHover` options.
+
+| Module `effect` | Family | Behavior | Good for |
+| --- | --- | --- | --- |
+| `trail` | Change characters | Density wake with a fading tail; glyph grid stays fixed. The signature Asciify hover. | Any portrait or hero; the default. |
+| `dissolve` | Change characters | Erases a soft path through the characters; the image reforms. | Quiet editorial pages. |
+| `contour` | Change characters | Fine tonal rings trace the path. | Line-art and print looks. |
+| `etch` | Change characters | Signed light-and-shadow impression (“Emboss”). | Engraving, paper. |
+| `ripple` | Change characters | Expanding signed tonal wave packets; faster strokes ring stronger. | Dot, LED and tile looks. |
+| `bleed` | Change characters | Ink bleed: ink wells up where the cursor rests, spreads along a fibrous paper grain, then dries back from its edges. | Sumi, woodcut, stipple, pen and ink. |
+| `water` | Move the image | Damped height-field refraction that settles after the stroke. | Frosted glass, water, calm heroes. |
+| `silk` | Move the image | Directional folds that follow the hand. | Fabric, fashion, slow motion. |
+| `vortex` | Move the image | A swirling wake. | Playful, music. |
+| `magnetic` | Move the image | The image gathers toward the stroke, then relaxes. | Product details. |
+| `scatter` | Move the image | Characters scatter in soft low-frequency drifts and spring back with one rebound. | Playful campaigns. |
+| `elastic` | Move the image | Pushes with the stroke, recoils past rest once, settles in about a second. | Toys, mascots. |
+| `lens` | Move the image | Lens wake: a magnifying wake along the stroke. | Detail-rich photos. |
+| `smudge` | Move the image | Drags the image along the stroke, no bounce. | Painterly looks. |
+| `loupe` | Follow the cursor | A flat-topped glass loupe rides a slightly springy follow, magnifies what it covers and compresses through a soft rim with a faint glint. Shrinks a little while moving fast, settles when you stop. | Products, cut-outs, halo overlays. |
+| `reveal` | Follow the cursor | A soft spotlight shows the original photograph through the thinned characters (Studio). On `/hover`, which has no photograph, it lights the characters instead. | Editorial, cinema, cut-outs (`scope: 'subject'`). |
+| `repel` | Follow the cursor | Characters part around the cursor into a packed ring, leaving a soft clearing; on leave they spring back with one soft rebound. | Stickers, tiles, mosaics. |
+| `tilt` | Follow the cursor | The image leans toward the cursor like a parallax card; bright areas sit nearer and move more (depth from smoothed brightness). | Album covers, posters, lock screens. |
+| `haze` | Follow the cursor | Heat haze: a rising shimmer bends the characters above the cursor, livelier while moving, calm at rest. | Neon, broadcast, dusk gradients. |
+| `none` | | No hover effect. | |
+
+Retired: `rake` (its combed strips tore the image) now plays `silk`. Saved settings and old integrations keep working; `DEPRECATED_STUDIO_HOVERS` lists the mapping. Cursor hovers (`loupe`, `reveal`, `repel`, `tilt`, `haze`) store a fraction of the artwork, so they scale with it; stroke hovers keep their CSS-pixel reach.
 
 These are `/hover` module `effect` IDs, not the root engine’s legacy `HoverEffect` values. For example, passing `hoverEffect: 'water'` to the published engine is invalid.
+
+## Scope: on the subject, or around it
+
+`scope: 'all' | 'subject' | 'outside'` (default `'all'`; labels in `HOVER_SCOPES`: Everywhere, Subject, Around) decides where a hover acts.
+
+```ts
+await mountStudio(canvas, '/product-on-black.jpg', {
+  settings: { style: 'mixed', backdrop: { mode: 'transparent' }, hover: { effect: 'reveal', scope: 'subject' } },
+});
+mountHover(host, canvas, { effect: 'trail', scope: 'outside' }); // a wake around a cut-out, never across it
+```
+
+How the subject is found, in order:
+1. **Source alpha.** A transparent PNG, WebM or canvas: coverage is its alpha.
+2. **A drawn Studio mask** (`mask.enabled`): the mask is the subject (inverted masks invert it), multiplied with alpha.
+3. **A plain ground.** An opaque image whose border is one even tone (a product or figure on black or white, as the Cutout, Halo overlay and Mascot sticker looks expect) is keyed by each area's distance from that tone.
+4. **Otherwise** (a busy edge-to-edge photo) there is no reliable subject, so every scope behaves like `'all'` rather than guessing.
+
+Coverage is feathered over about 2% of the short side, so a scoped hover fades softly at the boundary and never clips hard. Displacement, tone and light are all weighted by it. With `'outside'` on a transparent ground, tone hovers (Trail, Contour, Emboss, Ripple, Ink bleed, Heat haze) draw their own marks in the ink colour on the empty ground. In `/hover` the subject is read from the drawn canvas once per still (`invalidate()` rereads it); for video the first frame's subject is kept.
+
+## Smart behaviour
+
+- Cursor hovers ease in on entry (no overshoot), start under the pointer instead of sliding in from the last exit, settle when the pointer rests and decay after it leaves; Repel releases with one soft rebound.
+- Touch: `mountHover` follows a finger while it drags (`touch: false` turns this off) and lets go when it lifts; a vertical swipe still scrolls the page. `mountStudio` follows touch drags on its canvas.
+- Reduced motion turns hovers off; hidden or offscreen surfaces stop drawing; a resting loupe stays drawn without redrawing every frame.
 
 ## Still-image motion and dither
 
@@ -71,7 +105,7 @@ Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanlin
 
 ## Catalogs and useful combinations (4.4)
 
-Build controls from `STUDIO_HOVERS` and `STUDIO_MOTIONS`, exported by `/studio` and `/hover`. Each entry includes `value`, `label`, `group`, and `description`. Use the `value` as the API ID; “Emboss” is `etch` and “Contour Light” is `trace`. Do not maintain a second hard-coded menu or use the legacy core hover IDs for these interactions.
+Build controls from `STUDIO_HOVERS`, `HOVER_SCOPES` and `STUDIO_MOTIONS`, exported by `/studio` and `/hover`. Each entry includes `value`, `label` and `description` (hovers also a `group`). Show the scope control as a segmented choice next to the hover settings. Use the `value` as the API ID; “Emboss” is `etch` and “Contour Light” is `trace`. Do not maintain a second hard-coded menu or use the legacy core hover IDs for these interactions.
 
 For a fixed grid, try Contour Light with Emboss. For continuous spatial movement, try Parallax with Elastic. For a fabric-like treatment, try Woven Flow with Rake. These are combinations of two independent settings, not additional art styles. Keep strength restrained until you have checked the source at actual display size.
 
@@ -81,7 +115,7 @@ The pointer simulations have bounded storage. Elastic allocates its two velocity
 
 ## Lively images (4.10)
 
-The catalogs contain fourteen active hover effects and fourteen active ambient motions, plus Off for each. New motion IDs are `relight`, `shimmer`, `breeze`, and `unfold`. Relight models midtones with a rotating light field; Shimmer slowly animates source highlights. Both keep geometry stationary. Breeze bends the image with a traveling sway. Unfold closes and opens staggered panels, then holds the complete image. All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` changes strength. These are local image treatments, not AI-generated scene or subject motion.
+The catalogs contain nineteen active hover effects and fourteen active ambient motions, plus Off for each. New motion IDs are `relight`, `shimmer`, `breeze`, and `unfold`. Relight models midtones with a rotating light field; Shimmer slowly animates source highlights. Both keep geometry stationary. Breeze bends the image with a traveling sway. Unfold closes and opens staggered panels, then holds the complete image. All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` changes strength. These are local image treatments, not AI-generated scene or subject motion.
 
 `STUDIO_ANIMATION_PRESETS` is exported by `/studio` and `/hover`. Its six entries have `id`, `label`, `description`, `motion: {type,speed,amount}`, and `hover: {effect,radius,strength}`. These are editable combinations, not additional renderer styles. Do not overwrite the rest of a user's settings to apply one:
 
@@ -101,6 +135,6 @@ For a complete integration with independent PNG/MP4 export, copy the repository'
 
 For `/hover`, the same catalog needs an explicit shape conversion: `surface.update({ motion: preset.motion.type, motionSpeed: preset.motion.speed, effect: preset.hover.effect, radius: preset.hover.radius, strength: preset.hover.strength })`. `/hover` has no `motion.amount` option; use Studio for independently adjustable motion strength. Do not spread the nested Studio groups directly into surface options.
 
-Ripple rings uses at most eight wave packets and a fixed-resolution field. It does not allocate particles per character. Lens and Smudge reuse the existing field; their release integrates elapsed time, not a fixed frame count. Zero strength suppresses hover input; completed wakes sleep. These bounds and tests are not a guaranteed frame rate on every device.
+Every hover runs on one fixed field (128 cells on the long side) whatever the image size; cursor hovers are a few springs plus that field, and Ink bleed diffuses on it in fixed sub-steps. Measured in the Studio renderer at 640×480, 6px cells: 5–7ms per frame p50 for every hover, under 10ms p95. Ripple rings uses at most eight wave packets and a fixed-resolution field. It does not allocate particles per character. Lens and Smudge reuse the existing field; their release integrates elapsed time, not a fixed frame count. Zero strength suppresses hover input; completed wakes sleep. These bounds and tests are not a guaranteed frame rate on every device.
 
 To export a loop of a photo, use duration `12 / speed`. Restrict the speed/duration to your encoder's limits and use a frame count that fits whole cycles. Film grain, dust, glitch, pattern animation and input videos may not loop at that boundary. Pointer paths are not included in offline export. Respect reduced motion and provide pause; do not advertise artificial depth as true scene reconstruction.

@@ -169,12 +169,17 @@ export function mountStudioMedia(
     renderer.leave();
     wake();
   };
+  // A lifted finger has left the artwork; a released mouse button has not.
+  const lift = (e: PointerEvent) => {
+    if (e.pointerType === "touch") leave();
+  };
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
     motion();
   });
   observer.observe(canvas);
   canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", lift);
   canvas.addEventListener("pointerleave", leave);
   canvas.addEventListener("pointercancel", leave);
   document.addEventListener("visibilitychange", motion);
@@ -185,6 +190,7 @@ export function mountStudioMedia(
     cancelAnimationFrame(frame);
     observer.disconnect();
     canvas.removeEventListener("pointermove", move);
+    canvas.removeEventListener("pointerup", lift);
     canvas.removeEventListener("pointerleave", leave);
     canvas.removeEventListener("pointercancel", leave);
     document.removeEventListener("visibilitychange", motion);

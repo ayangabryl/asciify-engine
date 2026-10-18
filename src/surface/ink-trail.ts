@@ -147,12 +147,13 @@ export class InkTrail {
   }
 }
 
-export const isDensityHover = (mode: string) => ['trail','contour','dissolve','etch','ripple'].includes(mode);
+export const isDensityHover = (mode: string) => ['trail','contour','dissolve','etch','ripple','bleed'].includes(mode);
+const signedDensity = (mode: string) => mode === 'etch' || mode === 'ripple' || mode === 'bleed';
 
 /** Shared signed-density texture contract for Canvas and GPU renderers. */
-export const densityHoverKind = (mode: string) => (mode === 'etch' || mode === 'ripple') ? 3 : mode === 'dissolve' ? 2 : mode === 'contour' ? 1 : 0;
+export const densityHoverKind = (mode: string) => signedDensity(mode) ? 3 : mode === 'dissolve' ? 2 : mode === 'contour' ? 1 : 0;
 export const decodeDensity = (pixels: Uint8Array, index: number, mode: string, amount: number) =>
-  ((mode === 'etch' || mode === 'ripple') ? (pixels[index] * 256 + pixels[index + 1] - 32768) / 32767 :
+  (signedDensity(mode) ? (pixels[index] * 256 + pixels[index + 1] - 32768) / 32767 :
     (pixels[index] * 256 + pixels[index + 1]) / 65535) * amount;
 
 /** Bounded reversal: sparse marks fill in, dense marks open up along the wake. */
@@ -201,14 +202,22 @@ export const INK_TRAIL_GLSL = `
 uniform float edgeSafe;
 uniform float trailAmount;
 uniform float trailKind;
+uniform sampler2D scopeMap;
+uniform float scopeMode;
+// Hover scope: 0 everywhere, 1 on the subject, 2 around it. The map holds soft subject coverage in alpha.
+float hoverScope(vec2 uv) {
+  if (scopeMode < .5) return 1.;
+  float s=texture2D(scopeMap,uv).a;
+  return scopeMode < 1.5 ? s : 1.-s;
+}
 vec4 trailField(vec2 address) {
   return texture2D(surface,(address*(surfaceSize-1.0)+.5)/surfaceSize);
 }
 float trailFieldDensity(vec4 field) {
-  float packed=field.r*65280.0+field.g*255.0;
-  return (trailKind>2.5?(packed-32768.)/32767.:packed/65535.)*trailAmount;
+  float raw=field.r*65280.0+field.g*255.0;
+  return (trailKind>2.5?(raw-32768.)/32767.:raw/65535.)*trailAmount;
 }
-float trailDensity(vec2 address) { return trailFieldDensity(trailField(address)); }
+float trailDensity(vec2 address) { return trailFieldDensity(trailField(address))*hoverScope(address); }
 float trailPin(vec2 cell, vec2 grid) {
   vec2 edge=min(cell,grid-1.0-cell);
   return mix(1.,smoothstep(1.0,5.0,min(edge.x,edge.y)),edgeSafe);
@@ -217,7 +226,7 @@ vec2 trailSource(vec2 cell, vec2 grid, vec4 field) {
   vec2 home=(cell+.5)/grid;
   if(trailKind>.5 || trailAmount<=0.) return home;
   float pin=trailPin(cell,grid);
-  float response=1.-exp(-trailFieldDensity(field)*pin*3.5);
+  float response=1.-exp(-trailFieldDensity(field)*hoverScope(home)*pin*3.5);
   vec2 drift=(field.ba*255.-128.)/127.;
   return clamp(home-drift*response*.026*pin,.5/grid,1.-.5/grid);
 }

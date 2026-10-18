@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.21: premium hovers that know the subject
+
+- Six new hovers: `loupe`, `reveal`, `repel`, `tilt`, `haze` and `bleed`; `scatter`, `elastic` and `ripple` are refined, and `rake` is deprecated (it plays `silk`).
+- Every hover takes `decay` (how long it lingers) and `scope: 'all' | 'subject' | 'outside'`: the subject comes from transparency, a drawn mask or an even plain ground, with a feathered edge; a busy full-bleed photo acts as `all`.
+- Hovers ease in, settle when the pointer stops, follow touch drags and stay off under reduced motion.
+- `mountHover` now runs on the GPU in Chrome (a reserved word in its shader forced the 2D fallback).
+
 ## 4.20: sharper presets, 61 looks, twelve backgrounds
 
 - Studio presets `ascii` (Signature ASCII) and `night` (Night signal) are retuned: finer 4px cells, brighter inks, lifted midtones and a faint glow.

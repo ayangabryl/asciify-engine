@@ -2,16 +2,41 @@ import { RippleField } from './ripple-field';
 import { AfterimageField, isAfterimageMode } from './afterimage-field';
 import { surfaceEdgeWeight } from './surface-edge';
 import { ContourField } from './contour-field';
-import { InkTrail } from './ink-trail';
-import type { SurfaceHover } from './hover-catalog';
+import { InkTrail, invertTrailTone } from './ink-trail';
+import { resolveSurfaceHover, type DeprecatedSurfaceHover, type SurfaceHover } from './hover-catalog';
 import type { PointerField } from './fluid-field';
+import { CursorField, isCursorMode } from './cursor-field';
+import type { HoverGuide } from './hover-guide';
 
 export type HeroHover = SurfaceHover | 'light' | 'scan';
+/** Any accepted hover input, including retired IDs that now play their closest current effect. */
+export type HoverInput = HeroHover | DeprecatedSurfaceHover;
 const displacementStrength = (mode: HeroHover, amount: number) =>
   mode === 'water' ? 30 * amount / .55 : mode === 'silk' ? 28 * amount : mode === 'vortex' ? 38 * amount :
-  ['magnetic','scatter','elastic','rake','lens','smudge'].includes(mode) ? 32 * amount : 0;
+  ['magnetic','scatter','elastic','lens','smudge'].includes(mode) ? 32 * amount :
+  // Cursor hovers store UV displacement over .16, so they scale with the artwork rather than in fixed pixels.
+  ['loupe','repel','tilt','haze'].includes(mode) ? .16 * amount / .55 : 0;
+/** Maps the 0..1 `decay` option to a settle-speed multiplier: .5 is the tuned default, 0 snaps back, 1 lingers. */
+export const hoverSettle = (decay = .5) => Math.pow(2, (.5 - (Number.isFinite(decay) ? Math.max(0, Math.min(1, decay)) : .5)) * 2.4);
 
 export { surfaceEdgeWeight } from './surface-edge';
+
+/** The CPU renderers' tone response to a sampled hover energy (sample()[2] / 3). */
+export function hoverTone(effect: HeroHover, tone: number, energy: number, invert = false) {
+  if (!energy) return tone;
+  const clamp = (n: number) => Math.max(0, Math.min(1, n));
+  switch (effect) {
+    case 'trail': case 'contour': return invertTrailTone(tone, energy);
+    case 'etch': case 'ripple': return clamp(tone + energy * .35);
+    case 'dissolve': { const gain = Math.max(0, 1 + energy); return invert ? 1 - (1 - tone) * gain : tone * gain; }
+    case 'bleed': return clamp(tone + energy * (invert ? -.6 : .6));
+    case 'loupe': return clamp(tone + energy * .3);
+    case 'haze': return clamp(tone + energy * .5);
+    default: return tone;
+  }
+}
+/** Hovers that write character tone, and so can draw marks onto an empty ground. */
+export const marksGround = (effect: HeroHover) => ['trail','contour','etch','ripple','bleed','haze'].includes(effect);
 
 export interface SurfaceRefraction {
   width: number;
@@ -24,6 +49,8 @@ export interface SurfaceRefraction {
   edgeSafe?: boolean;
   /** Normalized focus and settled intensity; lighting never modifies geometry. */
   focus: [number, number, number, number];
+  /** Strength is a fraction of the scene rather than CSS pixels. */
+  relative?: boolean;
 }
 
 /** Damped shallow-water height field. Pointer travel excites a surface, not a translation. */
@@ -35,6 +62,8 @@ export class WaterSurface implements PointerField {
   private readonly contour: ContourField;
   private readonly afterimage: AfterimageField;
   private ripple: RippleField | null = null;
+  private cursor: CursorField | null = null;
+  private settle = 1;
   private readonly waterPixels: Uint8Array;
   private readonly heights: Float32Array;
   private readonly velocity: Float32Array;
@@ -75,32 +104,52 @@ export class WaterSurface implements PointerField {
     this.clear();
   }
   get invertsDensity() { return this.mode === 'trail'; }
-  get densityTrail() { return ['trail','contour','dissolve','etch','ripple'].includes(this.mode); }
+  get densityTrail() { return ['trail','contour','dissolve','etch','ripple','bleed'].includes(this.mode); }
   get hasRefraction() { return this.active || this.lensStrength > .00015; }
-  get active() { if(this.mode==='ripple')return this.ripple?.active??false; if(isAfterimageMode(this.mode))return this.afterimage.active; if(this.mode==='contour') return this.contour.active; if (this.mode === 'trail') return this.trail.active; return this.pending || this.energy > .00015; }
-  setMode(mode: HeroHover) {
+  /** The current effect, after retired IDs are mapped. */
+  get effect() { return this.mode; }
+  /** Something is visible, though it may be at rest (a loupe held still). */
+  get engaged() { return isCursorMode(this.mode) ? this.cursor!.engaged : this.active; }
+  /** Spotlight centre, presence and radius while Reveal is engaged. */
+  get spotlight() { return this.mode === 'reveal' && this.cursor ? this.cursor.focus : null; }
+  /** Changes whenever a resting cursor hover would draw differently. */
+  get signature() { return isCursorMode(this.mode) && this.cursor!.engaged ? this.cursor!.focus.map(n => n.toFixed(4)).join(',') : ''; }
+  /** Subject coverage and depth, for scoped and depth-aware hovers. */
+  setGuide(guide: HoverGuide | null) { if (this.cursor) this.cursor.guide = guide; this.guide = guide; }
+  private guide: HoverGuide | null = null;
+  get active() { if(isCursorMode(this.mode))return this.cursor!.active; if(this.mode==='ripple')return this.ripple?.active??false; if(isAfterimageMode(this.mode))return this.afterimage.active; if(this.mode==='contour') return this.contour.active; if (this.mode === 'trail') return this.trail.active; return this.pending || this.energy > .00015; }
+  setMode(input: HoverInput) {
+    const mode: HeroHover = input === 'light' || input === 'scan' ? input : resolveSurfaceHover(input) ?? 'none';
     if (mode === this.mode) return;
     this.clear(); this.mode = mode; this.refraction.mode = mode;
     if(isAfterimageMode(mode))this.afterimage.setMode(mode);
     if(mode==='ripple'&&!this.ripple)this.ripple=new RippleField(this.columns,this.rows);
-    this.refraction.pixels = mode === 'ripple' ? this.ripple!.pixels : mode === 'trail' ? this.trail.pixels : mode === 'contour' ? this.contour.pixels : isAfterimageMode(mode) ? this.afterimage.pixels : this.waterPixels;
+    if(isCursorMode(mode)){ this.cursor??=new CursorField(this.columns,this.rows); this.cursor.guide=this.guide; this.cursor.setMode(mode); }
+    this.refraction.pixels = isCursorMode(mode) ? this.cursor!.pixels : mode === 'ripple' ? this.ripple!.pixels : mode === 'trail' ? this.trail.pixels : mode === 'contour' ? this.contour.pixels : isAfterimageMode(mode) ? this.afterimage.pixels : this.waterPixels;
     this.refraction.strength = displacementStrength(mode, this.amount);
+    this.refraction.relative = isCursorMode(mode);
   }
-  configure(mode: HeroHover, amount = .55, radius = .2, edgeSafe = false) {
+  /** `decay` (0..1, default .5) sets how long the effect lingers after the pointer moves on or leaves. */
+  configure(mode: HoverInput, amount = .55, radius = .2, edgeSafe = false, decay = .5) {
     this.setMode(mode);
+    this.settle = hoverSettle(decay);
     this.refraction.edgeSafe = edgeSafe;
     this.afterimage.edgeSafe = edgeSafe;
     if(this.ripple)this.ripple.edgeSafe=edgeSafe;
     this.amount = Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : .55;
     this.radius = Number.isFinite(radius) ? Math.max(.1, Math.min(1, radius)) : .2;
-    this.refraction.strength = displacementStrength(mode, this.amount);
+    if(this.cursor){ this.cursor.edgeSafe=edgeSafe; this.cursor.settle=this.settle; this.cursor.setRadius(this.radius); }
+    this.refraction.strength = displacementStrength(this.mode, this.amount);
     this.refraction.focus[2] = this.densityTrail ? this.amount : this.lensStrength * this.amount;
     this.refraction.focus[3] = this.radius;
+    if(this.mode==='reveal'||this.mode==='repel') this.syncSpot();
   }
+  private syncSpot() { const f=this.cursor!.focus; this.refraction.focus=[f[0],f[1],f[2]*(this.mode==='repel'?Math.min(1,this.amount/.55):this.amount),f[3]]; }
   move(x: number, y: number, time?: number) {
     if (this.mode === 'none' || this.amount === 0) return;
     if (!Number.isFinite(x + y)) return;
     x = Math.max(0, Math.min(1, x)); y = Math.max(0, Math.min(1, y));
+    if(isCursorMode(this.mode)){this.cursor!.move(x,y,time);return;}
     if(this.mode==='ripple'){this.ripple!.move(x,y,this.radius,time);return;}
     if(isAfterimageMode(this.mode)){this.afterimage.move(x,y,this.radius);return;}
     if (this.mode === 'contour') { this.contour.move(x,y,this.radius); return; }
@@ -138,9 +187,9 @@ export class WaterSurface implements PointerField {
     }
     this.pending = true;
   }
-  leave() { this.ripple?.leave(); this.afterimage.leave(); this.contour.leave(); this.trail.leave(); this.previous = null; if (this.mode !== 'water' && this.lensStrength) this.pending = true; }
+  leave() { this.cursor?.leave(); this.ripple?.leave(); this.afterimage.leave(); this.contour.leave(); this.trail.leave(); this.previous = null; if (this.mode !== 'water' && this.lensStrength) this.pending = true; }
   clear() {
-    this.trail.clear(); this.contour.clear(); this.afterimage.clear(); this.ripple?.clear();
+    this.trail.clear(); this.contour.clear(); this.afterimage.clear(); this.ripple?.clear(); this.cursor?.clear();
     this.heights.fill(0); this.velocity.fill(0); this.next.fill(0); this.normals.fill(0);
     this.refraction.focus[2] = 0;
     this.previous = null; this.lensStrength = 0; this.energy = 0; this.pending = false; this.remainder = 0;
@@ -151,6 +200,9 @@ export class WaterSurface implements PointerField {
   }
   step(seconds: number) {
     if (!this.active || !Number.isFinite(seconds)) return;
+    if(isCursorMode(this.mode)){this.cursor!.step(seconds);if(this.mode==='reveal'||this.mode==='repel')this.syncSpot();return;}
+    // Stroke memories decay on their own clocks; `decay` stretches or shortens that clock.
+    seconds*=this.settle;
     if(this.mode==='ripple'){this.ripple!.step(seconds);return;}
     if(isAfterimageMode(this.mode)){this.afterimage.step(seconds);return;}
     if (this.mode === 'contour') { this.contour.step(seconds); return; }
@@ -198,6 +250,7 @@ export class WaterSurface implements PointerField {
     this.refraction.focus = [this.lensX, this.lensY, this.lensStrength * this.amount, this.radius];
   }
   sample(x: number, y: number, out: number[]) {
+    if(isCursorMode(this.mode)){this.cursor!.sample(x,y,out);out[0]*=this.amount/.55;out[1]*=this.amount/.55;out[2]*=this.mode==='reveal'||this.mode==='repel'?Math.min(1,this.amount/.55):this.amount*3;return;}
     if(this.mode==='ripple'){this.ripple!.sample(x,y,out);out[2]*=this.amount;return;}
     if(isAfterimageMode(this.mode)){this.afterimage.sample(x,y,out);out[0]*=this.amount;out[1]*=this.amount;out[2]*=this.amount;return;}
     if(this.mode==='contour'){out[0]=out[1]=0;out[2]=this.contour.sample(x,y)*this.amount*3;return;}
@@ -229,7 +282,8 @@ uniform vec4 hoverFocus;
 float surfaceLight(vec2 uv, vec2 size) {
   vec2 delta = (uv - hoverFocus.xy) * size / min(size.x, size.y) / hoverFocus.w;
   float light = exp(-3.0 * dot(delta, delta));
-  if (hoverMode > 1.5) light = (exp(-delta.x * delta.x * 110.0) * 1.3 - exp(-delta.x * delta.x * 12.0) * .3) * exp(-delta.y * delta.y * 1.8);
+  if (hoverMode > 2.5) light = -smoothstep(.85, .35, length(delta));
+  else if (hoverMode > 1.5) light = (exp(-delta.x * delta.x * 110.0) * 1.3 - exp(-delta.x * delta.x * 12.0) * .3) * exp(-delta.y * delta.y * 1.8);
   return hoverMode > .5 ? light * hoverFocus.z : 0.0;
 }
 vec3 illuminate(vec3 ink, float light) {

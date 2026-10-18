@@ -42,7 +42,8 @@ describe('expanded local effects', () => {
   it('uses a real restoring spring: displacement crosses rest and decays', () => {
     const f=new AfterimageField(128,72);f.setMode('elastic');f.move(.3,.5,.5);f.move(.7,.5,.5);
     const values:number[]=[];
-    for(let i=0;i<120;i++){f.step(1/120);const v=[0,0,0];f.sample(.5,.5,v);values.push(v[0]);}
+    // One visible rebound, settled within about 1.5 seconds.
+    for(let i=0;i<180;i++){f.step(1/120);const v=[0,0,0];f.sample(.5,.5,v);values.push(v[0]);}
     expect(Math.max(...values)).toBeGreaterThan(.001);
     expect(Math.min(...values)).toBeLessThan(-.0001);
     expect(Math.abs(values.at(-1)!)).toBeLessThan(Math.max(...values)*.02);
