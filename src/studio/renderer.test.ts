@@ -106,7 +106,8 @@ it('dither motion interpolates alpha and keeps hidden transparent RGB out of vis
   const data=vi.mocked(ditherPixels).mock.calls.at(-1)![0];
   let partial=0;
   for(let i=0;i<data.length;i+=4)if(data[i+3]>0&&data[i+3]<255) {
-    partial++;expect([...data.slice(i,i+3)]).toEqual([20,80,200]);
+    // Drift adds a faint light ripple; hidden red must still never leak in.
+    partial++;[20,80,200].forEach((v,c)=>expect(Math.abs(data[i+c]-v)).toBeLessThanOrEqual(10));
   }
   expect(partial).toBeGreaterThan(0);renderer.destroy();
 });

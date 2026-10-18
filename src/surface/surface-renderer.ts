@@ -1,6 +1,7 @@
 import { EDGE_FINISH_GLSL, finishSettings, type SurfaceFinish } from './surface-finish';
 import { createTextMaskPainter, type TextMaskFrame } from './text-mask';
 import { AMBIENT_GLSL, AmbientTimeline, resolveMotion, motionId, isFineDither, sampleAmbient, printGrain } from './ambient-motion';
+import { buildPhotoCues, packPhotoCues, PHOTO_CUE_STRIDE, type PhotoCues } from './photo-cues';
 import type { AsciiFrame, AsciiOptions } from '../types';
 import { INK_TRAIL_GLSL, densityHoverKind, decodeDensity, isDensityHover, sampleFlowGlyph, flowTrailIndex } from './ink-trail';
 import { createTrailGlyphs } from './trail-glyphs';
@@ -29,6 +30,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
   const timeline = new AmbientTimeline();
   const glyphs=createTrailGlyphs();
   let glyphData: ReturnType<typeof glyphs.update>|null=null;
+  let cues: PhotoCues | null = null, cueSource: object | null = null, cueRgba = new Uint8Array(0), cuePixels = new Uint8Array(0);
   let locations: Record<string, WebGLUniformLocation | null> = {};
   const attach = () => {
     canvas.className = 'ascii-hover-surface';
@@ -70,7 +72,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
       uniform vec2 gridSize; uniform vec2 atlasSize; uniform vec2 tileSize;
       uniform float atlasColumns; uniform float padding; uniform float glyphCount;
       uniform float dots; uniform float dotSize; uniform float directGlyphs; uniform vec4 backdrop;
-      uniform float edgeEffect; uniform sampler2D textMask; uniform float hasTextMask;
+      uniform float edgeEffect; uniform sampler2D textMask; uniform float hasTextMask; uniform sampler2D cueMap;
       ${EDGE_FINISH_GLSL}
       ${INK_TRAIL_GLSL}
       ${AMBIENT_GLSL}
@@ -113,7 +115,14 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           vec2 unit = relativeStrength > .5 ? vec2(1.) : 1. / sceneSize;
           uv -= slope * strength * mix(1.,smoothstep(2.,8.,min(edge.x,edge.y)),edgeSafe) * hoverScope(uv) * unit;
         }
-        vec4 ambient=ambientAt(uv,motionMode>9.5?toneAt(uv):.5);
+        vec4 ambient=vec4(0.,0.,0.,1.);
+        if(motionMode>.5) {
+          vec4 cue=texture2D(cueMap,uv);
+          vec2 step=1./gridSize;
+          vec2 slope=vec2(texture2D(cueMap,uv+vec2(step.x,0.)).x-texture2D(cueMap,uv-vec2(step.x,0.)).x,texture2D(cueMap,uv+vec2(0.,step.y)).x-texture2D(cueMap,uv-vec2(0.,step.y)).x);
+          // Bright reads as raised; normals lean away from the brighter side.
+          ambient=ambientAt(uv,toneAt(uv),cue,-slope/max(length(slope),1e-4)*smoothstep(0.,.06,length(slope)));
+        }
         uv -= ambient.xy/sceneSize;
         pixel=uv*sceneSize;
         vec4 ink = vec4(0.);
@@ -183,14 +192,14 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
     buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
     const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount'].map(k => [k,gl!.getUniformLocation(program!,k)]));
-    for (let unit=0; unit<7; unit++) {
+    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount', 'cueMap', 'motionFocus'].map(k => [k,gl!.getUniformLocation(program!,k)]));
+    for (let unit=0; unit<8; unit++) {
       const texture=gl.createTexture()!; textures.push(texture); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
     }
-    gl.uniform1i(locations.textMask,5); gl.uniform1i(locations.scopeMap,6);
+    gl.uniform1i(locations.textMask,5); gl.uniform1i(locations.scopeMap,6); gl.uniform1i(locations.cueMap,7);
     gl.uniform1i(locations.codes,2); gl.uniform1i(locations.cellColors,3); gl.uniform1i(locations.glyphAtlas,4);
     gl.uniform1i(locations.artwork,0); gl.uniform1i(locations.surface,1);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
@@ -231,6 +240,19 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           gl.uniform2f(locations.tileSize,plan.tileWidth,plan.tileHeight); gl.uniform1f(locations.atlasColumns,plan.atlasColumns);
           gl.uniform1f(locations.padding,plan.padding); gl.uniform1f(locations.glyphCount,plan.glyphs.length);
           gl.uniform1f(locations.dots,glyphData.dots?1:0); gl.uniform1f(locations.dotSize,glyphData.dotSize);
+        }
+      }
+      if (mode !== 'none' && glyphData && cueSource !== glyphData) {
+        // Cues come from the cell grid's own tone and coverage: accent ink or a palette never changes the light.
+        const {packed}=glyphData, n=packed.cols*packed.rows;
+        if (cueRgba.length !== n*4) cueRgba = new Uint8Array(n*4);
+        for (let i=0;i<n;i++) { const t=packed.indices[i*4+2]; cueRgba[i*4]=cueRgba[i*4+1]=cueRgba[i*4+2]=t; cueRgba[i*4+3]=packed.colors[i*4+3]; }
+        cues=buildPhotoCues(cueRgba,packed.cols,packed.rows,cues); cueSource=glyphData;
+        if (gl) {
+          cuePixels=packPhotoCues(cues,cuePixels);
+          gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D,textures[7]);
+          gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,packed.cols,packed.rows,0,gl.RGBA,gl.UNSIGNED_BYTE,cuePixels);
+          gl.uniform2f(locations.motionFocus,cues[6] ?? .5,cues[7] ?? .5);
         }
       }
       if (gl) {
@@ -288,7 +310,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
           for(let y=0;y<packed.rows;y++)for(let x=0;x<packed.cols;x++) {
             const u=(x+.5)/packed.cols,v=(y+.5)/packed.rows,i=(y*packed.cols+x)*4;
             if(packed.colors[i+3]<10)continue;
-            sampleAmbient(mode,u,v,phase,a,packed.indices[i+2]/255);
+            sampleAmbient(mode,u,v,phase,a,packed.indices[i+2]/255,cues ?? undefined,(y*packed.cols+x)*PHOTO_CUE_STRIDE);
             const fi=(Math.min(field.height-1,Math.round(v*(field.height-1)))*field.width+Math.min(field.width-1,Math.round(u*(field.width-1))))*4;
             const density=isDensityHover(field.mode)?decodeDensity(field.pixels,fi,field.mode,field.focus[2]):0;
             const original=packed.indices[i]+packed.indices[i+1]*256;

@@ -86,7 +86,22 @@ Coverage is feathered over about 2% of the short side, so a scoped hover fades s
 
 ## Still-image motion and dither
 
-The module's `motion` IDs are `none`, `caustics` (traveling light on a fixed grid), `current` (Slow Current), `reform` (Reveal & Reform), `sheen` (diagonal light sweep), `tidal` (Tidal Rings), and `grain` (Living Grain). 4.4 adds `parallax` (shallow drift), `weave` (interlaced flow), `print` (staggered row registration), and `trace` (light that follows source-image tonal contours). Sheen, Living Grain and Contour Light keep the grid anchored. Contour Light uses source luminance; pass `getFrame` for exact source tones when layering a surface over an existing canvas. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
+Still-image motion reads the photograph itself (its soft luminance, a relief normal, highlight nearness, local detail and an estimated depth, rebuilt per source frame) so light and movement are motivated by the image instead of laid over it. The `motion` IDs:
+
+| ID | Label | Group | What moves | Grid |
+|---|---|---|---|---|
+| `relight` | Relight | Light | A key light circles the subject and models its own relief; flat areas stay put. | anchored |
+| `sheen` | Specular sweep | Light | One slow pass of light across the upper midtones and highlights, bent by their form, then a rest. | anchored |
+| `glow` | Highlight bloom | Light | The brightest areas breathe a halo outward; deep shadows stay deep. | anchored |
+| `shimmer` | Glints | Light | Sparse, phased glints only on bright fine detail (water, metal, eyes). | anchored |
+| `parallax` | Parallax | Depth | Slow camera drift; near and far move against each other. | resampled |
+| `push` | Slow push | Depth | Ken Burns push toward the subject's center and back; nearer areas move slightly more. Never samples outside the frame. | resampled |
+| `focus` | Focus pull | Depth | Focus racks from subject to background and back; out-of-focus areas flatten toward their neighbourhood. | anchored |
+| `mist` | Mist | Atmosphere | Soft mist drifts through the distance and plain areas only. | anchored |
+| `current` | Drift | Atmosphere | Cinemagraph flow in smooth, distant areas; the detailed subject holds. | resampled |
+| `develop` | Develop | Reveal | Holds, fades, then develops back in from highlights to shadows. | anchored |
+
+"Anchored" motions change light only. "Resampled" motions move the image through a fixed character grid, so every glyph stays aligned and readable. Light motions mostly brighten the ink and change character density for only part of the shift, so light glows instead of flickering. Every motion except Relight, Glints and Mist shows the untouched still at time 0, which is what reduced motion and a paused preview display. Retired IDs still load as their closest replacement (`DEPRECATED_STUDIO_MOTIONS`): `caustics` → `sheen`, `grain` → `shimmer`, `trace` → `relight`, `tidal`/`weave`/`breeze` → `current`, `reform`/`print`/`unfold` → `develop`. Keep source-video motion alone unless the user intentionally wants another animation layered onto it. For a still, select one motion and a restrained `motionSpeed`, rather than stacking effects.
 
 For the website's fine-dither treatment, use the module's `fineDither: true` and `ditherStrength` after matching the backing canvas's character settings. This is separate from the core renderer’s built-in dither behavior. Check a still and a moving scene for flicker before choosing the default.
 
@@ -105,19 +120,19 @@ Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanlin
 
 ## Catalogs and useful combinations (4.4)
 
-Build controls from `STUDIO_HOVERS`, `HOVER_SCOPES` and `STUDIO_MOTIONS`, exported by `/studio` and `/hover`. Each entry includes `value`, `label` and `description` (hovers also a `group`). Show the scope control as a segmented choice next to the hover settings. Use the `value` as the API ID; “Emboss” is `etch` and “Contour Light” is `trace`. Do not maintain a second hard-coded menu or use the legacy core hover IDs for these interactions.
+Build controls from `STUDIO_HOVERS`, `HOVER_SCOPES` and `STUDIO_MOTIONS`, exported by `/studio` and `/hover`. Each entry includes `value`, `label` and `description` (hovers also a `group`). Show the scope control as a segmented choice next to the hover settings. Use the `value` as the API ID; “Emboss” is `etch`, “Specular sweep” is `sheen` and “Drift” is `current`. Do not maintain a second hard-coded menu or use the legacy core hover IDs for these interactions.
 
-For a fixed grid, try Contour Light with Emboss. For continuous spatial movement, try Parallax with Elastic. For a fabric-like treatment, try Woven Flow with Rake. These are combinations of two independent settings, not additional art styles. Keep strength restrained until you have checked the source at actual display size.
+For a fixed grid, try Relight with Emboss. For depth, try Parallax or Slow push with Tilt. For water and sky, try Drift with Ripple rings. These are combinations of two independent settings, not additional art styles. Keep strength restrained until you have checked the source at actual display size.
 
 All ambient modes repeat after `12 / speed` seconds. Looping the motion does not guarantee that a source video, film grain, dust, glitch or animated dither has the same boundary. Exported PNG/JPEG captures one frame; MP4/WebM/GIF carries autonomous motion, not live pointer movement. For complete composition export, use `/studio` rather than capturing the hover overlay.
 
 The pointer simulations have bounded storage. Elastic allocates its two velocity buffers only when first selected; idle effects stop. This is not a device-independent FPS promise. Test dense grids, fast reversal and the actual finish stack on the target device.
 
-## Lively images (4.10)
+## Lively images
 
-The catalogs contain nineteen active hover effects and fourteen active ambient motions, plus Off for each. New motion IDs are `relight`, `shimmer`, `breeze`, and `unfold`. Relight models midtones with a rotating light field; Shimmer slowly animates source highlights. Both keep geometry stationary. Breeze bends the image with a traveling sway. Unfold closes and opens staggered panels, then holds the complete image. All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` changes strength. These are local image treatments, not AI-generated scene or subject motion.
+The catalogs contain nineteen active hover effects and ten active ambient motions, plus Off for each (see the table above). All use deterministic 12-second base cycles; `motion.speed` changes cycle duration, `motion.amount` (0–2) changes strength. These are local image treatments driven by the photo's own light and depth estimate, not AI-generated scene or subject motion; the depth estimate favours a subject found from alpha or a plain ground, then sharp, central, lower detail.
 
-`STUDIO_ANIMATION_PRESETS` is exported by `/studio` and `/hover`. Its six entries have `id`, `label`, `description`, `motion: {type,speed,amount}`, and `hover: {effect,radius,strength}`. These are editable combinations, not additional renderer styles. Do not overwrite the rest of a user's settings to apply one:
+`STUDIO_ANIMATION_PRESETS` is exported by `/studio` and `/hover`. Its seven entries have `id`, `label`, `description`, `motion: {type,speed,amount}`, and `hover: {effect,radius,strength}`. These are editable combinations, not additional renderer styles. Do not overwrite the rest of a user's settings to apply one:
 
 ```ts
 import { mountStudio, STUDIO_ANIMATION_PRESETS } from 'asciify-engine/studio';

@@ -19,7 +19,7 @@ export interface HoverGuide {
   key: HoverGuideKey;
 }
 
-function blur(values: Float32Array, scratch: Float32Array, w: number, h: number, radius: number) {
+export function boxBlur(values: Float32Array, scratch: Float32Array, w: number, h: number, radius: number) {
   if (radius < 1) return;
   for (let pass = 0; pass < 2; pass++) {
     for (let y = 0; y < h; y++) {
@@ -82,8 +82,8 @@ export function buildHoverGuide(rgba: ArrayLike<number>, width: number, height: 
   guide.key = key;
   // A feather of about 2% of the short side: soft at the boundary, never a hard clip.
   const scratch = new Float32Array(n);
-  blur(subject, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .02)));
-  blur(depth, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .035)));
+  boxBlur(subject, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .02)));
+  boxBlur(depth, scratch, width, height, Math.max(1, Math.round(Math.min(width, height) * .035)));
   return guide;
 }
 

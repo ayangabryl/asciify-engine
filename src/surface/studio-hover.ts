@@ -1,6 +1,6 @@
 import type { SurfaceFilter } from './surface-finish';
 import { createTextMask } from './text-mask';
-import { resolveMotion, type AmbientMotion } from './ambient-motion';
+import { resolveMotion, type AmbientMotion, type LegacyAmbientMotion } from './ambient-motion';
 import type { AsciiFrame, AsciiOptions } from '../types';
 import { WaterSurface, type HeroHover } from './water-surface';
 import { createSurfaceRenderer, type SurfaceScope } from './surface-renderer';
@@ -23,7 +23,7 @@ export interface StudioHoverOptions {
   accentColor?: string;
   /** Supply the current object frame when available for exact glyph identities/colors. */
   getFrame?: () => AsciiFrame | undefined;
-  motion?: AmbientMotion;
+  motion?: AmbientMotion | LegacyAmbientMotion;
   motionSpeed?: number;
   fineDither?: boolean;
   ditherStrength?: number;

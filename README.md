@@ -646,6 +646,13 @@ const field = mountGlyphField(canvas, {
 
 It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
 
+## 4.22: photo-aware motion and finish
+
+- A new set of still-image motions read the photo's own light, form, highlights, detail and estimated depth: `relight`, `sheen` (specular sweep), `glow` (highlight bloom), `shimmer` (glints), `parallax`, `push`, `focus`, `mist`, `current` (drift) and `develop`.
+- Retired motions keep working through `DEPRECATED_STUDIO_MOTIONS`: caustics → sheen, grain → shimmer, trace → relight, tidal/weave/breeze → current, reform/print/unfold → develop.
+- Optical finish: bloom is a wide soft glow around highlights, and grain is fine film grain weighted to the midtones.
+- Animation presets are re-paired with the new motions, plus a new Depth study.
+
 ## 4.21: premium hovers that know the subject
 
 - Six new hovers: `loupe`, `reveal`, `repel`, `tilt`, `haze` and `bleed`; `scatter`, `elastic` and `ripple` are refined, and `rake` is deprecated (it plays `silk`).

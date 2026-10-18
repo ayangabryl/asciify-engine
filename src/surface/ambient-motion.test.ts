@@ -4,12 +4,12 @@ import { AmbientTimeline, sampleAmbient, resolveMotion, printGrain } from './amb
 describe('living image motion', () => {
   it('keeps pause and speed edits continuous and starts a new selection at its source', () => {
     const clock=new AmbientTimeline();
-    expect(clock.update(10,'caustics',1)).toBe(0);
-    expect(clock.update(11,'caustics',1)).toBe(1);
-    expect(clock.update(11,'caustics',3)).toBe(1);
+    expect(clock.update(10,'sheen',1)).toBe(0);
+    expect(clock.update(11,'sheen',1)).toBe(1);
+    expect(clock.update(11,'sheen',3)).toBe(1);
     expect(clock.update(12,'caustics',3)).toBe(4);
-    expect(clock.update(12,'reform',1)).toBe(0);
-    expect(clock.update(0,'reform',1)).toBe(0);
+    expect(clock.update(12,'develop',1)).toBe(0);
+    expect(clock.update(0,'develop',1)).toBe(0);
   });
   it('pins current edges, moves inside, and returns seamlessly after a full cycle', () => {
     for(const [x,y] of [[0,.5],[1,.5],[.5,0],[.5,1]])sampleAmbient('current',x,y,2,[]).slice(0,2).forEach(v=>expect(v).toBeCloseTo(0,10));
@@ -17,15 +17,18 @@ describe('living image motion', () => {
     expect(Math.abs(a[0])+Math.abs(a[1])).toBeGreaterThan(.1);
     a.forEach((v,i)=>expect(v).toBeCloseTo(b[i],6));
   });
-  it('holds a readable image, disperses, and reforms with staggered local timing', () => {
-    sampleAmbient('reform',.5,.5,0,[]).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
-    expect(sampleAmbient('reform',.5,.5,5,[])[3]).toBeLessThan(.3);
-    sampleAmbient('reform',.5,.5,10,[]).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
-    expect(sampleAmbient('reform',.1,.5,3,[])[3]).toBeLessThan(sampleAmbient('reform',.9,.5,3,[])[3]);
+  it('develops back in from the highlights after a readable hold', () => {
+    sampleAmbient('develop',.5,.5,0,[],.5).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
+    sampleAmbient('develop',.5,.5,6,[],.5).forEach((v,i)=>expect(v).toBeCloseTo(i===3?1:0,10));
+    expect(sampleAmbient('develop',.5,.5,8.6,[],.5)[3]).toBeLessThan(.2);
+    expect(sampleAmbient('develop',.5,.5,10,[],.9)[3]).toBeGreaterThan(sampleAmbient('develop',.5,.5,10,[],.2)[3]);
   });
-  it('keeps print glyph geometry fixed with a moving light without geometry changes', () => {
-    for(let t=0;t<12;t+=.1){const a=sampleAmbient('caustics',.37,.42,t,[]);expect(a.slice(0,2)).toEqual([0,0]);expect(Math.abs(a[2])).toBeLessThanOrEqual(.175);expect(a[3]).toBeGreaterThanOrEqual(.8);}
+  it('keeps light motions anchored and maps retired ids to current ones', () => {
+    for(let t=0;t<12;t+=.1){const a=sampleAmbient('sheen',.37,.42,t,[],.8);expect(a.slice(0,2)).toEqual([0,0]);expect(a[2]).toBeGreaterThanOrEqual(0);expect(a[2]).toBeLessThanOrEqual(.45);}
+    expect(resolveMotion('caustics')).toBe('sheen');
+    expect(resolveMotion('unfold')).toBe('develop');
     expect(resolveMotion('orbit')).toBe('none');
+    expect(resolveMotion('toString')).toBe('none');
     expect(resolveMotion('unknown')).toBe('none');
   });
   it('uses a stable spatial grain with balanced threshold coverage', () => {

@@ -156,7 +156,7 @@ export const STUDIO_LOOKS: {
       cellSize: 5,
       backdrop: { mode: "blurred", color: "#0b0b0a", blur: 18, opacity: 0.4 },
       ink: "#e6e3da",
-      motion: { type: "caustics", speed: 0.35 },
+      motion: { type: "relight", speed: 0.35, amount: 0.8 },
     },
   ],
   [

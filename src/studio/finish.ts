@@ -45,12 +45,16 @@ export function createStudioFinish() {
  if(blurMode>2.5)amount*=smoothstep(.05,.5,abs(q.y-focus));
  vec4 blurred=base;
  if(amount>0.){blurred=base*.2;for(int i=1;i<=4;i++){float f=float(i)*amount*.35;vec2 off=dir*f;if(blurMode<.5)off=vec2(cos(float(i)*1.57),sin(float(i)*1.57))*amount/size;blurred+=sampleAt(q+off)*.1+sampleAt(q-off)*.1;}}
- vec3 light=vec3(0.);if(bloom>0.)for(int i=0;i<4;i++){float a=float(i)*1.5708;vec3 s=sampleAt(q+vec2(cos(a),sin(a))*6./size).rgb;light+=max(vec3(0.),s-.35)*.25;}
- vec3 col=blurred.rgb+light*bloom;
+ vec3 light=vec3(0.);
+ // Bloom: a wide golden-angle disc of soft-kneed highlights, screened on, so light spills like halation instead of ghosting glyphs.
+ if(bloom>0.){float total=0.;for(int i=0;i<16;i++){float f=float(i);vec2 o=vec2(cos(f*2.39996),sin(f*2.39996))*(2.+f*1.6)/size;vec3 s=sampleAt(q+o).rgb;float w=1./(1.+f*.18);light+=s*smoothstep(.35,.9,max(s.r,max(s.g,s.b)))*w;total+=w;}light*=bloom*3.2/total;}
+ vec3 col=1.-(1.-blurred.rgb)*(1.-min(light,vec3(1.)));
  if(sharpen>0.){vec2 px=1./size;vec3 near=sampleAt(q+vec2(px.x,0.)).rgb+sampleAt(q-vec2(px.x,0.)).rgb+sampleAt(q+vec2(0.,px.y)).rgb+sampleAt(q-vec2(0.,px.y)).rgb;col+=(base.rgb*4.-near)*sharpen*.5;}
 col*=1.-scanlines*.4*(.5+.5*cos(q.y*size.y*3.14159));
  col*=1.-vignette*smoothstep(.15,.72,length(c));
- col+=(hash(floor(q*size)+floor(t*12.))-.5)*grain*.2;
+ // Film grain: soft triangular noise, strongest in the midtones, quiet in deep shadow and paper-white highlights.
+ float luma=dot(col,vec3(.299,.587,.114));vec2 g=floor(q*size/1.25)+floor(t*24.)*vec2(7.,13.);
+ col+=(hash(g)+hash(g+31.7)-1.)*grain*.17*(.2+3.2*luma*(1.-luma));
  if(dust>0.)col+=step(1.-dust*.002,hash(floor(q*size*.25)+floor(t*2.)))*.4;
  if(halftone>0.)col*=mix(1.,smoothstep(.1,.65,length(fract(q*size/6.)-.5)),halftone);
  gl_FragColor=vec4(clamp(col,0.,1.),blurred.a);}`,

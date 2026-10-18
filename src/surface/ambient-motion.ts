@@ -1,28 +1,33 @@
 import type { AsciiOptions } from '../types';
 
-export type AmbientMotion = 'none' | 'caustics' | 'current' | 'reform' | 'sheen' | 'tidal' | 'grain' | 'parallax' | 'weave' | 'print' | 'trace' | 'relight' | 'shimmer' | 'breeze' | 'unfold';
+export type AmbientMotion = 'none' | 'relight' | 'sheen' | 'glow' | 'shimmer' | 'parallax' | 'push' | 'focus' | 'mist' | 'current' | 'develop';
+/** Retired after 4.21: each still loads, as its closest photo-aware replacement. */
+export type LegacyAmbientMotion = 'caustics' | 'grain' | 'trace' | 'tidal' | 'weave' | 'breeze' | 'reform' | 'print' | 'unfold';
+export const DEPRECATED_MOTIONS: Readonly<Record<LegacyAmbientMotion, AmbientMotion>> = {
+  caustics: 'sheen', grain: 'shimmer', trace: 'relight', tidal: 'current', weave: 'current', breeze: 'current',
+  reform: 'develop', print: 'develop', unfold: 'develop',
+};
+// Every motion reads the photo's own light, depth and detail; none is a pattern laid over the image.
 export const MOTION_STYLES = [
   { value: 'none', mode: 'none', group: 'Still', label: 'Off', description: 'Keep the image still. Hover stays available.' },
-  { value: 'caustics', mode: 'caustics', group: 'Light and texture', label: 'Caustics', description: 'Soft ribbons of light travel across a stationary character grid.' },
-  { value: 'current', mode: 'current', group: 'Flow and depth', label: 'Slow Current', description: 'A gentle flow through the image, with steady edges.' },
-  { value: 'reform', mode: 'reform', group: 'Rebuild', label: 'Reveal & Reform', description: 'Disperse, gather, then hold the complete image.' },
-  { value: 'sheen', mode: 'sheen', group: 'Light and texture', label: 'Sheen', description: 'A broad diagonal light sweep; characters stay anchored.' },
-  { value: 'tidal', mode: 'tidal', group: 'Flow and depth', label: 'Tidal Rings', description: 'Concentric currents travel outward, with protected edges.' },
-  { value: 'grain', mode: 'grain', group: 'Light and texture', label: 'Living Grain', description: 'Slow, individually phased tonal changes on a stationary grid.' },
-  { value: 'parallax', mode: 'parallax', group: 'Flow and depth', label: 'Parallax', description: 'A shallow, continuous drift through the image, with the edges held in place.' },
-  { value: 'weave', mode: 'weave', group: 'Flow and depth', label: 'Woven Flow', description: 'Interlaced bands move in opposing directions, like a flexible printed fabric.' },
-  { value: 'print', mode: 'print', group: 'Rebuild', label: 'Print Shift', description: 'Staggered rows lift, soften and register back into the image.' },
-  { value: 'trace', mode: 'trace', group: 'Light and texture', label: 'Contour Light', description: 'Light follows the source image’s tonal contours; every character stays anchored.' },
-  { value: 'relight', mode: 'relight', group: 'Light and texture', label: 'Relight', description: 'A slow orbit of light models the image’s midtones, while the character grid stays fixed.' },
-  { value: 'shimmer', mode: 'shimmer', group: 'Light and texture', label: 'Shimmer', description: 'Small highlights glint at different moments. Shadows stay quiet and the image stays in place.' },
-  { value: 'breeze', mode: 'breeze', group: 'Flow and depth', label: 'Breeze', description: 'A traveling bend gently sways the image, like a print suspended in moving air.' },
-  { value: 'unfold', mode: 'unfold', group: 'Rebuild', label: 'Unfold', description: 'Narrow panels turn, soften and return to a complete image, with a readable hold between cycles.' },
+  { value: 'relight', mode: 'relight', group: 'Light', label: 'Relight', description: 'A key light circles the subject and models its own relief, like moving a lamp around a sculpture.' },
+  { value: 'sheen', mode: 'sheen', group: 'Light', label: 'Specular sweep', description: 'One slow pass of light glances across the highlights and follows their form, then rests.' },
+  { value: 'glow', mode: 'glow', group: 'Light', label: 'Highlight bloom', description: 'The brightest areas breathe a soft halo into their surroundings. Shadows stay deep.' },
+  { value: 'shimmer', mode: 'shimmer', group: 'Light', label: 'Glints', description: 'Sparse glints on bright fine detail, like light on water, metal or an eye. Everything else holds still.' },
+  { value: 'parallax', mode: 'parallax', group: 'Depth', label: 'Parallax', description: 'A slow camera drift: the subject moves against its background, read from the photo’s own depth cues.' },
+  { value: 'push', mode: 'push', group: 'Depth', label: 'Slow push', description: 'A gentle push toward the subject and back, with nearer areas moving slightly more.' },
+  { value: 'focus', mode: 'focus', group: 'Depth', label: 'Focus pull', description: 'Focus racks from the subject to the background and back; the characters soften out of focus.' },
+  { value: 'mist', mode: 'mist', group: 'Atmosphere', label: 'Mist', description: 'Soft mist drifts through the distance and plain areas, leaving the subject clear.' },
+  { value: 'current', mode: 'current', group: 'Atmosphere', label: 'Drift', description: 'Sky, water and smooth grounds flow slowly, like a cinemagraph; detailed areas hold still.' },
+  { value: 'develop', mode: 'develop', group: 'Reveal', label: 'Develop', description: 'The image holds, fades, then develops back in from its highlights to its shadows, like a print in the tray.' },
 ] as const;
 export function resolveMotion(style?: string): AmbientMotion {
-  return MOTION_STYLES.find(s => s.value === style || s.mode === style)?.mode ?? 'none';
+  const legacy = style && Object.prototype.hasOwnProperty.call(DEPRECATED_MOTIONS, style) ? DEPRECATED_MOTIONS[style as LegacyAmbientMotion] : style;
+  return MOTION_STYLES.find(s => s.value === legacy || s.mode === legacy)?.mode ?? 'none';
 }
 export const motionId = (mode: AmbientMotion) => MOTION_STYLES.findIndex(style => style.mode === mode);
-export const isAnchoredMotion = (mode: AmbientMotion) => ['none', 'caustics', 'sheen', 'grain', 'trace', 'relight', 'shimmer'].includes(mode);
+/** Motions that change light only: the character grid and every glyph's position stay fixed. */
+export const isAnchoredMotion = (mode: AmbientMotion) => ['none', 'relight', 'sheen', 'glow', 'shimmer', 'focus', 'mist', 'develop'].includes(mode);
 export const isFineDither = (options?: Pick<AsciiOptions, 'fineDither' | 'customText' | 'charsetFrames' | 'charset'>) => options?.fineDither === true && !options.customText && !options.charsetFrames?.length && !/[A-Za-z]/.test(options.charset ?? '');
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (a: number, b: number, v: number) => { const t = clamp((v-a)/(b-a)); return t*t*(3-2*t); };
@@ -32,7 +37,8 @@ export class AmbientTimeline {
   private last: number | null = null;
   private mode: AmbientMotion = 'none';
   private phase = 0;
-  update(time: number, mode: AmbientMotion, speed = 1) {
+  update(time: number, style: AmbientMotion | LegacyAmbientMotion, speed = 1) {
+    const mode = resolveMotion(style);
     if (!Number.isFinite(time)) return this.phase;
     if (mode !== this.mode || this.last !== null && time < this.last) { this.mode=mode; this.phase=0; this.last=time; }
     if (this.last !== null) this.phase += Math.max(0,time-this.last) * Math.max(.1,Math.min(3,Number.isFinite(speed)?speed:1));
@@ -40,130 +46,114 @@ export class AmbientTimeline {
     return this.phase;
   }
 }
-/** CPU reference and Canvas fallback. Output: offset in CSS px, density shift, opacity. */
-export function sampleAmbient(mode: AmbientMotion, x: number, y: number, time: number, out: number[], tone = .5) {
+/**
+ * CPU reference and Canvas fallback. Output: offset in CSS px (at a 960px frame), tone shift, opacity.
+ * `cues` holds photo cues (see photo-cues.ts) from `at`; without them the cell's tone stands in.
+ * At time 0 every motion shows the still image, so reduced motion and paused previews stay faithful.
+ */
+export function sampleAmbient(mode: AmbientMotion, x: number, y: number, time: number, out: number[], tone = .5, cues?: ArrayLike<number>, at = 0) {
   out[0]=out[1]=out[2]=0; out[3]=1;
   if (mode === 'none') return out;
-  const p=time*Math.PI/6, envelope=smooth(0,.12,Math.min(x,1-x,y,1-y));
-  if(mode==='caustics') {
-    const fold=Math.sin(x*9+y*5+p)+Math.sin(y*8-x*3-p);
-    const light=Math.pow(Math.max(0,1-Math.abs(fold)*.72),3);
-    out[2]=(light*.22-.045)*envelope;
-  } else if(mode==='current') {
-    out[0]=(Math.sin(y*9+p)*Math.cos(x*7-p))*10*envelope;
-    out[1]=(Math.cos(x*8+p)*Math.sin(y*6-p))*7*envelope;
+  tone = clamp(tone);
+  const light = cues ? cues[at] : tone;
+  const depth = cues ? cues[at+1] : .5+.5*clamp(1-Math.hypot(x-.5,y-.55)*2);
+  const glow = cues ? cues[at+2] : smooth(.55,1,tone)**2;
+  const detail = cues ? cues[at+3] : .5;
+  const nx = cues ? cues[at+4] : 0, ny = cues ? cues[at+5] : 0;
+  const p=time*Math.PI/6, cycle=((time%12)+12)%12, envelope=smooth(0,.12,Math.min(x,1-x,y,1-y));
+  if(mode==='relight') {
+    const a=p+.6, lx=Math.cos(a), ly=Math.sin(a);
+    const form=Math.max(-1,Math.min(1,nx*lx+ny*ly))+(lx*(x-.5)+ly*(y-.5))*.35;
+    out[2]=form*.2*(.3+.7*smooth(.04,.3,light)*(1-.6*smooth(.82,1,tone)));
   } else if(mode==='sheen') {
-    out[2]=Math.pow(.5+.5*Math.cos(x*5+y*3-p),8)*.2-.025;
-  } else if(mode==='tidal') {
-    const dx=x-.5,dy=y-.5,d=Math.hypot(dx,dy),wave=Math.sin(d*22-p)*envelope;
-    out[0]=dx*wave*9;out[1]=dy*wave*9;
-    out[2]=wave*.035;
-  } else if(mode==='grain') {
-    const phase=printGrain(Math.floor(x*160),Math.floor(y*100))*Math.PI*2;
-    out[2]=Math.sin(p+phase)*.07;
-  } else if(mode==='parallax') {
-    const depth=.45+.55*Math.max(0,1-Math.hypot(x-.5,y-.5)*1.4);
-    out[0]=Math.sin(p)*12*depth*envelope;
-    out[1]=(Math.cos(p)-1)*6*depth*envelope;
-  } else if(mode==='weave') {
-    out[0]=Math.sin(y*Math.PI*6+p)*Math.sin(p)*8*envelope;
-    out[1]=Math.sin(x*Math.PI*6-p)*Math.sin(p)*6*envelope;
-  } else if(mode==='print') {
-    const row=Math.floor(y*24), cycle=((time+printGrain(row,3)*3)%12+12)%12;
-    const lift=smooth(1,2.5,cycle)*(1-smooth(3.5,5,cycle));
-    out[0]=Math.sin(row*2.4)*lift*9*envelope;
-    out[1]=-lift*5*envelope;
-    out[2]=-lift*.22; out[3]=1-lift*.45;
-  } else if(mode==='trace') {
-    const level=.5+.5*Math.cos(p);
-    out[2]=Math.pow(Math.max(0,1-Math.abs(clamp(tone)-level)/.16),3)*.22-.015;
-  } else if(mode==='relight') {
-    const dx=x-.5,dy=y-.5,light=(dx*Math.cos(p)+dy*Math.sin(p))*1.3;
-    out[2]=light*.3*(.25+3*clamp(tone)*(1-clamp(tone)))*envelope;
+    const position=-.35+1.9*smooth(0,8,cycle);
+    const d=(x*.75+y*.45)/1.2+(nx*.75+ny*.45)*.05;
+    const band=Math.exp(-(((d-position)/.12)**2));
+    out[2]=band*smooth(.3,.8,light)*(1-.5*smooth(.9,1,tone))*.45;
+  } else if(mode==='glow') {
+    const k=.5-.5*Math.cos(p), threshold=1-.8*k;
+    out[2]=.2*smooth(threshold-.3,threshold+.02,glow)*Math.sqrt(glow)*(1-.65*tone)+.05*k*smooth(.6,.95,tone);
   } else if(mode==='shimmer') {
     const phase=printGrain(Math.floor(x*160),Math.floor(y*100))*Math.PI*2;
-    const glint=Math.pow(.5+.5*Math.cos(p+phase),10);
-    out[2]=(glint-.1762)*.28*smooth(.35,.9,tone);
-  } else if(mode==='breeze') {
-    const bend=Math.sin(p-y*4),depth=.35+.65*(1-y);
-    out[0]=bend*10*depth*envelope;
-    out[1]=Math.sin(p*2-y*4+x*3)*2.5*depth*envelope;
-    out[2]=Math.cos(p-y*4)*.035*envelope;
-  } else if(mode==='unfold') {
-    const column=Math.floor(x*12),local=x*12-column-.5;
-    const cycle=((time-column*.11)%12+12)%12;
-    const turn=smooth(1,3,cycle)*(1-smooth(5,7,cycle));
-    out[0]=-local*turn*24*envelope;
-    out[1]=Math.sin(column*1.7)*turn*3*envelope;
-    out[2]=-turn*.12;out[3]=1-turn*.65;
-  } else if(mode==='reform') {
-    const cycle=((time%12)+12)%12;
-    const grain=printGrain(Math.floor(x*160),Math.floor(y*100));
-    const order=x*.65+y*.2+grain*.15+Math.sin(x*8-y*5)*.08;
-    const gone=smooth(1.8+order*1.2,3.8+order*1.2,cycle)*(1-smooth(5+order*1.7,7.2+order*1.7,cycle));
-    out[0]=Math.sin(y*9+p)*gone*(1-gone)*24*envelope;
-    out[1]=-gone*(1-gone)*(8+grain*12)*envelope;
-    out[2]=-gone*.45; out[3]=1-gone*.9;
+    const glint=Math.pow(.5+.5*Math.cos(p*2+phase),28);
+    out[2]=glint*smooth(.5,.88,tone)*(.35+.65*smooth(.1,.55,detail))*.42;
+  } else if(mode==='parallax') {
+    const near=depth-.45;
+    out[0]=near*16*Math.sin(p)*envelope;
+    out[1]=near*7*Math.sin(p*2)*envelope;
+  } else if(mode==='push') {
+    // Zooming in only ever samples inside the frame, so the edges need no pinning.
+    const zoom=.045*(.5-.5*Math.cos(p))*(.7+.6*depth)*960;
+    const cx=cues ? cues[at+6] : .5, cy=cues ? cues[at+7] : .5;
+    out[0]=(x-cx)*zoom; out[1]=(y-cy)*zoom;
+  } else if(mode==='focus') {
+    const s=Math.sin(p), defocus=s*s*smooth(.15,.6,s>=0 ? 1-depth : depth);
+    out[2]=(light-tone)*defocus*.9;
+  } else if(mode==='mist') {
+    const far=Math.pow(1-depth,1.5)*(1-.6*detail);
+    const veil=Math.sin(x*4.1-p+Math.sin(y*3.3+p)*.9)*.5+Math.sin(x*7.3+y*2.1-p*2+Math.sin(x*2.7-y*5.1+p)*1.1)*.3+Math.sin(y*5.7-x*1.9+p)*.2;
+    out[2]=smooth(-.3,.9,veil)*far*.16*(1-.55*tone);
+  } else if(mode==='current') {
+    // Measured from the still at time zero: the flow starts from, and returns to, the photograph.
+    const fluid=(1-.4*detail)*(1-.8*depth)*envelope;
+    const wave=(q: number) => y*14-q+Math.sin(x*3+q)*1.5;
+    out[0]=(Math.sin(wave(p))-Math.sin(wave(0))+(Math.sin(x*5-y*3+p)-Math.sin(x*5-y*3))*.43)*7*fluid;
+    out[1]=(Math.sin(x*11+p)-Math.sin(x*11))*2*fluid;
+    out[2]=(Math.cos(wave(p))-Math.cos(wave(0)))*.03*fluid;
+  } else if(mode==='develop') {
+    const fade=smooth(7,8.5,cycle), k=clamp((cycle-8.5)/3.5);
+    const shown=cycle<8.5 ? 1-fade : smooth(0,1,(k*1.45-(1-tone)+(printGrain(Math.floor(x*160),Math.floor(y*100))-.5)*.06)/.3);
+    out[2]=-(1-shown)*.3; out[3]=1-(1-shown)*.9;
   }
   return out;
 }
 export const AMBIENT_GLSL = `
-  uniform float motionMode; uniform float motionTime; uniform float fineDither; uniform float ditherAmount;
+  uniform float motionMode; uniform float motionTime; uniform float fineDither; uniform float ditherAmount; uniform vec2 motionFocus;
   float printGrain(vec2 p) { return fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715)))); }
-  vec4 ambientAt(vec2 uv, float tone) {
-    float p=motionTime*.5235987756;
-    float edge=smoothstep(0.,.12,min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)));
+  // cue: light, depth, glow, detail; normal: relief normal.
+  vec4 ambientAt(vec2 uv, float tone, vec4 cue, vec2 normal) {
     if(motionMode<.5) return vec4(0.,0.,0.,1.);
+    float p=motionTime*.5235987756, cycle=mod(motionTime,12.);
+    float edge=smoothstep(0.,.12,min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)));
+    tone=clamp(tone,0.,1.);
     if(motionMode<1.5) {
-      float fold=sin(uv.x*9.+uv.y*5.+p)+sin(uv.y*8.-uv.x*3.-p);
-      float light=pow(max(0.,1.-abs(fold)*.72),3.);
-      return vec4(0.,0.,(light*.22-.045)*edge,1.);
+      float a=p+.6; vec2 l=vec2(cos(a),sin(a));
+      float form=clamp(dot(normal,l),-1.,1.)+dot(uv-.5,l)*.35;
+      return vec4(0.,0.,form*.2*(.3+.7*smoothstep(.04,.3,cue.x)*(1.-.6*smoothstep(.82,1.,tone))),1.);
     }
-    if(motionMode<2.5) return vec4(sin(uv.y*9.+p)*cos(uv.x*7.-p)*10.*edge,cos(uv.x*8.+p)*sin(uv.y*6.-p)*7.*edge,0.,1.);
-    if(motionMode>13.5) {
-      float column=floor(uv.x*12.),local=uv.x*12.-column-.5;
-      float cycle=mod(motionTime-column*.11,12.);
-      float turn=smoothstep(1.,3.,cycle)*(1.-smoothstep(5.,7.,cycle));
-      return vec4(-local*turn*24.*edge,sin(column*1.7)*turn*3.*edge,-turn*.12,1.-turn*.65);
+    if(motionMode<2.5) {
+      float position=-.35+1.9*smoothstep(0.,8.,cycle);
+      float d=(uv.x*.75+uv.y*.45)/1.2+(normal.x*.75+normal.y*.45)*.05;
+      float band=exp(-pow((d-position)/.12,2.));
+      return vec4(0.,0.,band*smoothstep(.3,.8,cue.x)*(1.-.5*smoothstep(.9,1.,tone))*.45,1.);
     }
-    if(motionMode>12.5) {
-      float depth=.35+.65*(1.-uv.y);
-      return vec4(sin(p-uv.y*4.)*10.*depth*edge,sin(p*2.-uv.y*4.+uv.x*3.)*2.5*depth*edge,cos(p-uv.y*4.)*.035*edge,1.);
+    if(motionMode<3.5) {
+      float k=.5-.5*cos(p), threshold=1.-.8*k;
+      return vec4(0.,0.,.2*smoothstep(threshold-.3,threshold+.02,cue.z)*sqrt(cue.z)*(1.-.65*tone)+.05*k*smoothstep(.6,.95,tone),1.);
     }
-    if(motionMode>11.5) {
+    if(motionMode<4.5) {
       float phase=printGrain(floor(uv*vec2(160.,100.)))*6.28318530718;
-      float glint=pow(.5+.5*cos(p+phase),10.);
-      return vec4(0.,0.,(glint-.1762)*.28*smoothstep(.35,.9,tone),1.);
+      float glint=pow(.5+.5*cos(p*2.+phase),28.);
+      return vec4(0.,0.,glint*smoothstep(.5,.88,tone)*(.35+.65*smoothstep(.1,.55,cue.w))*.42,1.);
     }
-    if(motionMode>10.5) {
-      float light=dot(uv-.5,vec2(cos(p),sin(p)))*1.3,level=clamp(tone,0.,1.);
-      return vec4(0.,0.,light*.3*(.25+3.*level*(1.-level))*edge,1.);
+    if(motionMode<5.5) { float near=cue.y-.45; return vec4(near*16.*sin(p)*edge,near*7.*sin(p*2.)*edge,0.,1.); }
+    if(motionMode<6.5) return vec4((uv-motionFocus)*.045*(.5-.5*cos(p))*(.7+.6*cue.y)*960.,0.,1.);
+    if(motionMode<7.5) {
+      float s=sin(p), defocus=s*s*smoothstep(.15,.6,s>=0.?1.-cue.y:cue.y);
+      return vec4(0.,0.,(cue.x-tone)*defocus*.9,1.);
     }
-    if(motionMode>9.5) {
-      float level=.5+.5*cos(p);
-      return vec4(0.,0.,pow(max(0.,1.-abs(clamp(tone,0.,1.)-level)/.16),3.)*.22-.015,1.);
+    if(motionMode<8.5) {
+      float far=pow(1.-cue.y,1.5)*(1.-.6*cue.w);
+      float veil=sin(uv.x*4.1-p+sin(uv.y*3.3+p)*.9)*.5+sin(uv.x*7.3+uv.y*2.1-p*2.+sin(uv.x*2.7-uv.y*5.1+p)*1.1)*.3+sin(uv.y*5.7-uv.x*1.9+p)*.2;
+      return vec4(0.,0.,smoothstep(-.3,.9,veil)*far*.16*(1.-.55*tone),1.);
     }
-    if(motionMode>8.5) {
-      float row=floor(uv.y*24.),cycle=mod(motionTime+printGrain(vec2(row,3.))*3.,12.);
-      float lift=smoothstep(1.,2.5,cycle)*(1.-smoothstep(3.5,5.,cycle));
-      return vec4(sin(row*2.4)*lift*9.*edge,-lift*5.*edge,-lift*.22,1.-lift*.45);
+    if(motionMode<9.5) {
+      float fluid=(1.-.4*cue.w)*(1.-.8*cue.y)*edge, wave=uv.y*14.-p+sin(uv.x*3.+p)*1.5, still=uv.y*14.+sin(uv.x*3.)*1.5;
+      return vec4((sin(wave)-sin(still)+(sin(uv.x*5.-uv.y*3.+p)-sin(uv.x*5.-uv.y*3.))*.43)*7.*fluid,(sin(uv.x*11.+p)-sin(uv.x*11.))*2.*fluid,(cos(wave)-cos(still))*.03*fluid,1.);
     }
-    if(motionMode>7.5) return vec4(sin(uv.y*18.8495559215+p)*sin(p)*8.*edge,sin(uv.x*18.8495559215-p)*sin(p)*6.*edge,0.,1.);
-    if(motionMode>6.5) {
-      float depth=.45+.55*max(0.,1.-length(uv-.5)*1.4);
-      return vec4(sin(p)*12.*depth*edge,(cos(p)-1.)*6.*depth*edge,0.,1.);
-    }
-    if(motionMode>5.5) return vec4(0.,0.,sin(p+printGrain(floor(uv*vec2(160.,100.)))*6.28318530718)*.07,1.);
-    if(motionMode>4.5) {
-      vec2 delta=uv-.5; float wave=sin(length(delta)*22.-p)*edge;
-      return vec4(delta*wave*9.,wave*.035,1.);
-    }
-    if(motionMode>3.5) return vec4(0.,0.,pow(.5+.5*cos(uv.x*5.+uv.y*3.-p),8.)*.2-.025,1.);
-    float cycle=mod(motionTime,12.);
-    float grain=printGrain(floor(uv*vec2(160.,100.)));
-    float order=uv.x*.65+uv.y*.2+grain*.15+sin(uv.x*8.-uv.y*5.)*.08;
-    float gone=smoothstep(1.8+order*1.2,3.8+order*1.2,cycle)*(1.-smoothstep(5.+order*1.7,7.2+order*1.7,cycle));
-    return vec4(sin(uv.y*9.+p)*gone*(1.-gone)*24.*edge,-gone*(1.-gone)*(8.+grain*12.)*edge,-gone*.45,1.-gone*.9);
+    float fade=smoothstep(7.,8.5,cycle), k=clamp((cycle-8.5)/3.5,0.,1.);
+    float shown=cycle<8.5?1.-fade:smoothstep(0.,1.,(k*1.45-(1.-tone)+(printGrain(floor(uv*vec2(160.,100.)))-.5)*.06)/.3);
+    return vec4(0.,0.,-(1.-shown)*.3,1.-(1.-shown)*.9);
   }
 `;
 

@@ -1,6 +1,6 @@
 import { resolveSurfaceHover, type DeprecatedSurfaceHover, type SurfaceHover } from '../surface/hover-catalog';
 import { normalizeHoverScope, type HoverScope } from '../surface/hover-guide';
-import { MOTION_STYLES, type AmbientMotion } from '../surface/ambient-motion';
+import { MOTION_STYLES, resolveMotion, type AmbientMotion } from '../surface/ambient-motion';
 import { normalizeStudioCurves, type StudioCurves } from './curves';
 import { normalizeStudioWarps, type StudioWarp, type StudioWarpEdge } from './warps';
 import { DEFAULT_STUDIO_PRINT, STUDIO_PRINT_STYLE_IDS, isStudioPrintStyle, normalizeStudioPrint, type StudioPrintSettings } from './print-model';
@@ -479,8 +479,9 @@ export function normalizeStudioSettings(input: unknown = {}): StudioSettings {
       : [],
     effects: fx,
     motion: {
+      // Retired motions load as their closest replacement, so saved settings and share links keep moving.
       type: choice(
-        a.type,
+        typeof a.type === "string" ? resolveMotion(a.type) : a.type,
         MOTION_STYLES.map(style => style.mode),
         "none",
       ),

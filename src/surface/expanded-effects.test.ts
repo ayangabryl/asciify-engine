@@ -73,14 +73,29 @@ describe('expanded local effects', () => {
     f.configure(mode,0,1);f.move(.1,.2);f.move(.9,.8);f.step(.016);expect(f.active).toBe(false);
   });
 
-  it('traces the source’s tonal contours, rather than drawing a generic screen-space light', () => {
-    const mid=sampleAmbient('trace',.5,.5,3,[],.5);
-    const dark=sampleAmbient('trace',.5,.5,3,[],.05);
-    expect(mid[2]).toBeGreaterThan(dark[2]+.15);
-    expect(mid.slice(0,2)).toEqual([0,0]);
-    for(const tone of [0,.25,.5,.75,1]) for(let t=0;t<12;t+=.15) {
-      const a=sampleAmbient('trace',.4,.6,t,[],tone),b=sampleAmbient('trace',.4,.6,t+12,[],tone);
-      a.forEach((n,i)=>expect(n).toBeCloseTo(b[i],8));
+  it('lights the photo’s own relief and highlights, rather than drawing a generic screen-space light', () => {
+    const facing=[.6,.5,.5,.5,1,0,.5,.5], away=[.6,.5,.5,.5,-1,0,.5,.5], flat=[.6,.5,.5,.5,0,0,.5,.5];
+    expect(sampleAmbient('relight',.5,.5,0,[],.5,facing)[2]).toBeGreaterThan(sampleAmbient('relight',.5,.5,0,[],.5,away)[2]+.2);
+    expect(Math.abs(sampleAmbient('relight',.5,.5,0,[],.5,flat)[2])).toBeLessThan(.05);
+    const lit=[.8,.5,.9,.5,0,0,.5,.5], dark=[.1,.5,0,.5,0,0,.5,.5];
+    expect(sampleAmbient('glow',.5,.5,6,[],.4,lit)[2]).toBeGreaterThan(.08);
+    expect(sampleAmbient('glow',.5,.5,6,[],.1,dark)[2]).toBeCloseTo(0,4);
+    let peak=0;for(let t=0;t<12;t+=.05)peak=Math.max(peak,sampleAmbient('sheen',.5,.5,t,[],.7,lit)[2]);
+    expect(peak).toBeGreaterThan(.2);
+    for(let t=0;t<12;t+=.05)expect(sampleAmbient('sheen',.5,.5,t,[],.1,dark)[2]).toBeLessThan(.001);
+  });
+  it('moves near and far apart for parallax, and pushes toward the subject without leaving the frame', () => {
+    const near=[.5,1,0,.5,0,0,.5,.5], far=[.5,0,0,.5,0,0,.5,.5];
+    expect(Math.sign(sampleAmbient('parallax',.5,.5,3,[],.5,near)[0])).toBe(-Math.sign(sampleAmbient('parallax',.5,.5,3,[],.5,far)[0]));
+    for(const [x,y] of [[0,0],[1,1],[0,1],[.3,.8]]) {
+      const a=sampleAmbient('push',x,y,6,[],.5,near);
+      expect(Math.abs(x-a[0]/960-.5)).toBeLessThanOrEqual(.5);expect(Math.abs(y-a[1]/960-.5)).toBeLessThanOrEqual(.5);
     }
+  });
+  it('racks focus between subject and background by pulling tone toward its neighbourhood', () => {
+    const near=[.3,1,0,.5,0,0,.5,.5], far=[.3,0,0,.5,0,0,.5,.5];
+    expect(sampleAmbient('focus',.5,.5,3,[],.8,far)[2]).toBeLessThan(-.3);
+    expect(sampleAmbient('focus',.5,.5,3,[],.8,near)[2]).toBeCloseTo(0,4);
+    expect(sampleAmbient('focus',.5,.5,9,[],.8,near)[2]).toBeLessThan(-.3);
   });
 });
