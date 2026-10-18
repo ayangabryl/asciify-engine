@@ -1,758 +1,105 @@
-# asciify-engine
-
-<p align="left">
-  <a href="https://www.npmjs.com/package/asciify-engine"><img src="https://img.shields.io/npm/v/asciify-engine?color=d4ff00&labelColor=0a0a0a&style=flat-square" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/asciify-engine"><img src="https://img.shields.io/npm/dm/asciify-engine?color=d4ff00&labelColor=0a0a0a&style=flat-square" alt="downloads" /></a>
-  <a href="https://github.com/ayangabryl/asciify-engine/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-d4ff00?labelColor=0a0a0a&style=flat-square" alt="MIT license" /></a>
-  <a href="https://www.buymeacoffee.com/asciify"><img src="https://img.shields.io/badge/buy_me_a_coffee-%E2%98%95-d4ff00?labelColor=0a0a0a&style=flat-square" alt="Buy Me A Coffee" /></a>
+<p align="center">
+  <a href="https://asciify.org">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/logo-dark.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/logo-light.png">
+      <img alt="Asciify" src="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/logo-light.png" width="220">
+    </picture>
+  </a>
 </p>
 
-A framework-agnostic ASCII art rendering engine for the browser. Convert images, animated GIFs, and video into character-based art rendered onto an HTML canvas — with full color support, interactive hover effects, living-image motion, 24 Studio render styles, and export.
+<p align="center">ASCII components, backgrounds and media for the web, drawn in real characters on the GPU.</p>
 
-### Media first, optional backgrounds
+<p align="center">
+  <a href="https://www.npmjs.com/package/asciify-engine"><img alt="npm version" src="https://img.shields.io/npm/v/asciify-engine?style=flat-square&labelColor=171716&color=3d3d3a"></a>
+  <a href="https://bundlejs.com/?q=asciify-engine"><img alt="Bundle size" src="https://img.shields.io/bundlejs/size/asciify-engine?style=flat-square&labelColor=171716&color=3d3d3a&label=gzip"></a>
+  <a href="https://www.npmjs.com/package/asciify-engine"><img alt="Downloads" src="https://img.shields.io/npm/dm/asciify-engine?style=flat-square&labelColor=171716&color=3d3d3a"></a>
+  <a href="https://github.com/ayangabryl/asciify-engine/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/asciify-engine?style=flat-square&labelColor=171716&color=3d3d3a"></a>
+</p>
 
-Use `asciify-engine/core` for image, video, GIF, webcam, text, and interactive rendering. It excludes the procedural background generators. Root imports expose the same media API. Procedural scenes are downloadable templates at https://asciify.org/backgrounds.
+<p align="center">
+  <a href="https://asciify.org">Website</a> ·
+  <a href="https://asciify.org/docs">Docs</a> ·
+  <a href="https://asciify.org/components">Components</a> ·
+  <a href="https://asciify.org/editor">Studio</a>
+</p>
 
-```ts
-import { asciifyVideo } from 'asciify-engine/core';
+<p align="center">
+  <a href="https://asciify.org">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/hero-dark.webp">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/hero-light.webp">
+      <img alt="The asciify.org home page: an ASCII field behind the headline and three live kit components" src="https://raw.githubusercontent.com/ayangabryl/asciify-engine/main/.github/assets/hero-light.webp" width="100%">
+    </picture>
+  </a>
+</p>
 
-const stop = await asciifyVideo('/film.mp4', canvas, {
-  fitTo: canvas.parentElement,
-  objectFit: 'cover',
-  maxRenderDimension: 960,
-  fontSize: 10,
-  fps: 30,
-  options: {
-    colorMode: 'accent', accentColor: '#a9b39a',
-    hoverEffect: 'trail', hoverStrength: 0.65,
-    hoverRadius: 0.18, hoverColor: '#d4ff00',
-  },
-});
-// On unmount / when replacing the source:
-stop();
-```
+Asciify is a framework-agnostic engine for ASCII on the web. Use it for interface components (loading buttons, toasts, tabs, AI states, charts, page transitions), for backgrounds behind your content, and for turning images, GIFs, video and text into characters. Components take their ink from your CSS tokens in light and dark, follow their element's size and radius, honour reduced motion and pause off screen.
 
-The trail follows elapsed time, fades after the pointer leaves, and changes character density through a bounded cursor wake. Image hover redraws a cached region; live video samples decoded frames while pointer motion can render between source frames. The standard image/GIF/live-video loops pause rendering outside the viewport and honor reduced motion. Small fonts keep real glyphs, and dense grids no longer silently disable hover.
-
-Use your own CSS and source media for atmosphere; see [the copyable media background example](examples/media-background.ts). A background generator is optional. GIF decoding loads only when a GIF conversion API is called. Source maps remain available in local builds and are excluded from the npm archive.
-
-`waveField` now animates the supplied media rather than replacing it with a generated scene. For the previous procedural scene, download the Wave template from https://asciify.org/backgrounds.
-
-Prepared `AsciiFrame` objects are treated as immutable for drawing caches. Replace the frame object after editing cells, or call `clearAsciifyCaches()`. Always call the returned cleanup function, including when an async mount resolves after a component has unmounted.
-
-
-**[&#9654; Live Playground](https://asciify.org) &middot; [npm](https://www.npmjs.com/package/asciify-engine)**
-
----
-
-## Overview
-
-asciify-engine works in two stages:
-
-1. **Convert** — a source (image, GIF buffer, video element) is sampled and converted into an `AsciiFrame`: a 2D array of character cells, each carrying a character and RGBA color data.
-2. **Render** — the frame is drawn onto a `<canvas>` element via a 2D context, with full support for color modes, font sizes, hover effects, and time-based animations.
-
-This separation means you can pre-compute frames once and render them at any frame rate, making it efficient for both static images and smooth animations.
-
----
-
-## Installation
+## Install
 
 ```bash
-npm install asciify-engine
+npm i asciify-engine
 ```
 
-Works with any modern bundler (Vite, webpack, esbuild, Rollup) and any framework — React, Vue, Svelte, Angular, Next.js, or vanilla JS.
-
-### Website hovers, included in npm
-
-Since **1.2.0**, import the enhanced interactions through `asciify-engine/hover`. No extra download is needed. This optional entry leaves root and `/core` browser bundles unchanged.
-
-```js
-import { asciify } from 'asciify-engine/core';
-import { mountHover } from 'asciify-engine/hover';
-
-// <div id="art" style="position:relative;width:fit-content">
-//   <canvas id="ascii" style="display:block"></canvas>
-// </div>
-const host = document.querySelector('#art');
-const canvas = document.querySelector('#ascii');
-const charset = ' .:-=+*#%@';
-const stop = await asciify('/image.jpg', canvas, {
-  fontSize: 7,
-  options: { charset, charAspect: 0.58, hoverStrength: 0, animationStyle: 'none' },
-});
-const hover = mountHover(host, canvas, {
-  effect: 'trail', strength: 0.55, radius: 0.2,
-  fontSize: 7, charAspect: 0.58, charset,
-});
-// Switch: hover.update({ effect: 'water' });
-// Redraw a still: hover.invalidate();
-// On unmount: hover.destroy(); stop();
-```
-
-Effects: **Trail, Water, Contour, Dissolve, Silk, Vortex, Magnetic Pull, Scatter, Emboss, Elastic, Rake**, and `none`. Inspect `STUDIO_HOVERS` for typed IDs and behavior groups (4.4+). Pass `effect` to `mountHover`, rather than passing these names to the legacy engine `hoverEffect` option. Keep engine hover and animation disabled to avoid stacking two renderers. Match `fontSize`, `charAspect`, `charSpacing`, `charset`, `customText`, and dot settings to the backing canvas.
-
-For video/GIF, set `animated: true, fps: 24` and coordinate `paused` with playback. For a still, optional `motion: 'caustics' | 'current' | 'reform'` (or the other IDs in `STUDIO_MOTIONS`) adds living-image motion; `fineDither: true` enables stationary grain. `mountStudioHover` remains an alias for the existing standalone integration. The module observes reduced motion, sleeps when idle/offscreen, and uses Canvas 2D when WebGL is unavailable (simpler spatial refraction). Call `destroy()` on unmount; use `hover.canvas` for overlay layering or snapshots.
-
-See the [complete integration and lifecycle guide](skills/asciify-engine/references/studio-effects.md). A [standalone ES module](https://asciify.org/background-sources/studio-hover.js) remains available for projects without a bundler.
-
-## Agent Skill
-
-This repository ships a standards-friendly Agent Skill at `skills/asciify-engine`. Install it with the current skills CLI:
+Building with a coding agent? Add the skill, then describe what you want:
 
 ```bash
-npx skills add https://github.com/ayangabryl/asciify-engine --skill asciify-engine
+npx skills add ayangabryl/asciify-engine
 ```
 
-Use the skill when building ASCII images, videos, GIFs, webcam effects, scroll-scrubbed heroes, hover interactions, or performance-sensitive ASCII media.
-
-The current hosted skill is available at [asciify.org/skill](https://asciify.org/skill), including a [layered HTML/ASCII hero example](https://asciify.org/skill/references/layered-hero.md). The hosted copy can receive documentation updates between npm releases.
-
----
-
-## Converting Media to ASCII
-
-### Images
-
-`imageToAsciiFrame` accepts any `HTMLImageElement`, `HTMLVideoElement`, or `HTMLCanvasElement` and returns a single ASCII frame.
+## Quick start
 
 ```ts
-import { imageToAsciiFrame, renderFrameToCanvas, DEFAULT_OPTIONS } from 'asciify-engine';
+import { buttonLoading } from 'asciify-engine/kit';
+import { asciify } from 'asciify-engine';
 
-const img = new Image();
-img.crossOrigin = 'anonymous';
-img.src = 'photo.jpg';
+const save = buttonLoading(document.querySelector('#save')!);
+save.start('Saving');
+await saveDraft();
+save.succeed('Saved');
 
-img.onload = () => {
-  const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-  const ctx    = canvas.getContext('2d')!;
-  const opts   = { ...DEFAULT_OPTIONS, fontSize: 10, colorMode: 'fullcolor' as const };
-
-  const { frame } = imageToAsciiFrame(img, opts, canvas.width, canvas.height);
-  renderFrameToCanvas(ctx, frame, opts, canvas.width, canvas.height);
-};
+const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
+  fontSize: 8,
+  options: { colorMode: 'fullcolor' },
+});
+// On unmount: save.destroy(); stop();
 ```
 
-### Animated GIFs
+## Features
 
-`gifToAsciiFrames` parses a GIF `ArrayBuffer` and returns one `AsciiFrame` per GIF frame, preserving the original frame rate.
+- **Kit** (`/kit`): 31 interface components and the curated asciify.org backgrounds, one call each.
+- **Media** (`asciify-engine`, `/core`): images, GIFs, video, webcam and text to ASCII on a canvas, with scroll-scrubbed video, chroma key and source crop.
+- **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset.
+- **Hover and motion** (`/hover`): 19 pointer effects and 10 still-image motions for media on your page.
+- **Studio** (`/studio`): 24 render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
+- **Agent skill**: the house design, every component's prompt and snippet, and the full API, for Claude Code, Cursor, Codex and other agents.
+- **Built for host pages**: no work at import, safe under SSR, tree-shaken per component, TypeScript types, ESM and CommonJS.
 
-```ts
-import { gifToAsciiFrames, renderFrameToCanvas, DEFAULT_OPTIONS } from 'asciify-engine';
+## Docs
 
-const buffer = await fetch('animation.gif').then(r => r.arrayBuffer());
-const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-const opts   = { ...DEFAULT_OPTIONS, fontSize: 8 };
+Everything else lives at **[asciify.org/docs](https://asciify.org/docs)**: the API reference, options, framework guides, chroma key, layering, Studio and GPU fields. The agent skill's [references](skills/asciify-engine/references) cover the same ground for agents.
 
-const { frames, fps } = await gifToAsciiFrames(buffer, opts, canvas.width, canvas.height);
+## Performance
 
-let frameIndex = 0;
-setInterval(() => {
-  renderFrameToCanvas(canvas.getContext('2d')!, frames[frameIndex], opts, canvas.width, canvas.height);
-  frameIndex = (frameIndex + 1) % frames.length;
-}, 1000 / fps);
+Each optional entry loads only when imported, and a route that uses one kit component downloads that component, not the whole kit. What the engine promises a host page, and how it is measured, is in [performance.md](skills/asciify-engine/references/performance.md).
+
+## Contributing
+
+Issues and pull requests are welcome. To work on the engine:
+
+```bash
+npm ci
+npm test
+npm run build
 ```
 
-### Video
+`npm run test:browser` serves the browser regression page. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-`asciifyVideo` streams video as live ASCII art in real time. Instant start, constant memory, unlimited duration.
+## Sponsor
 
-> ⚠️ Never set the backing `<video>` element to `display: none` — browsers skip GPU frame decoding. When given a URL string, `asciifyVideo` handles this automatically.
-
-```ts
-import { asciifyVideo } from 'asciify-engine';
-
-const canvas = document.getElementById('ascii') as HTMLCanvasElement;
-
-// Minimal
-const stop = await asciifyVideo('/clip.mp4', canvas);
-
-// Fit canvas to a container and re-size automatically on resize:
-const stop = await asciifyVideo('/clip.mp4', canvas, {
-  fitTo: '#hero',  // or an HTMLElement
-});
-
-// Full-bleed hero framing without custom CSS width hacks:
-const stop = await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: '#hero',
-  objectFit: 'contain',
-  objectPosition: 'center bottom',
-  width: '100vw',
-  height: '100%',
-  bleed: { x: '2vw' },
-});
-
-// Lifecycle hooks — ready state, timers, etc.:
-const stop = await asciifyVideo('/clip.mp4', canvas, {
-  fitTo: '#hero',
-  fontSize: 6,
-  onReady: () => setLoading(false),
-  onFrame: () => setElapsed(t => t + 1),
-});
-
-// Pre-extract all frames before playback (frame-perfect loops, short clips):
-const stop = await asciifyVideo('/clip.mp4', canvas, { preExtract: true });
-
-// Scroll-scrub video time using native browser scroll:
-const stop = await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: '#hero',
-  scroll: true,
-});
-
-// Use GSAP ScrollTrigger when it is already in your app:
-const stop = await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: '#hero',
-  scroll: {
-    gsap,
-    ScrollTrigger,
-    start: 'top bottom',
-    end: 'bottom top',
-    scrub: 1,
-    speed: 1.5,
-  },
-});
-
-// Clean up:
-stop();
-```
-
-
-
----
-
-## Rendering Options
-
-All conversion and render functions accept an `AsciiOptions` object. Spread `DEFAULT_OPTIONS` as a base and override what you need.
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `fontSize` | `number` | `7` (low-level); `10` (one-call) | Character cell size in pixels. Smaller values increase density and detail. |
-| `colorMode` | `'grayscale' \| 'fullcolor' \| 'matrix' \| 'accent'` | `'grayscale'` | Determines how pixel color is mapped to character color. |
-| `charset` | `string` | Standard ramp | Characters ordered from dense to sparse, representing brightness levels. |
-| `brightness` | `number` | `0` | Brightness adjustment from `-1` (darker) to `1` (lighter). |
-| `contrast` | `number` | `1` | Contrast multiplier applied before character mapping. |
-| `invert` | `boolean \| 'auto'` | `false` | Inverts the luminance mapping — light areas become dense, dark areas sparse. Set to `'auto'` to auto-detect from OS color scheme (light mode → invert, dark mode → normal). |
-| `renderMode` | `'ascii' \| 'dots'` | `'ascii'` | Render as text characters or circular dot particles. |
-| `hoverEffect` | `string` | `'none'` | Interactive effect driven by cursor position. See hover effects below. |
-| `hoverStrength` | `number` | `0` | Effect intensity (0–1). `0` = hover disabled. |
-| `hoverRadius` | `number` | `0.2` | Effect radius relative to canvas size (0–1). |
-| `chromaKey` | `true \| 'blue-screen' \| {r,g,b} \| string \| null` | `null` | Remove a background colour. `true` = heuristic green screen (any shade). `'blue-screen'` = heuristic blue screen. Custom: `{r,g,b}` or any CSS hex string keyed by Euclidean distance. `null` to disable. |
-| `chromaKeyTolerance` | `number` | `60` | Euclidean RGB distance threshold for chroma-key detection. `0` = exact match, higher = more pixels removed (max useful ~100). |
-| `chromaKeyTrimPadding` | `number` | `0.002` | Normalized safety padding around auto-trimmed keyed video foregrounds. Use `0` for edge-tight marketing heroes. |
-| `chromaKeyTrimLuminanceThreshold` | `number` | `0` | Minimum source luminance counted as auto-trim foreground. Raise slightly when invisible edge noise prevents keyed subjects from filling a preserved-ratio layout. |
-| `chromaKeyTrimMode` | `'range' \| 'frame' \| 'off'` | `'range'` | `'range'` keeps one stable crop for the playback range. `'frame'` remeasures each rendered frame and expands back to the render aspect for moving scrubbed heroes. `'off'` disables keyed auto-trim. |
-
-
-### Source Crop
-
-Use `sourceCrop` to remove empty source edges before ASCII sampling. The recommended API is CSS-like insets; the engine sizes `asciifyVideo` from the resolved crop aspect so the output does not stretch:
-
-```ts
-await asciifyVideo('/hero.mp4', canvas, {
-  options: {
-    sourceCrop: { top: 0.08, bottom: 0.22 },
-  },
-});
-```
-
-Crop from the sides the same way:
-
-```ts
-await asciifyVideo('/hero.mp4', canvas, {
-  options: {
-    sourceCrop: { left: 0.1, right: 0.1 },
-  },
-});
-```
-
-Use any side together:
-
-```ts
-sourceCrop: { top: 0.08, right: 0.12, bottom: 0.22, left: 0.12 }
-```
-
-`sourceCrop: { height: 0.7 }` keeps 70% of the source centered. `preserveAspect` only applies to single-dimension `width`/`height` crops. Side insets (`top`, `right`, `bottom`, `left`) define the crop window directly, then `asciifyVideo` uses that crop aspect for layout and render dimensions so a top/bottom crop can become a wide hero band without stretching.
-
-When `sourceCrop` and `chromaKey` are both enabled for video, `asciifyVideo` performs a one-time foreground trim inside the crop window. For scrubbed or trimmed video it samples the playback range and uses the union of the keyed foreground bounds. Keyed empty margins are removed before layout sizing, so green-screen or transparent-looking subjects can fill wide hero canvases without custom CSS hacks or per-frame zoom.
-
-Use `chromaKeyTrimMode: 'frame'` when the subject moves across a scroll-scrubbed hero and a single range crop still leaves an edge visually short. The engine remeasures the visible foreground per rendered frame and expands the crop to the render aspect, so the result stays proportionate while following the actual subject.
-
-### Canvas Layout
-
-Use layout options on `asciifyVideo` when the ASCII canvas needs to fill a hero, preview frame, or fixed viewport. These affect only the displayed canvas box; they do not change source sampling or ASCII detail.
-
-```ts
-await asciifyVideo('/hero.mp4', canvas, {
-  fitTo: '#hero',
-  objectFit: 'contain',
-  objectPosition: 'center bottom',
-  width: '100vw',
-  height: '100%',
-  bleed: { x: '2vw' },
-  options: {
-    sourceCrop: { top: 0.1, bottom: 0.18 },
-  },
-});
-```
-
-- `objectFit`: `'contain' | 'cover' | 'fill' | 'none' | 'scale-down'`
-- `objectPosition`: any CSS object-position value, such as `'center bottom'`
-- `scale`: visual overfill using CSS `scale`, preserving existing transforms
-- `width` / `height`: CSS lengths or pixel numbers for the visible canvas
-- `bleed`: extra layout overfill around the fitted canvas. Use `{ x: '2vw' }` for full-bleed ASCII heroes where glyph side bearings or character-cell quantization leave a thin visual edge gap.
-
-Use `sourceCrop` to reframe the input media. Use `objectFit`, `objectPosition`, `scale`, and `bleed` to place the rendered canvas in the layout. For high-detail scroll scrubbers, keep `preExtract` off and set `maxCachedFrames` to bound memory while the engine caches nearby text frames.
-
-### Chroma Key (Green/Blue Screen)
-
-Remove a solid background colour from any source — images, GIFs, or video — so the canvas background shows through keyed pixels.
-
-```ts
-import { asciify, DEFAULT_OPTIONS } from 'asciify-engine';
-
-// Green screen — zero config, just set true:
-asciify(img, canvas, {
-  options: { ...DEFAULT_OPTIONS, chromaKey: true, colorMode: 'fullcolor' },
-});
-
-// Blue screen
-asciify(img, canvas, {
-  options: { ...DEFAULT_OPTIONS, chromaKey: 'blue-screen', chromaKeyTolerance: 70 },
-});
-
-// Custom RGB key
-asciify(img, canvas, {
-  options: { ...DEFAULT_OPTIONS, chromaKey: { r: 0, g: 180, b: 90 }, chromaKeyTolerance: 50 },
-});
-
-// Live video with green screen
-asciifyVideo('/footage.mp4', canvas, {
-  fitTo: '#container',
-  options: { ...DEFAULT_OPTIONS, chromaKey: true, colorMode: 'fullcolor' },
-});
-```
-
-**Tolerance guide:**
-- `40–60` — tight key, natural green screen under good lighting
-- `60–80` — broader key, wrinkled fabric or uneven lighting
-- `80–120` — aggressive; expect some spill into the subject
-
-### Color Modes
-
-| Mode | Description |
-|---|---|
-| `grayscale` | Classic monochrome ASCII. Character brightness maps to source luminance. |
-| `fullcolor` | Each character inherits the original pixel color from the source. |
-| `matrix` | Monochrome green — inspired by classic terminal aesthetics. |
-| `accent` | Single accent color applied uniformly across all characters. |
-
-### Hover Effects
-
-Interactive effects that respond to cursor movement. Pass the effect name to `hoverEffect` and supply the cursor position to `renderFrameToCanvas` at render time.
-
-Available effects: `spotlight` · `flashlight` · `magnifier` · `force-field` · `neon` · `fire` · `ice` · `gravity` · `shatter` · `ghost`
-
-```ts
-canvas.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  renderFrameToCanvas(ctx, frame, opts, canvas.width, canvas.height, Date.now() / 1000, {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top,
-  });
-});
-```
-
----
-
-## Downloadable Background Templates
-
-`asciiBackground` mounts a self-animating ASCII renderer onto any DOM element — ideal for hero sections, banners, or full-page backgrounds. It manages its own canvas, animation loop, and resize handling internally.
-
-```ts
-// Download a template from https://asciify.org/backgrounds
-import { asciiBackground } from './backgrounds.js';
-
-const { destroy } = asciiBackground('#hero', {
-  type: 'rain',
-  colorScheme: 'auto', // follows OS dark/light mode
-  speed: 1.0,
-  density: 0.55,
-  accentColor: '#d4ff00',
-});
-
-// Stop and clean up when no longer needed
-destroy();
-```
-
-### Available Background Types
-
-| Type | Description |
-|---|---|
-| `wave` | Flowing sine-wave field with layered noise turbulence |
-| `rain` | Vertical column rain with a glowing leading character and fading trail |
-| `stars` | Parallax star field that reacts to cursor position |
-| `pulse` | Concentric ripple bursts emanating from the cursor |
-| `noise` | Smooth value-noise field with organic, fluid motion |
-| `grid` | Geometric grid that warps and brightens near the cursor |
-| `aurora` | Sweeping borealis-style color bands drifting across the field |
-| `silk` | Fluid swirl simulation following cursor movement |
-| `void` | Gravitational singularity — characters spiral inward toward the cursor |
-| `morph` | Characters morph between shapes over time, driven by noise |
-
-### Background Options
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `type` | `string` | `'wave'` | Which background renderer to use. |
-| `colorScheme` | `'auto' \| 'light' \| 'dark'` | `'dark'` | `'auto'` reacts to OS theme changes in real time. |
-| `fontSize` | `number` | `13` | Character size in pixels. |
-| `speed` | `number` | `1` | Global animation speed multiplier. |
-| `density` | `number` | `0.55` | Fraction of grid cells that are active (0–1). |
-| `accentColor` | `string \| 'auto'` | varies | Highlight or leading-character color (any CSS hex string). Set to `'auto'` to auto-detect: probes `--accent-color`, `--color-accent`, `--accent`, `--primary` CSS variables on `:root`, then falls back to OS color scheme (dark ink in light mode, light ink in dark mode). |
-| `color` | `string` | — | Override the body character color. |
-
----
-
-## React Integration
-
-```tsx
-import { useEffect, useRef } from 'react';
-import { imageToAsciiFrame, renderFrameToCanvas, DEFAULT_OPTIONS } from 'asciify-engine';
-
-export function AsciiImage({ src }: { src: string }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = src;
-    img.onload = () => {
-      const opts = { ...DEFAULT_OPTIONS, fontSize: 10, colorMode: 'fullcolor' as const };
-      const { frame } = imageToAsciiFrame(img, opts, canvas.width, canvas.height);
-      renderFrameToCanvas(canvas.getContext('2d')!, frame, opts, canvas.width, canvas.height);
-    };
-  }, [src]);
-
-  return <canvas ref={canvasRef} width={800} height={600} />;
-}
-```
-
----
-
-## Embed Generation
-
-Generate self-contained HTML that can be hosted anywhere or dropped directly into a page — no runtime dependency required.
-
-```ts
-import { generateEmbedCode, generateAnimatedEmbedCode } from 'asciify-engine';
-
-// Static — produces a single-file HTML with the ASCII art baked in
-const staticHtml = generateEmbedCode(frame, options);
-
-// Animated — produces a self-running HTML animation
-const animatedHtml = generateAnimatedEmbedCode(frames, options, fps);
-```
-
----
-
-## API Reference
-
-| Function | Signature | Returns |
-|---|---|---|
-| `asciify` | `(source, canvas, options?)` | `Promise<void>` |
-| `asciifyVideo` | `(source, canvas, options?)` | `Promise<() => void>` |
-| `asciifyGif` | `(source, canvas, options?)` | `Promise<() => void>` |
-| `asciifyWebcam` | `(canvas, options?)` | `Promise<() => void>` |
-| `asciiBackground` (downloaded template) | `(selector, options)` | `{ destroy() }` |
-| `imageToAsciiFrame` | `(source, options, w?, h?)` | `{ frame, cols, rows }` |
-| `renderFrameToCanvas` | `(ctx, frame, options, w, h, time?, hoverPos?)` | `void` |
-| `gifToAsciiFrames` | `(buffer, options, w, h, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
-| `videoToAsciiFrames` | `(video, options, w, h, fps?, maxSec?, onProgress?)` | `Promise<{ frames, cols, rows, fps }>` |
-| `generateEmbedCode` | `(frame, options)` | `string` |
-| `generateAnimatedEmbedCode` | `(frames, options, fps)` | `string` |
-
-`asciifyVideo` options: `fitTo` (HTMLElement/selector — fits canvas to container + ResizeObserver), `preExtract` (pre-decode all frames, default false), `trim: { start?: number; end?: number }` (loop a time slice in seconds, accepts floats), `scroll` (`true` for native scroll scrub, or `{ gsap, ScrollTrigger, trigger, start, end, scrub }` for GSAP), `onReady(video)`, `onFrame()`
-
-Scroll scrubbing works in live video mode. Leave `preExtract` off when using `scroll`.
-
----
+Asciify is free and open source. If it saves you time, [sponsor its development](https://asciify.org/sponsor).
 
 ## License
 
-MIT © [asciify.org](https://asciify.org)
-
-> ☕ [Buy me a coffee](https://www.buymeacoffee.com/asciify) — if this saved you time, I'd appreciate it!
-
-
-## Hero finish
-
-Version 1.3.0 adds text-shaped charcoal cutouts (`textMask`), peripheral scanline/fringe control (`edgeEffect`), fixed accent ink, and velocity-driven Trail source flow. These additions ship in **npm 1.3.0**. Upgrade older applications before using them. See the [complete API, layering example, lifecycle, and fallback limits](skills/asciify-engine/references/hero-finish.md).
-
-## Studio composition tools
-
-The `asciify-engine/studio` entry adds a reusable composition pipeline: alternate render styles, palette dithering, crop and masks, source/blurred/gradient backdrops, combined optical effects, saved looks, text fonts, and PNG/JPG/GIF/MP4/WebM export. Existing ASCII defaults and `/core` and `/hover` imports stay unchanged. Fonts and video encoders load on demand.
-
-```ts
-import { mountStudio } from 'asciify-engine/studio';
-
-const studio = await mountStudio(canvas, '/your-video.mp4', {
-  settings: {
-    style: 'ascii',
-    backdrop: { mode: 'blurred', opacity: 0.4 },
-  },
-});
-studio.update({ hover: { effect: 'water', radius: 0.35 } });
-// On unmount:
-studio.destroy();
-```
-
-See the [Studio API guide](skills/asciify-engine/references/studio-workspace.md) for complete settings, import/export, media ownership, browser requirements, and performance budgets.
-
-### 2.0.1 size and export fixes
-
-`studioGrid` exposes the effective grid and minimum cell size for a bounded preview. Dither uses `dither.scale`; other styles use `cellSize`. Pass `time` to `exportStudio` for a PNG/JPEG of the current frame. Animation exports continue to start at zero. See the Studio guide for the shared preview/export density contract.
-
-### Still-image motion — 3.0
-
-Use `motion: { type: 'current', speed: 1 }` with `/studio`, `motion: 'current'` with `/hover`, or `animationStyle: 'current'` with core. Choose one motion owner. The curated set is Off (`none`), Caustics (`caustics`, fixed-grid light), Slow Current (`current`, local flow), and Reveal & Reform (`reform`, staggered dissolve). All loop every 12 / speed seconds and preserve your chosen colors. Breathe, Fire, Rainbow and other old ambient motion IDs are retired. Old Studio presets restore with motion Off; update application-owned core options explicitly. Hover effects and optical finishes are independent. See [the 3.0 migration guide](skills/asciify-engine/references/upgrading.md).
-
-## 4.0: optional background templates
-
-Procedural backgrounds no longer ship in the npm package or root exports. Download only the template you want from [the background gallery](https://asciify.org/backgrounds); its copied code and lifecycle belong to your application. Existing 3.x applications can remain pinned while migrating. `/backgrounds`, `asciiBackground`, `BACKGROUND_TYPES`, and procedural `render*Background` exports are removed; text/media background APIs remain. The default import and `/core` now expose the same media-first API. `CHARACTER_SETS` is the lightweight curated catalog shared by the hero and editor.
-
-
-## 4.1.0: current catalogs only
-
-This release removes `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS`, and their key types. **Although numbered 4.1.0 at the maintainer's request, these removals are breaking changes.** Update imports before upgrading. Removed core `artStyle` shortcuts throw with migration guidance.
-
-Use `STUDIO_STYLES` from `asciify-engine/studio` for the 15 current render styles: ASCII, Braille, Dots, Lines, Blocks, Dither, Cross, Diagonal, Diamond, Mixed, Pixel, Mosaic, Lego, Voxel and Disco. Set `settings.style` with `mountStudio` / `createStudioRenderer`; these styles are actual rendering methods, not character ramps. Core media APIs remain ASCII-first.
-
-Use `CHARACTER_SETS.standard.chars` (or another curated entry) from root or `/core` for an ASCII ramp; custom `options.charset` and `charsetFrames` arrays remain supported. Use explicit `options.colorMode`, `renderMode`, and hover/motion settings instead of the removed combined presets. No legacy catalog has been moved to a hidden compatibility bundle.
-
-
-### Studio detail controls (4.2)
-
-The optional `asciify-engine/studio` entry includes 24 render styles, including hex mosaic, LED matrix and CMYK print. Dither supports pixel scale, custom palettes, RGB/luminance mapping, pattern speed and direction. Use `studioGrid` to report effective density and opt into a larger `maxCells` budget for one-pixel output; defaults stay performance-bounded. Mounts expose `setAdaptive` for an explicit detail/performance choice. Still-image motion has `amount`, and finishing adds `rgbSplit` and `sharpen` (WebGL required). See the [complete controls and export guidance](skills/asciify-engine/references/studio-workspace.md#fine-detail-and-controls-42). No AI service or server upload is introduced.
-
-### More motion for still images (4.3)
-
-Studio includes six still-image motions plus Off: Caustics, Slow Current, Reveal & Reform, Sheen, Tidal Rings, and Living Grain. Sheen and Living Grain preserve the grid. Motion speed and strength are adjustable. Hover adds Magnetic Pull and Scatter alongside Trail, Water, Contour, Dissolve, Silk, and Vortex. Use `hover.effect` in Studio or `effect` in the optional `/hover` module; configure radius and strength separately. Existing defaults remain unchanged.
-
-### Studio correctness and performance (4.3.1)
-
-Stationary compositions are reused during animated finishing. Hidden dither settings and zero-strength motion no longer keep still previews awake. Ordered dithering uses cached thresholds with byte-identical output; Scatter caches its spatial noise. CMYK now responds to tonal hovers and still motion. For a selected PNG/JPEG frame after changing motion speed, pass `time: player.time` and `motionTime: player.motionTime` to `exportStudio`. See the packaged project-integration skill reference for a live component and independent image/video export.
-
-### More ways to bring photos to life (4.4)
-
-Eleven pointer interactions and ten autonomous motions, plus Off. Emboss presses paired light and shadow into a fixed character grid; Elastic stores directional momentum and springs back; Rake combs the source into alternating ribbons. Parallax, Woven Flow, Print Shift and Contour Light join the still-image motions. Contour Light follows the actual source tones.
-
-```js
-import { STUDIO_HOVERS, STUDIO_MOTIONS } from 'asciify-engine/studio';
-// value / label / group / description: use these to build a complete picker.
-player.update({
-  motion: { type: 'parallax', speed: 1, amount: .7 },
-  hover: { effect: 'elastic', radius: .45, strength: .65 },
-});
-```
-
-All motion choices repeat every `12 / speed` seconds. Still exports preserve the selected preview phase; animated exports include motion without pointer events. Grain, dust, glitch, animated dither and source video have separate timing. No external AI service is used. See [effect integration](skills/asciify-engine/references/studio-effects.md).
-
-### Tonal detail and blue-noise dithering (4.5)
-
-Studio adds `dither.algorithm: 'blue-noise'`: a stable precomputed dispersed pattern with no runtime generation or asset download. `noise` remains white noise. Choose the algorithm from `DITHER_ALGORITHMS`; drift and shimmer remain independently controlled.
-
-Recover usable shadow/highlight separation before conversion with `color.gamma`, `shadows`, `highlights`, `blackPoint` and `whitePoint`. All Studio styles share these controls and retain neutral defaults. They are a bounded monotone tonal curve, not arbitrary per-channel curve editing. See [exact ranges, sampling budgets and a live-project example](skills/asciify-engine/references/studio-workspace.md#tonal-detail-and-blue-noise-45).
-
-### Channel curves and source noise reduction (4.6)
-
-Studio adds editable RGB, red, green and blue curves, with up to 16 control points each, plus optional edge-preserving source noise reduction. They apply before every render style and travel with saved settings and exports. Defaults preserve existing output. Curves use small cached lookups; still images reuse filtered pixels while hover/motion run. Dense video filtering is an explicit CPU tradeoff.
-
-```ts
-player.update({color:{
-  denoise:.25,
-  curves:{rgb:[[0,0],[.25,.2],[.75,.8],[1,1]]},
-}});
-const settings = player.settings; // detached snapshot for save/export
-```
-
-See [settings, normalization, processing order and performance guidance](skills/asciify-engine/references/studio-workspace.md#channel-curves-and-source-noise-46). Curves are local source controls, not another art-style alias or AI restoration.
-
-### Ordered source shaping (4.7)
-
-Combine up to eight source transformations before ASCII, dither or any Studio style: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Edit strength, position and radius, plus direction/frequency where applicable. Reorder or disable stages without losing their settings; choose extended or transparent edges. Generate controls from `STUDIO_WARPS` and `MAX_STUDIO_WARPS`.
-
-```ts
-player.update({
-  warps: [{type:'sphere',amount:.3,radius:.7}, {type:'shear',amount:.15,angle:25}],
-  warpEdge:'clamp',
-  motion:{type:'parallax',amount:.5},
-});
-```
-
-The stack is static shaping; motion and pointer hover remain independent. Coordinate maps are cached across video frames, and stills reuse shaped pixels during interaction. Empty stacks are free of additional pixel work. Defaults and root/core/hover behavior remain unchanged. Dither motion also gains alpha-correct interpolation at transparent edges. See [parameters, order, persistence/export and measured CPU tradeoffs](skills/asciify-engine/references/source-shaping.md).
-
-### Layered projects (4.8)
-
-Compose up to eight image, video, GIF or text layers with independent styles, motion, hover, placement, opacity and blend modes. `mountStudioProject` owns one playback loop and a shared cell/raster budget; hidden and unchanged layers skip work. Root/core/hover entry points remain unchanged.
-
-```ts
-import { mountStudioProject } from 'asciify-engine/studio';
-const player = await mountStudioProject(canvas, { layers: [
-  { id: 'photo', source: 'image', settings: { motion: { type: 'parallax' } } },
-  { id: 'title', source: 'text', placement: { width: .8, height: .25 },
-    settings: { ink: '#b3ed82', hover: { effect: 'elastic' } } },
-] }, { image: '/your-photo.webp', text: { text: 'HELLO', font: 'Small' } });
-player.updateLayer('photo', { settings: { hover: { effect: 'water' } } });
-// player.destroy() on unmount
-```
-
-`exportStudioProject` owns independent export media, so it does not disturb the live preview. Save layouts with `serializeStudioProject`, retain/rebind source assets separately, and restore with `parseStudioProject`. See the [layered-project guide](skills/asciify-engine/references/layered-projects.md) and [typed live/export example](examples/layered-composition.ts) for geometry, picking, ownership, cancellation and performance limits. This is an optional local composition API, not a claim of complete competitor-style or FPS parity.
-
-### Print and illustration (4.9)
-
-Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism add distinct print geometry to `/studio`. All share hover, living-image motion, masks, source shaping, saved settings and exports. Tune coverage, mark weight, angle, repeatable texture, light/dark ink polarity and two-ink registration with `print`. Use `STUDIO_PRINT_STYLES` for labels and [the print guide](skills/asciify-engine/references/print-styles.md) for a live still-image example, bounds and performance limits. ASCII remains the default.
-
-## 4.10: more life for still images
-
-Three additional pointer responses—Lens wake, Smudge and Ripple rings—and four autonomous motions—Relight, Shimmer, Breeze and Unfold—bring the catalogs to 14 each, plus Off. Source images, art styles and colors remain yours. Six editable combinations in `STUDIO_ANIMATION_PRESETS` help choose a starting point without replacing your look.
-
-```ts
-import { STUDIO_ANIMATION_PRESETS } from 'asciify-engine/studio';
-const preset = STUDIO_ANIMATION_PRESETS.find(p => p.id === 'quiet-light')!;
-player.update({ motion: preset.motion, hover: preset.hover });
-```
-
-Use one Studio player for live rendering, settings persistence and independent animation export. See [the complete interaction guide](skills/asciify-engine/references/studio-effects.md#lively-images-410) and [living-image helper](examples/living-image.ts). CPU simulation is bounded and wakes settle; device frame rates and visual fidelity still require browser measurement. Existing defaults and saved IDs are unchanged.
-
-## 4.11: GPU glyph fields
-
-`asciify-engine/field` renders an image, a video or generated motion as characters entirely on the GPU, with three cursor responses: `trail` (the Asciify Trail, the same ink field as the studio's, now on the GPU), `fluid` (an incompressible ink-in-water wake that curls into eddies) and `lantern` (a soft light with no distortion). Use it for full-bleed heroes and brand fields that must stay smooth while people move over them. Characters are drawn texel for texel from a glyph atlas, so any font and any charset work, including your own name.
-
-```ts
-import { mountGlyphField } from 'asciify-engine/field';
-
-const field = mountGlyphField(canvas, {
-  source: '/media/hero.mp4',
-  charset: ' .,:-+ACME',
-  color: 'ink', ink: '#f3ba32', shade: 1,
-  fluid: { radius: 0.08, refraction: 0.03, glow: 0.6 },
-});
-// field.update({ charset: ' .:ASCIIFY' }); field.destroy();
-```
-
-It needs WebGL2 on a GPU: `isGlyphFieldSupported()` is false without it or on software WebGL, and slow devices step down to 1× pixels and then still ambient motion. Keep a poster or the `/studio` renderer as the fallback. A still field stops drawing once its wake settles. Measured in Playwright Chromium on an Apple M4 Pro at 1440 × 900 and device pixel ratio 2, a full-viewport field held 120 fps (9 ms 95th-percentile frame) under continuous pointer movement; measure your own targets. See the [field guide](skills/asciify-engine/references/glyph-field.md) and [brand field example](examples/glyph-field.ts). It is a separate entry: the root, `/core`, `/hover` and `/studio` never load it.
-
-## 4.24: lighter on the host page
-
-- The kit is split per component: a host importing one component ships about 33 KB gzip instead of 99 KB. Existing imports are unchanged.
-- Animating components draw once per frame (they drew twice), ambient motion is capped at 60 fps (30 on low-end devices or Save-Data) while interactions keep the full rate, and at most one field mounts per frame, so mounts never stack into a long task.
-- Studio hover redraws at most 60 times a second and never takes more than half the main thread. Off-screen core video loops stop, zero-size fields stop, the backing store is capped at one 4K screen, and `destroy()` removes every listener.
-- See `references/performance.md` in the skill for what the engine promises host apps.
-
-## 4.23: dialogs always render, sharper motion cues, cleaner hovers
-
-- Kit fields inside an open modal dialog always get a WebGL context: fields covered by the dialog give theirs up and come back when it closes. A released field hands its canvas back at once (Safari counts dead contexts toward its limit), and a field whose context is lost recovers onto a fresh canvas.
-- Depth is fused from focus, haze, a horizon prior, texture and saliency with an edge-aware filter; Drift finds water (including non-blue seas by reflection), sky, cloud and falling water, and holds everything else still. The classic core renderer shares the same motion code. Analysis follows grid changes and reads the ungraded photo.
-- Water settles cleanly; Ripple and Emboss draw their own rings on dark or transparent ground; glyph fields take `scope`; video subjects update as the video plays; the hover catalog (`HOVER_CONTROLS`, `DEFAULT_HOVER`, `resolveHover`) is exported once. On the GPU path, Trail keeps the artwork's ground and Water moves whole cells.
-
-## 4.22: photo-aware motion and finish
-
-- A new set of still-image motions read the photo's own light, form, highlights, detail and estimated depth: `relight`, `sheen` (specular sweep), `glow` (highlight bloom), `shimmer` (glints), `parallax`, `push`, `focus`, `mist`, `current` (drift) and `develop`.
-- Retired motions keep working through `DEPRECATED_STUDIO_MOTIONS`: caustics → sheen, grain → shimmer, trace → relight, tidal/weave/breeze → current, reform/print/unfold → develop.
-- Optical finish: bloom is a wide soft glow around highlights, and grain is fine film grain weighted to the midtones.
-- Animation presets are re-paired with the new motions, plus a new Depth study.
-
-## 4.21: premium hovers that know the subject
-
-- Six new hovers: `loupe`, `reveal`, `repel`, `tilt`, `haze` and `bleed`; `scatter`, `elastic` and `ripple` are refined, and `rake` is deprecated (it plays `silk`).
-- Every hover takes `decay` (how long it lingers) and `scope: 'all' | 'subject' | 'outside'`: the subject comes from transparency, a drawn mask or an even plain ground, with a feathered edge; a busy full-bleed photo acts as `all`.
-- Hovers ease in, settle when the pointer stops, follow touch drags and stay off under reduced motion.
-- `mountHover` now runs on the GPU in Chrome (a reserved word in its shader forced the 2D fallback).
-
-## 4.20: sharper presets, 61 looks, twelve backgrounds
-
-- Studio presets `ascii` (Signature ASCII) and `night` (Night signal) are retuned: finer 4px cells, brighter inks, lifted midtones and a faint glow.
-- The woodblock print style no longer leaves pale seams between cells.
-- `aurora` joins the deprecated backgrounds (closest current preset: `mesh`), leaving twelve curated presets; `halo` fits tall stages, `caustics` is calmer in small cards and `wordField` reads on small dark stages.
-- The skill's `looks.md` covers 61 looks, adding Projects looks for album covers, editorial portraits, product heroes, posters, postcards, botanical plates, lookbooks, game box art, stickers and phone wallpapers, each with its export size and frame.
-
-## 4.19: a curated set of premium backgrounds
-
-- New presets `halo`, `ripple`, `mesh`, `interference`, `constellation` and `cascade`; `caustics`, `contour` and `aurora` are rebuilt on the GPU. All follow `setGlobalLook`, keep a quiet zone behind content and hold a still frame under reduced motion.
-- `cursor: false` turns pointer interaction off for every preset. `mark: 'glyph' | 'dot'` draws any preset in characters or dots; `swell` keeps dots by default.
-- Dated presets (`dna`, `circuit`, `fire`, `grid`, `morph`, `noise`, `pulse`, `rain`, `silk`, `stars`, `terrain`, `veil`, `void`, `wave`, `weave`, `dune`, `etch`, `facet`, `moire`, `halftone`) stay exported but are deprecated; the kit reference names the closest current preset for each.
-- Switching presets no longer leaves the previous preset's poster covering the new one.
-- `pageDissolve` draws its settled blocks in one masked pass and snapshots at 1x on touch devices, so the wave stays light on phones.
-- The skill's `looks.md` now covers 47 artwork looks, every render style, plus composed (blur, transparent, gradient) and finished (vignette, grain, bloom, scanlines) looks.
-
-## 4.18: 24 render styles in every live field, artwork looks, smoother components
-
-- Glyph fields draw the Studio's tile and print styles: `mark` accepts `pixel`, `mosaic`, `lego`, `voxel`, `disco`, `dither`, `hex`, `led`, `cmyk`, `stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph` and `pointillism` (see `FIELD_MARKS`), one shader branch each.
-- `setGlobalLook({ style })` re-skins every opted-in kit field in any of the 24 Studio styles (`KIT_STYLES`); `charset` still works alongside.
-- New background preset `swell`: a halftone dot field in slow crossing waves, quiet behind the content, swelling under the pointer.
-- Reworked kit components: `blockChart` (crisp glyph columns, scrubbing, morphing ranges), `commandPalette` (gliding selection, resolving rows, AI shimmer), `toastStack` (no outlines, layered stack, swipe to dismiss), `pill` and `tabs` (glyph status dots, gliding indicator, rolling figures), `pageDissolve` (one continuous wave), `imageGenerate` (one develop curve), `accordion` (one spring per panel, hover intent), `pullRefresh` (an iOS-sized ring), `dropzone` (a quiet ring that comes alive on drag-over).
-- The skill gains `references/looks.md`: 22 artwork looks with prompts and settings for wallpapers, posters and hero art.
-- Studio defaults are paper and graphite instead of yellow; the default characters are Classic ASCII.
-
-## 4.17: a thinking label that rolls
-
-- `thinking` drops the dot bands and the dotted rule. A wave runs through the status label instead, each letter rolling up through glyphs and back in the label's own font; when the answer starts, the label rolls into `Thought for 2s`. New options `roll`, `wave` and `glyphs`; `lines` and `rule` are ignored.
-
-## 4.16: smooth shading in every charset, rolling streamed text
-
-- Glyph fields gain `blend` (default `'auto'`): with nine or fewer characters, a photo or video mixes neighbouring characters in a fixed 4x4 pattern for the shades between them, so binary, dots and block sets shade like a full ramp. Drawn interface shapes stay crisp. It costs one comparison per cell and never shimmers.
-- `streamText(el, { transition: 'roll' })` rolls each character up through glyphs into the crisp letter, like the odometer, with the caret on the front of the roll.
-
-## 4.15: every charset at the same weight, inks from your tokens
-
-- `setGlobalLook({ charset })` measures the set's ink against classic ASCII and balances it: block and solid sets draw smaller glyphs and keep their detail, sets without light glyphs ease off, and faint sets draw larger, bolder glyphs. Tones are untouched.
-- Kit inks default to `--ascii-ink-strong`, and with that unset, to the element's own text colour, so components follow the page's tokens instead of a fixed grey.
-- `skeleton` reads its blocks' shapes from CSS (an image's radius; one bar per line of text, as wide as the words) and its shimmer is a continuous wave until `resolve()`.
-- A hidden (`display: none`) field gives its WebGL context to fields on screen.
-
-## 4.14: backgrounds in the kit, site-quality components
-
-- **`background(el, { preset })`** brings all 26 asciify.org backgrounds into the kit: drift, halftone, wordField and fluid on the GPU field, and 22 canvas presets (caustics, contour, facet, etch, moire, weave, veil, dune, wave, aurora, noise, silk, rain, stars, pulse, grid, voidWell, morph, fire, dna, terrain, circuit). Presets are separate imports, so a page pays only for the ones it uses, and each matches the /backgrounds page's rendering.
-- **The site now runs on the kit.** Every component demo on asciify.org is the kit itself, so what you see is what you install. Where the kit was weaker than the hand-built demos, the kit was raised to match.
-- **Performance and integration:** fields mount lazily near the viewport and release far from it, a page-wide budget keeps at most 12 WebGL contexts live, `poster` shows a still for first paint and as the no-GPU fallback, `setGlobalLook({ charset })` re-skins every glyph field at once with a short sweep, and `update({ ink, look })` merges per instance.
-- **New guide:** [applying-asciify.md](skills/asciify-engine/references/applying-asciify.md) teaches agents the house design: which component or background to use, text over fields, ink, radius, motion, performance and a finishing checklist.
-
-## 4.13: the kit — interface components in one call
-
-`asciify-engine/kit` turns Asciify's interface components into short, customisable calls on the GPU field. Each one follows its element's size and border radius, takes ink from your CSS variables in light and dark, honours reduced motion, pauses off screen, leaves your HTML working without WebGL2, and cleans up with `destroy()`.
-
-```ts
-import { beam, buttonLoading, statusOrb } from 'asciify-engine/kit';
-
-const b = beam(card, { palette: 'colorful', mode: 'progress' });
-b.progress(0.6); b.success();
-
-const save = buttonLoading(saveButton, { text: 'Save' });
-save.start('Saving'); await request; save.succeed('Saved');
-```
-
-Thirty components ship in the kit: beam, decode, odometer, buttonLoading, statusOrb, skeleton, pill, tabs, imageGenerate, voiceOrb, commandPalette, slideToConfirm, likeBurst, blockChart, pageDissolve, swipeDeck, codeInput, toastStack, thinking, streamText, compare, accordion, dropzone, disintegrate, pullRefresh, fieldBackground, wordmark, asciiVideo, artPanel and pricingGlow. Unused components tree-shake away; each adds about 2–4 kB gzipped on top of a 3.5 kB shared core and the `/field` entry. See [kit.md](skills/asciify-engine/references/kit.md), and [components.md](skills/asciify-engine/references/components.md) for the prompt and snippet of every component.
-
-## 4.12: halftone fields for interfaces
-
-`mark: 'dot'` turns the GPU field into a halftone: one circle per cell, its area following the tone, crisp at any pixel ratio. The new `drift` scene draws a few broad, slow lobes; `clear` keeps the field quiet around an element so copy stays readable; `pulse()` sends a ring through the dots when your interface wants to answer an event.
-
-```ts
-const field = mountGlyphField(canvas, {
-  mark: 'dot', scene: 'drift', cellSize: 14, dotScale: 0.64,
-  ink: '#9a988f', background: 'transparent',
-  clear: { element: document.querySelector('#hero .copy') },
-});
-saveButton.addEventListener('click', () => field.pulse({ element: saveButton }));
-```
-
-Also in 4.12:
-
-- **Even quality across styles.** Character styles stretch each image's tones to its own range and pick glyphs by measured ink, so dark or flat images keep their subject in every character set and look. Set `color.levels: 'none'` for the previous linear mapping. Adaptive resolution only steps down while frames are genuinely over budget, and returns to full detail when motion settles.
-- **Faster fields.** Image sources decode off the main thread and are scaled to what the cells can show; scene maths runs once per cell; shaders compile without blocking. `ready` resolves for fields mounted off screen, and a shader link failure is reported through `onError`.
-- **4.12.1:** fields size themselves from layout, so a parent's transform (a dialog scaling open) no longer stretches them.
-- **31 ready-made components in the agent skill** ([components.md](skills/asciify-engine/references/components.md)): controls, feedback, AI states, transitions, data, media, text and pages, each with the prompt and the reference code. See them running at [asciify.org/components](https://asciify.org/components).
+[MIT](LICENSE) © ayangabryl

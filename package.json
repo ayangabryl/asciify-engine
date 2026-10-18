@@ -74,6 +74,7 @@
     "skills/asciify-engine",
     "README.md",
     "LICENSE",
+    "CHANGELOG.md",
     "examples/media-background.ts",
     "examples/studio-composition.ts",
     "examples/layered-composition.ts",
