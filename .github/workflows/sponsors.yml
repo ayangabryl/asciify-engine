@@ -1,0 +1,32 @@
+name: Sponsors
+
+# Refreshes the README's sponsors section from https://cdn.asciify.org/sponsors.json, which the
+# asciify.org upload worker writes after matching GitHub Sponsors to sponsor applications.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sponsors
+  cancel-in-progress: true
+
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/update-sponsors.mjs
+      - name: Commit when changed
+        run: |
+          if git diff --quiet README.md; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update README sponsors" README.md
+          git push
