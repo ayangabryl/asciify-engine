@@ -498,6 +498,22 @@ describe('component behaviour', () => {
     expect(label.style.getPropertyValue('z-index')).toBe('');
     expect(count.textContent).toBe('14');
   });
+  it('twinkles a new pill from a frame stamped before the sheen began', () => {
+    const fresh = element('SPAN'), dot = new FakeElement('SPAN');
+    fresh.dataset.tone = 'new'; dot.dataset.dot = ''; fresh.appendChild(dot);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const p = pill(asElement(fresh));
+    advance();
+    clock += 100;
+    p.sheen();
+    // A frame's timestamp is when the frame began, before the input that started the sheen was handled.
+    const work = [...frames.values()];
+    frames.clear();
+    for (const fn of work) fn(clock - 4);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+    p.destroy();
+  });
   it('runs tabs with keys, aria and panels', () => {
     const list = element(), panels = [element(), element(), element()];
     const tabsEls = [0, 1, 2].map(i => { const t = new FakeElement('BUTTON'); t.setAttribute('role', 'tab'); t.setAttribute('aria-controls', `p${i}`); panels[i].setAttribute('id', `p${i}`); list.appendChild(t); return t; });

@@ -2,6 +2,10 @@
 
 Notable changes to `asciify-engine`, newest first. Releases are published to [npm](https://www.npmjs.com/package/asciify-engine) from version tags.
 
+
+## 4.26.1
+
+- Fixed: the pill's hover sparkle could read a character before the start of its set (progress slightly below zero) and throw.
 ## 4.26: Studio off the main thread, live while scrolling
 
 - Kit fields mount while the page scrolls instead of waiting for it to rest: within two viewports ahead, scroll direction first, at most two mounts per frame inside a 4 ms budget, with glyph atlases prewarmed at idle. A poster swaps for its canvas in the same frame the first frame is drawn, so a host is never blank, and paused fields keep their last frame.
