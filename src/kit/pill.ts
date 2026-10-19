@@ -221,7 +221,7 @@ export function pill(target: HTMLElement | Iterable<HTMLElement>, options: PillO
           // A sparkle leads the label and twinkles when the pointer arrives.
           const dot = placed[i].dot;
           if (!dot) return;
-          const p = (now - (sheens.get(el) ?? -1e6)) / SHEEN_MS, col = Math.floor((dot.x + dot.w / 2) / cw);
+          const p = Math.max(0, (now - (sheens.get(el) ?? -1e6)) / SHEEN_MS), col = Math.floor((dot.x + dot.w / 2) / cw);
           if (p < 1 && !still) busy = true;
           if (col >= first && col <= last) put(col, row, palette.new, at(p < 1 && !still ? TWINKLE[Math.floor(p * TWINKLE.length)] : '✦'));
         } else {
