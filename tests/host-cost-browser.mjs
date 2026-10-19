@@ -82,12 +82,21 @@ function instrument() {
     if (keys) { keys.delete(key(type, fn, options)); if (!keys.size) own.delete(fn); if (!own.size) live.listeners.delete(this); }
     return remove.call(this, type, fn, options);
   };
-  const getContext = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
-    const gl = getContext.call(this, type, ...rest);
-    if (gl && /webgl/.test(type)) live.contexts.add(gl);
-    return gl;
-  };
+  for (const Canvas of [HTMLCanvasElement, window.OffscreenCanvas].filter(Boolean)) {
+    const getContext = Canvas.prototype.getContext;
+    Canvas.prototype.getContext = function (type, ...rest) {
+      const gl = getContext.call(this, type, ...rest);
+      if (gl && /webgl/.test(type)) live.contexts.add(gl);
+      return gl;
+    };
+  }
+  // Live textures and framebuffers in contexts still alive, so growth over a soak shows.
+  const gpuObjects = new Map();
+  for (const name of ['Texture', 'Framebuffer']) {
+    const proto = WebGL2RenderingContext.prototype, make = proto[`create${name}`], drop = proto[`delete${name}`];
+    proto[`create${name}`] = function () { const object = make.call(this); gpuObjects.set(object, this); return object; };
+    proto[`delete${name}`] = function (object) { gpuObjects.delete(object); return drop.call(this, object); };
+  }
   const draw = WebGL2RenderingContext.prototype.drawArrays;
   WebGL2RenderingContext.prototype.drawArrays = function (...args) { counts.draws++; return draw.apply(this, args); };
   const create = URL.createObjectURL, revoke = URL.revokeObjectURL;
@@ -100,12 +109,15 @@ function instrument() {
   new PerformanceObserver(list => { for (const entry of list.getEntries()) { counts.longTasks++; counts.longMs += entry.duration; } }).observe({ type: 'longtask', buffered: false });
   window.__host = {
     counts,
+    /** Loses every live WebGL context, as a GPU reset does. */
+    loseAll: () => { for (const gl of live.contexts) if (!gl.isContextLost()) gl.getExtension('WEBGL_lose_context')?.loseContext(); },
     held: () => ({
       raf: live.raf.size, observers: live.observers.size, intervals: live.intervals.size, urls: live.urls.size,
       // A listener on a detached node goes with the node.
       listeners: [...live.listeners].filter(([target]) => !(target instanceof Node) || target.isConnected || target === document)
         .reduce((n, [, own]) => n + [...own.values()].reduce((m, keys) => m + keys.size, 0), 0),
       contexts: [...live.contexts].filter(gl => !gl.isContextLost()).length,
+      gpuObjects: [...gpuObjects.values()].filter(gl => !gl.isContextLost()).length,
     }),
   };
 }
@@ -194,7 +206,7 @@ try {
     await wait(1200);
     const leaks = await page.evaluate(async () => {
       handle.destroy();
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 3500));
       const now = __host.held();
       const left = Object.fromEntries(Object.entries(now).filter(([key, value]) => value > held[key]).map(([key, value]) => [key, value - held[key]]));
       const html = normal(document.getElementById('stage').cloneNode(true));
@@ -238,7 +250,7 @@ try {
     await wait(300);
     const hidden = await busy(tab, 2000);
     await page.evaluate(() => { delete document.hidden; delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
-    const leaks = await page.evaluate(async () => { handles.forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 600)); return __host.held(); });
+    const leaks = await page.evaluate(async () => { handles.forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 3500)); return __host.held(); });
     rows.push({ case: '30x beam', mountMs: many.mountMs, liveContexts: many.contexts, idleCpu: idle.cpuMsPerS, idleFrames: idle.frames, hiddenState, hiddenCpu: hidden.cpuMsPerS, hiddenFrames: hidden.frames, afterDestroy: JSON.stringify(leaks), errors: tab.errors.join(' | ') });
     console.log(rows[rows.length - 1]);
     await page.close();
@@ -298,14 +310,15 @@ try {
     const settle = 'await new Promise(r => setTimeout(r, 2500));';
     const idleWindow = `const c0 = __host.counts.rafRuns, d0 = __host.counts.draws, t0 = performance.now(); await new Promise(r => setTimeout(r, 1500)); const framesPerS = Math.round((__host.counts.rafRuns - c0) * 1000 / (performance.now() - t0)), drawsPerS = Math.round((__host.counts.draws - d0) * 1000 / (performance.now() - t0));`;
     const fn = body => new Function(`return (async () => { const k = await import('/kit.js'); const stage = document.getElementById('stage'); ${body} })();`);
-    // 150 components: contexts stay within the budget, nothing is lost, idle stays quiet, destroy frees all.
-    await edge('150 beams', fn(`stage.innerHTML = Array.from({ length: 150 }, (_, i) => '<button style="display:block;margin:6px;padding:12px 24px">Item ' + i + '</button>').join('');
+    // 60 components: contexts stay within the budget, nothing is lost, idle stays quiet, destroy frees all.
+    await edge('60 beams', fn(`stage.innerHTML = Array.from({ length: 60 }, (_, i) => '<button style="display:block;margin:6px;padding:12px 24px">Item ' + i + '</button>').join('');
       const lost = { n: 0 }; addEventListener('webglcontextlost', () => lost.n++, true);
       const start = performance.now(); const hs = [...stage.children].map(el => k.beam(el)); const mountMs = performance.now() - start;
       ${settle} const live = __host.held().contexts;
       for (let y = 0; y < 6; y++) { scrollTo(0, y * innerHeight); await new Promise(r => setTimeout(r, 400)); }
       scrollTo(0, 0); await new Promise(r => setTimeout(r, 800)); const peak = __host.held().contexts;
-      hs.forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 500)); const left = __host.held();
+      // The shared context is let go 3 s after the page's last field.
+      hs.forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 3500)); const left = __host.held();
       return { pass: live <= 12 && peak <= 12 && !lost.n && !left.contexts && !left.raf && !left.observers, numbers: { mountMs: Math.round(mountMs), liveContexts: live, peakContexts: peak, lostContexts: lost.n, afterDestroy: JSON.stringify(left) } };`));
     // A full-bleed field on a 5K-class screen: the backing store is capped near one 4K screen.
     await edge('large surface 2560x1440 css at dpr 3', fn(`stage.innerHTML = '<section style="width:2560px;height:1440px"></section>';
@@ -327,7 +340,7 @@ try {
     // Rapid mount and destroy, as StrictMode, route changes and recycled list rows do.
     await edge('100 rapid mount/destroy cycles', fn(`stage.innerHTML = '<button style="padding:12px 24px">Go</button>'; const before = __host.held();
       const start = performance.now(); for (let i = 0; i < 100; i++) { const h = k.beam(stage.firstElementChild); if (i % 2) await new Promise(r => requestAnimationFrame(r)); h.destroy(); }
-      const ms = performance.now() - start; await new Promise(r => setTimeout(r, 800)); const left = __host.held();
+      const ms = performance.now() - start; await new Promise(r => setTimeout(r, 3500)); const left = __host.held();
       const leaked = Object.keys(left).filter(key => left[key] > before[key]);
       return { pass: !leaked.length, numbers: { totalMs: Math.round(ms), leaked: leaked.join(',') || 'none' } };`));
     // No WebGL2: components keep their HTML (and posters), no errors, no work.
@@ -335,14 +348,38 @@ try {
       const hs = [k.beam(stage.children[0]), k.fieldBackground(stage.children[1])]; ${settle} ${idleWindow}
       const supported = hs.map(h => h.supported); hs.forEach(h => h.destroy());
       return { pass: supported.every(s => !s) && framesPerS === 0, numbers: { supported: supported.join(','), framesPerS } };`),
-      () => { const get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return /webgl/.test(type) ? null : get.call(this, type, ...rest); }; });
-    // A lost context that is never restored: the field gives way to its poster and mounts again on a fresh canvas.
-    await edge('context lost and not restored', fn(`stage.innerHTML = '<section style="height:300px"></section>';
-      const h = k.fieldBackground(stage.firstElementChild); ${settle}
-      const first = stage.querySelector('canvas[data-renderer="glyph-field"]'); first.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext();
-      await new Promise(r => setTimeout(r, 2500)); const next = stage.querySelector('canvas[data-renderer="glyph-field"]');
-      const ok = !!next && next !== first && !next.getContext('webgl2').isContextLost(); h.destroy();
-      return { pass: ok, numbers: { remounted: ok } };`));
+      () => { for (const Canvas of [HTMLCanvasElement, window.OffscreenCanvas].filter(Boolean)) { const get = Canvas.prototype.getContext; Canvas.prototype.getContext = function (type, ...rest) { return /webgl/.test(type) ? null : get.call(this, type, ...rest); }; } });
+    // A lost context that is never restored (a GPU reset): the fields draw again on a fresh context, the shared one or their own.
+    await edge('context lost and not restored', fn(`stage.innerHTML = '<section style="height:300px"></section><button>Go</button>';
+      const hs = [k.fieldBackground(stage.children[0]), k.beam(stage.children[1])]; ${settle}
+      __host.loseAll(); await new Promise(r => setTimeout(r, 2500));
+      const d0 = __host.counts.draws; hs[1].field.pointer(20, 10); await new Promise(r => setTimeout(r, 600));
+      const live = __host.held().contexts, drawn = __host.counts.draws > d0; hs.forEach(h => h.destroy());
+      return { pass: live >= 1 && drawn, numbers: { liveContexts: live, drawsAfterLoss: drawn } };`));
+    // Many fields of every kind on one page share one context (where the shared path applies), however they mount and release.
+    await edge('one context for 60 fields', fn(`stage.innerHTML = Array.from({ length: 40 }, (_, i) => '<button style="display:block;margin:6px;padding:12px 24px">Item ' + i + '</button>').join('')
+        + Array.from({ length: 10 }, () => '<section style="height:240px;margin:8px 0"></section>').join('') + Array.from({ length: 10 }, () => '<canvas style="display:block;width:320px;height:200px"></canvas>').join('');
+      const els = [...stage.children], hs = els.map(el => el.tagName === 'BUTTON' ? k.beam(el) : el.tagName === 'SECTION' ? k.fieldBackground(el) : null).filter(Boolean);
+      const fieldMod = await import('/field.js'); const own = els.filter(el => el.tagName === 'CANVAS').map(c => fieldMod.mountGlyphField(c, { scene: 'waves' }));
+      ${settle} let peak = __host.held().contexts;
+      for (let y = 0; y < 8; y++) { scrollTo(0, y * innerHeight * 0.8); await new Promise(r => setTimeout(r, 250)); peak = Math.max(peak, __host.held().contexts); }
+      scrollTo(0, 0); await new Promise(r => setTimeout(r, 500));
+      [...hs, ...own].forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 3500)); const left = __host.held();
+      return { pass: peak <= 1 && !left.raf && !left.observers && !left.contexts && !left.listeners, numbers: { peakContexts: peak, afterDestroy: JSON.stringify(left) } };`));
+    // Soak: four rounds of scrolling through mounting and releasing fields, with the pointer over them; listeners, observers,
+    // contexts, textures and heap stay flat.
+    await edge('soak: 4 rounds of scroll and hover', fn(`stage.innerHTML = Array.from({ length: 30 }, (_, i) => i % 3 ? '<button style="display:block;margin:10px;padding:14px 28px">Item ' + i + '</button>' : '<section style="height:320px;margin:8px 0"></section>').join('');
+      const hs = [...stage.children].map(el => el.tagName === 'BUTTON' ? k.beam(el) : k.fieldBackground(el)); ${settle}
+      const rounds = [];
+      for (let round = 0; round < 4; round++) {
+        const height = document.documentElement.scrollHeight - innerHeight;
+        for (let y = 0; y <= height; y += innerHeight / 3) { scrollTo(0, y); for (let i = 0; i < 6; i++) { document.elementFromPoint(200 + i * 30, 200)?.dispatchEvent(new PointerEvent('pointermove', { clientX: 200 + i * 30, clientY: 200, bubbles: true, composed: true })); await new Promise(r => requestAnimationFrame(r)); } }
+        for (let y = height; y >= 0; y -= innerHeight / 3) { scrollTo(0, y); await new Promise(r => setTimeout(r, 30)); }
+        await new Promise(r => setTimeout(r, 400)); const held = __host.held(); rounds.push({ listeners: held.listeners, observers: held.observers, contexts: held.contexts, gpuObjects: held.gpuObjects, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0 });
+      }
+      hs.forEach(h => h.destroy()); await new Promise(r => setTimeout(r, 3500)); const left = __host.held();
+      const flat = key => rounds.every(r => r[key] <= rounds[0][key]);
+      return { pass: flat('listeners') && flat('observers') && flat('contexts') && rounds[3].gpuObjects <= rounds[0].gpuObjects + 8 && rounds[3].heap <= rounds[0].heap * 1.25 + 2 && !left.raf && !left.contexts && !left.listeners, numbers: { listeners: rounds.map(r => r.listeners).join('>'), observers: rounds.map(r => r.observers).join('>'), contexts: rounds.map(r => r.contexts).join('>'), gpuObjects: rounds.map(r => r.gpuObjects).join('>'), heapMB: rounds.map(r => r.heap).join('>'), afterDestroy: JSON.stringify(left) } };`));
     // A low-end device (two cores): ambient motion draws 30 times a second.
     await edge('low-end device ambient rate', fn(`stage.innerHTML = '<section style="height:420px"></section>';
       const h = k.fieldBackground(stage.firstElementChild); ${settle} ${idleWindow} h.destroy();

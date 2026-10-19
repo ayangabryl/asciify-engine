@@ -96,9 +96,15 @@ npm run build
 
 `npm run test:browser` serves the browser regression page. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-## Sponsor
+## Sponsors
 
-Asciify is free and open source. If it saves you time, [sponsor its development](https://asciify.org/sponsor).
+<!-- sponsors:start -->
+
+Asciify is free and open source. [Sponsor its development](https://asciify.org/sponsor) on GitHub Sponsors.
+
+<p align="center"><a href="https://asciify.org/sponsor">Your logo here</a></p>
+
+<!-- sponsors:end -->
 
 ## License
 

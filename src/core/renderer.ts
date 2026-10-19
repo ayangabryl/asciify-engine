@@ -827,7 +827,10 @@ export async function gifToAsciiFrames(
 
   const maxFrames = Math.min(rawFrames.length, 300);
 
+  let slice = performance.now();
   for (let i = 0; i < maxFrames; i++) {
+    // Yield between frames every few milliseconds, so a long GIF never holds the page in one task.
+    if (performance.now() - slice > 8) { await new Promise(resolve => setTimeout(resolve, 0)); slice = performance.now(); }
     const f = rawFrames[i];
     const { dims, patch, disposalType } = f;
 
@@ -909,7 +912,10 @@ export async function gifToAsciiTextFrames(
   const fps = Math.round(Math.min(30, Math.max(5, 1000 / avgDelay)));
   const maxFrames = Math.min(rawFrames.length, 300);
 
+  let slice = performance.now();
   for (let i = 0; i < maxFrames; i++) {
+    // Yield between frames every few milliseconds, so a long GIF never holds the page in one task.
+    if (performance.now() - slice > 8) { await new Promise(resolve => setTimeout(resolve, 0)); slice = performance.now(); }
     const f = rawFrames[i];
     const { dims, patch, disposalType } = f;
 

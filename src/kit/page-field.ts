@@ -1,6 +1,7 @@
 import { isGlyphFieldSupported, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
 import { BASE_LOOK, isDark, mergeOptions, prefersReduced, resolveColor, styleKeeper, type KitOptions } from './core';
 import { disposeKit, liveField, poster, setPosterSource } from './core-live';
+import { cancelFieldFrame, requestFieldFrame, watchTheme } from '../field/field-gl';
 
 /**
  * A field that lies over or under a whole element and draws its own source or scene. Unlike `mountSurface`, nothing is painted per
@@ -81,24 +82,22 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
   });
   const field = live.field;
 
-  let themeFrame = 0;
+  let themeFrame = false;
   const refresh = () => { if (destroyed) return; dark = isDark(host); field.update({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink() }); };
+  const rethemeNow = () => { themeFrame = false; refresh(); };
   const retheme = () => {
     if (themeFrame || destroyed) return;
-    themeFrame = requestAnimationFrame(() => { themeFrame = 0; refresh(); });
+    themeFrame = true;
+    requestFieldFrame(rethemeNow);
   };
-  const scheme = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
-  scheme?.addEventListener?.('change', retheme);
-  // Class or attribute themes (`.dark`, `data-theme`) change no media query, so watch the root for them.
-  const themes = typeof MutationObserver === 'function' ? new MutationObserver(retheme) : null;
-  for (const root of [document.documentElement, document.body]) if (root) themes?.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'style'] });
+  // The colour scheme, and class or attribute themes (`.dark`, `data-theme`) on the root, through the page's one watcher.
+  const unwatchTheme = watchTheme(retheme);
 
   function teardown() {
     if (destroyed) return;
     destroyed = true;
-    if (themeFrame) cancelAnimationFrame(themeFrame);
-    themes?.disconnect();
-    scheme?.removeEventListener?.('change', retheme);
+    if (themeFrame) cancelFieldFrame(rethemeNow);
+    unwatchTheme();
     live.destroy();
     styles.restore();
   }

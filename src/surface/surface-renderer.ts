@@ -18,7 +18,7 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
   let gl: WebGLRenderingContext | null = null, ctx: CanvasRenderingContext2D | null = null;
   let program: WebGLProgram | null = null, buffer: WebGLBuffer | null = null;
   const textures: WebGLTexture[] = [], shaders: WebGLShader[] = [];
-  let disposed = false, uploaded = false, textureLimit = 4096;
+  let disposed = false, uploaded = false, textureLimit = 4096, linked = false;
   let atlasPlan: object | null = null, gridCols = 0, gridRows = 0, fieldWidth = 0, fieldHeight = 0;
   let directPrevious = false;
   const maskPainter=createTextMaskPainter();
@@ -73,10 +73,10 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
     gl = canvas.getContext('webgl', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, preserveDrawingBuffer: true });
     if (!gl) throw new Error('WebGL unavailable');
     textureLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    // Compiled without asking for the result, so a browser that compiles in parallel never blocks the page on this large shader.
     const compile = (type: number, code: string) => {
       const shader = gl!.createShader(type)!; shaders.push(shader);
       gl!.shaderSource(shader, code); gl!.compileShader(shader);
-      if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS)) throw new Error(gl!.getShaderInfoLog(shader) || 'Shader compilation failed');
       return shader;
     };
     program = gl.createProgram()!;
@@ -217,37 +217,53 @@ export function createSurfaceRenderer(host: HTMLElement, source: HTMLCanvasEleme
         gl_FragColor = directGlyphs > .5 ? result + backdrop*(1.-result.a) : result;
       }`));
     gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Surface shader link failed');
-    gl.useProgram(program);
-    buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-    const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','cellGround','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount', 'cueMap', 'motionFocus'].map(k => [k,gl!.getUniformLocation(program!,k)]));
-    for (let unit=0; unit<8; unit++) {
-      const texture=gl.createTexture()!; textures.push(texture); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,texture);
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    const context = gl, linkedProgram = program;
+    const setup = () => {
+      const gl = context, program = linkedProgram;
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(shaders.map(shader => gl.getShaderInfoLog(shader)).join('') || 'Surface shader link failed');
+      gl.useProgram(program);
+      buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+      const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
+      locations = Object.fromEntries(['finishSoftness','finishMode','finishPixelRatio','edgeEffect','textMask','hasTextMask','artwork','surface','resolution','sceneSize','cellSize','surfaceSize','strength','hoverMode','hoverFocus','codes','cellColors','glyphAtlas','gridSize','atlasSize','tileSize','atlasColumns','padding','glyphCount','dots','dotSize','directGlyphs','backdrop','cellGround','trailKind', 'edgeSafe', 'relativeStrength', 'scopeMap', 'scopeMode', 'trailAmount', 'motionMode', 'motionTime', 'fineDither', 'ditherAmount', 'cueMap', 'motionFocus'].map(k => [k,gl!.getUniformLocation(program!,k)]));
+      for (let unit=0; unit<8; unit++) {
+        const texture=gl.createTexture()!; textures.push(texture); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,texture);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      }
+      gl.uniform1i(locations.textMask,5); gl.uniform1i(locations.scopeMap,6); gl.uniform1i(locations.cueMap,7);
+      gl.uniform1i(locations.codes,2); gl.uniform1i(locations.cellColors,3); gl.uniform1i(locations.glyphAtlas,4);
+      gl.uniform1i(locations.artwork,0); gl.uniform1i(locations.surface,1);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
+      canvas.addEventListener('webglcontextlost', fallback); attach();
+      linked = true;
+    };
+    // The artwork stays in view until the shader has linked, then the surface takes its place.
+    const parallel = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
+    if (!parallel) setup();
+    else {
+      const poll = () => {
+        if (disposed || ctx) return;
+        if (!context.getProgramParameter(linkedProgram, parallel.COMPLETION_STATUS_KHR)) { requestAnimationFrame(poll); return; }
+        try { setup(); wake(); } catch { fallback(); }
+      };
+      poll();
     }
-    gl.uniform1i(locations.textMask,5); gl.uniform1i(locations.scopeMap,6); gl.uniform1i(locations.cueMap,7);
-    gl.uniform1i(locations.codes,2); gl.uniform1i(locations.cellColors,3); gl.uniform1i(locations.glyphAtlas,4);
-    gl.uniform1i(locations.artwork,0); gl.uniform1i(locations.surface,1);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
-    gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
-    canvas.addEventListener('webglcontextlost', fallback); attach();
   } catch { fallback(); }
   const fontReady = () => { if(!disposed) { glyphs.reset(); glyphData=null; uploaded=false; wake(); } };
   document.fonts?.addEventListener('loadingdone',fontReady);
   void document.fonts?.ready.then(fontReady);
   return {
     get canvas() { return canvas; },
-    canRenderGlyphs(options: AsciiOptions) { return !!gl && !disposed && supportsSurfaceGlyphs(options); },
+    canRenderGlyphs(options: AsciiOptions) { return !!gl && linked && !disposed && supportsSurfaceGlyphs(options); },
     render(dirty: boolean, field: SurfaceRefraction, width: number, height: number, cellWidth: number, cellHeight: number, frame?: AsciiFrame, options?: AsciiOptions, time = 0, finish: SurfaceFinish & { textMask?: TextMaskFrame; scope?: SurfaceScope } = {}) {
       const mode=resolveMotion(options?.animationStyle), phase=timeline.update(time,mode,options?.animationSpeed);
       const dither=isFineDither(options);
       const direct=!!gl && !!frame && supportsSurfaceGlyphs(options);
       if (direct !== directPrevious) { uploaded=false; directPrevious=direct; }
-      if (disposed || !width || !height || !source.width || !source.height) return;
+      if (disposed || !width || !height || !source.width || !source.height || (gl && !linked)) return;
       const ratio = Math.min(source.width / width, 1.5, Math.sqrt(4_000_000 / (width * height)));
       const w = Math.max(1, Math.round(width * ratio)), h = Math.max(1, Math.round(height * ratio));
       if (canvas.width !== w || canvas.height !== h) { canvas.width=w; canvas.height=h; uploaded=false; }

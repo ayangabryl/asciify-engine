@@ -32,6 +32,7 @@ export class FakeNode {
 }
 export class FakeText extends FakeNode { constructor(public data: string) { super(); this.textValue = data; } }
 
+const windowListeners = new Map<string, Set<(event: unknown) => void>>();
 export class FakeElement extends FakeNode {
   style = new FakeStyle();
   dataset: Record<string, string> = {};
@@ -79,7 +80,11 @@ export class FakeElement extends FakeNode {
   removeEventListener(type: string, fn: (event: unknown) => void) { this.listeners.get(type)?.delete(fn); }
   /** Fires `type` here and on each ancestor, like a bubbling event. */
   dispatch(type: string, event: Record<string, unknown> = {}) {
-    const full = { target: this, button: 0, pointerId: 1, clientX: 0, clientY: 0, preventDefault: vi.fn(), stopPropagation() {}, ...event };
+    const path: FakeElement[] = [];
+    for (let n: FakeElement | null = this; n; n = n.parentElement) path.push(n);
+    const full = { target: this, button: 0, pointerId: 1, clientX: 0, clientY: 0, preventDefault: vi.fn(), stopPropagation() {}, composedPath: () => path, ...event };
+    // The window's capture listeners hear it first, as the shared pointer listener does in a browser.
+    for (const fn of [...windowListeners.get(type) ?? []]) fn({ currentTarget: null, ...full });
     for (let n: FakeElement | null = this; n; n = n.parentElement) for (const fn of n.listeners.get(type) ?? []) fn({ currentTarget: n, ...full });
     return full;
   }
@@ -155,6 +160,11 @@ export function useFakeDom(mount: Mock, support: { on: boolean }) {
         let i = 0;
         return { nextNode: () => texts[i++] ?? null };
       },
+    });
+    windowListeners.clear();
+    vi.stubGlobal('window', {
+      addEventListener: (type: string, fn: (event: unknown) => void) => { if (!windowListeners.has(type)) windowListeners.set(type, new Set()); windowListeners.get(type)!.add(fn); },
+      removeEventListener: (type: string, fn: (event: unknown) => void) => windowListeners.get(type)?.delete(fn),
     });
     vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => { env.frames.set(++id, fn); return id; });
     vi.stubGlobal('cancelAnimationFrame', (handle: number) => env.frames.delete(handle));

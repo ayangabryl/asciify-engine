@@ -2,6 +2,13 @@
 
 Notable changes to `asciify-engine`, newest first. Releases are published to [npm](https://www.npmjs.com/package/asciify-engine) from version tags.
 
+## 4.25: one shared context, bounded memory
+
+- Every glyph field and kit surface on a page now draws through one shared WebGL2 context and one frame loop. Programs compile once, atlases are shared per glyphs/font/size, and one set of page listeners and observers serves every field. Output is pixel-identical.
+- Static fields draw once. Ambient motion slows when frames are expensive, and render scale steps down (1 → 0.5) before frame rate drops. Mounts wait while the page scrolls.
+- GPU memory is budgeted at 256 MB per page: off-screen kit fields fall back to posters, farthest first, and unused atlases are evicted. The shared context is released 3 s after the last field.
+- Fixed: more than 12 `lazy: false` fields fought over the context budget forever, growing memory without bound. Fixed: `destroy()` left a context on user canvases. The Studio surface shader no longer blocks the page (241 ms → 5 ms), and GIF frame extraction yields between frames.
+
 ## 4.24: Lighter on the host page
 
 - The kit is split per component: a host importing one component ships about 33 KB gzip instead of 99 KB. Existing imports are unchanged.
