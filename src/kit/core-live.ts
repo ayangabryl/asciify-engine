@@ -1,5 +1,6 @@
 import { mountGlyphField, type FieldMark, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
 import { currentFieldContext, isSharedFieldCanvas } from '../field/field-gl';
+import { prewarmGlyphAtlas } from '../field/glyph-field';
 
 /**
  * The Studio's 24 render styles as the glyph field draws them: the glyph-like styles are ramps, the halftone is the dot mark,
@@ -92,17 +93,24 @@ interface Slot {
   poster?: boolean;
   mount(): void;
   release(): void;
+  /** Builds what the first mount would build (its glyph atlas) ahead of it. */
+  prewarm?(): void;
 }
 
-// A field mounts within half a viewport of the screen and is released beyond one, so scrolling back and forth never thrashes.
-const MOUNT = 0.5, RELEASE = 1, DEFAULT_BUDGET = 12;
-// Mounting costs a few milliseconds (a context, an atlas, shader compiles). Past this much in one frame, the rest wait for the next.
-const FRAME_MS = 4;
+// A field mounts within two viewports of the screen, so it is live before it scrolls in even on a fast scroll (two mounts a
+// frame keep ahead of a wheel flinging a few thousand pixels a second), and is released beyond three, so scrolling back and
+// forth never thrashes.
+const MOUNT = 2, RELEASE = 3, DEFAULT_BUDGET = 12;
+// Within a viewport of the screen a field is near: over the GPU memory budget, only fields beyond this give way.
+const NEAR = 1;
+// Programs and atlases are shared, so a mount is cheap, but a scroll must never drop a frame for one: at most this many a
+// frame, and none past this much time in it. The rest wait for the next frame.
+const FRAME_MS = 4, FRAME_MOUNTS = 2;
 
 let budget = DEFAULT_BUDGET;
 const slots = new Set<Slot>();
 let watch: { ctor: unknown; list: IntersectionObserver[] } | null = null;
-let doc: Document | null = null, frame = 0, windowAt = -1e9, spent = 0, pumping = false, again = false;
+let doc: Document | null = null, frame = 0, windowAt = -1e9, spent = 0, count = 0, pumping = false, again = false;
 // The current frame's timestamp: the same for every task until the next frame, unlike the clock.
 const frameTime = () => { const at = (doc as { timeline?: { currentTime?: unknown } } | null)?.timeline?.currentTime; return typeof at === 'number' ? at : null; };
 
@@ -159,7 +167,7 @@ function observers() {
   if (!IO) return null;
   if (watch?.ctor !== IO) {
     watch?.list.forEach(o => o.disconnect());
-    watch = { ctor: IO, list: ['50% 0px', '100% 0px', '0px'].map(rootMargin => new IO(onEntries, { rootMargin })) };
+    watch = { ctor: IO, list: [`${MOUNT * 100}% 0px`, `${RELEASE * 100}% 0px`, '0px'].map(rootMargin => new IO(onEntries, { rootMargin })) };
     for (const slot of slots) watch.list.forEach(o => o.observe(slot.host));
   }
   return watch.list;
@@ -167,16 +175,19 @@ function observers() {
 
 // Closing a modal uncovers the page behind it: what it displaced comes back, even when the dialog drew no field.
 const onClose = () => pump();
-// While the page scrolls, fields entering the margin wait (and those with a poster wait even on screen) until it rests,
-// so a scroll never pays for mounting. The poster is the field's own still, so nothing visibly changes.
-const SETTLE_MS = 140;
-let scrolledAt = -1e9, settle = 0;
-const scrolling = () => { const t = now(); return t >= scrolledAt && t - scrolledAt < SETTLE_MS; };
+// Fields mount while the page scrolls, within the frame budget; those ahead in the scroll's direction go first.
+let heading = 0, scrolledTo = 0;
 const onScroll = () => {
-  scrolledAt = now();
-  clearTimeout(settle);
-  settle = setTimeout(() => pump(), SETTLE_MS) as unknown as number;
+  const y = typeof scrollY === 'number' ? scrollY : 0;
+  if (y !== scrolledTo) heading = y > scrolledTo ? 1 : -1;
+  scrolledTo = y;
 };
+/** Distance off screen, doubled for a field behind the scroll's direction, so the ones it is heading to mount first. */
+function ahead(host: HTMLElement, d: number) {
+  if (!d || !heading) return d;
+  const below = host.getBoundingClientRect().top > 0;
+  return below === (heading > 0) ? d : d * 2;
+}
 let closeOn: Document | null = null;
 const watchClose = (next: Document | null) => {
   if (closeOn === next) return;
@@ -184,25 +195,46 @@ const watchClose = (next: Document | null) => {
   closeOn?.removeEventListener?.('scroll', onScroll, true);
   next?.addEventListener?.('close', onClose, true);
   next?.addEventListener?.('scroll', onScroll, { capture: true, passive: true } as AddEventListenerOptions);
-  if (!next) clearTimeout(settle);
   closeOn = next;
 };
 
+/*
+ * After load, at idle, the fields still waiting build their glyph atlases in the shared context, so the first scroll to them
+ * pays no atlas painting. Nearest first; each idle slice builds what fits.
+ */
+const prewarmed = new WeakSet<Slot>();
+let warming = 0;
+function prewarmLater() {
+  if (warming || typeof requestIdleCallback !== 'function') return;
+  warming = requestIdleCallback(prewarmIdle, { timeout: 2000 });
+}
+function prewarmIdle(deadline: IdleDeadline) {
+  warming = 0;
+  const todo = [...slots].filter(s => !s.live && s.prewarm && !prewarmed.has(s)).sort((a, b) => offscreen(a.host) - offscreen(b.host));
+  for (const slot of todo) {
+    if (deadline.timeRemaining() < 2 && !deadline.didTimeout) { prewarmLater(); return; }
+    prewarmed.add(slot);
+    try { slot.prewarm!(); } catch { /* a mount builds it then */ }
+  }
+}
+const prewarmAgain = (slot: Slot) => { prewarmed.delete(slot); if (slots.has(slot)) prewarmLater(); };
+
 function claim(slot: Slot) {
   // A field from another document (a test, a replaced iframe) no longer shares this page's contexts.
-  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = 0; windowAt = scrolledAt = -1e9; }
+  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = count = heading = 0; windowAt = -1e9; scrolledTo = typeof scrollY === 'number' ? scrollY : 0; }
   watchClose(doc);
   slots.add(slot);
   const list = observers();
   list?.forEach(o => o.observe(slot.host));
   if (!list) slot.wanted = true; else judge(slot);
   pump();
+  if (!slot.live) prewarmLater();
 }
 function unclaim(slot: Slot) {
   if (!slots.delete(slot)) return;
   if (![...slots].some(other => other.host === slot.host)) watch?.list.forEach(o => o.unobserve(slot.host));
   if (!slots.size && watch) { watch.list.forEach(o => o.disconnect()); watch = null; }
-  if (!slots.size) watchClose(null);
+  if (!slots.size) { watchClose(null); if (warming && typeof cancelIdleCallback === 'function') cancelIdleCallback(warming); warming = 0; }
   pump();
 }
 
@@ -216,7 +248,7 @@ function pump(fromFrame = false) {
       // The budget renews with a frame, never within one task: a host that mounts many components in one commit (a
       // route change, a long list) gets one field mounted then, and the rest one per frame after it.
       const t = now(), at = frameTime();
-      if (fromFrame || (at === null ? t - windowAt > 16 || t < windowAt : at !== windowAt)) { windowAt = at ?? t; spent = 0; }
+      if (fromFrame || (at === null ? t - windowAt > 16 || t < windowAt : at !== windowAt)) { windowAt = at ?? t; spent = count = 0; }
       // A host taken out of the document (a route left, a list row recycled) before its handle is destroyed waits.
       for (const slot of slots) if (slot.host.isConnected === false) slot.wanted = false;
       for (const slot of slots) if (slot.live && !slot.wanted) slot.release();
@@ -229,17 +261,18 @@ function pump(fromFrame = false) {
       const far = () => live.filter(s => s.live && !s.shared).map(s => [s, rank(s) + (held(s) ? 0 : 1e9)] as const).sort((a, b) => b[1] - a[1]);
       // A lower budget releases the farthest at once.
       for (let over = live.length - budget, order = over > 0 ? far() : []; over > 0; over--) order.shift()?.[0].release();
-      // Past the page's GPU memory budget, shared fields off screen give way to their posters, farthest first; `lazy: false`
-      // fields too, since the budget is a guarantee to the host page.
+      // Past the page's GPU memory budget, shared fields far off screen give way to their posters, farthest first; `lazy: false`
+      // fields too, since the budget is a guarantee to the host page. A field on or near the screen is never released for it:
+      // nearer fields wait on their posters instead.
       const gpu = currentFieldContext();
-      const spill = () => [...slots].filter(s => s.live && s.shared && rank(s) > 0).sort((a, b) => rank(b) - rank(a));
+      const beyond = viewport() * NEAR;
+      const spill = () => [...slots].filter(s => s.live && s.shared && rank(s) > beyond).sort((a, b) => rank(b) - rank(a));
       if (gpu?.overBudget) for (const victim of spill()) { if (!gpu.overBudget) break; victim.release(); }
-      const waiting = [...slots].filter(s => s.wanted && !s.live).map(s => [s, s.eager ? -1 : rank(s)] as const).sort((a, b) => a[1] - b[1]);
+      const waiting = [...slots].filter(s => s.wanted && !s.live).map(s => [s, s.eager ? -1 : rank(s)] as const)
+        .map(([s, d]) => [s, d, d > 0 ? ahead(s.host, d) : d] as const).sort((a, b) => a[2] - b[2]);
       let mounted = 0;
-      const moving = scrolling();
       for (const [slot, d] of waiting) {
         if (!slots.has(slot) || slot.live) continue;
-        if (moving && !slot.eager && (d > 0 || slot.poster)) continue;
         if (gpu && !gpu.roomy) {
           // Room is made only by a farther field; otherwise this one keeps its poster until memory frees up.
           const victim = spill()[0];
@@ -247,7 +280,7 @@ function pump(fromFrame = false) {
           victim.release();
           if (!gpu.roomy) break;
         }
-        if (!slot.eager && spent >= FRAME_MS && !(fromFrame && !mounted)) { frame ||= requestAnimationFrame(() => { frame = 0; pump(true); }); break; }
+        if (!slot.eager && (spent >= FRAME_MS || count >= FRAME_MOUNTS) && !(fromFrame && !mounted)) { frame ||= requestAnimationFrame(() => { frame = 0; pump(true); }); break; }
         if (live.filter(s => s.live && !s.shared).length >= budget) {
           const victim = far()[0]?.[0];
           // The rest are farther still, so they wait too. Only another `lazy: false` field displaces one on view, and only a
@@ -259,6 +292,7 @@ function pump(fromFrame = false) {
         slot.mount();
         spent += now() - start;
         mounted++;
+        if (!slot.eager) count++;
         if (slot.live && !slot.shared) live.push(slot);
       }
     } while (again);
@@ -362,13 +396,17 @@ export function setPosterSource(kit: object, src: string) { for (const img of le
 export function disposeKit(kit: object) { const list = leftovers.get(kit); leftovers.delete(kit); list?.forEach(remove => remove()); }
 
 const quiet = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-/** A still under the field: shown until the first frame, while released, and in place of the field without WebGL. */
+/**
+ * A still under the field: shown until the first frame, while released, and in place of the field without WebGL. It swaps
+ * with the canvas in one frame, with no fade: the field's first frame is drawn in the frame the poster goes, so the host
+ * never shows both, or neither.
+ */
 export function poster(host: HTMLElement, src: string, place: string, kit: object, before?: Element | null) {
   const img = document.createElement('img');
   img.alt = '';
   img.decoding = 'async';
   img.setAttribute('aria-hidden', 'true');
-  img.setAttribute('style', `${place};object-fit:cover${quiet() ? '' : ';transition:opacity 280ms cubic-bezier(.23, 1, .32, 1)'}`);
+  img.setAttribute('style', `${place};object-fit:cover`);
   img.style.opacity = '1';
   img.dataset.asciiPoster = '';
   img.src = src;
@@ -522,12 +560,18 @@ export function liveField(config: LiveConfig): Live {
       if (slot.shared) unwatch = () => {};
       else {
         let gone = 0;
+        // A lost context blanks its canvas at once: the poster covers it until the context comes back or the field remounts.
         const onLost = () => {
           if (real !== field) return;
+          still?.show(true);
           clearTimeout(gone);
           gone = setTimeout(() => { if (real === field && canvas === drawn) { slot.release(); pump(); } }, LOST_MS) as unknown as number;
         };
-        const onRestored = () => clearTimeout(gone);
+        const onRestored = () => {
+          clearTimeout(gone);
+          // The restored field draws in its next frame; the poster goes after it.
+          requestAnimationFrame(() => requestAnimationFrame(() => { if (real === field) still?.show(false); }));
+        };
         drawn.addEventListener?.('webglcontextlost', onLost);
         drawn.addEventListener?.('webglcontextrestored', onRestored);
         unwatch = () => { clearTimeout(gone); drawn.removeEventListener?.('webglcontextlost', onLost); drawn.removeEventListener?.('webglcontextrestored', onRestored); };
@@ -565,6 +609,12 @@ export function liveField(config: LiveConfig): Live {
       still?.show(true);
       config.onRelease?.();
     },
+    prewarm() {
+      if (destroyed || real) return;
+      merged = { ...config.options(), ...recorded };
+      const want = wanted();
+      prewarmGlyphAtlas(canvas, { ...merged, ...(want ? lookOptions(want) : {}) });
+    },
   };
 
   function fail() {
@@ -585,6 +635,7 @@ export function liveField(config: LiveConfig): Live {
   }
   const record = {
     relook() {
+      if (!real) prewarmAgain(slot);
       const patch = lookPatch();
       if (!patch || !real) return;
       const field = real;

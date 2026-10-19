@@ -1,7 +1,7 @@
 import type { StudioSettings } from "./model";
 /** One optional GPU pass. The source is never read back from the GPU. */
-export function createStudioFinish() {
-  const canvas = document.createElement("canvas");
+export function createStudioFinish(make: () => HTMLCanvasElement = () => document.createElement("canvas")) {
+  const canvas = make();
   const gl = canvas.getContext("webgl", {
     alpha: true,
     premultipliedAlpha: false,

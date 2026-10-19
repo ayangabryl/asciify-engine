@@ -8,3 +8,11 @@ export {
 } from './field/field-model';
 export type { HoverScope as FieldHoverScope } from './surface/hover-guide';
 export type { GlyphFieldSettings, GlyphFieldInput, FieldFluidOptions, FieldLanternOptions, FieldTrailOptions, FieldHover, FieldColor, FieldFit, FieldScene, FieldMark, FieldClearZone } from './field/field-model';
+/**
+ * @internal For asciify-engine/kit, which imports this build: the page's one shared field context and frame loop, and
+ * atlas prewarming. Not part of the public API.
+ */
+export {
+  ambientFactor, cancelFieldFrame, currentFieldContext, isSharedFieldCanvas, requestFieldFrame, watchMotionPreference, watchPointer, watchTheme, watchVisibility,
+} from './field/field-gl';
+export { prewarmGlyphAtlas } from './field/glyph-field';

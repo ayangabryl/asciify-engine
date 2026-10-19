@@ -64,18 +64,35 @@ describe('fields that never release by distance', () => {
 });
 
 describe('lazy mounting', () => {
-  it('waits for a scroll to rest before mounting fields entering the margin, and holds a field with a poster even on screen', () => {
-    const near = at(3000), shown = at(3000);
-    const handles = [beam(as(near)), beam(as(shown), { poster: '/still.webp' })];
-    for (const fn of env.docListeners.get('scroll') ?? []) fn({});
-    scroll([near, 1100], [shown, 100]);
+  it('mounts fields while the page scrolls, two viewports ahead, at most two a frame and within the frame\'s time', () => {
+    // Each mount costs 1.5ms: the frame's 4ms allows two, and the count allows no more even when mounts are cheaper.
+    mount.mockImplementation(() => { env.clock += 1.5; const f = fakeField(); fields.push(f); return f; });
+    // The browser's frame time: the same for every task in a frame, however long they take.
+    const timeline = { currentTime: 0 };
+    Object.assign(document, { timeline });
+    const els = Array.from({ length: 7 }, () => at(5000));
+    const handles = els.map(el => beam(as(el), { poster: '/still.webp' }));
     expect(mount).not.toHaveBeenCalled();
-    advance(200);
-    expect(mount).toHaveBeenCalledTimes(2);
+    const frames: number[] = [];
+    // A fast scroll: every frame runs its frame callbacks, then the page moves on and the scroll event fires; nothing waits
+    // for the scroll to rest.
+    for (let frame = 0, top = 3200; frame < 8; frame++, top -= 300) {
+      const before = mount.mock.calls.length, start = env.clock;
+      timeline.currentTime = env.clock + 16;
+      advance();
+      for (const fn of env.docListeners.get('scroll') ?? []) fn({});
+      scroll(...els.map((el, i) => [el, top + i * 60] as [FakeElement, number]));
+      frames.push(mount.mock.calls.length - before);
+      expect(env.clock - start - 16).toBeLessThanOrEqual(4 + 1.5);
+    }
+    // Within two viewports (1600px) of the screen from the fourth frame on, all seven mount, two a frame, while still scrolling.
+    expect(Math.max(...frames)).toBeLessThanOrEqual(2);
+    expect(mount).toHaveBeenCalledTimes(7);
+    expect(frames.slice(0, 3)).toEqual([0, 0, 0]);
     handles.forEach(h => h.destroy());
   });
 
-  it('mounts near the viewport, releases beyond one viewport, and keeps the handle working throughout', async () => {
+  it('mounts within two viewports, releases beyond three, and keeps the handle working throughout', async () => {
     const el = at(3000);
     const b = beam(as(el));
     expect(b.supported).toBe(true);
@@ -90,9 +107,9 @@ describe('lazy mounting', () => {
     advance(); await flush();
     expect(fields[0].setSource).toHaveBeenCalled();
 
-    scroll([el, 1500]);
+    scroll([el, 3100]);
     expect(fields[0].destroy).not.toHaveBeenCalled();
-    scroll([el, 2000]);
+    scroll([el, 3300]);
     expect(fields[0].destroy).toHaveBeenCalledOnce();
     expect(env.frames.size).toBe(0);
 
@@ -170,7 +187,8 @@ describe('context budget', () => {
     expect(mount).toHaveBeenCalledTimes(2);
     expect(hc.supported).toBe(true);
 
-    // c comes on screen while b scrolls away: b, the farthest, gives its context to c.
+    // c comes on screen while b scrolls away, a frame later: b, the farthest, gives its context to c.
+    advance(20);
     scroll([c, 0], [b, 1100]);
     expect(mount).toHaveBeenCalledTimes(3);
     expect(mount.mock.calls[2][0].parentElement).toBe(c);
@@ -204,6 +222,8 @@ describe('context budget', () => {
     setFieldBudget(2);
     const grid = [beam(as(at(0))), beam(as(at(100)))];
     expect(mount).toHaveBeenCalledTimes(2);
+    // At most two mounts a frame: the dialog opens in a later one.
+    advance(20);
     const dialog = element('DIALOG');
     const modal = { open: [dialog] };
     Object.assign(document, { querySelectorAll: (selector: string) => (selector === 'dialog:modal' ? modal.open : []) });
@@ -214,15 +234,17 @@ describe('context budget', () => {
     expect(fields[0].destroy).toHaveBeenCalledOnce();
     expect(fields[1].destroy).toHaveBeenCalledOnce();
     // A covered field coming near never takes one back while the dialog is open.
-    beam(as(at(50)));
+    const covered = beam(as(at(50)));
     expect(mount).toHaveBeenCalledTimes(4);
 
     // Closing unmounts the dialog's demo: the page behind it mounts again.
+    advance(20);
     modal.open = [];
     shown.forEach(h => h.destroy());
     expect(mount).toHaveBeenCalledTimes(6);
     expect(mount.mock.calls.slice(4).map(call => call[0].parentElement?.parentElement)).not.toContain(dialog);
     grid.forEach(h => h.destroy());
+    covered.destroy();
   });
 
   it('brings covered fields back when a dialog that drew none closes', () => {
@@ -269,7 +291,7 @@ describe('context budget', () => {
     const el = at(0);
     const handle = beam(as(el));
     const [first] = canvases(el);
-    scroll([el, 2000]);
+    scroll([el, 3300]);
     expect(fields[0].destroy).toHaveBeenCalledOnce();
     const [waiting] = canvases(el);
     expect(waiting).not.toBe(first);
@@ -346,7 +368,7 @@ describe('context budget', () => {
 });
 
 describe('posters', () => {
-  it('shows the poster under the canvas until the first frame and again while released', async () => {
+  it('shows the poster under the canvas until the first frame and again while released, swapping without a fade', async () => {
     const el = at(0);
     const b = beam(as(el), { poster: '/beam.webp' });
     const [img] = imgs(el);
@@ -356,13 +378,31 @@ describe('posters', () => {
     expect(img.style.opacity).toBe('1');
     await flush();
     expect(img.style.opacity).toBe('0');
-    scroll([el, 3000]);
+    // It swaps with the canvas in one frame: no fade, so the host never shows both, or neither.
+    expect(String(img.getAttribute('style') ?? '')).not.toMatch(/transition/);
+    scroll([el, 4000]);
     expect(img.style.opacity).toBe('1');
     scroll([el, 0]);
     await flush();
     expect(img.style.opacity).toBe('0');
     b.destroy();
     expect(imgs(el)).toHaveLength(0);
+  });
+
+  it('covers a lost context with the poster at once, and uncovers it once the context is back and drawn', async () => {
+    const el = at(0);
+    const b = beam(as(el), { poster: '/beam.webp' });
+    const [img] = imgs(el);
+    await flush();
+    expect(img.style.opacity).toBe('0');
+    const [canvas] = canvases(el);
+    canvas.dispatch('webglcontextlost');
+    expect(img.style.opacity).toBe('1');
+    canvas.dispatch('webglcontextrestored');
+    expect(img.style.opacity).toBe('1');
+    advance(); advance();
+    expect(img.style.opacity).toBe('0');
+    b.destroy();
   });
 
   it('stays as the fallback without WebGL and when the field fails, until destroy', () => {
@@ -419,6 +459,8 @@ describe('global look', () => {
     const off = subscribeGlobalLook(look => seen.push(look));
     const orb = statusOrb(as(at(0))), dots = beam(as(at(0))), word = statusOrb(as(at(0)), { look: { charset: ' ABC' } });
     const kept = statusOrb(as(at(0)), { globalLook: false });
+    // Two mounts a frame: the four are live after two.
+    advance(20); advance(20);
     setGlobalLook({ charset: ' .oO@' });
     expect(getGlobalLook()).toEqual({ charset: ' .oO@' });
     expect(seen).toEqual([{ charset: ' .oO@' }]);
@@ -428,6 +470,7 @@ describe('global look', () => {
     // The component's own updates keep the global characters; a new field mounts with them.
     orb.update({ look: { charset: ' -+' } });
     expect(fields[0].update.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ charset: ' .oO@' });
+    advance(20);
     const late = statusOrb(as(at(0)));
     expect(optionsOf(4)).toMatchObject({ charset: ' .oO@' });
 
@@ -459,6 +502,7 @@ describe('global look', () => {
   it('draws a style in every opted-in glyph field, skipping dots, letters and opt-outs, and puts each mark back', () => {
     const orb = statusOrb(as(at(0))), dots = beam(as(at(0))), word = statusOrb(as(at(0)), { look: { charset: ' ABC' } });
     const kept = statusOrb(as(at(0)), { globalLook: false });
+    advance(20); advance(20);
     setGlobalLook({ style: 'lego' });
     // A tile style keeps the field's own charset, which decides the cells left empty.
     expect(fields[0].update).toHaveBeenLastCalledWith(expect.objectContaining({ mark: 'lego', charset: ' .:-=+*#%@' }));
@@ -467,6 +511,7 @@ describe('global look', () => {
     // The component's own updates keep the style; a new field mounts with it.
     orb.update({ look: { charset: ' -+' } });
     expect(fields[0].update.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ mark: 'lego', charset: ' -+' });
+    advance(20);
     const late = statusOrb(as(at(0)));
     expect(optionsOf(4)).toMatchObject({ mark: 'lego' });
 
