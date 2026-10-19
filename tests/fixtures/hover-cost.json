@@ -1,0 +1,246 @@
+{
+ "album": {
+  "cost": 1.5,
+  "wall": 4
+ },
+ "editorial": {
+  "cost": 2.4,
+  "wall": 6.2
+ },
+ "product": {
+  "cost": 5.9,
+  "wall": 10.2
+ },
+ "concrete": {
+  "cost": 3.3,
+  "wall": 6.6
+ },
+ "postcard": {
+  "cost": 3.3,
+  "wall": 4.5
+ },
+ "botanical": {
+  "cost": 8.1,
+  "wall": 13.9
+ },
+ "stadium": {
+  "cost": 1.3,
+  "wall": 2.4
+ },
+ "lookbook": {
+  "cost": 3.7,
+  "wall": 6.3
+ },
+ "nightcity": {
+  "cost": 10.7,
+  "wall": 21.6
+ },
+ "sumi": {
+  "cost": 2.5,
+  "wall": 4.7
+ },
+ "wirephoto": {
+  "cost": 4.6,
+  "wall": 6.6
+ },
+ "gamebox": {
+  "cost": 2.2,
+  "wall": 3.2
+ },
+ "sticker": {
+  "cost": 2.1,
+  "wall": 3.8
+ },
+ "lockscreen": {
+  "cost": 4.1,
+  "wall": 8.3
+ },
+ "frost": {
+  "cost": 5.2,
+  "wall": 9.7
+ },
+ "bokeh": {
+  "cost": 1.3,
+  "wall": 3.6
+ },
+ "cutout": {
+  "cost": 1.7,
+  "wall": 3.9
+ },
+ "halo": {
+  "cost": 1.4,
+  "wall": 4.2
+ },
+ "afterglow": {
+  "cost": 1.5,
+  "wall": 4
+ },
+ "neon": {
+  "cost": 7.9,
+  "wall": 12.7
+ },
+ "cobalt": {
+  "cost": 7.4,
+  "wall": 13
+ },
+ "cameo": {
+  "cost": 5.1,
+  "wall": 10.8
+ },
+ "gilded": {
+  "cost": 5.1,
+  "wall": 11
+ },
+ "overprint": {
+  "cost": 2.9,
+  "wall": 5.3
+ },
+ "cinema": {
+  "cost": 6,
+  "wall": 12.5
+ },
+ "darkroom": {
+  "cost": 2.5,
+  "wall": 6.5
+ },
+ "broadcast": {
+  "cost": 13.5,
+  "wall": 19.6
+ },
+ "tape": {
+  "cost": 3.6,
+  "wall": 6.4
+ },
+ "miniature": {
+  "cost": 8.9,
+  "wall": 13.5
+ },
+ "archive": {
+  "cost": 4.9,
+  "wall": 9.8
+ },
+ "velocity": {
+  "cost": 9.8,
+  "wall": 16.5
+ },
+ "poppress": {
+  "cost": 9.4,
+  "wall": 15.3
+ },
+ "ascii": {
+  "cost": 4.9,
+  "wall": 9.4
+ },
+ "night": {
+  "cost": 4.9,
+  "wall": 9.9
+ },
+ "terminal": {
+  "cost": 3.9,
+  "wall": 8.1
+ },
+ "wallpaper": {
+  "cost": 4.9,
+  "wall": 8.5
+ },
+ "blueprint": {
+  "cost": 2.8,
+  "wall": 5.1
+ },
+ "mixed": {
+  "cost": 5.9,
+  "wall": 9.1
+ },
+ "blocks": {
+  "cost": 6.8,
+  "wall": 10.7
+ },
+ "braille": {
+  "cost": 6.8,
+  "wall": 10.3
+ },
+ "cross": {
+  "cost": 9.1,
+  "wall": 13.8
+ },
+ "diagonal": {
+  "cost": 6.1,
+  "wall": 10.7
+ },
+ "diamond": {
+  "cost": 6.3,
+  "wall": 10.4
+ },
+ "print": {
+  "cost": 6.1,
+  "wall": 7.3
+ },
+ "handheld": {
+  "cost": 4,
+  "wall": 5.1
+ },
+ "riso": {
+  "cost": 7,
+  "wall": 8.2
+ },
+ "dots": {
+  "cost": 2.9,
+  "wall": 8.1
+ },
+ "cmyk": {
+  "cost": 10.3,
+  "wall": 23.7
+ },
+ "stipple": {
+  "cost": 3.1,
+  "wall": 5.7
+ },
+ "engraving": {
+  "cost": 3,
+  "wall": 6.9
+ },
+ "crosshatch": {
+  "cost": 5.4,
+  "wall": 13.2
+ },
+ "pointillism": {
+  "cost": 6.1,
+  "wall": 10.8
+ },
+ "woodblock": {
+  "cost": 1.9,
+  "wall": 5.3
+ },
+ "risograph": {
+  "cost": 8.1,
+  "wall": 17.7
+ },
+ "mosaic": {
+  "cost": 1.5,
+  "wall": 3.6
+ },
+ "bricks": {
+  "cost": 1.8,
+  "wall": 4.5
+ },
+ "voxel": {
+  "cost": 2.9,
+  "wall": 5.9
+ },
+ "disco": {
+  "cost": 2.4,
+  "wall": 5.8
+ },
+ "pixel": {
+  "cost": 4.4,
+  "wall": 6.8
+ },
+ "hex": {
+  "cost": 3.5,
+  "wall": 6.4
+ },
+ "led": {
+  "cost": 2.6,
+  "wall": 4.7
+ }
+}

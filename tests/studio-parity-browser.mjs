@@ -6,9 +6,10 @@
 //
 // Looks: every /looks card's settings, hover and sample, read from the site checkout (--site, default ../asciify), or
 // --looks file.json ([{ id, settings, source }], sources under --public). Without either, STUDIO_LOOKS on a sample.
-// Every comparison must match exactly, except a style whose dots a worker fills on the GPU (GPU_STYLES): Pointillism's
-// are rasterised the way Chrome's GPU canvas does it (same polygons, same 4x multisampling), which leaves rounding-level
-// differences, and a few edge samples, that a viewer cannot see. Those frames pass within the bounds below.
+// Every comparison must match exactly, except a style whose dots a worker fills on the GPU (GPU_STYLES): Pointillism's and
+// Stipple's are rasterised the way Chrome's GPU canvas does it (same polygons, same 4x multisampling), LED's and Dots' lone
+// circles with its analytic coverage, which leaves rounding-level differences, and a few edge samples, that a viewer
+// cannot see. Those frames pass within the bounds below.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -122,6 +123,10 @@ const browser = await chromium.launch({ channel: 'chrome', headless: process.env
 const GPU_STYLES = {
   // Pixels any channel of which differs by more than 16; mean and largest difference after a 1px blur.
   pointillism: { loud: .0005, seenMean: .05, seenMax: 24 },
+  stipple: { loud: .0005, seenMean: .05, seenMax: 24 },
+  // Lone circles are covered analytically, as Chrome does: every pixel within 2 or 3 levels of it, spread over the rims.
+  led: { loud: 0, seenMean: .1, seenMax: 4 },
+  dots: { loud: 0, seenMean: .1, seenMax: 4 },
 };
 const failures = [], rows = [];
 let turns = 0;

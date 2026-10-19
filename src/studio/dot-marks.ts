@@ -59,17 +59,58 @@ precision highp float;
 in vec4 ink;
 out vec4 outColor;
 void main() { outColor = ink; }`;
-const FLOATS = 10;
+// A path of one circle is an oval to Chrome's canvas, which covers it analytically instead of tessellating it. Measured
+// against it: inside the circle, coverage follows the implicit-function distance estimate (x² + y² - r²) / 2|p|; outside,
+// the exact distance to the rim; either as 0.5 minus the distance at the pixel's centre. Each disc is one quad over the
+// pixels it can touch.
+const DISC_VERTEX = `#version 300 es
+layout(location=1) in vec4 shape;
+layout(location=3) in vec4 color;
+layout(location=4) in float path;
+uniform vec2 size;
+out vec4 ink;
+flat out vec3 disc;
+void main() {
+  int corner = gl_VertexID;
+  vec2 c = vec2(corner == 1 || corner == 2 || corner == 4 ? 1.0 : 0.0, corner == 2 || corner == 4 || corner == 5 ? 1.0 : 0.0);
+  float reach = shape.z + 1.0;
+  vec2 p = mix(floor(shape.xy - reach), ceil(shape.xy + reach), c);
+  ink = vec4(color.rgb * color.a, color.a);
+  disc = shape.xyz;
+  gl_Position = vec4(p / size * 2.0 - 1.0, 1.0 - path * exp2(-23.0), 1.0);
+}`;
+const DISC_FRAGMENT = `#version 300 es
+precision highp float;
+in vec4 ink;
+flat in vec3 disc;
+out vec4 outColor;
+void main() {
+  float r = disc.z, d = distance(gl_FragCoord.xy, disc.xy);
+  float coverage = clamp(d < r ? 0.5 - (d * d - r * r) / (2.0 * max(d, 1e-6)) : r + 0.5 - d, 0.0, 1.0);
+  if (coverage <= 0.0) discard;
+  outColor = ink * coverage;
+}`;
+const FLOATS = 10, SHAPE = 6, FILL = 9;
 
-/** The recorder's own call for one filled ellipse in an 8-bit colour, as fillStyle = rgb(), ellipse() and fill() would draw it. */
+/** The fill style `fillColor` leaves set: assigning it again keeps that colour. */
+export const DOT_FILL = "dot-fill";
+/** The recorder's own calls, which take colours as numbers instead of CSS strings. */
 export interface DotRecorder {
+  /** One filled ellipse in an 8-bit colour, as fillStyle = rgb(), ellipse() and fill() would draw it. */
   fillEllipse(x: number, y: number, rx: number, ry: number, rotation: number, red: number, green: number, blue: number): void;
+  /** Sets the fill as fillStyle = `rgb(red,green,blue)` would (channels as given, clamped to 0..255), without the string. */
+  fillColor(red: number, green: number, blue: number): void;
 }
 export interface DotMarks {
   /** A Canvas 2D stand-in that records fills; draw the result with `finish`. */
   readonly ctx: CanvasRenderingContext2D;
-  /** Starts a frame; false once the GPU context is lost, when the caller draws on Canvas 2D instead. */
-  begin(width: number, height: number): boolean;
+  /**
+   * Starts a frame; false once the GPU context is lost, or for a while after a frame that mixed discs with other marks,
+   * when the caller draws on Canvas 2D instead. A caller whose marks can never be lone circles of a pixel or more (all
+   * multi-shape paths, rotated ellipses or fillEllipse) passes `mixed` false, which skips the exact record a mixed
+   * frame's replay needs.
+   */
+  begin(width: number, height: number, mixed?: boolean): boolean;
   /** Draws the recorded marks and returns the layer; null if the GPU failed this frame. */
   finish(): OffscreenCanvas | null;
   destroy(): void;
@@ -87,16 +128,37 @@ export function createDotMarks(): DotMarks | null {
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) || "Dot shader failed");
     return shader;
   };
-  const program = gl.createProgram()!;
-  try {
-    gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX));
-    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT));
+  const link = (vertex: string, fragment: string) => {
+    const program = gl.createProgram()!;
+    gl.attachShader(program, compile(gl.VERTEX_SHADER, vertex));
+    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragment));
     gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+    return gl.getProgramParameter(program, gl.LINK_STATUS) ? program : null;
+  };
+  let program: WebGLProgram | null, discs: WebGLProgram | null;
+  try {
+    program = link(VERTEX, FRAGMENT);
+    discs = link(DISC_VERTEX, DISC_FRAGMENT);
   } catch {
     return null;
   }
+  if (!program || !discs) return null;
   const size = gl.getUniformLocation(program, "size"), slotsAt = gl.getUniformLocation(program, "slots");
+  const discSize = gl.getUniformLocation(discs, "size");
+  // Each call is recorded first, exactly (shapes as doubles, colours as given), and turned into instances at the end of
+  // the frame. A frame of lone circles is drawn with analytic discs, a frame of any other marks tessellated; a frame that
+  // mixes the two Chrome draws differently from either (one such mark switches its whole canvas to another
+  // antialiasing), so it is replayed on Canvas 2D instead.
+  let discMarks = false, pathMarks = false;
+  /** Per mark: x, y, rx, ry, rotation, path. */
+  let shapes = new Float64Array(SHAPE * 4096);
+  /** Per path: fill alpha and colour as blended (0..1), then globalAlpha, the colour given to fillColor and the style's index. */
+  let fills = new Float64Array(FILL * 1024);
+  let styles: string[] = [];
+  // Frames left to draw on Canvas 2D after one had to: a look that mixes marks usually keeps doing so.
+  let skip = 0;
+  let rawRed = 0, rawGreen = 0, rawBlue = 0;
+  let fallback: OffscreenCanvasRenderingContext2D | null = null;
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   const instances = gl.createBuffer();
@@ -112,9 +174,9 @@ export function createDotMarks(): DotMarks | null {
   const framebuffer = gl.createFramebuffer(), target = gl.createRenderbuffer(), depthTarget = gl.createRenderbuffer();
   let targetWidth = 0, targetHeight = 0;
   const resolved = gl.createFramebuffer(), single = gl.createRenderbuffer();
-  let data = new Float32Array(FLOATS * 4096), count = 0, width = 1, height = 1, largest = 0, paths = 0;
+  let data = new Float32Array(FLOATS * 4096), count = 0, width = 1, height = 1, paths = 0;
   // The current path: ellipses waiting for fill().
-  let path = new Float32Array(5 * 8), pathCount = 0;
+  let path = new Float64Array(5 * 8), pathCount = 0;
   let alpha = 1, red = 0, green = 0, blue = 0, fillAlpha = 1, style = "#000000";
   // Fill colours as Canvas 2D keeps them: channels as parsed, not rounded to 8 bits until they are blended.
   const parsed = new Map<string, [number, number, number, number]>();
@@ -143,24 +205,32 @@ export function createDotMarks(): DotMarks | null {
     return rgba;
   };
   const push = (cx: number, cy: number, rx: number, ry: number, rotation: number) => {
-    if (pathCount * 5 + 5 > path.length) { const next = new Float32Array(path.length * 2); next.set(path); path = next; }
+    if (pathCount * 5 + 5 > path.length) { const next = new Float64Array(path.length * 2); next.set(path); path = next; }
     const o = pathCount++ * 5;
     path[o] = cx; path[o + 1] = cy; path[o + 2] = rx; path[o + 3] = ry; path[o + 4] = rotation;
   };
-  const reserve = (n: number) => {
-    if ((count + n) * FLOATS > data.length) {
-      const next = new Float32Array(Math.max(data.length * 2, (count + n) * FLOATS));
-      next.set(data); data = next;
-    }
+  // A frame whose marks cannot mix (a caller that only draws paths) skips the exact record: instances are written as they come.
+  let exact = true, largest = 0;
+  const shape = (x: number, y: number, rx: number, ry: number, rotation: number, id: number) => {
+    if ((count + 1) * SHAPE > shapes.length) { const next = new Float64Array(shapes.length * 2); next.set(shapes); shapes = next; }
+    const e = count++ * SHAPE;
+    shapes[e] = x; shapes[e + 1] = y; shapes[e + 2] = rx; shapes[e + 3] = ry; shapes[e + 4] = rotation; shapes[e + 5] = id;
   };
   const write = (x: number, y: number, rx: number, ry: number, rotation: number, r: number, g: number, b: number, a: number, id: number) => {
-    // A degenerate ellipse fills nothing.
-    if (!(rx > 0 && ry > 0)) return;
+    if ((count + 1) * FLOATS > data.length) { const next = new Float32Array(data.length * 2); next.set(data); data = next; }
     const o = count++ * FLOATS;
     if (rx > largest) largest = rx;
     if (ry > largest) largest = ry;
     data[o] = x; data[o + 1] = y; data[o + 2] = rx; data[o + 3] = ry; data[o + 4] = rotation;
     data[o + 5] = r; data[o + 6] = g; data[o + 7] = b; data[o + 8] = a; data[o + 9] = id;
+  };
+  const filled = (id: number, a: number, r: number, g: number, b: number, own: boolean, rr: number, rg: number, rb: number) => {
+    if ((id + 1) * FILL > fills.length) { const next = new Float64Array(fills.length * 2); next.set(fills); fills = next; }
+    const o = id * FILL;
+    fills[o] = a; fills[o + 1] = r; fills[o + 2] = g; fills[o + 3] = b;
+    fills[o + 4] = alpha; fills[o + 5] = rr; fills[o + 6] = rg; fills[o + 7] = rb;
+    if (!own && styles[styles.length - 1] !== style) styles.push(style);
+    fills[o + 8] = own ? -1 : styles.length - 1;
   };
   const ctx = {
     get globalAlpha() { return alpha; },
@@ -184,27 +254,71 @@ export function createDotMarks(): DotMarks | null {
     fill() {
       const a = alpha * fillAlpha;
       if (a <= 0) return;
-      reserve(pathCount);
       const id = ++paths;
+      let drawn = false;
+      // A degenerate ellipse fills nothing.
       for (let i = 0; i < pathCount; i++) {
         const p = i * 5;
-        write(path[p], path[p + 1], path[p + 2], path[p + 3], path[p + 4], red, green, blue, a, id);
+        if (!(path[p + 2] > 0 && path[p + 3] > 0)) continue;
+        if (exact) shape(path[p], path[p + 1], path[p + 2], path[p + 3], path[p + 4], id);
+        else write(path[p], path[p + 1], path[p + 2], path[p + 3], path[p + 4], red, green, blue, a, id);
+        drawn = true;
       }
+      if (!drawn) return;
+      // A lone circle of a pixel or more is an oval to Chrome; smaller ones and everything else are paths.
+      if (pathCount === 1 && path[2] === path[3] && path[4] === 0 && path[2] >= 1) discMarks = true; else pathMarks = true;
+      if (exact) filled(id, a, red, green, blue, style === DOT_FILL, rawRed, rawGreen, rawBlue);
+    },
+    fillColor(r: number, g: number, b: number) {
+      style = DOT_FILL;
+      rawRed = r; rawGreen = g; rawBlue = b;
+      red = Math.max(0, Math.min(255, r)) / 255; green = Math.max(0, Math.min(255, g)) / 255; blue = Math.max(0, Math.min(255, b)) / 255; fillAlpha = 1;
     },
     fillEllipse(x: number, y: number, rx: number, ry: number, rotation: number, r: number, g: number, b: number) {
       if (alpha <= 0) return;
-      reserve(1);
-      write(x, y, rx, ry, rotation, Math.max(0, Math.min(255, r)) / 255, Math.max(0, Math.min(255, g)) / 255, Math.max(0, Math.min(255, b)) / 255, alpha, ++paths);
+      const id = ++paths;
+      if (!(rx > 0 && ry > 0)) return;
+      pathMarks = true;
+      const red = Math.max(0, Math.min(255, r)) / 255, green = Math.max(0, Math.min(255, g)) / 255, blue = Math.max(0, Math.min(255, b)) / 255;
+      if (!exact) return write(x, y, rx, ry, rotation, red, green, blue, alpha, id);
+      shape(x, y, rx, ry, rotation, id);
+      filled(id, alpha, red, green, blue, true, r, g, b);
     },
+  };
+  /** The frame's marks on Canvas 2D, exactly as the calls recorded would have drawn them there. */
+  const replay = () => {
+    if (!fallback) fallback = new OffscreenCanvas(width, height).getContext("2d");
+    const c = fallback;
+    if (!c) return null;
+    if (c.canvas.width !== width || c.canvas.height !== height) { c.canvas.width = width; c.canvas.height = height; }
+    else c.clearRect(0, 0, width, height);
+    for (let i = 0; i < count;) {
+      const id = shapes[i * SHAPE + 5], f = id * FILL;
+      c.globalAlpha = fills[f + 4];
+      c.fillStyle = fills[f + 8] < 0 ? `rgb(${fills[f + 5]},${fills[f + 6]},${fills[f + 7]})` : styles[fills[f + 8]];
+      c.beginPath();
+      const many = i + 1 < count && shapes[(i + 1) * SHAPE + 5] === id;
+      for (; i < count && shapes[i * SHAPE + 5] === id; i++) {
+        const e = i * SHAPE, x = shapes[e], y = shapes[e + 1], rx = shapes[e + 2], ry = shapes[e + 3], rotation = shapes[e + 4];
+        if (many) c.moveTo(x + rx, y);
+        if (rx === ry && rotation === 0) c.arc(x, y, rx, 0, Math.PI * 2); else c.ellipse(x, y, rx, ry, rotation, 0, Math.PI * 2);
+      }
+      c.fill();
+    }
+    c.globalAlpha = 1;
+    return c.canvas;
   };
   return {
     ctx: ctx as unknown as CanvasRenderingContext2D,
-    begin(w, h) {
+    begin(w, h, mixed = true) {
       if (gl.isContextLost()) return false;
-      width = w; height = h; count = 0; pathCount = 0; largest = 0; paths = 0; alpha = 1; style = "#000000"; red = green = blue = 0; fillAlpha = 1;
+      if (skip > 0) { skip--; return false; }
+      exact = mixed; largest = 0;
+      width = w; height = h; count = 0; styles = []; discMarks = pathMarks = false; pathCount = 0; paths = 0; alpha = 1; style = "#000000"; red = green = blue = 0; fillAlpha = 1;
       return true;
     },
     finish() {
+      if (discMarks && pathMarks && exact) { skip = 30; return replay(); }
       if (gl.isContextLost()) return null;
       if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
@@ -228,11 +342,15 @@ export function createDotMarks(): DotMarks | null {
       gl.clearDepth(1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       if (count) {
-        gl.useProgram(program);
-        gl.uniform2f(size, width, height);
-        // Enough rim slots for the largest ellipse this frame (a circle bounds its ellipse's segment count).
-        const n = Math.sqrt(Math.max(0, 2 * largest - .207)), slots = Math.min(64, 2 ** Math.ceil(Math.log2(Math.max(1, Math.ceil(n)))));
-        gl.uniform1i(slotsAt, slots);
+        if (count * FLOATS > data.length) data = new Float32Array(Math.max(data.length * 2, count * FLOATS));
+        if (exact) for (let i = 0; i < count; i++) {
+          const e = i * SHAPE, id = shapes[e + 5], f = id * FILL, o = i * FLOATS;
+          const rx = shapes[e + 2], ry = shapes[e + 3];
+          if (rx > largest) largest = rx;
+          if (ry > largest) largest = ry;
+          data[o] = shapes[e]; data[o + 1] = shapes[e + 1]; data[o + 2] = rx; data[o + 3] = ry; data[o + 4] = shapes[e + 4];
+          data[o + 5] = fills[f + 1]; data[o + 6] = fills[f + 2]; data[o + 7] = fills[f + 3]; data[o + 8] = fills[f]; data[o + 9] = id;
+        }
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LESS);
         gl.enable(gl.BLEND);
@@ -240,7 +358,18 @@ export function createDotMarks(): DotMarks | null {
         gl.bindVertexArray(vao);
         gl.bindBuffer(gl.ARRAY_BUFFER, instances);
         gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, count * FLOATS), gl.STREAM_DRAW);
-        gl.drawArraysInstanced(gl.TRIANGLES, 0, slots * 4 * 3, count);
+        if (discMarks && !pathMarks) {
+          gl.useProgram(discs);
+          gl.uniform2f(discSize, width, height);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
+        } else {
+          // Enough rim slots for the largest ellipse this frame (a circle bounds its ellipse's segment count).
+          const n = Math.sqrt(Math.max(0, 2 * largest - .207)), slots = Math.min(64, 2 ** Math.ceil(Math.log2(Math.max(1, Math.ceil(n)))));
+          gl.useProgram(program);
+          gl.uniform2f(size, width, height);
+          gl.uniform1i(slotsAt, slots);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, slots * 4 * 3, count);
+        }
         gl.bindVertexArray(null);
       }
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer);
@@ -255,6 +384,9 @@ export function createDotMarks(): DotMarks | null {
       return canvas;
     },
     destroy() {
+      if (fallback) fallback.canvas.width = fallback.canvas.height = 1;
+      gl.deleteProgram(program);
+      gl.deleteProgram(discs);
       gl.deleteRenderbuffer(target);
       gl.deleteRenderbuffer(depthTarget);
       gl.deleteRenderbuffer(single);

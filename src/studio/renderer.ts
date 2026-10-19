@@ -1,5 +1,5 @@
 import { samplePixel } from './sample-pixel';
-import type { DotMarks } from './dot-marks';
+import { DOT_FILL, type DotMarks, type DotRecorder } from './dot-marks';
 import { createColorLookups, applyColorLookups } from './tone';
 import { SourceDenoiser } from './denoise';
 import { SourceWarpProcessor } from './warps';
@@ -40,7 +40,7 @@ export interface StudioRendererHost {
   /** Playback identity of the next source: a worker receives each video frame as a new bitmap. */
   media(source: StudioSource): { video: boolean; time: number; key: unknown };
   finishCanvas?: () => HTMLCanvasElement;
-  /** GPU dots for Pointillism, which Canvas 2D cannot fill in a display frame. */
+  /** GPU dots for the round-mark styles (DOT_STYLES), which Canvas 2D cannot fill in a display frame. */
   marks?: () => DotMarks | null;
   /** Draws the frame's scene (see drawStudioScene) when the host prepared it elsewhere. */
   scene?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
@@ -68,6 +68,8 @@ const ramps: Record<string, string> = {
   diamond: " ·◇◈◆",
   mixed: " .:+/◇#@",
 };
+/** Styles whose marks are all filled circles and ellipses, which a worker fills on the GPU (dot-marks.ts). */
+const DOT_STYLES = new Set(["pointillism", "stipple", "led", "dots"]);
 /** Ignore the darkest and brightest 1% so a few specular or black pixels do not decide the range. */
 const LEVEL_LOW = 0.01, LEVEL_HIGH = 0.99;
 /** Never stretch a flat source more than about 3x, which would only amplify noise. */
@@ -487,10 +489,12 @@ export function createStudioRendererCore(
         art.ctx.imageSmoothingEnabled = false;
         art.ctx.drawImage(sample.canvas, 0, 0, w, h);
       } else {
-        // Pointillism's pigment dots are filled on the GPU when the host can (a worker); everything else on Canvas 2D.
-        const dotted = state.style === "pointillism";
+        // Round marks (Pointillism's pigments, Stipple, LED emitters, Dots) are filled on the GPU when the host can (a
+        // worker): tens of thousands of fills a frame, each a CSS colour string, are more than Canvas 2D draws in a display frame.
+        const dotted = DOT_STYLES.has(state.style);
         if (dotted && host.marks && marks === undefined) marks = host.marks();
-        dots = dotted && marks?.begin(w, h) ? marks : null;
+        // LED and Dots draw lone circles, which a frame can mix with sub-pixel ones; the others only draw paths.
+        dots = dotted && marks?.begin(w, h, state.style === "led" || state.style === "dots") ? marks : null;
         const chars = Array.from(ramps[state.style] ?? state.charset),
           ac = dots?.ctx ?? art.ctx;
         const accent = rgb(state.ink);
@@ -613,8 +617,15 @@ export function createStudioRendererCore(
             else if (autoTone && state.colorMode === "accent") alpha *= 0.32 + 0.68 * Math.pow(lum, levelGamma);
             ac.globalAlpha = alpha;
             const toneDelta = (lum - sourceLum) * 255;
-            // GPU dots take source and gray pigments per mark: the cell's own fill is never used.
-            const ink = dots && state.colorMode !== "accent" ? state.ink :
+            let ink: string;
+            // Pointillism's GPU pigments take their own colours per mark: the cell's fill is never used.
+            if (dots && state.colorMode !== "accent" && state.style === "pointillism") ink = state.ink;
+            else if (dots && state.colorMode !== "accent") {
+              // Other GPU dots take the cell's fill as numbers, the colour the rgb() string below would parse to.
+              if (state.colorMode === "source") (dots.ctx as unknown as DotRecorder).fillColor(r + toneDelta, g + toneDelta, b + toneDelta);
+              else { const v = Math.round(lum * 255); (dots.ctx as unknown as DotRecorder).fillColor(v, v, v); }
+              ink = DOT_FILL;
+            } else ink =
               state.colorMode === "source"
                 ? `rgb(${r + toneDelta},${g + toneDelta},${b + toneDelta})`
                 : state.colorMode === "gray"
