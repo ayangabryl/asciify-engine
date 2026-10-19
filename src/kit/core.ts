@@ -1,5 +1,6 @@
 import { isGlyphFieldSupported, type GlyphField, type GlyphFieldOptions } from '../field';
 import { disposeKit, liveField, poster, setPosterSource } from './core-live';
+import { ambientFactor, cancelFieldFrame, requestFieldFrame, watchMotionPreference, watchPointer, watchTheme, watchVisibility } from '../field/field-gl';
 
 /** Options every kit component takes. */
 export interface KitOptions {
@@ -263,10 +264,9 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   let dark = isDark(host);
   // An unset token falls back to the host's own text colour, which already follows the page's design tokens.
   const ink = () => resolveColor(config.ink(dark), host) ?? resolveColor(getComputedStyle(host).color, host) ?? (dark ? '#d8d6cf' : '#1d1d1b');
-  let raf = 0, paused = false, visible = true, destroyed = false, paintedAt = -Infinity, inputAt = -Infinity;
-  const onInput = (event: Event) => { inputAt = event.timeStamp; };
-  host.addEventListener('pointermove', onInput, { passive: true });
-  host.addEventListener('pointerdown', onInput, { passive: true });
+  let raf = false, paused = false, visible = true, destroyed = false, paintedAt = -Infinity, inputAt = -Infinity;
+  // Moves over the element, through the page's one pointer listener.
+  const unwatchInput = watchPointer({ target: host, move: event => { inputAt = event.timeStamp; }, leave() {} });
   const live = liveField({
     host, canvas: first, kit, place,
     options: () => ({ ...BASE_LOOK, ...config.look(), ink: ink(), interactionTarget: host, label: '' }),
@@ -277,7 +277,7 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
       void mounted.ready.then(kick, () => {});
       kick();
     },
-    onRelease: () => { if (raf) cancelAnimationFrame(raf); raf = 0; },
+    onRelease: () => { if (raf) cancelFieldFrame(step); raf = false; },
     onFail: () => { teardown(); config.onFail?.(); },
   });
   const field = live.field;
@@ -301,8 +301,9 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     } catch (error) {
       if (typeof console !== 'undefined') console.error(error);
     }
-    // The canvas goes in directly and the field draws in the same task, so HTML and field never disagree for a frame.
-    void field.setSource(art).then(() => { if (!destroyed) field.redraw(); });
+    // The canvas goes in directly and the field draws it at once, so HTML and field never disagree for a frame.
+    void field.setSource(art);
+    if (!destroyed) field.redraw();
     return more;
   };
   /** The component's settled frame as a fresh source canvas, for a parent that draws this field into its own (pageDissolve). */
@@ -320,17 +321,17 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     return out;
   }
   settledSources.set(first, settled);
-  const step = (now: number) => {
-    raf = 0;
+  function step(now: number) {
+    raf = false;
     if (destroyed || paused || !live.live) return;
     // A component animating by itself paints at most 60 times a second (30 on a low-end device or with Save-Data);
     // for a second after the pointer moves over it, every frame, so a drag or a press keeps the screen's full rate.
-    if (now - paintedAt < ambientMs() && now - inputAt > 1000) { raf = requestAnimationFrame(step); return; }
+    if (now - paintedAt < ambientMs() * ambientFactor() && now - inputAt > 1000) { raf = true; requestFieldFrame(step); return; }
     paintedAt = now;
     const more = paintNow(now);
-    if (more && !still() && visible && !(typeof document !== 'undefined' && document.hidden)) raf = requestAnimationFrame(step);
-  };
-  function kick() { if (!raf && !destroyed && !paused && live.live) raf = requestAnimationFrame(step); }
+    if (more && !still() && visible && !(typeof document !== 'undefined' && document.hidden)) { raf = true; requestFieldFrame(step); }
+  }
+  function kick() { if (!raf && !destroyed && !paused && live.live) { raf = true; requestFieldFrame(step); } }
 
   // A resize clears the canvas; repaint in the same frame so a size change (a label growing) never shows a blank frame.
   const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
@@ -344,43 +345,35 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     if (visible) kick();
   }, { rootMargin: '64px' }) : null;
   view?.observe(host);
-  const onVisibility = () => { if (!document.hidden) kick(); };
-  document.addEventListener('visibilitychange', onVisibility);
+  const unwatchVisibility = watchVisibility(() => { if (!document.hidden) kick(); });
 
-  let themeFrame = 0;
+  let themeFrame = false;
+  const rethemeNow = () => {
+    themeFrame = false;
+    if (destroyed) return;
+    dark = isDark(host);
+    field.update({ ink: ink() });
+    config.onTheme?.();
+    kick();
+  };
   const retheme = () => {
     if (themeFrame || destroyed) return;
-    themeFrame = requestAnimationFrame(() => {
-      themeFrame = 0;
-      if (destroyed) return;
-      dark = isDark(host);
-      field.update({ ink: ink() });
-      config.onTheme?.();
-      kick();
-    });
+    themeFrame = true;
+    requestFieldFrame(rethemeNow);
   };
-  const scheme = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
-  scheme?.addEventListener?.('change', retheme);
-  const motion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-  motion?.addEventListener?.('change', kick);
-  // Class or attribute themes (`.dark`, `data-theme`) change no media query, so watch the root for them.
-  const themes = typeof MutationObserver === 'function' ? new MutationObserver(retheme) : null;
-  for (const root of [document.documentElement, document.body]) if (root) themes?.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'style'] });
+  // The colour scheme, and class or attribute themes (`.dark`, `data-theme`) on the root, through the page's one watcher.
+  const unwatchTheme = watchTheme(retheme);
+  const unwatchMotion = watchMotionPreference(kick);
 
   function teardown() {
     if (destroyed) return;
     destroyed = true;
-    if (raf) cancelAnimationFrame(raf);
-    if (themeFrame) cancelAnimationFrame(themeFrame);
-    raf = themeFrame = 0;
+    if (raf) cancelFieldFrame(step);
+    if (themeFrame) cancelFieldFrame(rethemeNow);
+    raf = themeFrame = false;
     resize?.disconnect();
     view?.disconnect();
-    themes?.disconnect();
-    document.removeEventListener('visibilitychange', onVisibility);
-    host.removeEventListener('pointermove', onInput);
-    host.removeEventListener('pointerdown', onInput);
-    scheme?.removeEventListener?.('change', retheme);
-    motion?.removeEventListener?.('change', kick);
+    unwatchVisibility(); unwatchInput(); unwatchTheme(); unwatchMotion();
     live.destroy();
     styles.restore();
     art.width = art.height = 1;
@@ -398,7 +391,7 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     dark: () => dark,
     box,
     play() { if (!paused) return; paused = false; field.play(); kick(); },
-    pause() { paused = true; if (raf) cancelAnimationFrame(raf); raf = 0; field.pause(); },
+    pause() { paused = true; if (raf) cancelFieldFrame(step); raf = false; field.pause(); },
     destroy: teardown,
   };
 }

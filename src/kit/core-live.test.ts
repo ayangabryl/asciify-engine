@@ -49,7 +49,32 @@ const scroll = (...moves: [FakeElement, number][]) => {
 const optionsOf = (call: number) => mount.mock.calls[call][1];
 const imgs = (el: FakeElement) => el.children.filter(c => c.tagName === 'IMG');
 
+describe('fields that never release by distance', () => {
+  it('settles when there are more of them than the context budget, instead of taking contexts from each other forever', () => {
+    setFieldBudget(2);
+    const els = [0, 900, 1800, 2700].map(top => at(top));
+    const handles = els.map(el => beam(as(el), { lazy: false }));
+    for (let i = 0; i < 5; i++) { scroll(...els.map(el => [el, el.rect.top] as [FakeElement, number])); advance(); }
+    const settled = mount.mock.calls.length;
+    for (let i = 0; i < 30; i++) { scroll(...els.map(el => [el, el.rect.top] as [FakeElement, number])); advance(); }
+    expect(mount.mock.calls.length).toBe(settled);
+    expect(fields.filter(f => !f.destroy.mock.calls.length)).toHaveLength(2);
+    handles.forEach(h => h.destroy());
+  });
+});
+
 describe('lazy mounting', () => {
+  it('waits for a scroll to rest before mounting fields entering the margin, and holds a field with a poster even on screen', () => {
+    const near = at(3000), shown = at(3000);
+    const handles = [beam(as(near)), beam(as(shown), { poster: '/still.webp' })];
+    for (const fn of env.docListeners.get('scroll') ?? []) fn({});
+    scroll([near, 1100], [shown, 100]);
+    expect(mount).not.toHaveBeenCalled();
+    advance(200);
+    expect(mount).toHaveBeenCalledTimes(2);
+    handles.forEach(h => h.destroy());
+  });
+
   it('mounts near the viewport, releases beyond one viewport, and keeps the handle working throughout', async () => {
     const el = at(3000);
     const b = beam(as(el));

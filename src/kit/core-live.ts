@@ -1,4 +1,5 @@
 import { mountGlyphField, type FieldMark, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
+import { currentFieldContext, isSharedFieldCanvas } from '../field/field-gl';
 
 /**
  * The Studio's 24 render styles as the glyph field draws them: the glyph-like styles are ramps, the halftone is the dot mark,
@@ -85,6 +86,10 @@ interface Slot {
   eager: boolean;
   wanted: boolean;
   live: boolean;
+  /** Drawn through the page's shared context: it holds no context of its own, so the budget passes it by. */
+  shared?: boolean;
+  /** A poster stands in while it waits. */
+  poster?: boolean;
   mount(): void;
   release(): void;
 }
@@ -102,8 +107,10 @@ let doc: Document | null = null, frame = 0, windowAt = -1e9, spent = 0, pumping 
 const frameTime = () => { const at = (doc as { timeline?: { currentTime?: unknown } } | null)?.timeline?.currentTime; return typeof at === 'number' ? at : null; };
 
 /**
- * At most `n` kit fields hold a WebGL context at once (default 12; browsers drop the oldest past about 16).
+ * At most `n` kit fields hold a WebGL context of their own at once (default 12; browsers drop the oldest past about 16).
  * Past it the live field farthest off screen is released first, and shows its poster until it is the nearer one again.
+ * Fields drawn through the page's shared context hold none, so they don't count; only fields that fall back to a context
+ * of their own (a canvas in another document, a browser without the shared path) do.
  */
 export function setFieldBudget(n: number) {
   budget = Number.isFinite(n) && n >= 1 ? Math.floor(n) : DEFAULT_BUDGET;
@@ -160,17 +167,30 @@ function observers() {
 
 // Closing a modal uncovers the page behind it: what it displaced comes back, even when the dialog drew no field.
 const onClose = () => pump();
+// While the page scrolls, fields entering the margin wait (and those with a poster wait even on screen) until it rests,
+// so a scroll never pays for mounting. The poster is the field's own still, so nothing visibly changes.
+const SETTLE_MS = 140;
+let scrolledAt = -1e9, settle = 0;
+const scrolling = () => { const t = now(); return t >= scrolledAt && t - scrolledAt < SETTLE_MS; };
+const onScroll = () => {
+  scrolledAt = now();
+  clearTimeout(settle);
+  settle = setTimeout(() => pump(), SETTLE_MS) as unknown as number;
+};
 let closeOn: Document | null = null;
 const watchClose = (next: Document | null) => {
   if (closeOn === next) return;
   closeOn?.removeEventListener?.('close', onClose, true);
+  closeOn?.removeEventListener?.('scroll', onScroll, true);
   next?.addEventListener?.('close', onClose, true);
+  next?.addEventListener?.('scroll', onScroll, { capture: true, passive: true } as AddEventListenerOptions);
+  if (!next) clearTimeout(settle);
   closeOn = next;
 };
 
 function claim(slot: Slot) {
   // A field from another document (a test, a replaced iframe) no longer shares this page's contexts.
-  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = 0; windowAt = -1e9; }
+  if (doc !== slot.doc) { doc = slot.doc; slots.clear(); frame = spent = 0; windowAt = scrolledAt = -1e9; }
   watchClose(doc);
   slots.add(slot);
   const list = observers();
@@ -200,31 +220,46 @@ function pump(fromFrame = false) {
       // A host taken out of the document (a route left, a list row recycled) before its handle is destroyed waits.
       for (const slot of slots) if (slot.host.isConnected === false) slot.wanted = false;
       for (const slot of slots) if (slot.live && !slot.wanted) slot.release();
-      const live = [...slots].filter(s => s.live);
+      const live = [...slots].filter(s => s.live && !s.shared);
       const modal = topModal();
       const covered = (s: Slot) => !!modal && !modal.contains(s.host);
       const rank = (s: Slot) => offscreen(s.host) + (covered(s) ? COVERED : 0);
       // A covered `lazy: false` field keeps no claim over one the open dialog shows.
       const held = (s: Slot) => s.eager && !covered(s);
-      const far = () => live.filter(s => s.live).map(s => [s, rank(s) + (held(s) ? 0 : 1e9)] as const).sort((a, b) => b[1] - a[1]);
+      const far = () => live.filter(s => s.live && !s.shared).map(s => [s, rank(s) + (held(s) ? 0 : 1e9)] as const).sort((a, b) => b[1] - a[1]);
       // A lower budget releases the farthest at once.
       for (let over = live.length - budget, order = over > 0 ? far() : []; over > 0; over--) order.shift()?.[0].release();
+      // Past the page's GPU memory budget, shared fields off screen give way to their posters, farthest first; `lazy: false`
+      // fields too, since the budget is a guarantee to the host page.
+      const gpu = currentFieldContext();
+      const spill = () => [...slots].filter(s => s.live && s.shared && rank(s) > 0).sort((a, b) => rank(b) - rank(a));
+      if (gpu?.overBudget) for (const victim of spill()) { if (!gpu.overBudget) break; victim.release(); }
       const waiting = [...slots].filter(s => s.wanted && !s.live).map(s => [s, s.eager ? -1 : rank(s)] as const).sort((a, b) => a[1] - b[1]);
       let mounted = 0;
+      const moving = scrolling();
       for (const [slot, d] of waiting) {
         if (!slots.has(slot) || slot.live) continue;
+        if (moving && !slot.eager && (d > 0 || slot.poster)) continue;
+        if (gpu && !gpu.roomy) {
+          // Room is made only by a farther field; otherwise this one keeps its poster until memory frees up.
+          const victim = spill()[0];
+          if (!victim || rank(victim) <= rank(slot)) break;
+          victim.release();
+          if (!gpu.roomy) break;
+        }
         if (!slot.eager && spent >= FRAME_MS && !(fromFrame && !mounted)) { frame ||= requestAnimationFrame(() => { frame = 0; pump(true); }); break; }
-        if (live.filter(s => s.live).length >= budget) {
+        if (live.filter(s => s.live && !s.shared).length >= budget) {
           const victim = far()[0]?.[0];
-          // The rest are farther still, so they wait too. Only another `lazy: false` field displaces one on view.
-          if (!victim || (!slot.eager && (held(victim) || rank(victim) <= d))) break;
+          // The rest are farther still, so they wait too. Only another `lazy: false` field displaces one on view, and only a
+          // nearer one displaces another `lazy: false` field: two of them never take the context from each other in turn.
+          if (!victim || (held(victim) ? !slot.eager || rank(victim) <= rank(slot) : !slot.eager && rank(victim) <= d)) break;
           victim.release();
         }
         const start = now();
         slot.mount();
         spent += now() - start;
         mounted++;
-        if (slot.live) live.push(slot);
+        if (slot.live && !slot.shared) live.push(slot);
       }
     } while (again);
   } finally {
@@ -459,7 +494,7 @@ export function liveField(config: LiveConfig): Live {
   };
 
   const slot: Slot = {
-    host, doc: document, eager: kit?.current.lazy === false, wanted: false, live: false,
+    host, doc: document, eager: kit?.current.lazy === false, wanted: false, live: false, poster: !!still || !!config.ownPoster,
     mount() {
       if (destroyed || real) return;
       if (used) canvas = config.canvas = freshCanvas(canvas);
@@ -479,19 +514,24 @@ export function liveField(config: LiveConfig): Live {
       }
       real = field;
       slot.live = true;
+      slot.shared = isSharedFieldCanvas(canvas);
       // A context the browser takes back (Safari past its 16, a GPU reset) and does not restore leaves a blank canvas:
-      // the field is released to its poster and mounts again on a fresh canvas when the budget allows.
+      // the field is released to its poster and mounts again on a fresh canvas when the budget allows. The shared
+      // context replaces itself instead.
       const drawn = canvas;
-      let gone = 0;
-      const onLost = () => {
-        if (real !== field) return;
-        clearTimeout(gone);
-        gone = setTimeout(() => { if (real === field && canvas === drawn) { slot.release(); pump(); } }, LOST_MS) as unknown as number;
-      };
-      const onRestored = () => clearTimeout(gone);
-      drawn.addEventListener?.('webglcontextlost', onLost);
-      drawn.addEventListener?.('webglcontextrestored', onRestored);
-      unwatch = () => { clearTimeout(gone); drawn.removeEventListener?.('webglcontextlost', onLost); drawn.removeEventListener?.('webglcontextrestored', onRestored); };
+      if (slot.shared) unwatch = () => {};
+      else {
+        let gone = 0;
+        const onLost = () => {
+          if (real !== field) return;
+          clearTimeout(gone);
+          gone = setTimeout(() => { if (real === field && canvas === drawn) { slot.release(); pump(); } }, LOST_MS) as unknown as number;
+        };
+        const onRestored = () => clearTimeout(gone);
+        drawn.addEventListener?.('webglcontextlost', onLost);
+        drawn.addEventListener?.('webglcontextrestored', onRestored);
+        unwatch = () => { clearTimeout(gone); drawn.removeEventListener?.('webglcontextlost', onLost); drawn.removeEventListener?.('webglcontextrestored', onRestored); };
+      }
       if (paused) field.pause();
       void field.ready.then(() => {
         if (real !== field) return;
@@ -513,10 +553,15 @@ export function liveField(config: LiveConfig): Live {
       wiping = null;
       settings = field.settings;
       field.destroy();
-      loseContext(canvas);
-      // Safari counts a lost context against its 16 for as long as its canvas lives, and past them loses the oldest
-      // live one: a released field gives its canvas up at once (a blank one waits in its place), so it can be collected.
-      if (!destroyed) { canvas = config.canvas = freshCanvas(canvas); used = false; }
+      if (slot.shared) {
+        // A shared field's canvas holds no context: it is cleared for the poster and drawn into again on the next mount.
+        if (!destroyed) { canvas.width = canvas.width; used = false; }
+      } else {
+        loseContext(canvas);
+        // Safari counts a lost context against its 16 for as long as its canvas lives, and past them loses the oldest
+        // live one: a released field gives its canvas up at once (a blank one waits in its place), so it can be collected.
+        if (!destroyed) { canvas = config.canvas = freshCanvas(canvas); used = false; }
+      }
       still?.show(true);
       config.onRelease?.();
     },
