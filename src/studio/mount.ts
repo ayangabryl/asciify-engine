@@ -1,6 +1,7 @@
 import { hasAnimatedEffects } from './activity';
 import { AmbientTimeline } from '../surface/ambient-motion';
 import { createStudioRenderer } from "./renderer";
+import { HoverPacer } from "./pacer";
 import { createWorkerStudioRenderer, loadStudioWorker, studioWorkerSupported, type WorkerStudioRenderer } from "./worker-renderer";
 import { loadStudioMedia, type StudioMedia } from "./media";
 import {
@@ -130,7 +131,8 @@ export function mountStudioMedia(
     frame = 0;
     if (disposed || !visible || document.hidden) return;
     // A worker's finished frame reaches the canvas on this display frame.
-    if (threaded?.show() && threaded.drawing) wake();
+    const shown = threaded?.show() ?? false;
+    if (shown && threaded!.drawing) wake();
     const moving = shouldPlay();
     if (moving) time += last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
@@ -148,8 +150,12 @@ export function mountStudioMedia(
       (animated &&
         (sourceChanged || needsMotion) &&
         now - painted >= interval);
-    if (threaded) pace(now);
-    if (due && threaded && !dirty && ticks % stride) queued = true;
+    if (threaded) {
+      // A hover frame was wanted on this display frame (at full rate, one is shown on every one) and none was ready.
+      pacer.tick(now, renderer.active && pacer.stride === 1 && !shown && threaded.drawing, costAverage);
+      ticks++;
+    }
+    if (due && threaded && !dirty && ticks % pacer.stride) queued = true;
     else if (due && threaded) {
       if (threaded.busy) queued = true;
       else {
@@ -191,35 +197,9 @@ export function mountStudioMedia(
       wake();
     }
   }
-  // Frames drawn in workers cost the page nothing, but the browser still rasters and composites each one. When the display's
-  // own frames slow down (the GPU process cannot keep up), a hover is drawn on every second, third or fourth display
-  // frame until they recover; a step back that slows them again waits twice as long before the next try.
-  let tickAt = 0, ticks = 0, short = 0, shortCount = 0, sum = 0, count = 0, fastest = Infinity, stride = 1, hold = 0, wait = 1, tried = false;
-  function pace(now: number) {
-    const interval = now - tickAt;
-    tickAt = now;
-    ticks++;
-    if (interval < 3 || interval > 100) return;
-    // The display's own rate: the quickest run of 8 frames (single intervals jitter around it).
-    short += interval;
-    if (++shortCount === 8) { fastest = Math.min(fastest, short / 8); short = shortCount = 0; }
-    sum += interval;
-    if (++count < 30) return;
-    const mean = sum / count;
-    sum = count = 0;
-    if (mean > fastest * 1.25) {
-      if (tried) wait = Math.min(64, wait * 2);
-      stride = Math.min(4, stride + 1);
-      hold = wait;
-      tried = false;
-    } else if (stride > 1 && mean < fastest * 1.1 && --hold <= 0) {
-      stride--;
-      tried = true;
-    } else if (tried) {
-      tried = false;
-      wait = Math.max(1, wait / 2);
-    }
-  }
+  // How often a hover drawn in workers is shown (see pacer.ts); a new hover starts at full rate.
+  const pacer = new HoverPacer();
+  let ticks = 0;
   /** Adaptive quality: only a sustained miss of the frame budget counts as struggling; a busy frame or two does not. */
   function measured(cost: number, animated: boolean) {
     costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
@@ -259,6 +239,7 @@ export function mountStudioMedia(
   }
   const move = (e: PointerEvent) => {
     if (!shouldPlay()) return;
+    if (!renderer.active) pacer.reset();
     const rect = canvas.getBoundingClientRect();
     renderer.pointer(
       (e.clientX - rect.left) / rect.width,

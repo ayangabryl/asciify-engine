@@ -3,6 +3,12 @@
 Notable changes to `asciify-engine`, newest first. Releases are published to [npm](https://www.npmjs.com/package/asciify-engine) from version tags.
 
 
+
+## 4.27: Smooth dot looks and steady hover
+
+- LED (Scoreboard), Dots and Stipple draw in one instanced GPU pass, like Pointillism, instead of thousands of Canvas 2D fills per frame: Scoreboard's hover costs 5 ms instead of 12, Lookbook goes from 93 to 120 fps. Output matches within the parity tolerance; frames mixing sub-pixel dots fall back to Canvas 2D exactly.
+- Hover pacing steps down only when a look's own frames are late for several frames, ignores one-off stalls, and returns to full rate within a second (it used to wait up to 16 s). A new hover starts at full rate.
+- `npm run bench:looks` fails a look whose hover cost regresses past its recorded budget.
 ## 4.26.1
 
 - Fixed: the pill's hover sparkle could read a character before the start of its set (progress slightly below zero) and throw.
