@@ -1,6 +1,7 @@
 import { hasAnimatedEffects } from './activity';
 import { AmbientTimeline } from '../surface/ambient-motion';
 import { createStudioRenderer } from "./renderer";
+import { createWorkerStudioRenderer, loadStudioWorker, studioWorkerSupported, type WorkerStudioRenderer } from "./worker-renderer";
 import { loadStudioMedia, type StudioMedia } from "./media";
 import {
   normalizeStudioSettings,
@@ -27,6 +28,8 @@ export async function mountStudio(
   source: File | string,
   options: MountStudioOptions = {},
 ) {
+  // The render worker's script loads while the media does.
+  if (studioWorkerSupported()) void loadStudioWorker();
   const media = await loadStudioMedia(source, options.signal);
   try {
     return mountStudioMedia(canvas, media, options);
@@ -44,7 +47,34 @@ export function mountStudioMedia(
   let settings = normalizeStudioSettings(options.settings),
     width = options.width ?? media.width,
     height = options.height ?? media.height;
-  const renderer = createStudioRenderer(canvas, settings, options);
+  // The page's main thread only posts input: the worker draws, so hover runs at the display's rate and never blocks the
+  // page. Without OffscreenCanvas (or if the worker fails to start) the same renderer draws here, at most 60 times a second.
+  type PageRenderer = ReturnType<typeof createStudioRenderer>;
+  let threaded: WorkerStudioRenderer | null = null;
+  let renderer: PageRenderer | WorkerStudioRenderer;
+  const onPage = () => createStudioRenderer(canvas, settings, options);
+  if (studioWorkerSupported()) {
+    try {
+      renderer = threaded = createWorkerStudioRenderer(canvas, settings, options, {
+        frame: presented,
+        ready: () => wake(),
+        unavailable() {
+          // Nothing was drawn yet: the page takes over with the same settings and budget.
+          const budget = renderer.maxCells, ratio = renderer.pixelRatio;
+          threaded = null;
+          renderer = onPage();
+          renderer.setBudget(budget);
+          renderer.setPixelRatio(ratio);
+          dirty = true;
+          wake();
+        },
+        error: fault,
+      }, { width, height });
+    } catch {
+      threaded = null;
+      renderer = onPage();
+    }
+  } else renderer = onPage();
   const ambientClock = new AmbientTimeline();
   let frame = 0,
     disposed = false,
@@ -56,7 +86,8 @@ export function mountStudioMedia(
     last = 0,
     painted = 0,
     videoFrame = -1,
-    drewActive = false;
+    drewActive = false,
+    queued = false;
   let adaptive = options.adaptive !== false;
   let samples = 0,
     costAverage = 0,
@@ -98,6 +129,8 @@ export function mountStudioMedia(
   function tick(now: number) {
     frame = 0;
     if (disposed || !visible || document.hidden) return;
+    // A worker's finished frame reaches the canvas on this display frame.
+    if (threaded?.show() && threaded.drawing) wake();
     const moving = shouldPlay();
     if (moving) time += last ? Math.min(0.1, (now - last) / 1000) : 0;
     last = now;
@@ -106,46 +139,44 @@ export function mountStudioMedia(
     const decoded = video?.getVideoPlaybackQuality?.().totalVideoFrames ?? -1;
     const sourceChanged = !video || decoded < 0 || decoded !== videoFrame;
     const interval = 1000 / Math.max(1, Math.min(60, options.fps ?? 60)) - 0.5;
-    // Every frame is drawn on the CPU: at most 60 a second (a 120 Hz screen would double the work for no visible gain),
-    // and a slow look leaves the page at least half of the main thread instead of drawing back to back.
+    // On the page, every frame is drawn on the main thread: at most 60 a second (a 120 Hz screen would double the work
+    // for no visible gain), and a slow look leaves the page at least half of the main thread instead of drawing back to
+    // back. A worker draws a hover on every display frame it can keep up with.
     const due =
       dirty ||
-      (renderer.active ? now - painted >= Math.max(interval, costAverage * 2) : drewActive) ||
+      (renderer.active ? threaded || now - painted >= Math.max(interval, costAverage * 2) : drewActive) ||
       (animated &&
         (sourceChanged || needsMotion) &&
         now - painted >= interval);
-    if (due) {
+    if (threaded) pace(now);
+    if (due && threaded && !dirty && ticks % stride) queued = true;
+    else if (due && threaded) {
+      if (threaded.busy) queued = true;
+      else {
+        if (media.animated && !video) threaded.invalidate();
+        const [w, h] = studioDimensions(width, height, settings);
+        renderedMotionTime = ambientClock.update(time, settings.motion.type, settings.motion.speed);
+        const frameTime = video?.currentTime ?? time;
+        if (threaded.render(media.frame(frameTime), frameTime, w, h, renderedMotionTime, { video: !!video, time: decoded }) || dirty) {
+          // The frame's time: onFrame reports it when the frame reaches the canvas.
+          dirty = false;
+          painted = now;
+          queued = false;
+          videoFrame = decoded;
+        }
+      }
+    } else if (due) {
       const start = performance.now();
       try {
         if (media.animated && !video) renderer.invalidate();
         const [w, h] = studioDimensions(width, height, settings);
         renderedMotionTime = ambientClock.update(time, settings.motion.type, settings.motion.speed);
-        renderer.render(media.frame(video?.currentTime ?? time), time, w, h, renderedMotionTime);
+        (renderer as PageRenderer).render(media.frame(video?.currentTime ?? time), time, w, h, renderedMotionTime);
         const cost = performance.now() - start;
         options.onFrame?.(video?.currentTime ?? time, cost);
-        costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
-        if (++samples > 20 && adaptive && (animated || renderer.active)) {
-          // Only a sustained miss of the frame budget counts as struggling; a busy frame or two does not.
-          const frameBudget = 1000 / Math.max(1, Math.min(60, options.fps ?? 60));
-          overBudget = costAverage > frameBudget * 1.1 ? overBudget + 1 : 0;
-          underBudget = costAverage < frameBudget * 0.5 ? underBudget + 1 : 0;
-          if (overBudget >= 20 && renderer.maxCells > 3000) {
-            renderer.setBudget(Math.max(3000, renderer.maxCells * 0.8));
-            options.onQualityChange?.(renderer.maxCells);
-            overBudget = 0;
-            costAverage = 0;
-          } else if (underBudget >= 30 && renderer.maxCells < targetCells) {
-            renderer.setBudget(Math.min(targetCells, renderer.maxCells * 1.25));
-            options.onQualityChange?.(renderer.maxCells);
-            underBudget = 0;
-            costAverage = 0;
-          }
-        }
+        measured(cost, animated);
       } catch (error) {
-        paused = true;
-        options.onError?.(
-          error instanceof Error ? error : new Error(String(error)),
-        );
+        fault(error);
       }
       dirty = false;
       painted = now;
@@ -153,9 +184,75 @@ export function mountStudioMedia(
       drewActive = renderer.active;
       videoFrame = decoded;
     }
-    if (moving && (animated || renderer.active)) wake();
+    if (moving && (animated || renderer.active || queued)) wake();
     // Motion has settled: draw the still again at the full requested resolution.
-    else if (!animated && !renderer.active && restore()) {
+    else if (!animated && !renderer.active && !threaded?.drawing && restore()) {
+      dirty = true;
+      wake();
+    }
+  }
+  // Frames drawn in workers cost the page nothing, but the browser still rasters and composites each one. When the display's
+  // own frames slow down (the GPU process cannot keep up), a hover is drawn on every second, third or fourth display
+  // frame until they recover; a step back that slows them again waits twice as long before the next try.
+  let tickAt = 0, ticks = 0, short = 0, shortCount = 0, sum = 0, count = 0, fastest = Infinity, stride = 1, hold = 0, wait = 1, tried = false;
+  function pace(now: number) {
+    const interval = now - tickAt;
+    tickAt = now;
+    ticks++;
+    if (interval < 3 || interval > 100) return;
+    // The display's own rate: the quickest run of 8 frames (single intervals jitter around it).
+    short += interval;
+    if (++shortCount === 8) { fastest = Math.min(fastest, short / 8); short = shortCount = 0; }
+    sum += interval;
+    if (++count < 30) return;
+    const mean = sum / count;
+    sum = count = 0;
+    if (mean > fastest * 1.25) {
+      if (tried) wait = Math.min(64, wait * 2);
+      stride = Math.min(4, stride + 1);
+      hold = wait;
+      tried = false;
+    } else if (stride > 1 && mean < fastest * 1.1 && --hold <= 0) {
+      stride--;
+      tried = true;
+    } else if (tried) {
+      tried = false;
+      wait = Math.max(1, wait / 2);
+    }
+  }
+  /** Adaptive quality: only a sustained miss of the frame budget counts as struggling; a busy frame or two does not. */
+  function measured(cost: number, animated: boolean) {
+    costAverage = costAverage ? costAverage * 0.9 + cost * 0.1 : cost;
+    if (++samples > 20 && adaptive && (animated || renderer.active)) {
+      const frameBudget = 1000 / Math.max(1, Math.min(60, options.fps ?? 60));
+      overBudget = costAverage > frameBudget * 1.1 ? overBudget + 1 : 0;
+      underBudget = costAverage < frameBudget * 0.5 ? underBudget + 1 : 0;
+      if (overBudget >= 20 && renderer.maxCells > 3000) {
+        renderer.setBudget(Math.max(3000, renderer.maxCells * 0.8));
+        options.onQualityChange?.(renderer.maxCells);
+        overBudget = 0;
+        costAverage = 0;
+      } else if (underBudget >= 30 && renderer.maxCells < targetCells) {
+        renderer.setBudget(Math.min(targetCells, renderer.maxCells * 1.25));
+        options.onQualityChange?.(renderer.maxCells);
+        underBudget = 0;
+        costAverage = 0;
+      }
+    }
+  }
+  function fault(error: unknown) {
+    paused = true;
+    options.onError?.(error instanceof Error ? error : new Error(String(error)));
+  }
+  /** A worker frame reached the canvas. */
+  function presented(frameTime: number, cost: number) {
+    if (disposed) return;
+    options.onFrame?.(frameTime, cost);
+    // Workers taking turns each have that many frames' time for one.
+    measured(cost / (threaded?.turns ?? 1), shouldPlay() && (media.animated || hasAnimatedEffects(settings)));
+    drewActive = renderer.active;
+    if (queued || drewActive || dirty || threaded?.drawing) wake();
+    else if (restore()) {
       dirty = true;
       wake();
     }
@@ -268,7 +365,7 @@ export function mountStudioMedia(
     get maxCells() {
       return renderer.maxCells;
     },
-    get capabilities() {
+    get capabilities(): { gpuFinish: boolean } {
       return renderer.capabilities;
     },
     destroy,

@@ -157,16 +157,16 @@ describe('shared field context', () => {
     const first = mountMany(1, { hover: 'none' });
     runFrame();
     const textures = counts.textures, buffers = counts.buffers, bytes = fieldGl.currentFieldContext()!.bytes;
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < fieldGl.SPARE_ATLASES + 12; round++) {
       // Every round a different charset: unused atlases are kept only up to the spare count.
-      const fields = mountMany(5, { hover: round % 2 ? 'lantern' : 'trail', charset: ` .:${String.fromCharCode(65 + round)}#` });
+      const fields = mountMany(5, { hover: round % 2 ? 'lantern' : 'trail', charset: ` .:${String.fromCharCode(0x4e00 + round)}#` });
       runFrame(); runFrame();
       fields.forEach(f => f.field.destroy());
     }
     runFrame();
     expect(counts.buffers).toBe(buffers);
-    // The one field left, plus at most eight spare atlases.
-    expect(counts.textures - textures).toBeLessThanOrEqual(8);
+    // The one field left, plus at most the spare atlases.
+    expect(counts.textures - textures).toBeLessThanOrEqual(fieldGl.SPARE_ATLASES);
     expect(fieldGl.currentFieldContext()!.bytes - bytes).toBeLessThan(8 * 1024 * 1024);
     first.forEach(f => f.field.destroy());
   });

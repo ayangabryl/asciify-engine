@@ -24,3 +24,8 @@ declare module "gifenc" {
   };
   export default api;
 }
+/** A worker entry bundled to a script string at build time (tsup.config.ts). */
+declare module "*?worker-source" {
+  const source: string;
+  export default source;
+}

@@ -54,6 +54,23 @@ describe('GPU memory budget', () => {
     expect(gpu.live).toBe(0);
   });
 
+  it('over budget, releases only fields far off screen, never one on or near it', () => {
+    const els = [0, 300, 600].map(at);
+    const handles = els.map(el => beam(as(el), { poster: '/still.webp' }));
+    advance(20);
+    expect(gpu.live).toBe(3);
+    gpu.limit = 1;
+    scroll([els[2], 1500]);
+    advance(20);
+    // On screen, and 700px below it (within a viewport): both kept, over budget or not.
+    expect(gpu.live).toBe(3);
+    // 1200px below: beyond the mount margin, so it gives way, though still short of the release distance.
+    scroll([els[2], 2000]);
+    expect(gpu.live).toBe(2);
+    gpu.limit = 3;
+    handles.forEach(h => h.destroy());
+  });
+
   it('settles with fields that never release by distance: no mounting and releasing in turn at the budget', () => {
     const els = Array.from({ length: 10 }, (_, i) => at(i * 900));
     const handles = els.map(el => beam(as(el), { lazy: false, poster: '/still.webp' }));

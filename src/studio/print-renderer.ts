@@ -1,3 +1,4 @@
+import type { DotRecorder } from './dot-marks';
 import { normalizeStudioPrint, type StudioPrintStyle } from './print-model';
 
 const TAU = Math.PI * 2;
@@ -104,6 +105,7 @@ export function createPrintPainter(input: unknown) {
         ctx.beginPath(); ctx.arc(px + cell * .5 + offset * directions[0][0], py + cell * .5 + offset * directions[0][1], radius * Math.sqrt(.3 + separation * .7) * speckle, 0, TAU); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
       } else {
+        const fillEllipse = (ctx as Partial<DotRecorder>).fillEllipse;
         if (style === 'stipple') ctx.beginPath();
         for (let mark = 0; mark < 4; mark++) {
           const jitter = noise(x * 2 + mark % 2, y * 2 + (mark >> 1), seed);
@@ -116,6 +118,12 @@ export function createPrintPainter(input: unknown) {
           else {
             // Pigments differ in hue for source color, only brightness for gray/accent.
             const shift = (jitter - .5) * roughness * 64;
+            // GPU dots (dot-marks.ts) take the same fill as numbers.
+            if (fillEllipse && colorMode !== 'accent') {
+              const red = Math.round(r + shift);
+              fillEllipse(cx, cy, radius, radius * .64, jitter * Math.PI, red, colorMode === 'source' ? Math.round(g - shift * .4) : red, colorMode === 'source' ? Math.round(b - shift) : red);
+              continue;
+            }
             if (colorMode === 'source') ctx.fillStyle = `rgb(${Math.round(r + shift)},${Math.round(g - shift * .4)},${Math.round(b - shift)})`;
             else if (colorMode === 'gray') ctx.fillStyle = `rgb(${Math.round(r + shift)},${Math.round(r + shift)},${Math.round(r + shift)})`;
             else ctx.fillStyle = ink;

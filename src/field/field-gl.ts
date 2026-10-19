@@ -225,8 +225,11 @@ const IDLE_MS = 3000;
  * until there is room. Fields mounted directly with mountGlyphField are counted but never released by it.
  */
 export const FIELD_MEMORY_BUDGET = 256 * 1024 * 1024;
-/** Atlases no field uses any more, kept for a remount and evicted oldest first past this many. */
-const SPARE_ATLASES = 8;
+/**
+ * Atlases no field uses any more, kept for a remount (or built ahead of a mount) and evicted oldest first past this many,
+ * and all of them while over the memory budget. Each is a few glyph cells: a page's whole set costs little.
+ */
+export const SPARE_ATLASES = 32;
 /** Render scale steps: weak GPUs draw fewer pixels per cell before any field gives up frames. */
 const SCALES = [1, 0.85, 0.7, 0.58, 0.5];
 
@@ -378,6 +381,8 @@ export class FieldContext {
     entry.users.add(user);
     return entry;
   }
+  /** True when the atlas for `key` exists, in use or spare. */
+  hasAtlas(key: string) { return this.atlases.has(key); }
   paintAtlas(entry: SharedAtlas, paint: () => { image: TexImageSource; final: boolean }) {
     const gl = this.gl, { image, final } = paint();
     gl.bindTexture(gl.TEXTURE_2D, entry.texture);

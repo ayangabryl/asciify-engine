@@ -1,4 +1,5 @@
 import { samplePixel } from './sample-pixel';
+import type { DotMarks } from './dot-marks';
 import { createColorLookups, applyColorLookups } from './tone';
 import { SourceDenoiser } from './denoise';
 import { SourceWarpProcessor } from './warps';
@@ -26,12 +27,32 @@ export function studioSourceSize(s: StudioSource): [number, number] {
       ? [s.naturalWidth, s.naturalHeight]
       : [s.width, s.height];
 }
-const surface = (readFrequently = false) => {
+type Surface = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
+const domSurface = (readFrequently = false): Surface => {
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d", { willReadFrequently: readFrequently });
   if (!ctx) throw new Error("Canvas 2D is unavailable.");
   return { canvas: c, ctx };
 };
+/** Where a renderer gets its scratch canvases and learns about its source; a worker supplies its own. @internal */
+export interface StudioRendererHost {
+  surface(readFrequently?: boolean): Surface;
+  /** Playback identity of the next source: a worker receives each video frame as a new bitmap. */
+  media(source: StudioSource): { video: boolean; time: number; key: unknown };
+  finishCanvas?: () => HTMLCanvasElement;
+  /** GPU dots for Pointillism, which Canvas 2D cannot fill in a display frame. */
+  marks?: () => DotMarks | null;
+  /** Draws the frame's scene (see drawStudioScene) when the host prepared it elsewhere. */
+  scene?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+  finished(status: "gpu" | "unavailable" | "none"): void;
+}
+const domHost = (canvas: HTMLCanvasElement): StudioRendererHost => ({
+  surface: domSurface,
+  media: (source) => "currentTime" in source
+    ? { video: true, time: source.getVideoPlaybackQuality?.().totalVideoFrames ?? source.currentTime, key: source }
+    : { video: false, time: 0, key: source },
+  finished(status) { canvas.dataset.studioFinish = status; },
+});
 const resize = (c: HTMLCanvasElement, w: number, h: number) => {
   if (c.width !== w || c.height !== h) {
     c.width = w;
@@ -160,6 +181,33 @@ function paintMask(mc: CanvasRenderingContext2D, w: number, h: number, shapes: S
     mc.fill();
   }
 }
+const advancers = new WeakMap<object, (source: StudioSource, time: number, width: number, height: number, motionTime: number, draw: boolean) => void>();
+/**
+ * Moves a renderer through a frame without drawing it: the hover field, timing and source state change exactly as
+ * render() would change them. Two renderers fed the same frames this way stay in lockstep, drawing alternate frames.
+ * @internal
+ */
+export function advanceStudioRenderer(renderer: object, source: StudioSource, time: number, width: number, height: number, motionTime: number) {
+  advancers.get(renderer)?.(source, time, width, height, motionTime, false);
+}
+/** @internal */
+export const studioMaxDimension = (limit?: number) => Math.max(64, Math.min(4096, Number.isFinite(limit) ? limit! : 960));
+/** The drawn size of a requested frame, within the longest-side limit. @internal */
+export function studioFit(maxDimension: number, requestedWidth: number, requestedHeight: number): [number, number] {
+  const fit = Math.min(1, maxDimension / Math.max(requestedWidth, requestedHeight));
+  return [Math.max(2, Math.round(requestedWidth * fit)), Math.max(2, Math.round(requestedHeight * fit))];
+}
+/** The cropped, rotated source at the frame's size: everything else is drawn from this. @internal */
+export function drawStudioScene(ctx: CanvasRenderingContext2D, source: StudioSource, w: number, h: number, crop: StudioSettings["crop"]) {
+  const [sw, sh] = studioSourceSize(source);
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  const c = studioCrop(sw, sh, w, h, crop);
+  ctx.translate(c.x + c.width / 2, c.y + c.height / 2);
+  ctx.rotate((crop.rotation * Math.PI) / 180);
+  ctx.drawImage(source, (-sw * c.scale) / 2, (-sh * c.scale) / 2, sw * c.scale, sh * c.scale);
+  ctx.restore();
+}
 /** Reusable bounded renderer. Call configure only when settings change; render owns no RAF. */
 export function createStudioRenderer(
   canvas: HTMLCanvasElement,
@@ -170,6 +218,20 @@ export function createStudioRenderer(
     pixelRatio?: number;
   } = {},
 ) {
+  return createStudioRendererCore(canvas, settings, limits, domHost(canvas));
+}
+/** The renderer behind createStudioRenderer, on any host. @internal */
+export function createStudioRendererCore(
+  canvas: HTMLCanvasElement,
+  settings: unknown,
+  limits: {
+    maxDimension?: number;
+    maxCells?: number;
+    pixelRatio?: number;
+  },
+  host: StudioRendererHost,
+) {
+  const surface = host.surface;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is already owned by another renderer.");
   const scene = surface(),
@@ -187,6 +249,7 @@ export function createStudioRenderer(
   let levelLow = 0, levelHigh = 1, levelGamma = INK_GAMMA_MAX, levelSource: unknown = null;
   let inkCoverage: number[] | null = null, inkLookup: Uint8Array | null = null, inkKey = "";
   let finish: ReturnType<typeof createStudioFinish> | undefined;
+  let marks: DotMarks | null | undefined;
   let state = normalizeStudioSettings(settings),
     revision = 0,
     prepared = "",
@@ -200,7 +263,7 @@ export function createStudioRenderer(
     cols = 0,
     rows = 0,
     last = 0;
-  let sourceIdentity: StudioSource | null = null,
+  let sourceIdentity: unknown = null,
     atlasKey = "";
   let flow = new WaterSurface();
   // Subject coverage for scoped hovers and depth for Tilt, at the cell grid. Built only when a hover needs it.
@@ -214,13 +277,7 @@ export function createStudioRenderer(
   let printPainter = createPrintPainter(state.print);
   const denoiser = new SourceDenoiser(state.color.denoise);
   const warper = new SourceWarpProcessor(state.warps,state.warpEdge);
-  const maxDimension = Math.max(
-      64,
-      Math.min(
-        4096,
-        Number.isFinite(limits.maxDimension) ? limits.maxDimension! : 960,
-      ),
-    ),
+  const maxDimension = studioMaxDimension(limits.maxDimension),
     maxCells = Math.max(
       256,
       Math.min(
@@ -247,6 +304,10 @@ export function createStudioRenderer(
     requestedHeight = 540,
     motionTime = time * state.motion.speed,
   ) {
+    frame(source, time, requestedWidth, requestedHeight, motionTime, true);
+  }
+  /** One frame: every change to the renderer's state, then (when `draw`) the picture. */
+  function frame(source: StudioSource, time: number, requestedWidth: number, requestedHeight: number, motionTime: number, draw: boolean) {
     if (!Number.isFinite(time)) time = 0;
     if (
       !Number.isFinite(requestedWidth) ||
@@ -257,12 +318,7 @@ export function createStudioRenderer(
       throw new Error("Render dimensions must be positive finite numbers.");
     const [sw, sh] = studioSourceSize(source);
     if (!sw || !sh) return;
-    const fit = Math.min(
-      1,
-      maxDimension / Math.max(requestedWidth, requestedHeight),
-    );
-    const w = Math.max(2, Math.round(requestedWidth * fit)),
-      h = Math.max(2, Math.round(requestedHeight * fit));
+    const [w, h] = studioFit(maxDimension, requestedWidth, requestedHeight);
     resize(canvas, w, h);
     resize(scene.canvas, w, h);
     resize(art.canvas, w, h);
@@ -282,23 +338,19 @@ export function createStudioRenderer(
     );
     flow.step(Math.max(0, Math.min(0.05, time - last)));
     last = time;
-    const mediaTime =
-      "currentTime" in source
-        ? (source.getVideoPlaybackQuality?.().totalVideoFrames ??
-          source.currentTime)
-        : 0;
-    const key = [revision, w, h, mediaTime].join(":");
+    const media = host.media(source);
+    const key = [revision, w, h, media.time].join(":");
     const isDither = state.style === "dither";
     const grid = studioGrid(w, h, state, budgetCells, pixelRatio);
     const cell = grid.cell, ch = grid.rowHeight;
     const nextCols = grid.columns, nextRows = grid.rows;
     if (
       prepared !== key ||
-      sourceIdentity !== source ||
+      sourceIdentity !== media.key ||
       cols !== nextCols ||
       rows !== nextRows
     ) {
-      sourceIdentity = source;
+      sourceIdentity = media.key;
       prepared = key;
       // A new grid (an adaptive budget change keeps the key) needs its own photo cues.
       cuesKey = "";
@@ -306,19 +358,8 @@ export function createStudioRenderer(
       compositionCacheKey = "";
       cols = nextCols;
       rows = nextRows;
-      scene.ctx.clearRect(0, 0, w, h);
-      scene.ctx.save();
-      const c = studioCrop(sw, sh, w, h, state.crop);
-      scene.ctx.translate(c.x + c.width / 2, c.y + c.height / 2);
-      scene.ctx.rotate((state.crop.rotation * Math.PI) / 180);
-      scene.ctx.drawImage(
-        source,
-        (-sw * c.scale) / 2,
-        (-sh * c.scale) / 2,
-        sw * c.scale,
-        sh * c.scale,
-      );
-      scene.ctx.restore();
+      if (host.scene) host.scene(scene.ctx, w, h);
+      else drawStudioScene(scene.ctx, source, w, h, state.crop);
       resize(sample.canvas, cols, rows);
       sample.ctx.clearRect(0, 0, cols, rows);
       sample.ctx.drawImage(scene.canvas, 0, 0, cols, rows);
@@ -347,8 +388,8 @@ export function createStudioRenderer(
         const [low, high] = studioLevels(pixels);
         const gamma = studioToneGamma(pixels, low, high);
         // A new still snaps to its own range; a playing video eases toward each frame's range.
-        const ease = levelSource === source && "currentTime" in source ? 0.15 : 1;
-        levelSource = source;
+        const ease = levelSource === media.key && media.video ? 0.15 : 1;
+        levelSource = media.key;
         levelLow += (low - levelLow) * ease;
         levelHigh += (high - levelHigh) * ease;
         levelGamma += (gamma - levelGamma) * ease;
@@ -376,6 +417,8 @@ export function createStudioRenderer(
       } else guide = null;
       flow.setGuide(guide);
     }
+    // A renderer that only went through frames another drew has no current composition of its own to reuse.
+    if (!draw) { compositionCacheKey = ditherCacheKey = ""; return; }
     // Post-processing changes time, not the underlying still composition. Reuse
     // that layer until media, layout, settings or a live field changes it.
     const stillMotion = hasAmbientMotion(state);
@@ -394,6 +437,7 @@ export function createStudioRenderer(
       const lightMotion = isLightMotion(motion);
       // Motion reads the photo's own light and depth: built once per source frame, not per tick.
       if (motion !== "none" && cuesKey !== prepared) { cues = buildPhotoCues(photo, cols, rows, cues); cuesKey = prepared; }
+      let dots: DotMarks | null = null;
       if (isDither) {
         const stableDither = stableComposition;
         if (!stableDither || ditherCacheKey !== key) {
@@ -443,8 +487,12 @@ export function createStudioRenderer(
         art.ctx.imageSmoothingEnabled = false;
         art.ctx.drawImage(sample.canvas, 0, 0, w, h);
       } else {
+        // Pointillism's pigment dots are filled on the GPU when the host can (a worker); everything else on Canvas 2D.
+        const dotted = state.style === "pointillism";
+        if (dotted && host.marks && marks === undefined) marks = host.marks();
+        dots = dotted && marks?.begin(w, h) ? marks : null;
         const chars = Array.from(ramps[state.style] ?? state.charset),
-          ac = art.ctx;
+          ac = dots?.ctx ?? art.ctx;
         const accent = rgb(state.ink);
         const rings = effect === "ripple" || effect === "etch";
         const ringInk = rings && accent[0] * .299 + accent[1] * .587 + accent[2] * .114 < 90 ? [214, 214, 214] : accent;
@@ -565,7 +613,8 @@ export function createStudioRenderer(
             else if (autoTone && state.colorMode === "accent") alpha *= 0.32 + 0.68 * Math.pow(lum, levelGamma);
             ac.globalAlpha = alpha;
             const toneDelta = (lum - sourceLum) * 255;
-            const ink =
+            // GPU dots take source and gray pigments per mark: the cell's own fill is never used.
+            const ink = dots && state.colorMode !== "accent" ? state.ink :
               state.colorMode === "source"
                 ? `rgb(${r + toneDelta},${g + toneDelta},${b + toneDelta})`
                 : state.colorMode === "gray"
@@ -581,6 +630,8 @@ export function createStudioRenderer(
               const index = autoTone && inkLookup
                 ? inkLookup[Math.round(glyphLum * 255)]
                 : Math.max(0, Math.min(chars.length - 1, Math.round(glyphLum * (chars.length - 1))));
+              // An empty glyph draws nothing: skipping it saves a canvas call per blank cell and changes no pixel.
+              if (state.colorMode === "accent" ? inkCoverage?.[index] === 0 : chars[index] === " ") continue;
               if (state.colorMode === "accent")
                 ac.drawImage(
                   atlas.canvas,
@@ -637,6 +688,8 @@ export function createStudioRenderer(
               ] as const;
               ac.globalCompositeOperation = "multiply";
               for (const [color, density, ox, oy] of inks) {
+                // An ink with no density is a zero-radius dot, which fills nothing (the brightest channel always is).
+                if (!(density > 0)) continue;
                 ac.fillStyle = color; ac.beginPath();
                 ac.arc(px+cell*ox, py+ch*oy, cell*.48*Math.sqrt(Math.max(0,density)),0,Math.PI*2); ac.fill();
               }
@@ -684,6 +737,10 @@ export function createStudioRenderer(
           }
       }
       art.ctx.globalAlpha = 1;
+      if (dots) {
+        const layer = dots.finish();
+        if (layer) art.ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
+      }
       if (state.color.amount || state.lights.length) {
         resize(inkMask.canvas, w, h);
         inkMask.ctx.clearRect(0, 0, w, h);
@@ -813,7 +870,7 @@ export function createStudioRenderer(
     );
     ctx!.clearRect(0, 0, w, h);
     if (hasFinish) {
-      if (finish === undefined) finish = createStudioFinish();
+      if (finish === undefined) finish = createStudioFinish(host.finishCanvas);
       if (finish)
         ctx!.drawImage(
           finish.render(composite.canvas, state.effects, time, pixelRatio),
@@ -821,13 +878,13 @@ export function createStudioRenderer(
           0,
         );
       else ctx!.drawImage(composite.canvas, 0, 0);
-      canvas.dataset.studioFinish = finish ? "gpu" : "unavailable";
+      host.finished(finish ? "gpu" : "unavailable");
     } else {
       ctx!.drawImage(composite.canvas, 0, 0);
-      canvas.dataset.studioFinish = "none";
+      host.finished("none");
     }
   }
-  return {
+  const api = {
     canvas,
     render,
     /** Change raster scale without adding logical cells or remounting media. */
@@ -867,6 +924,8 @@ export function createStudioRenderer(
     },
     destroy() {
       finish?.destroy();
+      marks?.destroy();
+      marks = undefined;
       warper.clear();
       denoiser.configure(0);
       for (const s of [
@@ -892,4 +951,6 @@ export function createStudioRenderer(
       cuesKey = "";
     },
   };
+  advancers.set(api, frame);
+  return api;
 }

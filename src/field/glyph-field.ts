@@ -91,6 +91,72 @@ export function glyphFieldTier(): 'gpu' | 'software' | 'none' {
   }
 }
 
+type CellLayout = ReturnType<typeof fieldCellLayout>;
+const atlasFont = (settings: GlyphFieldSettings, layout: CellLayout) => `${settings.fontWeight} ${Math.max(1, layout.height * settings.glyphScale)}px ${settings.font}`;
+const atlasKeyOf = (settings: GlyphFieldSettings, layout: CellLayout) => `${fieldGlyphs(settings.charset).join('')}\u0000${atlasFont(settings, layout)}\u0000${layout.width}x${layout.height}x${layout.columns}`;
+/** A field's pixel ratio for a canvas of this CSS size: the display's, capped by the field and the backing-pixel limit, then the page's render scale. */
+function fieldPixelRatio(settings: GlyphFieldSettings, width: number, height: number, scale: number) {
+  const full = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio, Math.sqrt(MAX_BACKING_PIXELS / Math.max(1, width * height)));
+  // A GPU that falls behind draws fewer pixels per cell first, down to one per CSS pixel, before any frame is given up.
+  return scale < 1 && full > 1 ? Math.max(1, full * scale) : full;
+}
+/** Paints the glyph atlas: one cell per glyph, white on transparent. `final` is false while the font is still loading. */
+function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, shared: boolean) {
+  const glyphs = fieldGlyphs(settings.charset);
+  const paint = document.createElement('canvas');
+  paint.width = layout.atlasWidth; paint.height = layout.atlasHeight;
+  const context = paint.getContext('2d')!;
+  context.fillStyle = '#fff';
+  context.textAlign = 'center';
+  context.textBaseline = 'alphabetic';
+  context.font = atlasFont(settings, layout);
+  const capital = context.measureText('M');
+  const ascent = capital.actualBoundingBoxAscent || layout.height * settings.glyphScale * 0.7;
+  const descent = capital.actualBoundingBoxDescent || 0;
+  const baseline = (layout.height + ascent - descent) / 2;
+  glyphs.forEach((glyph, index) => {
+    const x = (index % layout.columns) * layout.width + layout.width / 2;
+    const y = Math.floor(index / layout.columns) * layout.height + baseline;
+    const measured = context.measureText(glyph).width;
+    context.save();
+    context.beginPath();
+    context.rect(x - layout.width / 2, y - baseline, layout.width, layout.height);
+    context.clip();
+    context.translate(x, y);
+    if (measured > layout.width * 0.96) context.scale((layout.width * 0.96) / measured, 1);
+    context.fillText(glyph, 0, 0);
+    context.restore();
+  });
+  // Painted with the font still loading, the atlas is painted again when it arrives.
+  let final = true;
+  const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+  try { final = fonts?.check ? fonts.check(context.font, glyphs.join('')) : true; } catch { /* an unparsable font: as it is */ }
+  if (shared) queueMicrotask(() => { paint.width = paint.height = 1; });
+  return { image: paint as TexImageSource, final };
+}
+const noAtlasUser = () => {};
+/**
+ * Builds the glyph atlas a field with these options would build on `canvas` (laid out, in this document), in the page's shared
+ * context, and keeps it as a spare, so mounting the field later takes it as it is. Returns false where nothing was built
+ * (no shared context, a canvas without a size, an atlas the page already has).
+ */
+export function prewarmGlyphAtlas(canvas: HTMLCanvasElement, options: GlyphFieldOptions = {}): boolean {
+  if (typeof document === 'undefined' || (canvas as { ownerDocument?: Document }).ownerDocument !== document) return false;
+  const width = canvas.clientWidth, height = canvas.clientHeight;
+  if (!width || !height) return false;
+  const host = fieldContext();
+  if (!host || host.lost) return false;
+  const { clear: _clear, source: _source, interactionTarget: _target, onError: _error, label: _label, ...rest } = options;
+  const settings = normalizeFieldSettings(rest as GlyphFieldInput);
+  const layout = fieldCellLayout(settings.cellSize, settings.cellAspect, fieldPixelRatio(settings, width, height, host.scale), fieldGlyphs(settings.charset).length);
+  const key = atlasKeyOf(settings, layout);
+  if (host.hasAtlas(key)) return false;
+  try {
+    host.releaseAtlas(host.atlas(key, () => paintGlyphAtlas(settings, layout, true), noAtlasUser), noAtlasUser);
+  } catch { return false; }
+  return true;
+}
+
 /**
  * True when WebGL2 runs on a GPU. Software WebGL draws every pixel on the CPU and would starve the rest of the page,
  * so it reports false unless `allowSoftware` is set. Mounting can still fail on a blocked GPU, so handle errors.
@@ -372,9 +438,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (shared ? !host!.canCompileInParallel : !parallel) programsReady(true);
   }
 
-  const fontString = () => `${settings.fontWeight} ${Math.max(1, layout.height * settings.glyphScale)}px ${settings.font}`;
+  const fontString = () => atlasFont(settings, layout);
   const onAtlas = () => { dirty = true; wake(); };
-  const atlasKey = () => `${fieldGlyphs(settings.charset).join('')}\u0000${fontString()}\u0000${layout.width}x${layout.height}x${layout.columns}`;
+  const atlasKey = () => atlasKeyOf(settings, layout);
   const buildAtlas = () => {
     const glyphs = fieldGlyphs(settings.charset);
     glyphCount = glyphs.length;
@@ -399,38 +465,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     (image as HTMLCanvasElement).width = (image as HTMLCanvasElement).height = 1;
     dirty = true;
   };
-  function paintAtlas() {
-    const glyphs = fieldGlyphs(settings.charset);
-    const paint = document.createElement('canvas');
-    paint.width = layout.atlasWidth; paint.height = layout.atlasHeight;
-    const context = paint.getContext('2d')!;
-    context.fillStyle = '#fff';
-    context.textAlign = 'center';
-    context.textBaseline = 'alphabetic';
-    context.font = fontString();
-    const capital = context.measureText('M');
-    const ascent = capital.actualBoundingBoxAscent || layout.height * settings.glyphScale * 0.7;
-    const descent = capital.actualBoundingBoxDescent || 0;
-    const baseline = (layout.height + ascent - descent) / 2;
-    glyphs.forEach((glyph, index) => {
-      const x = (index % layout.columns) * layout.width + layout.width / 2;
-      const y = Math.floor(index / layout.columns) * layout.height + baseline;
-      const measured = context.measureText(glyph).width;
-      context.save();
-      context.beginPath();
-      context.rect(x - layout.width / 2, y - baseline, layout.width, layout.height);
-      context.clip();
-      context.translate(x, y);
-      if (measured > layout.width * 0.96) context.scale((layout.width * 0.96) / measured, 1);
-      context.fillText(glyph, 0, 0);
-      context.restore();
-    });
-    // Painted with the font still loading, the atlas is painted again when it arrives.
-    let final = true;
-    try { final = fonts?.check ? fonts.check(context.font, glyphs.join('')) : true; } catch { /* an unparsable font: as it is */ }
-    if (shared) queueMicrotask(() => { paint.width = paint.height = 1; });
-    return { image: paint, final };
-  }
+  function paintAtlas() { return paintGlyphAtlas(settings, layout, shared); }
   const fonts = typeof document === 'undefined' ? undefined : (document as Document & { fonts?: FontFaceSet }).fonts;
   const awaitFont = () => {
     if (!fonts?.load) return;
@@ -530,9 +565,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const rect = canvas.clientWidth || canvas.clientHeight ? { width: canvas.clientWidth, height: canvas.clientHeight } : canvas.getBoundingClientRect();
     // A zero-size canvas (a collapsed panel, an element not laid out yet) draws nothing until it has a size.
     empty = !rect.width || !rect.height;
-    const full = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio, Math.sqrt(MAX_BACKING_PIXELS / Math.max(1, rect.width * rect.height)));
-    // A GPU that falls behind draws fewer pixels per cell first, down to one per CSS pixel, before any frame is given up.
-    const ratio = shared && host!.scale < 1 && full > 1 ? Math.max(1, full * host!.scale) : full;
+    const ratio = fieldPixelRatio(settings, rect.width, rect.height, shared ? host!.scale : 1);
     const nextWidth = Math.max(1, Math.round(rect.width * ratio)), nextHeight = Math.max(1, Math.round(rect.height * ratio));
     if (nextWidth === width && nextHeight === height && ratio === pixelRatio) return false;
     const aspectChanged = !width || Math.abs(nextWidth / nextHeight - width / height) > 0.01;
@@ -805,7 +838,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const onResize = () => { const resized = measure(); measureClear(); if (resized || dirty) wake(); };
   let unobserveClear = clearElement ? observeSize(clearElement.element, onResize) : () => {};
   unwatch.push(observeSize(canvas, onResize), () => unobserveClear());
-  unwatch.push(observeView(canvas, '120px', entry => { visible = entry.isIntersecting; if (visible) { dirty = true; wake(); } }));
+  // Paused only well off screen: a field scrolling in is already drawing, and a paused one keeps its last frame on its canvas.
+  unwatch.push(observeView(canvas, '25% 0px', entry => { visible = entry.isIntersecting; if (visible) { dirty = true; wake(); } }));
   unwatch.push(watchVisibility(() => { if (!document.hidden) { dirty = true; wake(); } }));
   unwatch.push(watchMotionPreference(() => { dirty = true; wake(); }));
   unwatch.push(watchFonts(onFontsLoaded));

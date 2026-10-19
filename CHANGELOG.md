@@ -2,6 +2,16 @@
 
 Notable changes to `asciify-engine`, newest first. Releases are published to [npm](https://www.npmjs.com/package/asciify-engine) from version tags.
 
+## 4.26: Studio off the main thread, live while scrolling
+
+- Kit fields mount while the page scrolls instead of waiting for it to rest: within two viewports ahead, scroll direction first, at most two mounts per frame inside a 4 ms budget, with glyph atlases prewarmed at idle. A poster swaps for its canvas in the same frame the first frame is drawn, so a host is never blank, and paused fields keep their last frame.
+- Fixed: the kit bundled its own copy of the field's shared context, so kit fields ran a second context and frame loop and were still held to the old 12-context cap. The build now fails if a kit chunk carries its own copy.
+
+- `mountStudio` and `mountStudioMedia` draw in workers on `OffscreenCanvas`. The page keeps the pointer and posts only input; frames come back as `ImageBitmap`s and are shown without a copy, one per display frame. No first frame or hover is a long task on the page any more (a /looks card's first live frame was a 100 ms task).
+- Hover draws at the display's rate (120 Hz on ProMotion) for every look: workers take turns drawing frames (as many as the first frames' cost needs, up to three, within 6 megapixels of frames in all), each applying the same input so their hover state is identical; and Pointillism fills its dots on the GPU the way Chrome's canvas does (same polygons, same 4x multisampling). Pointillism hover: about 110 ms → 6 ms a frame. If the browser's own frames slow down under the raster load (CMYK's multiplied dots in a large frame), hover backs off to every second frame or less, so the page stays at the display's rate.
+- Output is unchanged: `tests/studio-parity-browser.mjs` compares every look, at rest and along a hover path, in light and dark, against the previous release; Pointillism matches within rounding.
+- The worker's script is its own chunk (`studio-worker.js`, about 47 KB gzip), fetched with the first mount's media. Without `OffscreenCanvas` 2D, or if the worker cannot start, the Studio draws on the page as before. `createStudioRenderer` is unchanged and still draws on the calling thread. Public API unchanged.
+
 ## 4.25: one shared context, bounded memory
 
 - Every glyph field and kit surface on a page now draws through one shared WebGL2 context and one frame loop. Programs compile once, atlases are shared per glyphs/font/size, and one set of page listeners and observers serves every field. Output is pixel-identical.
