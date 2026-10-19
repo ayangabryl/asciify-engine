@@ -33,8 +33,15 @@ export function imageFor(src: string, img: HTMLImageElement = document.createEle
 /** Draws a picture cropped like `object-fit: cover`, focused at `fx`, `fy`. */
 export function drawCover(pen: CanvasRenderingContext2D, pic: Picture, x: number, y: number, w: number, h: number, fx = 0.5, fy = 0.5) {
   if (w <= 0 || h <= 0 || !pic.width || !pic.height) return;
-  const s = Math.max(w / pic.width, h / pic.height), sw = w / s, sh = h / s;
-  pen.drawImage(pic.image, (pic.width - sw) * fx, (pic.height - sh) * fy, sw, sh, x, y, w, h);
+  const s = Math.max(w / pic.width, h / pic.height), dw = pic.width * s, dh = pic.height * s;
+  // Placed whole and clipped rather than cut with a source rectangle: an `<img>` chosen from a srcset reports a
+  // density-corrected naturalWidth, while drawImage's source rectangle is in the file's own pixels.
+  pen.save();
+  pen.beginPath();
+  pen.rect(x, y, w, h);
+  pen.clip();
+  pen.drawImage(pic.image, x + (w - dw) * fx, y + (h - dh) * fy, dw, dh);
+  pen.restore();
 }
 
 /**

@@ -4,6 +4,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+
+## 4.27.1
+
+- Fixed: kit components drawing an `<img>` that uses `srcset` (compare, image accordion) took only the top-left part of the file, because `naturalWidth` is density-corrected while a source rectangle is read in file pixels. `drawCover` now places the whole image, so the before/after slider lines up across the divider.
 ## 4.27: Smooth dot looks and steady hover
 
 - LED (Scoreboard), Dots and Stipple draw in one instanced GPU pass, like Pointillism, instead of thousands of Canvas 2D fills per frame: Scoreboard's hover costs 5 ms instead of 12, Lookbook goes from 93 to 120 fps. Output matches within the parity tolerance; frames mixing sub-pixel dots fall back to Canvas 2D exactly.
