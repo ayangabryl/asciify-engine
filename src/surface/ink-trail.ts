@@ -11,8 +11,10 @@ export class InkTrail {
   private signal: Float32Array;
   private peak = 0;
   readonly width: number; readonly height: number;
-  constructor(width: number, height: number) {
-    this.width=width; this.height=height;
+  /** Cells the brush and the pointer's speed are measured against. Default the shorter side, so the wake scales with the field. */
+  readonly span: number;
+  constructor(width: number, height: number, span?: number) {
+    this.width=width; this.height=height; this.span=span ?? Math.min(width,height);
     const n = width * height;
     this.pixels = new Uint8Array(n * 4);
     this.signal = new Float32Array(n);
@@ -36,7 +38,7 @@ export class InkTrail {
     const old = this.previous; this.previous = {x, y, time}; if (!old) return;
     const dx = (x-old.x)*(this.width-1), dy = (y-old.y)*(this.height-1);
     const travel = Math.hypot(dx,dy); if (travel < .001) return;
-    const size = Math.min(this.width,this.height);
+    const size = this.span;
     // Pointer speed, rather than event count, controls the wake's width and force.
     // Coalesced input is still integrated along the complete travelled segment.
     const elapsed = time > old.time ? Math.max(1/240, (time-old.time)/1000) : 1/60;

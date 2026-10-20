@@ -37,7 +37,7 @@ describe('cursorTrail', () => {
     expect(canvases(layer)).toHaveLength(1);
     expect(trail.active).toBe(true);
     expect(env.field.setSource).toHaveBeenCalled();
-    run(1200);
+    run(6000);
     expect(trail.active).toBe(false);
     // Idle: no frame is waiting once the last character has faded.
     const before = env.field.setSource.mock.calls.length;
@@ -88,6 +88,32 @@ describe('cursorTrail', () => {
     sweep();
     expect(trail.active).toBe(false);
     expect(layers()).toHaveLength(0);
+  });
+});
+
+describe('cursorTrail trail style', () => {
+  it('draws a kit field\'s ink trail, eased like the field\'s trail hover, and keeps the wordmark\'s glyphs', async () => {
+    const trail = cursorTrail({ trail: { span: 540, cell: 15 } });
+    sweep();
+    await flush();
+    const looks = [...env.field.update.mock.calls.map(c => c[0]), ...mount.mock.calls.map(c => c[1])];
+    expect(looks.some(l => l && l.cellAspect === 0.8 && l.glyphScale === 0.8 && l.shade === 0 && l.levels === 'none')).toBe(true);
+    run(16);
+    expect(trail.active).toBe(true);
+    run(6000);
+    expect(trail.active).toBe(false);
+    trail.destroy();
+  });
+
+  it('measures the brush against the span, not the viewport, so it matches a field of that size', async () => {
+    const { InkTrail } = await import('../surface/ink-trail');
+    const lit = (t: InstanceType<typeof InkTrail>) => { let n = 0; for (let i = 0; i < t.width * t.height; i++) if (t.pixels[i * 4] > 8) n++; return n; };
+    const small = new InkTrail(100, 60, 20), wide = new InkTrail(100, 60);
+    for (const t of [small, wide]) { t.move(0.2, 0.5, 0.22, 0); t.move(0.5, 0.5, 0.22, 50); t.step(1 / 60); }
+    expect(small.span).toBe(20);
+    expect(wide.span).toBe(60);
+    expect(lit(small)).toBeGreaterThan(0);
+    expect(lit(small)).toBeLessThan(lit(wide));
   });
 });
 
