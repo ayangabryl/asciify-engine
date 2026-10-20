@@ -81,3 +81,7 @@ The website uses the published renderer's native Trail. A chain-shaped tonal ove
 ## 18. Accessible interaction
 
 “Audit this Asciify component for keyboard access, touch scrolling, contrast, reduced motion and error states. Keep decorative canvases out of the reading order, provide text alternatives for meaningful artwork, and keep every CTA usable when rendering fails.”
+
+## 19. Page-wide cursor trail
+
+“Add an Asciify cursor trail to [our site] with `cursorTrail` from `asciify-engine/kit`: one call in the app shell, style [trail/wake/water/sparkle], inked from [our text token], fine cells. Keep it off on touch and under reduced motion, quiet over inputs, dialogs and [our heroes or editors] (`data-ascii-cursor-skip` or `skip`), under our header and dialogs (`zIndex`), and destroy it on unmount. If we offer a picker, store the choice per visitor and call `update({ style })` or `destroy()` live.”
