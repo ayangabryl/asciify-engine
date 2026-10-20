@@ -5,6 +5,11 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.29: cursorTrail's trail is the field trail
+
+- `cursorTrail({ style: 'trail' })` now draws the same ink trail as a kit field's `hover: 'trail'` (the wordmark's), with the wordmark's glyphs, so the page cursor and a field's own trail read as one. New `trail: { strength, radius, span, cell }` sizes it to match a given field: `span` is that field's shorter side and `cell` its longer side / 128, in CSS pixels. Still idle once the last character fades. `wake`, `water` and `sparkle` are unchanged.
+- `InkTrail` takes an optional `span`, the cells its brush is measured against.
+
 ## 4.28: cursorTrail, an ASCII cursor for the whole page
 
 - New: `cursorTrail()` in `asciify-engine/kit` puts a page-wide cursor trail on any site in one call: `cursorTrail({ style: 'trail' | 'wake' | 'water' | 'sparkle', ink, charset, cellSize })`. One fixed, click-through layer on the shared GPU context, mounted on the first pointer move and drawing only while something fades. Off on touch, under reduced motion and in hidden tabs; quiet over inputs, dialogs and `[data-ascii-cursor-skip]`. Returns a handle with `update`, `clear`, `pause`, `play` and `destroy`.
