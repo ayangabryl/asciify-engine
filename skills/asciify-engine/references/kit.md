@@ -242,7 +242,19 @@ const cursor = cursorTrail({ style: 'trail', ink: '--ink', charset: ' .:-=+*#%@'
 picker.onchange = () => (picker.value === 'off' ? cursor.destroy() : cursor.update({ style: picker.value }));
 ```
 
-Options: `style` (`'trail'` a fine tapered tail, `'wake'` a softer, wider band, `'water'` rings that spread from the path, `'sparkle'` glints scattered along it; default `trail`), `charset` (default ` .:-=+*#%@`), `cellSize` (CSS px, default 9), `life` (ms a point takes to fade, default 800, `water` 950), `zIndex` (default 1000; keep it under your dialogs and sticky header), `skip` (a selector to stay quiet over, on top of inputs, textareas, selects, `[contenteditable]`, dialogs and `[data-ascii-cursor-skip]`), plus the shared `ink` (default `--ascii-ink`, then the body's text colour), `look`, `reducedMotion` and `globalLook` (default `false`: the trail keeps its own ramp when `setGlobalLook` re-skins the page). Methods: `update`, `clear()`, `pause()`, `play()`, `destroy()`; getter `active` (something is fading). It is off on touch-only devices (`hover: none` and `pointer: coarse`) and for touch pointers, under reduced motion and while the tab is hidden. Mount it once per page (in React, in the app shell's effect); skip pages that have their own pointer work, such as an editor, and mark heroes with their own hover `data-ascii-cursor-skip`.
+Options: `style` (`'trail'` a fine tapered tail, `'wake'` a softer, wider band, `'water'` rings that spread from the path, `'sparkle'` glints scattered along it; default `trail`), `charset` (default ` .:-=+*#%@`), `cellSize` (CSS px, default 9), `life` (ms a point takes to fade, default 800, `water` 950), `zIndex` (default 1000; keep it under your dialogs and sticky header), `skip` (a selector to stay quiet over, on top of inputs, textareas, selects, `[contenteditable]`, dialogs and `[data-ascii-cursor-skip]`), plus the shared `ink` (default `--ascii-ink`, then the body's text colour), `look`, `reducedMotion` and `globalLook` (default `false`: the trail keeps its own ramp when `setGlobalLook` re-skins the page). Methods: `update`, `clear()`, `pause()`, `play()`, `destroy()`; getter `active` (something is fading). It is off on touch-only devices (`hover: none` and `pointer: coarse`) and for touch pointers, under reduced motion and while the tab is hidden. Mount it once per page (in React, in the app shell's effect, or a layout that persists across routes) and skip pages that have their own pointer work, such as an editor. `trail: { strength, radius, span, cell }` sizes the `trail` style to match a field's own trail (same brush, so a wordmark's hover and the page's read as one).
+
+**One continuous trail across the page.** A field's own hover stops at its canvas edge, so a page trail that skips every canvas feels boxed in: it breaks at each hero and wordmark and restarts inside it. For one trail that flows through everything:
+
+```ts
+// Heroes, backgrounds and wordmarks: no hover of their own; the page trail draws over them.
+const hero = fieldBackground(heroEl, { preset: 'hero', look: { hover: 'none' } });
+const mark = wordmark(footerMark, { text: 'acme', look: { cellSize: 7, hover: 'none' } });
+// One layer for the page. Skip only interactive components that keep their own hover.
+const cursor = cursorTrail({ style: 'trail', ink: '--ink', zIndex: 40, skip: '.demo canvas' });
+```
+
+Match `cellSize` (and `trail.cell`) to the biggest field it crosses, such as the footer wordmark, so the glyphs don't change size at its edge. Don't put `data-ascii-cursor-skip` on those fields: that's what brings the box back.
 
 ### asciiVideo
 
