@@ -5,7 +5,7 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
-## Unreleased
+## 4.28: cursorTrail, an ASCII cursor for the whole page
 
 - New: `cursorTrail()` in `asciify-engine/kit` puts a page-wide cursor trail on any site in one call: `cursorTrail({ style: 'trail' | 'wake' | 'water' | 'sparkle', ink, charset, cellSize })`. One fixed, click-through layer on the shared GPU context, mounted on the first pointer move and drawing only while something fades. Off on touch, under reduced motion and in hidden tabs; quiet over inputs, dialogs and `[data-ascii-cursor-skip]`. Returns a handle with `update`, `clear`, `pause`, `play` and `destroy`.
 
