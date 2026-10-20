@@ -256,6 +256,13 @@ const cursor = cursorTrail({ style: 'trail', ink: '--ink', zIndex: 40, skip: '.d
 
 Match `cellSize` (and `trail.cell`) to the biggest field it crosses, such as the footer wordmark, so the glyphs don't change size at its edge. Don't put `data-ascii-cursor-skip` on those fields: that's what brings the box back.
 
+**It's a background hover: keep it behind the content.** Give it `zIndex: -1` so cards, panels, dialogs and text cover it and it shows only on the open page and through transparent fields (heroes, wordmarks). For a negative z-index layer to show, only `html` may paint the page colour: `body`, the app root and full-page wrappers (main, footer, page shells) must have no background of their own, or they cover it. Cards keep their surface colour, which is what hides the trail inside them.
+
+```css
+html { background: var(--bg); }
+body, #root, .page, footer { background: transparent; }
+```
+
 ### asciiVideo
 
 A video drawn in characters, muted and looping. `play()` and `pause()` stop the video and the field together.
