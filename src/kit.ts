@@ -42,6 +42,8 @@ export type { LikeBurstOptions, LikeBurstHandle, LikeMark } from './kit/like-bur
 export { blockChart } from './kit/block-chart';
 export type { BlockChartOptions, BlockChartHandle } from './kit/block-chart';
 export { pageDissolve } from './kit/page-dissolve';
+export { cursorTrail } from './kit/cursor-trail';
+export type { CursorTrailOptions, CursorTrailHandle, CursorTrailStyle } from './kit/cursor-trail';
 export type { PageDissolveOptions, PageDissolveHandle } from './kit/page-dissolve';
 export { swipeDeck } from './kit/swipe-deck';
 export type { SwipeDeckOptions, SwipeDeckHandle } from './kit/swipe-deck';

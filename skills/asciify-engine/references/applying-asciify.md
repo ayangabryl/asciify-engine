@@ -15,6 +15,7 @@ Pick by what the field does for the person, not by how it looks.
 | Show a value changing | `odometer`, `pill` counts, `blockChart` |
 | Move between states or views | `tabs`, `pageDissolve`, `commandPalette`, `toastStack`, `disintegrate` |
 | Answer a gesture | `likeBurst`, `swipeDeck`, `compare`, `accordion`, `dropzone` |
+| Follow the pointer across the page | `cursorTrail` (one per page, off on touch and under reduced motion) |
 | Carry a brand moment or media | `decode`, `wordmark`, `asciiVideo`, `artPanel`, `pricingGlow`, `fieldBackground` `notFound` |
 | Set the page's one ground | `fieldBackground` `hero`, or `background()` with a preset (section 9) |
 

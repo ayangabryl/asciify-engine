@@ -203,7 +203,7 @@ For your own `mountSurface` or `mountPageField` component, pass the options box 
 Whole-element fields that draw their own scene or source: page backgrounds, a wordmark, a video, the sign-in art panel and the pricing card's glow. Each lays one canvas over or under the element (inset 0, following its border radius), inks it from the theme, honours reduced motion and restores the element on `destroy()`. Without WebGL2 they return inert handles and leave the HTML alone.
 
 ```ts
-import { fieldBackground, wordmark, asciiVideo, artPanel, pricingGlow } from 'asciify-engine/kit';
+import { fieldBackground, wordmark, asciiVideo, artPanel, pricingGlow, cursorTrail } from 'asciify-engine/kit';
 ```
 
 ### fieldBackground
@@ -231,7 +231,18 @@ input.oninput = () => mark.setText(input.value);
 
 Options: `text`, `font` (default `Georgia, "Times New Roman", serif`), `fontWeight` (default 600), `artHeight` (height of the 1800 px wide canvas the word is set on, default 520; a shorter one sets the word larger in a wide element), `label` (the canvas's accessible name when the word is not the element's own text; default the word). Methods: `setText(text)`; getter `text`.
 
-The landing's closing name is `wordmark(box, { text: 'asciify', artHeight: 480, label: 'asciify, drawn in characters', look: { charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 400, cellSize: 9, cellAspect: 0.62, glyphScale: 0.92, contrast: 1, shade: 0.5, trail: { strength: 0.9, radius: 0.3 } } })`, and its hero is `fieldBackground(section, { preset: 'hero', ripple: false, palette: { light: '#7d7b75', dark: '#77756f' }, look: { scale: 1.25, cellSize: 12, brightness: 0.24, contrast: 1, charset: ' .:+*#', cellAspect: 0.62, glyphScale: 0.86, clear: { element: copy, padding: -24, feather: 0.6, shape: 'ellipse' } } })` (`scale` 1.6 under 760px).
+The site footer closes on `wordmark(box, { text: 'asciify', font: '"Fraunces", Georgia, serif', fontWeight: 600, label: 'Asciify', look: { cellSize } })`, with `cellSize` the box width / 190 held between 4 and 8 and the box capped at 1320px wide, and its hero is `fieldBackground(section, { preset: 'hero', ripple: false, palette: { light: '#7d7b75', dark: '#77756f' }, look: { scale: 1.25, cellSize: 12, brightness: 0.24, contrast: 1, charset: ' .:+*#', cellAspect: 0.62, glyphScale: 0.86, clear: { element: copy, padding: -24, feather: 0.6, shape: 'ellipse' } } })` (`scale` 1.6 under 760px).
+
+### cursorTrail
+
+Characters that follow the pointer across the whole page, in one line. It lays a fixed, full-viewport, click-through layer on the page's shared GPU context and draws the pointer's recent path into it: densest at the cursor and stepping down the charset along a tail that thins and fades over about 0.8s. Nothing mounts until the pointer first moves, and nothing draws once the last character has faded, so a still pointer costs nothing. It takes no element.
+
+```ts
+const cursor = cursorTrail({ style: 'trail', ink: '--ink', charset: ' .:-=+*#%@', cellSize: 9 });
+picker.onchange = () => (picker.value === 'off' ? cursor.destroy() : cursor.update({ style: picker.value }));
+```
+
+Options: `style` (`'trail'` a fine tapered tail, `'wake'` a softer, wider band, `'water'` rings that spread from the path, `'sparkle'` glints scattered along it; default `trail`), `charset` (default ` .:-=+*#%@`), `cellSize` (CSS px, default 9), `life` (ms a point takes to fade, default 800, `water` 950), `zIndex` (default 1000; keep it under your dialogs and sticky header), `skip` (a selector to stay quiet over, on top of inputs, textareas, selects, `[contenteditable]`, dialogs and `[data-ascii-cursor-skip]`), plus the shared `ink` (default `--ascii-ink`, then the body's text colour), `look`, `reducedMotion` and `globalLook` (default `false`: the trail keeps its own ramp when `setGlobalLook` re-skins the page). Methods: `update`, `clear()`, `pause()`, `play()`, `destroy()`; getter `active` (something is fading). It is off on touch-only devices (`hover: none` and `pointer: coarse`) and for touch pointers, under reduced motion and while the tab is hidden. Mount it once per page (in React, in the app shell's effect); skip pages that have their own pointer work, such as an editor, and mark heroes with their own hover `data-ascii-cursor-skip`.
 
 ### asciiVideo
 

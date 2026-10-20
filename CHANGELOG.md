@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## Unreleased
+
+- New: `cursorTrail()` in `asciify-engine/kit` puts a page-wide cursor trail on any site in one call: `cursorTrail({ style: 'trail' | 'wake' | 'water' | 'sparkle', ink, charset, cellSize })`. One fixed, click-through layer on the shared GPU context, mounted on the first pointer move and drawing only while something fades. Off on touch, under reduced motion and in hidden tabs; quiet over inputs, dialogs and `[data-ascii-cursor-skip]`. Returns a handle with `update`, `clear`, `pause`, `play` and `destroy`.
+
 ## 4.27.1
 
 - Fixed: kit components drawing an `<img>` that uses `srcset` (compare, image accordion) took only the top-left part of the file, because `naturalWidth` is density-corrected while a source rectangle is read in file pixels. `drawCover` now places the whole image, so the before/after slider lines up across the divider.
