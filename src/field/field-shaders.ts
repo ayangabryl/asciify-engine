@@ -74,7 +74,7 @@ uniform sampler2D uTrailMap, uScope;
 uniform float uScopeMode;
 uniform vec2 uLevels;
 uniform int uMark;
-uniform float uScale, uClearFeather, uClearShape;
+uniform float uScale, uClearFeather, uClearShape, uOrder;
 uniform vec4 uClear;
 uniform vec4 uPulse[4];
 layout(location=0) out vec4 outInk;
@@ -371,6 +371,13 @@ void main(){
     upper=fract(level)>(BAYER[q.y*4+q.x]+.5)/16.?1.:0.;
   }
   float index=min(uCount-1.,floor(level)+upper+(flick>.5&&tone>.02?1.:0.));
+  if(uOrder>.5){
+    // Text order: the charset after its blank is read in sequence along each row, each row a few letters on, so words stay
+    // legible. Every letter shows from a tone of .6; below it a 4x4 Bayer screen thins them out toward the field's quiet edges.
+    ivec2 q=ivec2(mod(cell,4.));
+    float n=max(1.,uCount-1.);
+    index=tone>.04+(BAYER[q.y*4+q.x]+.5)/16.*.56?1.+mod(cell.x+cell.y*(floor(n*.38)+1.),n):0.;
+  }
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
@@ -394,11 +401,11 @@ precision highp sampler2D;
 uniform sampler2D uAtlas, uCells, uUnder;
 uniform vec2 uResolution, uCell, uPitch;
 uniform float uColumns, uDotScale, uSourceColor;
+uniform vec2 uDir;
 uniform int uMark;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
-// The Studio's print defaults: screen angle -35deg, roughness .35, seed 7, registration .2 and its coral second ink.
-const vec2 DIR=vec2(.81915,-.57358);
+// The Studio's print defaults: roughness .35, seed 7, registration .2 and its coral second ink. The screen angle is uDir (-35deg).
 const float ROUGH=.35,SEED=7.;
 const vec3 SECOND=vec3(.925,.404,.322);
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
@@ -420,6 +427,7 @@ void lay(inout vec3 rgb,inout float a,vec3 c,float k){
   a=next;
 }
 void main(){
+  vec2 DIR=uDir;
   vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
   // The pitch is the atlas cell, or a fractional one under cellFit 'fill', where each glyph sits centred in its stretched cell.
   vec2 cell=floor(frag/uPitch);

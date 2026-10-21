@@ -103,6 +103,17 @@ export interface GlyphFieldSettings {
   mark: FieldMark;
   /** Largest dot as a fraction of the cell, for `mark: 'dot'`. */
   dotScale: number;
+  /**
+   * Screen angle in degrees for the line and print marks (`engraving`, `crosshatch`, `woodblock`, `risograph`), turning clockwise
+   * as CSS `rotate` does: 0 runs the cuts horizontally, 90 vertically, -45 rising to the right. Default -35, the Studio's.
+   */
+  markAngle: number;
+  /**
+   * `tone` (default) picks each cell's glyph by its tone, from empty to dense. `text` reads the charset after its blank in order
+   * along each row (each row a few letters on), so a word or phrase stays legible as text-as-art: every letter shows from a tone of
+   * 0.6, and below it a fine 4x4 screen thins them out toward the quiet edges.
+   */
+  glyphOrder: 'tone' | 'text';
   color: FieldColor;
   ink: string;
   /** Color the wake lifts characters toward. 'auto' brightens each character's own color, so the wake never turns white. */
@@ -179,6 +190,8 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   glyphScale: 0.8,
   mark: 'glyph',
   dotScale: 0.9,
+  markAngle: -35,
+  glyphOrder: 'tone',
   color: 'ink',
   ink: '#f3ba32',
   highlight: 'auto',
@@ -275,6 +288,8 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     glyphScale: clamp(input.glyphScale, 0.3, 1.6, base.glyphScale),
     mark: FIELD_MARKS.includes(input.mark as FieldMark) ? input.mark as FieldMark : base.mark,
     dotScale: clamp(input.dotScale, 0.1, 1.4, base.dotScale),
+    markAngle: clamp(input.markAngle, -360, 360, base.markAngle),
+    glyphOrder: input.glyphOrder === 'text' || input.glyphOrder === 'tone' ? input.glyphOrder : base.glyphOrder,
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),
     highlight: input.highlight === 'auto' ? 'auto' : hex(input.highlight, base.highlight),

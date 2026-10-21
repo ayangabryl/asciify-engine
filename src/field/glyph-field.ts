@@ -681,6 +681,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
     gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
     gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
+    gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : 0);
     gl.uniform1f(u.uScale, settings.scale);
     const zone = settings.clear;
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
@@ -728,6 +729,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform2f(p.uPitch, pitchX, pitchY);
     gl.uniform1f(p.uColumns, layout.columns);
     gl.uniform1f(p.uDotScale, settings.dotScale);
+    gl.uniform2f(p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
     gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

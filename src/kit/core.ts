@@ -124,6 +124,15 @@ const ambientMs = () => ambient ??= (() => {
   return 1000 / (low ? 30 : 60) - 2;
 })();
 
+/**
+ * How far an element has come into view: 0 while its top is at or below the viewport's bottom edge, 1 once it has risen half a
+ * viewport (or its own height, if less) past it, so even a footer at the very end of the page reaches 1.
+ */
+export function entryProgress(element: Element) {
+  const r = element.getBoundingClientRect(), vh = typeof innerHeight === 'number' && innerHeight > 0 ? innerHeight : 800;
+  return clamp((vh - r.top) / Math.max(1, Math.min(r.height || vh, vh * 0.5)));
+}
+
 export const prefersReduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const reducedFrom = (option: boolean | undefined) => option ?? prefersReduced();
 

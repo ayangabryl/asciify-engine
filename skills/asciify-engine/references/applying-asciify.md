@@ -16,8 +16,9 @@ Pick by what the field does for the person, not by how it looks.
 | Move between states or views | `tabs`, `pageDissolve`, `commandPalette`, `toastStack`, `disintegrate` |
 | Answer a gesture | `likeBurst`, `swipeDeck`, `compare`, `accordion`, `dropzone` |
 | Follow the pointer across the page | `cursorTrail` (one per page, off on touch and under reduced motion) |
-| Carry a brand moment or media | `decode`, `wordmark`, `asciiVideo`, `artPanel`, `pricingGlow`, `fieldBackground` `notFound` |
-| Set the page's one ground | `fieldBackground` `hero`, or `background()` with a preset (section 9) |
+| Carry a brand moment or media | `decode` (and its `scramble`), `wordmark` (and its `assemble`), `morphField`, `ditherImage`, `asciiVideo`, `artPanel`, `pricingGlow`, `fieldBackground` `notFound` |
+| Show where: places, reach, a network | `globe` with `points` |
+| Set the page's one ground | `fieldBackground` `hero`, `ditherGradient`, or `background()` with a preset (section 9) |
 
 Do not use characters:
 
@@ -218,6 +219,21 @@ import { background, drift } from 'asciify-engine/kit';
 const bg = background(hero, { preset: drift, clear: heroCopy, poster: '/stills/drift-light.webp' });
 signUpButton.addEventListener('click', () => bg.field?.pulse({ element: signUpButton, strength: 1.2 })); // GPU presets expose the field
 ```
+
+## 9b. Event and launch pages
+
+A conference, launch or campaign page can carry more character than a product page, but the same rules hold: one key visual a section, real HTML for every headline and link, and motion that answers the visitor.
+
+| Section | Piece | Keep it |
+| --- | --- | --- |
+| Header | `decode(link, { scramble: true, trigger: 'manual', settle: 'text' })` on each nav link | Links rest as plain HTML and only scramble on hover; `cellSize` about 3 so letters stay crisp. |
+| Hero | `morphField` of your own frames (`mark: 'engraving'` lines, white ink on the brand ground) and `decode(h1, { scramble: true, settle: 'text' })` | One morph per hero; a counter or caption through `onChange`; a poster per theme. |
+| Ambient pointer | `cursorTrail({ style: 'spray', readout: true, zIndex: -1 })` | A background hover: behind cards, off on touch and under reduced motion. |
+| Proof sections | `globe` for venues or reach, `ditherImage` for photos in the brand's two tones, `background(el, { preset: wordField, look: { glyphOrder: 'text', … } })` for repeated words | `globe` and `wordField` are section grounds; keep copy off their middle or `clear` it. |
+| Call to action | `ditherGradient` on the brand-coloured panel | Light from an edge, the button over the quiet part. |
+| Footer | `wordmark(mark, { assemble: 'scroll', look: { hover: 'none' } })` | The page trail draws over it; nothing else moves in the footer. |
+
+Brand colour as the ground: give the section the brand background and draw in white or a light tint of it (`ink: '#fff'` or a token); on a white section draw in the brand token. Check contrast of the HTML over the busiest frame of the morph.
 
 ## 10. Checklist before you finish
 

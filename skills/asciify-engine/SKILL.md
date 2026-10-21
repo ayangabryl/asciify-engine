@@ -35,7 +35,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 
 | The user wants | Use |
 | --- | --- |
-| A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404 | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
+| A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404; event-site pieces (scrambling headers and headlines, morphing hatched heroes, dithered glows, a dotted globe, two-tone photos, assembling wordmarks, a spray cursor) | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
 | A background behind a hero, pricing, docs or a section, light or dark | Kit `fieldBackground(el, { preset: 'hero', clear })` (asciify.org's hero) or `background(el, { preset, clear })` with one of the 12 curated presets below |
 | Their word or brand in characters | Kit `wordmark`, or `background()` with `wordField` |
 | Their video in characters on the page | Kit `asciiVideo` |
@@ -49,7 +49,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 
 ## The kit in one paragraph
 
-Each kit function mounts an `aria-hidden` field over or inside your element, follows its size and border radius, inks it from your theme in light and dark, pauses off screen, honours reduced motion, falls back without WebGL2 to an inert handle that leaves your HTML working, and cleans up on `destroy()`. components.md has 31 components as short snippets with the prompt a person gives, in categories Components, AI, Text, Transitions, Media, Pages and Backgrounds. In React, create the handle in an effect and return its `destroy`.
+Each kit function mounts an `aria-hidden` field over or inside your element, follows its size and border radius, inks it from your theme in light and dark, pauses off screen, honours reduced motion, falls back without WebGL2 to an inert handle that leaves your HTML working, and cleans up on `destroy()`. components.md has 37 components as short snippets with the prompt a person gives, in categories Components, AI, Text, Transitions, Media, Pages and Backgrounds. In React, create the handle in an effect and return its `destroy`.
 
 ```ts
 import { beam } from 'asciify-engine/kit';

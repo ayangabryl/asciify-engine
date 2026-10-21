@@ -1,12 +1,16 @@
 import { isGlyphFieldSupported, type GlyphField, type GlyphFieldOptions } from '../field';
 import { watchMotionPreference, watchPointer, watchVisibility } from '../field/field-gl';
 import { InkTrail } from '../surface/ink-trail';
-import { hash, mergeOptions, mountSurface, prefersReduced, type KitHandle, type KitOptions, type PaintFrame, type Surface } from './core';
+import { hash, mergeOptions, mountSurface, prefersReduced, resolveColor, type KitHandle, type KitOptions, type PaintFrame, type Surface } from './core';
 
-export type CursorTrailStyle = 'trail' | 'wake' | 'water' | 'sparkle';
+export type CursorTrailStyle = 'trail' | 'wake' | 'water' | 'sparkle' | 'spray';
 
 export interface CursorTrailOptions extends KitOptions {
-  /** `trail` the ink trail of a kit field's `hover: 'trail'` (the wordmark's), `wake` a softer, wider band along the path, `water` rings that spread from it, `sparkle` glints scattered along it. Default `trail`. */
+  /**
+   * `trail` the ink trail of a kit field's `hover: 'trail'` (the wordmark's), `wake` a softer, wider band along the path, `water`
+   * rings that spread from it, `sparkle` glints scattered along it, `spray` patches of diagonal hatching sprayed round the path
+   * (a drag draws a hatched selection box). Default `trail`.
+   */
   style?: CursorTrailStyle;
   /** Characters from empty to dense; the head of the trail takes the last one. Default ` .:-=+*#%@`. */
   charset?: string;
@@ -23,6 +27,11 @@ export interface CursorTrailOptions extends KitOptions {
   zIndex?: number;
   /** More elements to stay quiet over, as a selector, on top of inputs, dialogs and `[data-ascii-cursor-skip]`. */
   skip?: string;
+  /**
+   * Small monospaced coordinate tags (`412, 168`) beside the newest marks and at a drag box's corners, in the ink with
+   * `--ascii-readout-text` (default white) on it. Decoration, hidden from assistive technology. Default false.
+   */
+  readout?: boolean;
 }
 
 export interface CursorTrailHandle extends KitHandle<CursorTrailOptions> {
@@ -34,13 +43,15 @@ export interface CursorTrailHandle extends KitHandle<CursorTrailOptions> {
 
 const DEFAULTS = { style: 'trail' as CursorTrailStyle, charset: ' .:-=+*#%@', cellSize: 9, zIndex: 1000 };
 const QUIET = 'input, textarea, select, [contenteditable], dialog, [role="dialog"], [role="alertdialog"], [data-ascii-cursor-skip]';
-const MAX = { trail: 64, wake: 48, water: 20, sparkle: 140 } as const;
+const MAX = { trail: 64, wake: 48, water: 20, sparkle: 140, spray: 90 } as const;
 const RES = 0.5;
 const TRAIL = { strength: 0.62, radius: 0.22, span: 540, cell: 15 };
 /** Samples per ink cell along each side, so the tone is eased after interpolation, as the field's shader does. */
 const SUB = 3;
 
 export interface CursorTrailMark { x: number; y: number; t: number; seed: number; vx: number; vy: number }
+/** A drag's selection box in viewport pixels; `t` is when the button came up, or 0 while it is held. */
+export interface CursorTrailBox { x0: number; y0: number; x1: number; y1: number; t: number }
 
 const grey = (v: number) => { const n = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${n},${n},${n})`; };
 
@@ -61,7 +72,7 @@ function stroke(pen: CanvasRenderingContext2D, marks: CursorTrailMark[], s: numb
 }
 
 /** One frame of `style` into the source canvas: white is the densest character. Exported for tests. */
-export function cursorTrailFrame(pen: CanvasRenderingContext2D, marks: CursorTrailMark[], style: CursorTrailStyle, now: number, life: number, cell: number, scale: number) {
+export function cursorTrailFrame(pen: CanvasRenderingContext2D, marks: CursorTrailMark[], style: CursorTrailStyle, now: number, life: number, cell: number, scale: number, box?: CursorTrailBox | null) {
   pen.lineCap = 'round';
   pen.lineJoin = 'round';
   pen.globalCompositeOperation = 'lighten';
@@ -79,6 +90,27 @@ export function cursorTrailFrame(pen: CanvasRenderingContext2D, marks: CursorTra
       pen.beginPath();
       pen.arc(m.x * scale, m.y * scale, (cell * 0.8 + age * 0.085) * scale, 0, Math.PI * 2);
       pen.stroke();
+    }
+  } else if (style === 'spray') {
+    // Soft-edged patches: the field's hatching mark turns each into a cluster of diagonal strokes, heaviest at its middle.
+    for (const m of marks) {
+      const age = now - m.t, k = 1 - age / life;
+      if (k <= 0) continue;
+      const r = cell * (1.1 + 1.6 * m.seed) * (0.75 + 0.25 * k) * scale, x = m.x * scale, y = m.y * scale;
+      const g = pen.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, grey(0.95 * k ** 0.8));
+      g.addColorStop(0.6, grey(0.6 * k ** 0.8));
+      g.addColorStop(1, grey(0));
+      pen.fillStyle = g;
+      pen.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    if (box) {
+      const k = box.t ? 1 - (now - box.t) / life : 1;
+      if (k > 0) {
+        pen.strokeStyle = grey(0.85 * k);
+        pen.lineWidth = Math.max(1, cell * 0.5 * scale);
+        pen.strokeRect(Math.min(box.x0, box.x1) * scale, Math.min(box.y0, box.y1) * scale, Math.abs(box.x1 - box.x0) * scale, Math.abs(box.y1 - box.y0) * scale);
+      }
     }
   } else {
     for (const m of marks) {
@@ -102,7 +134,27 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
   const state = { current: { ...DEFAULTS, ...options } };
   const o = () => state.current;
   const life = () => o().life ?? (o().style === 'water' ? 950 : 800);
-  let marks: CursorTrailMark[] = [];
+  let marks: CursorTrailMark[] = [], box: CursorTrailBox | null = null;
+  const tags: HTMLElement[] = [];
+  let tagAt = -Infinity, tagNext = 0;
+  /** Shows a coordinate tag at a viewport point; the oldest of four is reused. */
+  const tag = (x: number, y: number, now: number, slot?: number) => {
+    if (!o().readout || !host) return;
+    const i = slot ?? (tagNext++ % 2) + 2;
+    let el = tags[i];
+    if (!el) {
+      el = document.createElement('span');
+      tags[i] = el;
+      host.appendChild(el);
+    }
+    const ink = resolveColor(o().ink ?? '--ascii-ink', document.body, '#1d1d1b') ?? '#1d1d1b';
+    el.textContent = `${Math.round(x)}, ${Math.round(y)}`;
+    el.style.cssText = `position:absolute;left:${Math.round(x + 10)}px;top:${Math.round(y - 22)}px;padding:1px 5px;font:500 10px/1.5 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.02em;white-space:nowrap;color:var(--ascii-readout-text,#fff);background:${ink};opacity:.9;transition:opacity ${life()}ms linear`;
+    tagAt = now;
+    // Next frame, start the fade: the transition runs from full to clear over the marks' life.
+    requestAnimationFrame?.(() => { if (el) el.style.opacity = '0'; });
+  };
+  const dropTags = () => { for (const el of tags) el?.remove(); tags.length = 0; };
   let surface: Surface | null = null, host: HTMLElement | null = null, failed = false, destroyed = false, paused = false, last = 0;
   const ok = typeof document !== 'undefined' && typeof window !== 'undefined' && isGlyphFieldSupported();
   const touchOnly = () => typeof matchMedia === 'function' && matchMedia('(hover: none)').matches && matchMedia('(pointer: coarse)').matches;
@@ -116,7 +168,8 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
   // `trail` takes the wordmark's own glyphs, so its tail and a field's trail read as one.
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: o().charset, cellSize: o().cellSize,
-    ...(o().style === 'trail' ? { font: '"Geist", Arial, sans-serif', fontWeight: 500, cellAspect: 0.8, glyphScale: 0.8, shade: 0, levels: 'none' as const } : { cellAspect: 0.62, glyphScale: 0.92, shade: 0.6 }),
+    ...(o().style === 'trail' ? { font: '"Geist", Arial, sans-serif', fontWeight: 500, cellAspect: 0.8, glyphScale: 0.8, shade: 0, levels: 'none' as const }
+      : o().style === 'spray' ? { mark: 'engraving' as const, markAngle: -45, cellAspect: 1, shade: 0 } : { cellAspect: 0.62, glyphScale: 0.92, shade: 0.6 }),
     contrast: 1, ...o().look,
   });
   const ink = { trail: null as InkTrail | null, cols: 0, rows: 0, at: 0, moved: 0, lit: false, art: null as HTMLCanvasElement | null };
@@ -173,8 +226,9 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
     const { pen, now, scale } = frame;
     const span = life();
     marks = marks.filter(m => now - m.t < span);
-    if (!marks.length) return false;
-    cursorTrailFrame(pen, marks, o().style, now, span, o().cellSize, scale);
+    if (box && box.t && now - box.t > span) box = null;
+    if (!marks.length && !box) return false;
+    cursorTrailFrame(pen, marks, o().style, now, span, o().cellSize, scale, box);
     return true;
   };
   const mount = () => {
@@ -211,25 +265,40 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
       surface?.kick();
       return;
     }
+    if (style === 'spray') {
+      const held = (event.buttons & 1) === 1;
+      if (held) {
+        if (!box || box.t) { box = { x0: x, y0: y, x1: x, y1: y, t: 0 }; mount(); tag(x, y, now, 0); }
+        box.x1 = x; box.y1 = y;
+        if (now - tagAt > 60) tag(x, y, now, 1);
+      } else if (box && !box.t) box.t = now;
+    }
     const prev = marks[marks.length - 1];
     const gap = prev ? Math.hypot(x - prev.x, y - prev.y) : Infinity;
     // Rings and glints are spaced out; the path keeps every move that goes somewhere.
-    if (style === 'water' ? gap < o().cellSize * 2.6 && now - last < 90 : gap < 2) return;
+    if (style === 'water' ? gap < o().cellSize * 2.6 && now - last < 90 : style === 'spray' ? gap < o().cellSize * 2.2 : gap < 2) { if (box) surface?.kick(); return; }
     last = now;
     if (style === 'sparkle') {
       for (let i = 0; i < 2; i++) {
         const seed = hash(now + i * 17, x + y), turn = hash(y + i, now) * Math.PI * 2, reach = o().cellSize * 1.4 * hash(x, now + i);
         marks.push({ x: x + Math.cos(turn) * reach, y: y + Math.sin(turn) * reach, t: now, seed, vx: Math.cos(turn) * 0.012, vy: Math.sin(turn) * 0.012 + 0.01 });
       }
+    } else if (style === 'spray') {
+      const turn = hash(now, x) * Math.PI * 2, reach = o().cellSize * 2.6 * hash(y, now);
+      marks.push({ x: x + Math.cos(turn) * reach, y: y + Math.sin(turn) * reach, t: now, seed: hash(x + now, y), vx: 0, vy: 0 });
+      if (!box && now - tagAt > 140) { mount(); tag(x, y, now); }
     } else marks.push({ x, y, t: now, seed: 0, vx: 0, vy: 0 });
     while (marks.length > MAX[style]) marks.shift();
     mount();
     surface?.kick();
   };
 
-  const dropAll = () => { marks = []; ink.trail?.clear(); ink.lit = false; ink.at = 0; };
+  const dropAll = () => { marks = []; box = null; dropTags(); ink.trail?.clear(); ink.lit = false; ink.at = 0; };
 
+  const release = () => { if (box && !box.t) { box.t = performance.now(); surface?.kick(); } };
+  if (ok) window.addEventListener('pointerup', release, true);
   const unwatch = ok ? [
+    () => window.removeEventListener('pointerup', release, true),
     watchPointer({ target: window, move, leave() {} }),
     watchVisibility(() => { if (document.hidden) dropAll(); }),
     watchMotionPreference(() => { if (reduced()) dropAll(); surface?.kick(); }),
@@ -238,7 +307,7 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
   return {
     get supported() { return ok && !failed && !destroyed; },
     get field(): GlyphField | null { return destroyed ? null : surface?.field ?? null; },
-    get active() { return marks.length > 0 || ink.lit; },
+    get active() { return marks.length > 0 || !!box || ink.lit; },
     clear() { dropAll(); surface?.kick(); },
     update(next) {
       if (destroyed) return;
