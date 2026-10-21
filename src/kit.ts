@@ -1,7 +1,7 @@
 /** Interface components as one call each, drawn by the GPU glyph field. Each import pulls in only the components it names. */
 export { beam, beamPalette, BEAM_PALETTES } from './kit/beam';
 export type { BeamOptions, BeamHandle, BeamPalette, BeamMode } from './kit/beam';
-export { decode } from './kit/decode';
+export { decode, SCRAMBLE_SCRIPTS } from './kit/decode';
 export type { DecodeOptions, DecodeHandle } from './kit/decode';
 export { odometer } from './kit/odometer';
 export type { OdometerOptions, OdometerHandle } from './kit/odometer';
@@ -44,6 +44,14 @@ export type { BlockChartOptions, BlockChartHandle } from './kit/block-chart';
 export { pageDissolve } from './kit/page-dissolve';
 export { cursorTrail } from './kit/cursor-trail';
 export type { CursorTrailOptions, CursorTrailHandle, CursorTrailStyle } from './kit/cursor-trail';
+export { globe } from './kit/globe';
+export type { GlobeOptions, GlobeHandle, GlobePoint } from './kit/globe';
+export { morphField } from './kit/morph-field';
+export type { MorphFieldOptions, MorphFieldHandle, MorphSource } from './kit/morph-field';
+export { ditherGradient } from './kit/dither-gradient';
+export type { DitherGradientOptions, DitherGradientHandle, DitherLight } from './kit/dither-gradient';
+export { ditherImage } from './kit/dither-image';
+export type { DitherImageOptions, DitherImageHandle } from './kit/dither-image';
 export type { PageDissolveOptions, PageDissolveHandle } from './kit/page-dissolve';
 export { swipeDeck } from './kit/swipe-deck';
 export type { SwipeDeckOptions, SwipeDeckHandle } from './kit/swipe-deck';

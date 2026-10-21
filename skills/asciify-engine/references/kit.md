@@ -51,7 +51,20 @@ const d = decode(document.querySelector('h1')!, { duration: 800 });
 d.replay();
 ```
 
-Options: `text` (draw this instead, centred and as large as fits, in the element's own font weight, family and letter spacing; `\n` breaks lines), `duration` (ms, default 900), `trigger` (`'visible' | 'manual'`), `replayOnHover` (default true; entry is read from pointer moves too, so a scripted cursor replays it), `settle` (`'glyphs'` keeps the headline in characters, `'text'` hands back to the crisp HTML). Ink defaults to the element's text colour. Method: `replay()`.
+Options: `text` (draw this instead, centred and as large as fits, in the element's own font weight, family and letter spacing; `\n` breaks lines), `duration` (ms, default 800, 1400 with `scramble`), `trigger` (`'visible' | 'manual' | 'scroll'`), `replayOnHover` (default true; entry is read from pointer moves too, so a scripted cursor replays it), `settle` (`'glyphs'` keeps the headline in characters, `'text'` hands back to the crisp HTML), `scramble` (4.30: `true` or your own alphabets, below). Ink defaults to the element's text colour. Method: `replay()`.
+
+**Scramble (4.30).** `scramble: true` flips the headline through other alphabets before it lands: each flip fills every unresolved letter from one alphabet (kana, Hangul, accented Latin, Cyrillic, Greek, then digits and signs: `SCRAMBLE_SCRIPTS`), drawn in the element's own font at that letter's own place, and letters lock left to right over the last 60% of the run. Pass `scramble: ['ABCDEF…', '0123…']` for your own alphabets (one string each). The field draws every flip, so it is characters all the way, and the real text stays in the DOM.
+
+**Scroll (4.30).** `trigger: 'scroll'` ties the decode to scroll position: it resolves as the element rises into view (0 at the viewport's bottom edge, done half a viewport, or its own height, later) and undoes as it leaves. Scroll is the clock, so nothing draws while the page is still. With `scramble`, the flips step with scroll too.
+
+```ts
+// A headline that flips through alphabets and lands on the real words, then hands back to the HTML.
+decode(h1, { scramble: true, settle: 'text' });
+// Header links that scramble on hover: manual, so they rest as plain HTML.
+for (const a of nav.querySelectorAll('a')) decode(a, { scramble: true, trigger: 'manual', settle: 'text', look: { cellSize: 3 } });
+// A section title that resolves with scroll.
+decode(sectionTitle, { trigger: 'scroll', settle: 'text' });
+```
 
 ## odometer
 
@@ -229,7 +242,12 @@ const mark = wordmark(box, { text: 'asciify' });
 input.oninput = () => mark.setText(input.value);
 ```
 
-Options: `text`, `font` (default `Georgia, "Times New Roman", serif`), `fontWeight` (default 600), `artHeight` (height of the 1800 px wide canvas the word is set on, default 520; a shorter one sets the word larger in a wide element), `label` (the canvas's accessible name when the word is not the element's own text; default the word). Methods: `setText(text)`; getter `text`.
+Options: `text`, `font` (default `Georgia, "Times New Roman", serif`), `fontWeight` (default 600), `artHeight` (height of the 1800 px wide canvas the word is set on, default 520; a shorter one sets the word larger in a wide element), `label` (the canvas's accessible name when the word is not the element's own text; default the word), `assemble` (4.30: `'visible'` gathers the word out of scattered pieces once as it scrolls into view, over `duration` ms, default 1400; `'scroll'` ties the gathering to scroll position and scatters it again as it leaves; off under reduced motion; default off). Methods: `setText(text)`; getter `text`.
+
+```ts
+// A footer wordmark that assembles as the page reaches it, with the page trail drawing over it.
+wordmark(footerMark, { text: 'acme', assemble: 'scroll', look: { cellSize: 7, hover: 'none' } });
+```
 
 The site footer closes on `wordmark(box, { text: 'asciify', font: '"Fraunces", Georgia, serif', fontWeight: 600, label: 'Asciify', look: { cellSize } })`, with `cellSize` the box width / 190 held between 4 and 8 and the box capped at 1320px wide, and its hero is `fieldBackground(section, { preset: 'hero', ripple: false, palette: { light: '#7d7b75', dark: '#77756f' }, look: { scale: 1.25, cellSize: 12, brightness: 0.24, contrast: 1, charset: ' .:+*#', cellAspect: 0.62, glyphScale: 0.86, clear: { element: copy, padding: -24, feather: 0.6, shape: 'ellipse' } } })` (`scale` 1.6 under 760px).
 
@@ -242,7 +260,7 @@ const cursor = cursorTrail({ style: 'trail', ink: '--ink', charset: ' .:-=+*#%@'
 picker.onchange = () => (picker.value === 'off' ? cursor.destroy() : cursor.update({ style: picker.value }));
 ```
 
-Options: `style` (`'trail'` a fine tapered tail, `'wake'` a softer, wider band, `'water'` rings that spread from the path, `'sparkle'` glints scattered along it; default `trail`), `charset` (default ` .:-=+*#%@`), `cellSize` (CSS px, default 9), `life` (ms a point takes to fade, default 800, `water` 950), `zIndex` (default 1000; keep it under your dialogs and sticky header), `skip` (a selector to stay quiet over, on top of inputs, textareas, selects, `[contenteditable]`, dialogs and `[data-ascii-cursor-skip]`), plus the shared `ink` (default `--ascii-ink`, then the body's text colour), `look`, `reducedMotion` and `globalLook` (default `false`: the trail keeps its own ramp when `setGlobalLook` re-skins the page). Methods: `update`, `clear()`, `pause()`, `play()`, `destroy()`; getter `active` (something is fading). It is off on touch-only devices (`hover: none` and `pointer: coarse`) and for touch pointers, under reduced motion and while the tab is hidden. Mount it once per page (in React, in the app shell's effect, or a layout that persists across routes) and skip pages that have their own pointer work, such as an editor. `trail: { strength, radius, span, cell }` sizes the `trail` style to match a field's own trail (same brush, so a wordmark's hover and the page's read as one).
+Options: `style` (`'trail'` a fine tapered tail, `'wake'` a softer, wider band, `'water'` rings that spread from the path, `'sparkle'` glints scattered along it, `'spray'` (4.30) patches of diagonal hatching sprayed round the path, where a drag draws a hatched selection box; default `trail`), `readout` (4.30: small monospaced coordinate tags such as `412, 168` beside the newest spray marks and at a drag box's corners, in the ink with `--ascii-readout-text`, default white, on it; decoration, `aria-hidden`; default false), `charset` (default ` .:-=+*#%@`), `cellSize` (CSS px, default 9), `life` (ms a point takes to fade, default 800, `water` 950), `zIndex` (default 1000; keep it under your dialogs and sticky header), `skip` (a selector to stay quiet over, on top of inputs, textareas, selects, `[contenteditable]`, dialogs and `[data-ascii-cursor-skip]`), plus the shared `ink` (default `--ascii-ink`, then the body's text colour), `look`, `reducedMotion` and `globalLook` (default `false`: the trail keeps its own ramp when `setGlobalLook` re-skins the page). Methods: `update`, `clear()`, `pause()`, `play()`, `destroy()`; getter `active` (something is fading). It is off on touch-only devices (`hover: none` and `pointer: coarse`) and for touch pointers, under reduced motion and while the tab is hidden. Mount it once per page (in React, in the app shell's effect, or a layout that persists across routes) and skip pages that have their own pointer work, such as an editor. `trail: { strength, radius, span, cell }` sizes the `trail` style to match a field's own trail (same brush, so a wordmark's hover and the page's read as one).
 
 **One continuous trail across the page.** A field's own hover stops at its canvas edge, so a page trail that skips every canvas feels boxed in: it breaks at each hero and wordmark and restarts inside it. For one trail that flows through everything:
 
@@ -506,6 +524,98 @@ pull.revealRows(feed.querySelectorAll('.just-arrived')); // or reveal any rows y
 ```
 
 Options: `onRefresh` (may return a promise; the ring spins at least 600ms), `content` (the element that moves, default the first child), `threshold` (px, default 64), `messages` (`{ refreshing, done, failed }` for the live region), `reveal` (a selector for the rows `onRefresh` added: a frame after it resolves they are hidden behind the check, then resolve in from characters as the content springs back). Methods: `refresh()`, `revealRows(rows)` (each row appears as glyphs of its own text, with its photos drawn as tone rather than flat tiles, following a row that is still opening, then hands over to the HTML over about 760ms; a row is revealed once, and under reduced motion or without WebGL2 rows just show); getter `state` (`idle`, `pulling`, `refreshing`, `done`). Sets `aria-busy` while refreshing. It engages only when the element is scrolled to the top; give it `overflow: hidden` or `auto` and keep a Refresh button for keyboard users.
+
+## Event-site pieces (4.30)
+
+The pieces an event or launch site is built from: a hero of images that morph as hatched lines, a dithered light, a globe of dots, photos in a brand's two tones, plus `decode`'s scramble and scroll, `wordmark`'s assembly and `cursorTrail`'s spray above. All draw through the shared GPU context, take `ink`, `look`, `poster`, `lazy`, `globalLook` and `reducedMotion`, pause off screen, return inert handles without WebGL2 (the poster, or your HTML, stays) and idle when nothing moves.
+
+```ts
+import { morphField, ditherGradient, globe, ditherImage } from 'asciify-engine/kit';
+```
+
+### morphField
+
+Frames that morph into one another as the field's marks: by default diagonal engraved lines (`mark: 'engraving'`, `markAngle: -45`) whose weight follows the tone, so one picture's stripes thin away as the next one's thicken. It holds each frame, then cross-fades; between morphs it idles unless the frame is a video or a drawing function.
+
+```ts
+const hero = morphField(heroEl, {
+  sources: ['/frames/crowd.webp', '/frames/stage.webp', (pen, w, h, now) => drawCubes(pen, w, h, now)],
+  ink: '#ffffff', hold: 3200, transition: 1000,
+  onChange: i => (counter.textContent = `${i + 1}/3`),
+});
+nextButton.onclick = () => hero.next();
+```
+
+Options: `sources` (required: image URLs or elements, canvases, videos, or `(pen, w, h, now) => void` functions that draw white-on-black each frame, such as a turning 3D scene), `hold` (ms, default 3200), `transition` (ms, default 1000), `autoplay` (default true; off under reduced motion), `fit` (`'cover' | 'contain'`), `layer` (`'under'` default, below the content; `'over'`), `onChange(index)` (as each morph starts: keep a caption or counter in step), `label` (read to assistive technology; otherwise decoration). Methods: `next()`, `go(index)`; getter `index`. Change the stripes with `look`: `{ markAngle: 90 }` vertical lines, `{ mark: 'crosshatch' }`, `{ mark: 'dither' }`, `{ mark: 'glyph' }` for characters, `{ cellSize }` for their pitch.
+
+### ditherGradient
+
+A gradient of soft lights drawn as a two-tone dither: the field's ink on the element's own background. The lights drift and breathe gently and the first leans toward the pointer. With `motion: 0` it draws once and idles until the pointer moves over it.
+
+```ts
+// A glow rising from the bottom of a brand-coloured hero.
+ditherGradient(hero, { ink: '--brand-light', lights: [{ x: 0.5, y: 1.08, radius: 0.62 }] });
+// Soft blobs, like a cosmic poster.
+ditherGradient(panel, { ink: '--brand', lights: [{ x: 0.2, y: 0.3, radius: 0.35 }, { x: 0.75, y: 0.7, radius: 0.4, strength: 0.8 }], look: { mark: 'dot', cellSize: 8 } });
+```
+
+Options: `lights` (`{ x, y, radius?, strength? }` in shares of the element, radius of its longer side; default one broad light from just below the bottom edge), `base` (ground tone, default 0.05), `motion` (0 still to 1, default 0.35), `follow` (how far the first light leans to the pointer, default 0.06; 0 off), `layer` (`'under'` default). Ink defaults to the element's text colour, so give the element its background and a text colour, or pass `ink`. Method: `setLights(lights)`. The default mark is `'dither'` (a 4x4 Bayer screen); `look: { mark: 'dot' | 'pixel' | 'stipple' | 'glyph' }` changes it.
+
+### globe
+
+A globe of dots: land, a faint ocean, latitude and longitude lines and the far side's land showing through, turning slowly. Drag turns it with a little momentum; `points` mark places with a ring that keeps spreading. It carries a built-in world map (Natural Earth 1:50m land, public domain, 2.7 KB).
+
+```ts
+const earth = globe(el, { ink: '--brand', points: [{ lat: 37.8, lon: -122.4 }, { lat: 51.5, lon: -0.1 }], label: 'Our network of 330 cities' });
+regionSelect.onchange = () => earth.rotateTo(Number(regionSelect.value));
+```
+
+Options: `speed` (degrees a second, default 6; 0 holds it, and with no points it then draws once and idles), `lon` (longitude facing the viewer, default -30), `tilt` (degrees, default 18), `land` (`(lat, lon) => number | boolean` for your own map, such as a coverage map), `graticule` (degrees between lines, default 15; 0 none), `points` (`{ lat, lon }[]`), `backside` (0–1, default 0.22), `size` (share of the shorter side, default 0.92), `drag` (default true; sets `touch-action: pan-y` so the page still scrolls), `label`. Methods: `rotateTo(lon, lat?)`; getter `lon`. Default look: `mark: 'dot'`, `cellSize: 5`; `look: { mark: 'glyph', charset: ' .:+#' }` writes it in characters.
+
+### ditherImage
+
+An image drawn in a brand's two tones as dither, pixels, dots or engraving, developing in, lightest marks first, as it scrolls into view.
+
+```ts
+ditherImage(figure, { tones: ['--navy', '--brand-blue'], mark: 'dither', cellSize: 5 });   // the <img> inside
+ditherImage(tile, { src: '/aerial.webp', tones: ['transparent', '--brand'], mark: 'pixel', reveal: 'scroll' });
+```
+
+Options: `src` (a URL or `<img>`; default the first `<img>` inside, hidden while drawn), `tones` (`[ground, ink]`, CSS colours or tokens; `'transparent'` keeps the element's own background; default `['transparent', '--ascii-ink-strong']`), `mark` (any field mark, default `'dither'`), `cellSize` (default 5), `reveal` (`'visible'` default, `'scroll'`, `'none'`), `duration` (ms, default 1100), `focus`, `label` (default the image's `alt`). Method: `replay()`.
+
+### Field options these use
+
+Two `look` settings (and `mountGlyphField` options) came with these pieces:
+
+- `markAngle` (degrees, default -35): the screen angle of the line and print marks (`engraving`, `crosshatch`, `woodblock`, `risograph`), turning clockwise as CSS `rotate` does: 0 horizontal lines, 90 vertical, -45 rising to the right.
+- `glyphOrder: 'text'`: reads the charset after its blank in order along each row (each row a few letters on), so a phrase stays legible as text-as-art; the tone decides which cells show their letter (all from a tone of 0.6, thinning toward the quiet edges). For a background of repeated words that lights up under the pointer: `background(el, { preset: wordField, look: { glyphOrder: 'text', charset: ' build connect protect ', hover: 'lantern', highlight: '#ff5b1f' } })`.
+
+### Recipe: an event site's header, hero and footer
+
+For "a Cloudflare Connect–style header, hero and footer", or any launch or event page with that energy, compose these pieces rather than a copy of anyone's design. Use your own brand tokens and images.
+
+```ts
+import { morphField, decode, cursorTrail, ditherGradient, globe, wordmark } from 'asciify-engine/kit';
+
+// Header: plain HTML links that scramble on hover.
+for (const a of header.querySelectorAll('nav a')) decode(a, { scramble: true, trigger: 'manual', settle: 'text', look: { cellSize: 3 } });
+
+// Hero on a brand-coloured ground: frames morphing as hatched lines, a headline that flips through alphabets and lands.
+const hero = morphField(heroEl, { sources: frames, ink: '#ffffff', look: { cellSize: 6 }, onChange: i => (tag.textContent = `${i + 1}/${frames.length}`) });
+decode(heroEl.querySelector('h1')!, { scramble: true, settle: 'text' });
+
+// The pointer sprays hatching with coordinate tags over the open page (behind cards).
+cursorTrail({ style: 'spray', readout: true, ink: '--ascii-ink', zIndex: -1 });
+
+// A globe section, and a closing call to action on a dithered glow.
+globe(globeEl, { ink: '--brand', points: venues, label: 'Where we meet' });
+ditherGradient(ctaEl, { ink: '--brand-light' });
+
+// Footer: the name gathers as the page reaches it.
+wordmark(footerMark, { text: 'connect', assemble: 'scroll', look: { hover: 'none' } });
+```
+
+Keep each piece to one job: the hero's morph is the key visual, the spray is ambient, the globe and glow are sections. Mount the cursor once per page, keep every headline and link real HTML, and give each piece a `poster` where it is above the fold.
 
 ## Backgrounds
 

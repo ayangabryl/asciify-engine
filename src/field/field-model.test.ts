@@ -116,6 +116,10 @@ describe('glyph field halftone and clear zones', () => {
   it('normalizes the dot mark, drift scene and clear zone', () => {
     const settings = normalizeFieldSettings({ mark: 'dot', scene: 'drift', dotScale: 9, scale: 0, clear: { x: 0.2, width: 0.5, shape: 'rect' } });
     expect([settings.mark, settings.scene, settings.dotScale, settings.scale]).toEqual(['dot', 'drift', 1.4, 0.2]);
+    expect([settings.markAngle, settings.glyphOrder]).toEqual([-35, 'tone']);
+    const turned = normalizeFieldSettings({ mark: 'engraving', markAngle: 90, glyphOrder: 'text' });
+    expect([turned.markAngle, turned.glyphOrder]).toEqual([90, 'text']);
+    expect(normalizeFieldSettings({ markAngle: 'x' as unknown as number, glyphOrder: 'rows' as 'text' }).glyphOrder).toBe('tone');
     expect(settings.clear).toMatchObject({ x: 0.2, y: 0.3, width: 0.5, height: 0.4, shape: 'rect' });
     expect(normalizeFieldSettings({ clear: false }, settings).clear).toBe(false);
   });

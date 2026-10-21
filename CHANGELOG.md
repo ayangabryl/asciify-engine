@@ -5,6 +5,15 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## Unreleased: event-site pieces
+
+- New in `asciify-engine/kit`: `morphField` (frames, including drawing functions and video, that morph into one another as hatched lines or any mark; `next`, `go`, `onChange`), `ditherGradient` (soft lights as a two-tone dither on the element's own background, leaning toward the pointer), `globe` (a globe of dots with land, ocean, graticule and far side, turning, draggable, with `points` and `rotateTo`; built-in Natural Earth land mask, 2.7 KB) and `ditherImage` (an image in a brand's two tones as dither, pixels, dots or engraving, developing in when visible or with scroll).
+- `decode`: `scramble` flips the headline through other alphabets (`SCRAMBLE_SCRIPTS`, or your own) before landing, drawn by the field in the element's font; `trigger: 'scroll'` ties the decode to scroll position and idles while the page is still.
+- `wordmark`: `assemble: 'visible' | 'scroll'` gathers the word out of scattered pieces as it comes into view.
+- `cursorTrail`: `style: 'spray'` sprays patches of diagonal hatching round the path and draws a hatched box while dragging; `readout: true` adds coordinate tags.
+- Field: `markAngle` sets the screen angle of the line and print marks (default -35, as before); `glyphOrder: 'text'` reads the charset in order along each row, so repeated words stay legible as text-as-art.
+- Skill: kit.md "Event-site pieces" with an event-site header, hero and footer recipe; applying-asciify.md section 9b; scenario prompts 20 and 21.
+
 ## 4.29: cursorTrail's trail is the field trail
 
 - `cursorTrail({ style: 'trail' })` now draws the same ink trail as a kit field's `hover: 'trail'` (the wordmark's), with the wordmark's glyphs, so the page cursor and a field's own trail read as one. New `trail: { strength, radius, span, cell }` sizes it to match a given field: `span` is that field's shorter side and `cell` its longer side / 128, in CSS pixels. Still idle once the last character fades. `wake`, `water` and `sparkle` are unchanged.

@@ -478,6 +478,87 @@ const v = asciiVideo(player, { src: '/media/magnolia.mp4', poster: '/media/magno
 playButton.onclick = () => playButton.setAttribute('aria-label', v.toggle() ? 'Pause' : 'Play');
 ```
 
+## nav-scramble: Scrambling links
+Category: Text
+
+Prompt:
+“Make [our header's links] scramble on hover with Asciify: the link's letters flip through other alphabets (kana, Hangul, accented Latin, Greek) and land back on the word, drawn in characters in the link's own font, then hand back to the plain HTML link.”
+
+```ts
+import { decode } from 'asciify-engine/kit';
+
+// manual: each link rests as plain HTML and only scrambles when the pointer enters it
+const links = [...nav.querySelectorAll<HTMLElement>('a')].map(a => decode(a, { scramble: true, trigger: 'manual', settle: 'text', duration: 700, look: { cellSize: 3 } }));
+```
+
+## morph-hero: Morphing hero
+Category: Pages
+
+Prompt:
+“Build [our event hero] with Asciify: on our brand-coloured ground, [our 3–5 images or drawn scenes] morph into one another as diagonal hatched lines whose weight follows the tone, a small counter shows which frame is up, and the headline flips through alphabets before landing on the real words. Keep the headline and buttons in HTML.”
+
+```ts
+import { morphField, decode } from 'asciify-engine/kit';
+
+// frames: image URLs, canvases, videos, or (pen, w, h, now) => void drawings in white on black
+const hero = morphField(heroSection, { sources: frames, ink: '#ffffff', hold: 3200, transition: 1000, onChange: i => (counter.textContent = `${i + 1}/${frames.length}`) });
+const title = decode(heroTitle, { scramble: true, settle: 'text' });
+nextButton.onclick = () => hero.next();
+```
+
+## ascii-globe: Globe of dots
+Category: Media
+
+Prompt:
+“Show [where we are: our venues, regions or network] on a globe of dots with Asciify: land, a faint ocean, latitude lines and the far side showing through, turning slowly, draggable, with a ring spreading from each place. Buttons turn it to a region.”
+
+```ts
+import { globe } from 'asciify-engine/kit';
+
+const earth = globe(globeBox, { ink: '--brand', points: [{ lat: 37.8, lon: -122.4 }, { lat: 51.5, lon: -0.1 }, { lat: 1.35, lon: 103.8 }], label: 'Our three venues' });
+regionButtons.forEach(b => (b.onclick = () => earth.rotateTo(Number(b.dataset.lon))));
+```
+
+## dither-glow: Dithered glow
+Category: Backgrounds
+
+Prompt:
+“Light [our call-to-action panel] with Asciify: a soft glow rising from the bottom edge, drawn as a fine two-tone dither in [a light tint] on [our brand colour], drifting gently and leaning toward the cursor. The button and copy sit over the quiet part.”
+
+```ts
+import { ditherGradient } from 'asciify-engine/kit';
+
+// the panel has the brand background; the ink is the dither's light tone
+const glow = ditherGradient(ctaPanel, { ink: '--brand-tint', lights: [{ x: 0.5, y: 1.08, radius: 0.62 }] });
+```
+
+## dither-image: Two-tone photo
+Category: Media
+
+Prompt:
+“Draw [our photo] in our two brand tones with Asciify, as [dither / pixels / dots / engraving], developing in from its lightest marks as it scrolls into view. Keep the image's alt text.”
+
+```ts
+import { ditherImage } from 'asciify-engine/kit';
+
+// draws the <img> inside the figure (hidden while drawn; its alt names the canvas)
+const photo = ditherImage(figure, { tones: ['--brand-deep', '--brand'], mark: 'dither', cellSize: 5 });
+markPicker.onchange = () => photo.update({ mark: markPicker.value });
+```
+
+## assemble-wordmark: Assembling wordmark
+Category: Text
+
+Prompt:
+“Close [our footer] on our name, [name], set large in characters that gather out of scattered pieces as the visitor scrolls down to it, and scatter again as they scroll away. Keep the name in HTML.”
+
+```ts
+import { wordmark } from 'asciify-engine/kit';
+
+// draws the element's own text; scroll ties the assembly to the footer's way into view
+const mark = wordmark(footerName, { assemble: 'scroll', font: 'Georgia, "Times New Roman", serif', fontWeight: 600 });
+```
+
 ## hero-background: Background
 Category: Backgrounds
 
