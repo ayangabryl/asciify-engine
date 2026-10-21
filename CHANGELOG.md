@@ -5,7 +5,7 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
-## Unreleased: event-site pieces
+## 4.30: event-site pieces — morphField, globe, ditherGradient, ditherImage, scramble, assemble, spray
 
 - New in `asciify-engine/kit`: `morphField` (frames, including drawing functions and video, that morph into one another as hatched lines or any mark; `next`, `go`, `onChange`), `ditherGradient` (soft lights as a two-tone dither on the element's own background, leaning toward the pointer), `globe` (a globe of dots with land, ocean, graticule and far side, turning, draggable, with `points` and `rotateTo`; built-in Natural Earth land mask, 2.7 KB) and `ditherImage` (an image in a brand's two tones as dither, pixels, dots or engraving, developing in when visible or with scroll).
 - `decode`: `scramble` flips the headline through other alphabets (`SCRAMBLE_SCRIPTS`, or your own) before landing, drawn by the field in the element's font; `trigger: 'scroll'` ties the decode to scroll position and idles while the page is still.
