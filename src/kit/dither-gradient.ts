@@ -52,9 +52,11 @@ export function ditherGradientFrame(pen: CanvasRenderingContext2D, w: number, h:
     pen.translate(x, y); pen.scale(1, a); pen.translate(-x, -y);
     const g = pen.createRadialGradient(x, y, 0, x, y, r);
     // A soft-shouldered falloff, so the dither steps through every level rather than banding at the rim.
+    // A full, flat core that falls away quickly, as a sunrise on the edge, then a long faint shoulder.
     g.addColorStop(0, grey(s));
-    g.addColorStop(0.35, grey(s * 0.62));
-    g.addColorStop(0.7, grey(s * 0.2));
+    g.addColorStop(0.28, grey(s * 0.96));
+    g.addColorStop(0.55, grey(s * 0.42));
+    g.addColorStop(0.8, grey(s * 0.12));
     g.addColorStop(1, grey(0));
     pen.fillStyle = g;
     pen.fillRect(0, y - r, w, 2 * r);

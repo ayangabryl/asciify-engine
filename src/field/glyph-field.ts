@@ -7,7 +7,7 @@ import {
 import { InkTrail } from '../surface/ink-trail';
 import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
 import {
-  FIELD_MARKS, activeFieldHover, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
+  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
@@ -222,6 +222,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let videoFresh = true, videoCallback = 0, levels: [number, number] = [0, 1], levelsAt = -Infinity;
   let drawnAt = -Infinity, empty = false;
   const ambientMs = ambientInterval();
+  const wordData = new Float32Array(16);
   let raf = false, last = 0, time = 0, dirty = true, destroyed = false, lost = false, failed = false, paused = false, visible = true;
   let previous: [number, number] | null = null, pending: { from: [number, number]; to: [number, number] } | null = null;
   // Slow frames for about a second drop the field to 1x pixels, then to no ambient motion; the wake keeps working.
@@ -682,6 +683,10 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
     gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0);
+    const words = settings.glyphOrder === 'text' && settings.textRepeat === 'row' ? fieldWords(settings.charset) : [];
+    wordData.fill(0); wordData.set(words);
+    gl.uniform2fv(u.uWords, wordData);
+    gl.uniform1f(u.uWordCount, words.length / 2);
     gl.uniform1f(u.uScale, settings.scale);
     const zone = settings.clear;
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
@@ -731,6 +736,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(p.uDotScale, settings.dotScale);
     gl.uniform2f(p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
     gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
+    gl.uniform4f(p.uLine, settings.linePitch, settings.lineWeight, settings.sparkle, 0);
     gl.uniform4f(p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
     gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
     gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);

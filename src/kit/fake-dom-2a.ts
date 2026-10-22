@@ -63,6 +63,7 @@ export class FakeElement extends FakeNode {
   set textContent(value: string) { this.childNodes = []; this.textValue = ''; if (value) this.appendChild(new FakeText(value)); }
   getBoundingClientRect() { return { ...this.rect, right: this.rect.left + this.rect.width, bottom: this.rect.top + this.rect.height }; }
   appendChild<T extends FakeNode>(node: T) { node.remove(); node.parentElement = this; this.childNodes.push(node); return node; }
+  prepend(node: FakeNode) { node.remove(); node.parentElement = this; this.childNodes.unshift(node); }
   insertBefore<T extends FakeNode>(node: T, before: FakeNode | null) {
     node.remove(); node.parentElement = this;
     const i = before ? this.childNodes.indexOf(before) : -1;

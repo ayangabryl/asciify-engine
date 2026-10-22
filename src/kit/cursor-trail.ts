@@ -103,9 +103,12 @@ export function cursorTrailFrame(pen: CanvasRenderingContext2D, marks: CursorTra
     for (const m of marks) {
       const age = now - m.t, k = 1 - age / life;
       if (k <= 0) continue;
-      const side = Math.round(2 + 3 * m.seed) * cell, x = Math.round((m.x - side / 2) / cell) * cell, y = Math.round((m.y - side / 2) / cell) * cell;
-      pen.fillStyle = grey(0.9 * Math.min(1, k * 1.6) ** 0.8);
-      pen.fillRect(x * scale, y * scale, side * scale, side * scale);
+      const n = Math.round(2 + 3 * m.seed), x = Math.round(m.x / cell - n / 2) * cell, y = Math.round(m.y / cell - n / 2) * cell;
+      // Each cell of the patch at its own weight, so the hatching breaks into stepped segments as worn print does.
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        pen.fillStyle = grey(0.9 * Math.min(1, k * 1.6) ** 0.8 * (0.55 + 0.45 * hash(m.seed * 97 + i, j * 13.1)));
+        pen.fillRect((x + i * cell) * scale, (y + j * cell) * scale, cell * scale, cell * scale);
+      }
     }
   } else {
     for (const m of marks) {

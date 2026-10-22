@@ -41,12 +41,15 @@ export function wordArt(word: string, font = DEFAULTS.font, weight = DEFAULTS.fo
   return canvas;
 }
 
-const TILE = 10;
+/** One field cell in the art's pixels, and where the cell grid starts, so pieces move whole cells at a time. */
+export interface ScatterGrid { w: number; h: number; x0: number; y0: number }
+
 /**
- * The word's art with every piece displaced toward a scattered place: `progress` 0 is fully scattered (and faded), 1 the word
- * itself. Pieces settle in a staggered order. Exported for tests.
+ * The word's art with every piece, one field cell each, flying in from a scattered place: `progress` 0 is nothing yet, 1 the word
+ * itself. Pieces leave left to right with a little jitter, ease home, and move only by whole cells, so every frame the field
+ * draws whole crisp characters rather than smeared halves. Exported for tests.
  */
-export function scatterFrame(art: HTMLCanvasElement, progress: number, out: HTMLCanvasElement) {
+export function scatterFrame(art: HTMLCanvasElement, progress: number, out: HTMLCanvasElement, grid: ScatterGrid = { w: 10, h: 10, x0: 0, y0: 0 }) {
   if (out.width !== art.width || out.height !== art.height) { out.width = art.width; out.height = art.height; }
   const pen = out.getContext('2d');
   if (!pen) return out;
@@ -54,15 +57,15 @@ export function scatterFrame(art: HTMLCanvasElement, progress: number, out: HTML
   pen.fillStyle = '#000';
   pen.fillRect(0, 0, out.width, out.height);
   if (progress >= 1) { pen.drawImage(art, 0, 0); return out; }
-  const cols = Math.ceil(art.width / TILE), rows = Math.ceil(art.height / TILE);
+  const { w, h } = grid, x0 = (grid.x0 % w) - w, y0 = (grid.y0 % h) - h;
+  const cols = Math.ceil((art.width - x0) / w), rows = Math.ceil((art.height - y0) / h);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const i = r * cols + c, k = house(clamp(progress * 1.5 - hash(i, 3.7) * 0.5));
+    const i = r * cols + c, x = x0 + c * w, y = y0 + r * h;
+    const delay = 0.5 * (c / cols) + 0.15 * hash(i, 3.7), k = house(clamp((progress - delay) / 0.35));
     if (k <= 0) continue;
-    const dx = (hash(i, 1.3) - 0.5) * art.width * 0.45 * (1 - k), dy = (hash(i, 2.9) - 0.5) * art.height * 1.4 * (1 - k);
-    pen.globalAlpha = k;
-    pen.drawImage(art, c * TILE, r * TILE, TILE, TILE, c * TILE + dx, r * TILE + dy, TILE, TILE);
+    const dx = Math.round(((hash(i, 1.3) - 0.5) * art.width * 0.25 * (1 - k)) / w) * w, dy = Math.round(((hash(i, 2.9) - 0.5) * art.height * 1.6 * (1 - k)) / h) * h;
+    pen.drawImage(art, x, y, w, h, x + dx, y + dy, w, h);
   }
-  pen.globalAlpha = 1;
   return out;
 }
 
@@ -97,12 +100,18 @@ export function wordmark(element: HTMLElement, options: WordmarkOptions = {}): W
   // Assembly: the source is the scattered word until it has gathered.
   const scattered = document.createElement('canvas');
   let progress = 1, start = -1, frame = false;
+  // The field's cell in the art's pixels under the contain fit, so the scatter moves pieces by whole cells.
+  const gridOf = (art: HTMLCanvasElement): ScatterGrid => {
+    const rect = element.getBoundingClientRect(), lk = look(), ch = lk.cellSize ?? 7, cw = ch * (lk.cellAspect ?? 0.8);
+    const k = Math.min(rect.width / art.width, rect.height / art.height) || 1;
+    return { w: cw / k, h: ch / k, x0: -((rect.width - art.width * k) / 2) / k, y0: -((rect.height - art.height * k) / 2) / k };
+  };
   const assembling = () => !!state.current.assemble && !!page && !page.still();
   const show = () => {
     if (!page) return;
     const art = draw();
     if (!assembling() || progress >= 1) { void page.field.setSource(art); return; }
-    void page.field.setSource(scatterFrame(art, progress, scattered));
+    void page.field.setSource(scatterFrame(art, progress, scattered, gridOf(art)));
     page.field.redraw();
   };
   const step = (now: number) => {

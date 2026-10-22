@@ -121,6 +121,17 @@ export interface GlyphFieldSettings {
    * the cell's centre, so drawn shapes land as whole cells with crisp edges, as tiled art does.
    */
   sample: 'area' | 'point';
+  /** For `engraving` and `crosshatch`: the distance between lines in cell heights. Default 0.5 (two lines a cell). */
+  linePitch: number;
+  /** For `engraving` and `crosshatch`: multiplies how thick a line grows with the tone. Default 1. */
+  lineWeight: number;
+  /** For `engraving` and `crosshatch`: the share of lit cells, 0 to 0.05, that catch a small bright square, twinkling. Default 0. */
+  sparkle: number;
+  /**
+   * With `glyphOrder: 'text'`: `flow` (default) reads the charset as one stream along the rows; `row` sets one word of it a row,
+   * repeated with a space between, rows taking the words in turn (up to eight words), as a wall of repeated words.
+   */
+  textRepeat: 'flow' | 'row';
   /**
    * `tone` (default) picks each cell's glyph by its tone, from empty to dense. `text` reads the charset after its blank in order
    * along each row (each row a few letters on), so a word or phrase stays legible as text-as-art: every letter is there and the tone
@@ -209,6 +220,10 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   accents: 0,
   shuffle: 0,
   sample: 'area',
+  linePitch: 0.5,
+  lineWeight: 1,
+  sparkle: 0,
+  textRepeat: 'flow',
   glyphOrder: 'tone',
   color: 'ink',
   ink: '#f3ba32',
@@ -310,6 +325,10 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     accents: clamp(input.accents, 0, 0.3, base.accents),
     shuffle: clamp(input.shuffle, 0, 4, base.shuffle),
     sample: input.sample === 'point' || input.sample === 'area' ? input.sample : base.sample,
+    linePitch: clamp(input.linePitch, 0.2, 4, base.linePitch),
+    lineWeight: clamp(input.lineWeight, 0.2, 3, base.lineWeight),
+    sparkle: clamp(input.sparkle, 0, 0.05, base.sparkle),
+    textRepeat: input.textRepeat === 'row' || input.textRepeat === 'flow' ? input.textRepeat : base.textRepeat,
     glyphOrder: input.glyphOrder === 'text' || input.glyphOrder === 'tone' || input.glyphOrder === 'scatter' ? input.glyphOrder : base.glyphOrder,
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),
@@ -440,4 +459,16 @@ export function fieldClearFromRects(field: { left: number; top: number; width: n
     height: (element.height + padding * 2) / field.height,
     feather, shape,
   };
+}
+
+/** Each word of a charset (runs of non-blank glyphs) as [first glyph index, length], up to eight, for `textRepeat: 'row'`. */
+export function fieldWords(charset: string): number[] {
+  const glyphs = fieldGlyphs(charset), out: number[] = [];
+  for (let i = 0; i < glyphs.length && out.length < 16;) {
+    if (!glyphs[i].trim()) { i++; continue; }
+    const start = i;
+    while (i < glyphs.length && glyphs[i].trim()) i++;
+    out.push(start, i - start);
+  }
+  return out;
 }

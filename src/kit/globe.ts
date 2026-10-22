@@ -153,8 +153,8 @@ export function globeSphereFrame(pen: CanvasRenderingContext2D, w: number, h: nu
     for (let i = 0; i < dots.length; i += 2) {
       view(dots[i], dots[i + 1], v);
       if (v[2] >= 0) continue;
-      const s = Math.max(px * 0.8, dot * 0.4);
-      pen.fillRect(cx + v[0] * R - s / 2, cy - v[1] * R - s / 2, s, s);
+      const s = Math.max(1, Math.round(Math.max(px * 0.8, dot * 0.4)));
+      pen.fillRect(Math.round(cx + v[0] * R - s / 2), Math.round(cy - v[1] * R - s / 2), s, s);
     }
   }
   for (let i = 0; i < dots.length; i += 2) {
@@ -162,9 +162,10 @@ export function globeSphereFrame(pen: CanvasRenderingContext2D, w: number, h: nu
     const z = v[2];
     if (z < 0) continue;
     // Squarely facing, a full square in full ink; toward the rim smaller and paler, so the limb melts into a haze of fine dots.
-    const s = Math.max(px * 0.7, dot * (0.35 + 0.65 * z));
+    // Whole source pixels, so each square lands solid rather than as a soft-edged outline.
+    const s = Math.max(1, Math.round(Math.max(px * 0.7, dot * (0.35 + 0.65 * z))));
     pen.fillStyle = grey(0.18 + 0.82 * z ** 1.8);
-    pen.fillRect(cx + v[0] * R - s / 2, cy - v[1] * R - s / 2, s, s);
+    pen.fillRect(Math.round(cx + v[0] * R - s / 2), Math.round(cy - v[1] * R - s / 2), s, s);
   }
 }
 

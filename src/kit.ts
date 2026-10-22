@@ -48,6 +48,8 @@ export { globe } from './kit/globe';
 export type { GlobeOptions, GlobeHandle, GlobePoint } from './kit/globe';
 export { ocean, OCEAN_KINDS } from './kit/ocean';
 export type { OceanOptions, OceanHandle, OceanCreature, OceanKind } from './kit/ocean';
+export { navPill } from './kit/nav-pill';
+export type { NavPillOptions, NavPillHandle } from './kit/nav-pill';
 export { morphField } from './kit/morph-field';
 export type { MorphFieldOptions, MorphFieldHandle, MorphSource } from './kit/morph-field';
 export { ditherGradient } from './kit/dither-gradient';
