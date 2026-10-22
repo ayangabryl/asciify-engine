@@ -617,6 +617,24 @@ wordmark(footerMark, { text: 'connect', assemble: 'scroll', look: { hover: 'none
 
 Keep each piece to one job: the hero's morph is the key visual, the spray is ambient, the globe and glow are sections. Mount the cursor once per page, keep every headline and link real HTML, and give each piece a `poster` where it is above the fold.
 
+## Ocean
+
+### ocean
+
+An ocean seen from above, drawn as characters: fish, sharks, hammerheads, manta rays, jellyfish and schools of small fish. Each creature is a procedural body (a spine with a width profile, fins and a tail) that swims with a travelling wave from snout to tail, steers, wanders and, in a school, keeps together. Depth layers make the far ones smaller, fainter and slower. The cursor scatters small fish and sharks turn to investigate it and circle; a press sends a ring through the field and scatters the fish near it. By default it sits behind the element's content, as a background.
+
+```ts
+import { ocean } from 'asciify-engine/kit';
+
+const sea = ocean(hero, {
+  creatures: [{ kind: 'shark' }, { kind: 'hammerhead', size: 0.9 }, { kind: 'school', count: 32 }, { kind: 'jellyfish', count: 2 }],
+  ink: '--ascii-ink', label: 'Sharks and a school of fish swimming',
+});
+addButton.onclick = () => sea.add('manta');
+```
+
+Options: `creatures` (`{ kind, size?, count? }[]`, kinds `fish`, `shark`, `hammerhead`, `manta`, `jellyfish`, `school`; a school's `count` is its fish, default 28; size multiplies the kind's length, which follows the element's shorter side; default a shark, a hammerhead, a manta, four fish, two jellyfish and a school), `speed` (default 1; 0 holds and idles), `density` (multiplies every count), `depth` (0–1, default 0.7; 0 one plane), `palette` (an ink per kind, colours or tokens, drawn in source colour; kinds without one use `ink`), `background` (`'transparent'` default, or a colour or token for the water), `interactive` (default true), `ripples` (default true), `edges` (`'turn'` default, or `'wrap'`), `seed` (default 1; the same seed always gives the same ocean), `layer` (`'under'` default, `'over'`), `label`. Methods: `add(kind, { size?, count? })` returns how many were added, `remove(kind?)` removes the latest (a whole school at once), getter `count`. Default look: glyphs `' .:-=+*#%@'` at `cellSize: 7`; every mark works (`look: { mark: 'dither' }`, `'dot'`, `'pixel'`, `'engraving'`, …) and every charset (`look: { charset: ' ⠁⠃⠇⡇⣇⣧⣷⣿' }` for braille). Under reduced motion it draws a still composition (the creatures where a moment of swimming left them); it pauses off screen and in a hidden tab. Keep headlines over the quieter middle, or lower `density`.
+
 ## Backgrounds
 
 The curated backgrounds on asciify.org/backgrounds as one call each. They are scenes of the GPU glyph field, so they follow `setGlobalLook` (the header's characters and the 24 render styles) like every field component, keep a quiet zone for your copy, take `lazy`, `poster`, `globalLook` and the context budget, and hold one still frame under reduced motion. The canvas sits under the element's content (`isolation: isolate`, `z-index: -1`), follows the theme and pauses off screen and in hidden tabs.

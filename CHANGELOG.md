@@ -5,6 +5,11 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## Unreleased
+
+- New in `asciify-engine/kit`: `ocean(el, options)`, an ocean seen from above drawn as characters: fish, sharks, hammerheads, manta rays, jellyfish and schools of small fish, each a procedural body that swims with a travelling wave, steers, wanders and schools, in depth layers. The cursor scatters small fish and sharks turn to investigate; a press sends a ripple. Options `creatures`, `speed`, `density`, `depth`, `palette`, `background`, `interactive`, `ripples`, `edges`, `seed`, `layer`, `label`; handle `add`, `remove`, `count`. Shared GPU context, posters, still under reduced motion, paused off screen, deterministic for a seed.
+- Skill: kit.md "Ocean", components.md `ascii-ocean`, applying-asciify.md, scenario prompt 22.
+
 ## 4.30: event-site pieces — morphField, globe, ditherGradient, ditherImage, scramble, assemble, spray
 
 - New in `asciify-engine/kit`: `morphField` (frames, including drawing functions and video, that morph into one another as hatched lines or any mark; `next`, `go`, `onChange`), `ditherGradient` (soft lights as a two-tone dither on the element's own background, leaning toward the pointer), `globe` (a globe of dots with land, ocean, graticule and far side, turning, draggable, with `points` and `rotateTo`; built-in Natural Earth land mask, 2.7 KB) and `ditherImage` (an image in a brand's two tones as dither, pixels, dots or engraving, developing in when visible or with scroll).

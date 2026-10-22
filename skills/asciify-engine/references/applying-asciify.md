@@ -18,6 +18,7 @@ Pick by what the field does for the person, not by how it looks.
 | Follow the pointer across the page | `cursorTrail` (one per page, off on touch and under reduced motion) |
 | Carry a brand moment or media | `decode` (and its `scramble`), `wordmark` (and its `assemble`), `morphField`, `ditherImage`, `asciiVideo`, `artPanel`, `pricingGlow`, `fieldBackground` `notFound` |
 | Show where: places, reach, a network | `globe` with `points` |
+| A playful, living hero ground | `ocean` (fish, sharks, mantas, jellyfish and schools that answer the cursor) |
 | Set the page's one ground | `fieldBackground` `hero`, `ditherGradient`, or `background()` with a preset (section 9) |
 
 Do not use characters:

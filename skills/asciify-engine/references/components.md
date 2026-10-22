@@ -506,6 +506,18 @@ const title = decode(heroTitle, { scramble: true, settle: 'text' });
 nextButton.onclick = () => hero.next();
 ```
 
+## ascii-ocean: Ocean
+Category: Backgrounds
+
+Prompt:
+“Put an ASCII ocean behind [our landing hero] with Asciify: [a shark, a hammerhead and a school of small fish, plus a jellyfish or two] seen from above, swimming with real tail beats, the school keeping together, far ones smaller and fainter. The cursor scatters the fish and the sharks turn to investigate; a click sends a ripple. Inked from our text token, behind the headline, still under reduced motion.”
+
+```ts
+import { ocean } from 'asciify-engine/kit';
+
+ocean(hero, { creatures: [{ kind: 'shark' }, { kind: 'hammerhead' }, { kind: 'school', count: 32 }, { kind: 'jellyfish', count: 2 }], label: 'Sharks and fish swimming' });
+```
+
 ## ascii-globe: Globe of dots
 Category: Media
 
