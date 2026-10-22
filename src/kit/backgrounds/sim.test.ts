@@ -1,3 +1,4 @@
+import { SurfaceTap } from '../../surface/surface-tap';
 import { describe, expect, it, vi } from 'vitest';
 
 const { mount, support } = vi.hoisted(() => ({ mount: vi.fn(), support: { on: true } }));
@@ -79,7 +80,7 @@ describe('shockwave', () => {
     expect(s.step(1 / 60, 1)).toBe(true);
     s.render(out);
     expect(Math.max(...out)).toBeLessThan(0.2);
-    s.press(50, 50);
+    s.press(50, 50, 'ring');
     expect(s.count).toBe(1);
     for (let i = 0; i < 30; i++) s.step(1 / 60, 1);
     s.render(out);
@@ -90,6 +91,34 @@ describe('shockwave', () => {
     for (let i = 0; i < 30 * 5; i++) s.step(1 / 30, 1);
     expect(s.count).toBe(0);
     expect(s.step(1 / 60, 0)).toBe(false);
+  });
+});
+
+describe('surface tap', () => {
+  it('by default sends a front over the wind that the wind carries and that fades', () => {
+    const s = new Shockwave(1), out = new Float32Array(160 * 90);
+    s.resize(160, 90);
+    s.step(1 / 60, 1); s.render(out);
+    s.press(80, 45);
+    expect(s.count).toBe(0);
+    expect(s.tap?.live).toBe(true);
+    for (let i = 0; i < 36; i++) { s.step(1 / 60, 1); s.render(out); }
+    // Downwind (right and up) the front has run further than upwind.
+    const reach = (dx: number, dy: number) => { let r = 0; for (let k = 1; k < 70; k++) { const x = Math.round(80 + dx * k), y = Math.round(45 + dy * k); if (x < 0 || y < 0 || x >= 160 || y >= 90) break; if (Math.abs(s.tap!.h[y * 160 + x]) > s.tap!.front * 0.3) r = k; } return r; };
+    expect(reach(0.93, -0.36)).toBeGreaterThan(reach(-0.93, 0.36));
+    for (let i = 0; i < 60 * 4; i++) { s.step(1 / 30, 1); s.render(out); }
+    expect(s.tap?.live).toBe(false);
+  });
+  it('travels slower over a slow medium and is held back by a wall', () => {
+    const open = new SurfaceTap(80, 40), slow = new SurfaceTap(80, 40), walled = new SurfaceTap(80, 40);
+    slow.speed.fill(0.25);
+    for (let y = 0; y < 40; y++) walled.wall[y * 80 + 50] = 0.9;
+    for (const t of [open, slow, walled]) { t.base = 30; t.drop(30, 20, 1, 2); for (let i = 0; i < 30; i++) t.step(1 / 60); }
+    const ahead = (t: SurfaceTap) => { let m = 0, at = 0; for (let x = 33; x < 80; x++) if (t.h[20 * 80 + x] > m) { m = t.h[20 * 80 + x]; at = x; } return at; };
+    expect(ahead(slow)).toBeLessThan(ahead(open));
+    for (const t of [open, walled]) for (let i = 0; i < 40; i++) t.step(1 / 60);
+    const beyond = (t: SurfaceTap) => { let e = 0; for (let y = 0; y < 40; y++) for (let x = 52; x < 80; x++) e += Math.abs(t.h[y * 80 + x]); return e; };
+    expect(beyond(walled)).toBeLessThan(beyond(open) * 0.5);
   });
 });
 

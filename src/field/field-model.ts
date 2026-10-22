@@ -191,6 +191,14 @@ export interface GlyphFieldSettings {
    * from that ground; feathered at the edge. A busy photo and generated scenes have no subject, so every scope acts as `all`.
    */
   scope: HoverScope;
+  /**
+   * How a press on a photo or video source answers, and what `pulse()` sends. `surface` (default) is a wave that travels over
+   * the picture: fast over water, sky and smooth areas, slow on detail, held back by strong edges and the subject's outline so
+   * it wraps round the subject; water rings with glints, sky swells softly, solid ground gives a short shudder, all shaded by
+   * the photo's own light. `ring` sends the plain ring; `none` leaves presses alone (`pulse()` then sends the ring).
+   * Fields without a source keep the ring.
+   */
+  tap: 'surface' | 'ring' | 'none';
   maxPixelRatio: number;
   /** Stop ambient motion and soften the wake when the visitor prefers reduced motion. */
   respectReducedMotion: boolean;
@@ -251,6 +259,7 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   lantern: DEFAULT_FIELD_LANTERN,
   trail: DEFAULT_FIELD_TRAIL,
   scope: 'all',
+  tap: 'surface',
   maxPixelRatio: 2,
   respectReducedMotion: true,
 };
@@ -367,6 +376,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
       radius: clamp(input.trail?.radius, 0.1, 1, base.trail.radius),
     },
     scope: input.scope === undefined ? base.scope : normalizeHoverScope(input.scope),
+    tap: input.tap === 'ring' || input.tap === 'none' || input.tap === 'surface' ? input.tap : base.tap,
     maxPixelRatio: clamp(input.maxPixelRatio, 0.5, 4, base.maxPixelRatio),
     respectReducedMotion: typeof input.respectReducedMotion === 'boolean' ? input.respectReducedMotion : base.respectReducedMotion,
   };

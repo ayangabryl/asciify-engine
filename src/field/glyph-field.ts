@@ -6,6 +6,8 @@ import {
 } from './field-gl';
 import { InkTrail } from '../surface/ink-trail';
 import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
+import { buildPhotoCues, type PhotoCues } from '../surface/photo-cues';
+import { SurfaceTap, photoMedium, shadePhotoTap } from '../surface/surface-tap';
 import {
   FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
@@ -219,6 +221,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // An image the field decoded itself, and the height it was uploaded at.
   let ownedBitmap: Bitmapish | null = null, textureHeight = 0;
   let sourceBytes = 0;
+  let videoFrames = 0;
   let videoFresh = true, videoCallback = 0, levels: [number, number] = [0, 1], levelsAt = -Infinity;
   let drawnAt = -Infinity, empty = false;
   const ambientMs = ambientInterval();
@@ -266,6 +269,57 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindTexture(gl.TEXTURE_2D, trailTexture);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, trail.width, trail.height, gl.RGBA, gl.UNSIGNED_BYTE, trail.pixels);
     trailUploaded = true;
+    return true;
+  };
+  // Surface tap: a wave stepped on the CPU over the photo's own medium (read from the source, every frame for video) and
+  // uploaded as a small texture of tone lift and glint.
+  let tap: SurfaceTap | null = null, tapTexture: WebGLTexture | null = null, tapPixels = new Uint8Array(0), tapOn = false;
+  let tapCues: PhotoCues | null = null, tapContext: CanvasRenderingContext2D | null = null, tapRead = -1;
+  const tapLight: [number, number] = [-0.5, -0.8], tapGrid: [number, number] = [0, 0];
+  const readTapMedium = () => {
+    if (!tap || !source) return;
+    try {
+      tapContext ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      if (!tapContext) return;
+      // A video re-reads its medium every frame, so it reads it on half the grid (about 1 ms rather than 6).
+      const half = source instanceof HTMLVideoElement, cols = half ? tap.cols >> 1 : tap.cols, rows = half ? tap.rows >> 1 : tap.rows;
+      const probe = tapContext.canvas;
+      if (probe.width !== cols || probe.height !== rows) { probe.width = cols; probe.height = rows; } else tapContext.clearRect(0, 0, cols, rows);
+      const sw = sourceWidth || 1, sh = sourceHeight || 1;
+      tapContext.drawImage(source as CanvasImageSource, map.offset[0] * sw, map.offset[1] * sh, map.scale[0] * sw, map.scale[1] * sh, 0, 0, cols, rows);
+      tapCues = buildPhotoCues(tapContext.getImageData(0, 0, cols, rows).data, cols, rows, tapCues);
+      tapGrid[0] = cols; tapGrid[1] = rows;
+      photoMedium(tap, tapCues, tapLight, cols, rows);
+    } catch { /* A tainted source keeps the last medium (an even one at first). */ }
+  };
+  const startTap = (x: number, y: number, strength: number) => {
+    if (!width || !height) return;
+    const aspect = width / height;
+    const cols = Math.round(aspect >= 1 ? 128 : 128 * aspect), rows = Math.round(aspect >= 1 ? 128 / aspect : 128);
+    if (!tap || tap.cols !== cols || tap.rows !== rows) {
+      tap = new SurfaceTap(cols, rows); tapCues = null; tapPixels = new Uint8Array(cols * rows * 4);
+      tapTexture ??= texture(gl.LINEAR);
+      gl.bindTexture(gl.TEXTURE_2D, tapTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
+    tap.base = Math.min(cols, rows) * 1.1; tap.mass = 50; tap.fade = 1.6;
+    readTapMedium(); tapRead = videoFrames;
+    tap.drop(x * (cols - 1), y * (rows - 1), strength, 2.2);
+    wake();
+  };
+  const stepTap = (dt: number) => {
+    if (!tap?.live || !tapTexture) { if (tapOn) { tapOn = false; return true; } return false; }
+    // A moving picture moves its water and its subject: the medium follows each new frame.
+    if (source instanceof HTMLVideoElement && tapRead !== videoFrames) { readTapMedium(); tapRead = videoFrames; }
+    tap.step(dt, 0.45 + 0.55 * Math.exp(-tap.age / 0.7));
+    const fade = Math.min(1, Math.exp(-(tap.age - 0.9) / 0.5));
+    if (fade < 0.02) { tap.clear(); tapOn = false; return true; }
+    shadePhotoTap(tap, tapCues ?? new Float32Array(0), tapLight, tapPixels, fade, tapGrid[0], tapGrid[1]);
+    gl.bindTexture(gl.TEXTURE_2D, tapTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, tap.cols, tap.rows, gl.RGBA, gl.UNSIGNED_BYTE, tapPixels);
+    tapOn = true;
     return true;
   };
   const stepLantern = (dt: number, now: number) => {
@@ -663,6 +717,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(u.uFluid, 2);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(u.uTrailMap, 3);
     gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, scopeTexture ?? sourceTexture); gl.uniform1i(u.uScope, 6);
+    gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tapTexture ?? sourceTexture); gl.uniform1i(u.uTapMap, 7);
+    gl.uniform1f(u.uTapOn, tapOn && source && photographic ? 1 : 0);
     gl.uniform1f(u.uScopeMode, scopeOn && settings.scope !== 'all' ? (settings.scope === 'subject' ? 1 : 2) : 0);
     gl.uniform1f(u.uFluidMode, stableOn ? 1 : 0);
     gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : hover === 'loupe' ? 4 : hover === 'reveal' ? 5 : 0);
@@ -770,6 +826,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       if (source instanceof HTMLVideoElement && source.readyState >= 2 && videoFresh) {
         if (!('requestVideoFrameCallback' in source)) videoFresh = true; else videoFresh = false;
         uploadSource();
+        videoFrames++;
         dirty = true;
       }
       const hover = activeFieldHover(settings);
@@ -779,6 +836,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       if (lanternLike(hover)) simulating = stepLantern(dt, now) || simulating;
       // Draw once more after the wake settles, so the last frame is clean.
       if (hover === 'trail') { const wasActive = !!inkTrail?.active; simulating = stepTrail(dt) || simulating; if (wasActive && !inkTrail?.active) dirty = true; }
+      if (tap?.live || tapOn) { simulating = stepTap(dt) || simulating; if (!tapOn) dirty = true; }
       if (pulses.length) {
         for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].born >= 2400) pulses.splice(i, 1);
         simulating = true;
@@ -834,6 +892,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     wake();
   };
   const onPointerMove = (event: PointerEvent) => {
+    if (event.type === 'pointerdown') onPointerDown(event);
     const point = toField(event.clientX, event.clientY);
     if (target === window) pointerClient.inside = !!point;
     moveTo(point);
@@ -844,6 +903,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // A field scrolled out of reach skips moves elsewhere on the page, once the pointer has left it.
   const pointerClient: PointerClient = { target, move: onPointerMove, leave: onPointerLeave, near: () => visible };
   const unwatch: (() => void)[] = [watchPointer(pointerClient)];
+  // A press on a photo or video sends a tap through it; presses arrive through the page's one pointer listener.
+  function onPointerDown(press: PointerEvent) {
+    if (settings.tap === 'none' || !source || !photographic || paused || destroyed || reduced() || press.button !== 0) return;
+    if (typeof Element !== 'undefined' && press.target instanceof Element && press.target.closest('button, a, input, select, summary, textarea, label')) return;
+    const point = toField(press.clientX, press.clientY);
+    if (!point || point[0] < 0 || point[0] > 1 || point[1] < 0 || point[1] > 1) return;
+    if (settings.tap === 'surface') startTap(point[0], 1 - point[1], 1);
+    else { pulses = [...pulses, { x: point[0], y: 1 - point[1], born: performance.now(), strength: 1 }].slice(-4); wake(); }
+  }
 
   const onResize = () => { const resized = measure(); measureClear(); if (resized || dirty) wake(); };
   let unobserveClear = clearElement ? observeSize(clearElement.element, onResize) : () => {};
@@ -860,7 +928,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (shared) gl = host!.gl;
     shaders.length = 0; vertexShader = null; atlasEntry = null;
     cellProgram = pixelProgram = fluidProgram = null; cells = null;
-    fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false; scopeTexture = null; scopeOn = false;
+    fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false; scopeTexture = null; scopeOn = false; tapTexture = null; tap = null; tapOn = false;
     try { init(); dirty = true; wake(); } catch (error) { report(error); }
   };
   const client: FieldClient = {
@@ -1070,6 +1138,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         x = box.left + box.width / 2 - rect.left; y = box.top + box.height / 2 - rect.top;
       }
       const strength = Math.max(0, Math.min(2, options.strength ?? 1));
+      if (settings.tap === 'surface' && source && photographic) { startTap(x / rect.width, y / rect.height, strength); return; }
       pulses = [...pulses, { x: x / rect.width, y: y / rect.height, born: performance.now(), strength }].slice(-4);
       wake();
     },
