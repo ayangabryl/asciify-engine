@@ -8,7 +8,8 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 ## Unreleased
 
 - New in `asciify-engine/kit`: `ocean(el, options)`, an ocean seen from above drawn as characters: fish, sharks, hammerheads, manta rays, jellyfish and schools of small fish, each a procedural body that swims with a travelling wave, steers, wanders and schools, in depth layers. The cursor scatters small fish and sharks turn to investigate; a press sends a ripple. Options `creatures`, `speed`, `density`, `depth`, `palette`, `background`, `interactive`, `ripples`, `edges`, `seed`, `layer`, `label`; handle `add`, `remove`, `count`. Shared GPU context, posters, still under reduced motion, paused off screen, deterministic for a seed.
-- Skill: kit.md "Ocean", components.md `ascii-ocean`, applying-asciify.md, scenario prompt 22.
+- New background presets you play with, each a simulation drawn into the field's source (every mark and charset, theme ink, faint by default, still under reduced motion, no frames once settled): `estuary` (soft blotches the cursor stirs into swirls), `capillary` (a faint network of branching veins; new veins sprout toward the cursor and burst from a click, then fade) and `shockwave` (a click sends rings of characters outward, a front and two echoes; the cursor leaves gusts). Use `setPreset` for a mode switcher.
+- Skill: kit.md "Ocean" and "Interactive simulations", components.md `ascii-ocean` and `stir-grow-ripple`, applying-asciify.md, scenario prompts 22 and 23.
 
 ## 4.30: event-site pieces — morphField, globe, ditherGradient, ditherImage, scramble, assemble, spray
 

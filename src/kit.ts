@@ -92,6 +92,10 @@ export { interference } from './kit/backgrounds/interference';
 export { mesh } from './kit/backgrounds/mesh';
 export { cascade } from './kit/backgrounds/cascade';
 export { constellation } from './kit/backgrounds/constellation';
+// Simulations the visitor plays with: veins that grow toward the cursor, a stirred current, rings from a click.
+export { capillary } from './kit/backgrounds/capillary';
+export { estuary } from './kit/backgrounds/estuary';
+export { shockwave } from './kit/backgrounds/shockwave';
 // Retired (@deprecated): still exported so existing code runs, hidden from the site and docs.
 export { aurora } from './kit/backgrounds/aurora';
 export { halftone } from './kit/backgrounds/halftone';

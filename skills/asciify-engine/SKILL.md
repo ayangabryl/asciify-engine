@@ -35,7 +35,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 
 | The user wants | Use |
 | --- | --- |
-| A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404; event-site pieces (scrambling headers and headlines, morphing hatched heroes, dithered glows, a dotted globe, two-tone photos, assembling wordmarks, a spray cursor); an ASCII ocean of swimming creatures | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
+| A UI component in characters: button loading, status, toasts, tabs, pills, odometer, chart, AI thinking and streaming, transitions, sign-in, pricing, 404; event-site pieces (scrambling headers and headlines, morphing hatched heroes, dithered glows, a dotted globe, two-tone photos, assembling wordmarks, a spray cursor); an ASCII ocean of swimming creatures; interactive backgrounds visitors stir, grow and ripple | `asciify-engine/kit` ([applying-asciify.md](references/applying-asciify.md), [components.md](references/components.md), [kit.md](references/kit.md)) |
 | A background behind a hero, pricing, docs or a section, light or dark | Kit `fieldBackground(el, { preset: 'hero', clear })` (asciify.org's hero) or `background(el, { preset, clear })` with one of the 12 curated presets below |
 | Their word or brand in characters | Kit `wordmark`, or `background()` with `wordField` |
 | Their video in characters on the page | Kit `asciiVideo` |

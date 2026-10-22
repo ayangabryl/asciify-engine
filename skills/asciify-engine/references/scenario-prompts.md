@@ -97,3 +97,7 @@ The website uses the published renderer's native Trail. A chain-shaped tonal ove
 ## 22. An ASCII ocean behind the hero
 
 “Put an ASCII ocean behind our landing hero with `ocean` from `asciify-engine/kit`: [a shark, a hammerhead, a manta, a few fish, two jellyfish and a school of 30 small fish], inked from [our text token] (or a `palette` per kind from our brand tokens), `layer: 'under'` so the headline and CTA stay real HTML above it. The cursor scatters the fish and the sharks turn to investigate; a click sends a ripple. Pick a `seed` we like, keep the busiest creatures off the headline (fewer, or a lower `density` on phones), give it a `label` or leave it decorative, and a `poster` for the first viewport in both themes. Reduced motion shows a still composition; it pauses off screen. Check light and dark, a 390px phone and WebGL off.”
+
+## 23. An interactive hero background with a mode switcher
+
+“Build an interactive ASCII hero background visitors can stir, click and grow, with a mode switcher: `background(hero, { preset: estuary, clear: headline })` from `asciify-engine/kit`, and three pills (Estuary, Capillary, Shockwave) as a real radio group that call `bg.setPreset(estuary | capillary | shockwave)`. Keep it faint behind the headline in [our text token] (`palette: { light, dark }` if we need a tint), the headline and CTA real HTML, the pills keyboard-reachable and labelled, a `poster` for the first viewport in both themes, and one still frame under reduced motion. Check light and dark, a 390px phone, touch, and WebGL off.”
