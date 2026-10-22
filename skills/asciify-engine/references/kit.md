@@ -672,12 +672,14 @@ Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning o
 | `wordField` | Your word (`text`) as a flowing field of letters | 13, 1, trail |
 | `fluid` | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
 | `estuary` | Smoke-soft currents of letters drifting dim; the cursor stirs them and lights the currents it passes along their own contours, fading over a couple of seconds | 10, 1, stir |
-| `capillary` | A faint network of veins in letters; the cursor lights the veins it touches and the light runs along them, a click floods them | 10, 1, light |
-| `shockwave` | Wind streaks drifting in gusts; the cursor brightens them, a click sends one ring that eases to a stop and fades | 10, 1, ring |
+| `capillary` | A faint network of veins in letters; the cursor lights the veins it touches and the light runs along them, a click sends a wave that runs along the veins and lights them | 10, 1, light |
+| `shockwave` | Wind streaks drifting in gusts; the cursor brightens them, a click sends one front over the wind that the wind carries, buckles in the gusts, eases to a stop and fades | 10, 1, ring |
 
 ### Interactive simulations: estuary, capillary, shockwave
 
 Three presets are simulations the visitor plays with rather than scenes: each runs on a coarse grid on the CPU and draws into the field's source, drawn as a dark screen of scattered letters: every cell keeps one character from `a-zA-Z0-9` (`glyphOrder: 'scatter'`, 5 × 10 px cells) and the tone sets how brightly it shows. Every mark and charset still works (`look: { mark: 'dither' }`, `charset: 'braille'` scatters braille), the ink follows the theme, and the defaults are faint enough for a headline on top. They answer the cursor and clicks (`cursor: false` turns both off), hold one still frame under reduced motion, pause off screen, and stop drawing once nothing moves: `capillary` fades its network in and then rests until the pointer wakes it; `estuary` and `shockwave` drift at any `speed` above 0 and with `speed: 0` wait for the pointer. None keeps a quiet middle by default; pass `clear: headline` for one.
+
+A click is a surface tap by default (`tap: 'surface'`): a damped 2D wave on the simulation's grid whose speed, damping and reflection come from the preset's own field, so the front is never a perfect circle. In `shockwave` the wind is the medium: the front runs ahead downwind, slows and breaks in dense gusts and slips through open air, its rim lighting the streaks it passes; in `estuary` it slows in the dense currents and lights them along their contours; in `capillary` it runs fast along the veins and drags through the cells between. `tap: 'ring'` keeps the earlier response (an even ring, a round glow, a round flood). The wave costs about 1 ms a frame on a 240-cell grid and stops once it fades.
 
 ```ts
 import { background, capillary, estuary, shockwave } from 'asciify-engine/kit';

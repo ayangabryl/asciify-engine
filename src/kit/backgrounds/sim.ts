@@ -2,6 +2,7 @@ import type { GlyphFieldOptions } from '../../field';
 import type { BackgroundContext, BackgroundPreset, BackgroundRun, BackgroundSettings } from '../background';
 import { mountSurface } from '../core';
 import { FIELD_GRAPHITE, glyphCells, dotCells, markOf } from './gpu';
+import type { TapStyle } from '../../surface/surface-tap';
 
 /**
  * A simulation drawn into a tone grid each frame. The grid is the field's source: one value per source pixel, 0 empty to 1
@@ -17,7 +18,8 @@ export interface Simulation {
   render(out: Float32Array): void;
   /** Pointer at a grid position, with its movement since the last event in cells. */
   move?(x: number, y: number, dx: number, dy: number): void;
-  press?(x: number, y: number): void;
+  /** A click at a grid position; `tap` is the asked-for response (`'surface'` by default). */
+  press?(x: number, y: number, tap?: TapStyle): void;
   leave?(): void;
 }
 
@@ -141,7 +143,7 @@ function mountSim(context: BackgroundContext, spec: SimSpec): BackgroundRun | nu
     if (event.button !== 0 || off(event)) return;
     const p = at(event);
     if (!p) return;
-    sim.press?.(p[0], p[1]);
+    sim.press?.(p[0], p[1], context.settings().tap);
     surface.kick();
   };
   const leave = () => { lastX = lastY = NaN; sim.leave?.(); surface.kick(); };

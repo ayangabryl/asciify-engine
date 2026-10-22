@@ -80,6 +80,8 @@ uniform vec2 uWords[8];
 uniform float uWordCount;
 uniform vec4 uClear;
 uniform vec4 uPulse[4];
+uniform sampler2D uTapMap;
+uniform float uTapOn;
 layout(location=0) out vec4 outInk;
 layout(location=1) out vec4 outUnder;
 ${FLUID_CODEC(packed)}
@@ -357,6 +359,12 @@ void main(){
     float dist=length((uv-uPulse[i].xy)*vec2(aspect,1.)),front=uPulse[i].z*.95;
     float ring=exp(-pow((dist-front)/.1,2.))*uPulse[i].w*exp(-uPulse[i].z*.85);
     tone=clamp(tone+ring*.85,0.,1.);
+  }
+  if(uTapOn>0.){
+    // A surface tap: a signed lift (16 bits) and a glint, worked out on the CPU over the photo's own medium.
+    vec4 tap=texture(uTapMap,uv);
+    float lift=(tap.r*65280.+tap.g*255.)/65535.*2.-1.;
+    tone=clamp(tone+(lift*1.25+tap.b)*uTapOn,0.,1.);
   }
   tone*=1.-uVignette*smoothstep(.35,1.05,length((uv-.5)*vec2(min(aspect,1.8),1.)*2.));
   if(uClear.z>0.){

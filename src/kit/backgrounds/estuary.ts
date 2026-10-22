@@ -1,17 +1,23 @@
 import { smoothstep } from '../core';
 import { vnoise } from './shared';
 import { simPreset, SCATTER_LOOK, SIM_GRAPHITE, type Simulation } from './sim';
+import { SurfaceTap, type TapStyle } from '../../surface/surface-tap';
 
 /**
  * Smoke-soft currents of tone, wider than tall, warping as they drift; dim at rest. The pointer stirs the water (a push and a
  * swirl that relax back) and leaves a glow that lights the currents it passes, so the lit patch keeps their ragged contours
- * and fades over a second or two. Exported for tests.
+ * and fades over a second or two. A click stirs the water and sends a wave over the currents (`tap: 'surface'`): it slows in
+ * the dense smoke and runs through the clear water between, lighting the currents as it goes; `'ring'` lights a round patch.
+ * Exported for tests.
  */
 export class Estuary implements Simulation {
   cols = 0; rows = 0; t = 0;
   u = new Float32Array(0); v = new Float32Array(0); ox = new Float32Array(0); oy = new Float32Array(0);
   /** The pointer's glow, 0–1, decaying. */
   heat = new Float32Array(0);
+  /** The currents' density at each cell as last drawn: the medium a tap travels over. */
+  dens = new Float32Array(0);
+  tap: SurfaceTap | null = null;
   private lattice = new Float32Array(0);
   private freq = 0.05; private live = false; private warm = false;
   constructor(public seed = 1) {}
@@ -19,13 +25,31 @@ export class Estuary implements Simulation {
     this.cols = cols; this.rows = rows;
     const n = cols * rows;
     this.u = new Float32Array(n); this.v = new Float32Array(n); this.ox = new Float32Array(n); this.oy = new Float32Array(n);
-    this.heat = new Float32Array(n);
+    this.heat = new Float32Array(n); this.dens = new Float32Array(n); this.tap = null;
     // About three currents down the stage, whatever the grid: blotches a third of the height tall.
     this.freq = 5.2 / Math.max(8, rows);
     this.live = this.warm = false;
   }
   step(dt: number, speed: number) {
     this.t += dt * speed * 0.16;
+    const tap = this.tap;
+    if (tap?.live) {
+      const { dens, heat } = this;
+      for (let i = 0; i < dens.length; i++) {
+        const d = smoothstep(0.42, 0.74, dens[i]), s = 1 - 0.72 * d;
+        tap.speed[i] = s * s; tap.damp[i] = 0.8 + 2.4 * d; tap.wall[i] = 0;
+      }
+      tap.base = this.rows * 0.7;
+      tap.step(dt, 0.3 + 0.7 * Math.exp(-tap.age / 0.6));
+      // The crest lights the water it is passing; the existing glow keeps the currents' ragged contours as it fades.
+      const scale = 1 / Math.max(0.03, tap.front), fade = Math.exp(-tap.age / 1.1);
+      for (let i = 0; i < heat.length; i++) {
+        const v = tap.h[i] * scale;
+        if (v > 0.1) { const lit = smoothstep(0.1, 0.8, v) * fade; if (lit > heat[i]) heat[i] = lit; }
+      }
+      this.warm = true;
+      if (fade < 0.06) tap.clear();
+    }
     if (!this.live && !this.warm) return speed > 0;
     const { u, v, ox, oy, heat } = this, push = Math.exp(-dt * 1.6), relax = Math.exp(-dt * 0.5), cool = Math.exp(-dt * 0.62);
     let most = 0, hot = 0;
@@ -41,7 +65,7 @@ export class Estuary implements Simulation {
     }
     if (most < 0.02) { u.fill(0); v.fill(0); ox.fill(0); oy.fill(0); this.live = false; }
     this.warm = hot > 0;
-    return speed > 0 || this.live || this.warm;
+    return speed > 0 || this.live || this.warm || !!this.tap?.live;
   }
   /** The currents at a grid point: smoke-like, warped twice, a little wider than tall, 0–1. */
   water(x: number, y: number) {
@@ -66,6 +90,7 @@ export class Estuary implements Simulation {
         const ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy, k = iy * lw + ix;
         const n = (L[k] * (1 - fx) + L[k + 1] * fx) * (1 - fy) + (L[k + lw] * (1 - fx) + L[k + lw + 1] * fx) * fy;
         const h = heat[i];
+        this.dens[i] = n;
         const rest = 0.015 + 0.21 * smoothstep(0.42, 0.78, n);
         // The glow lights the currents it reaches, brighter the denser they are, so a lit patch keeps their ragged contours.
         const lit = h > 0 ? smoothstep(0.03, 0.4, h) * smoothstep(0.4, 0.56, n + 0.06 * h) * (0.35 + 1.3 * (n - 0.4)) : 0;
@@ -81,9 +106,12 @@ export class Estuary implements Simulation {
     this.impulse(x, y, dx * 2.5, dy * 2.5, Math.min(m, 6) * 0.7, R);
     this.glow(x, y, R * 1.6, Math.min(0.4, 0.08 + m * 0.04));
   }
-  press(x: number, y: number) {
+  press(x: number, y: number, tap: TapStyle = 'surface') {
     this.impulse(x, y, 0, 0, 10, this.rows * 0.14, 14);
-    this.glow(x, y, this.rows * 0.24, 1);
+    if (tap === 'ring') { this.glow(x, y, this.rows * 0.24, 1); return; }
+    this.glow(x, y, this.rows * 0.06, 0.8);
+    this.tap ??= new SurfaceTap(this.cols, this.rows);
+    this.tap.drop(x, y, 1, Math.max(1.5, this.rows * 0.03));
   }
   private glow(x: number, y: number, R: number, amount: number) {
     const { cols, rows, heat } = this, r = Math.ceil(R * 1.8);

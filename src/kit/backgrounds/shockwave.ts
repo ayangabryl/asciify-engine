@@ -1,6 +1,7 @@
 import { smoothstep } from '../core';
 import { hash2, vnoise } from './shared';
 import { simPreset, SCATTER_LOOK, SIM_GRAPHITE, type Simulation } from './sim';
+import { SurfaceTap, type TapStyle } from '../../surface/surface-tap';
 
 const MAX_RINGS = 12;
 // Each ring: x, y, age (s), strength.
@@ -9,20 +10,31 @@ const STRIDE = 4;
 const WX = Math.cos(-0.42), WY = Math.sin(-0.42);
 
 /**
- * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click sends one ring out, fast at
- * first and easing to a stop, its rim a wavering band that lights the streaks inside it as it passes, fading over two seconds
- * or so. The cursor stirs gusts that brighten the streaks along its path. Exported for tests.
+ * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click sends a front out, fast at
+ * first and easing to a stop, its rim a wavering band that lights the streaks as it passes, fading over two seconds or so.
+ * By default (`tap: 'surface'`) the front is a wave over the wind itself: it slows and breaks in the dense gusts and slips
+ * through the open air, so its rim buckles where the streaks are; `'ring'` keeps the even analytic ring.
+ * The cursor stirs gusts that brighten the streaks along its path. Exported for tests.
  */
 export class Shockwave implements Simulation {
   cols = 0; rows = 0; t = 0;
   heat = new Float32Array(0); grain = new Float32Array(0);
+  /** The wind's density at each cell as last drawn: the medium the surface tap travels over. */
+  dens = new Float32Array(0);
+  tap: SurfaceTap | null = null;
+  private crossed = new Uint8Array(0);
   readonly rings = new Float32Array(MAX_RINGS * STRIDE);
   count = 0;
+  /** The gust strength at the last point `wind` read. */
+  gust = 0;
+  /** The gusts at each cell as last drawn, 0–1. */
+  gusts = new Float32Array(0);
   private freq = 0.05; private warm = false;
   constructor(public seed = 1) {}
   resize(cols: number, rows: number) {
     this.cols = cols; this.rows = rows;
-    this.heat = new Float32Array(cols * rows); this.grain = new Float32Array(cols * rows);
+    this.heat = new Float32Array(cols * rows); this.grain = new Float32Array(cols * rows); this.dens = new Float32Array(cols * rows); this.gusts = new Float32Array(cols * rows);
+    this.tap = null;
     for (let y = 0, i = 0; y < rows; y++) for (let x = 0; x < cols; x++, i++) this.grain[i] = hash2(x * 3 + 7, y * 5 + 11);
     this.freq = 3.6 / Math.max(8, rows);
     this.warm = false;
@@ -52,7 +64,22 @@ export class Shockwave implements Simulation {
       for (let i = 0; i < heat.length; i++) { const h = heat[i] * cool; heat[i] = h < 0.004 ? 0 : h; if (h > hot) hot = h; }
       this.warm = hot > 0;
     }
-    return speed > 0 || this.count > 0 || this.warm;
+    const tap = this.tap;
+    if (tap?.live) {
+      // The wind is the medium: dense gusts slow the front and hold part of it back, open air lets it run.
+      const { dens, gusts } = this;
+      for (let i = 0; i < dens.length; i++) {
+        const d = 0.6 * smoothstep(0.2, 0.7, gusts[i]) + 0.4 * smoothstep(0.25, 0.65, dens[i]), s = 1 - 0.85 * d;
+        tap.speed[i] = s * s; tap.damp[i] = 0.4 + 2.4 * d; tap.wall[i] = 0.07 * smoothstep(0.6, 0.85, dens[i]);
+      }
+      tap.base = this.rows * 0.8;
+      // The wind carries the front: it runs ahead downwind and lags upwind, and the carry eases with the front.
+      const carry = this.rows * 0.32 * (0.3 + 0.7 * Math.exp(-tap.age / 0.6));
+      tap.drift[0] = WX * carry; tap.drift[1] = WY * carry;
+      tap.step(dt * pace, 0.16 + 0.84 * Math.exp(-tap.age / 0.55));
+      if (Shockwave.strength(tap.age) < 0.01 && tap.age > 0.2) tap.clear();
+    }
+    return speed > 0 || this.count > 0 || this.warm || !!tap?.live;
   }
   /** The ring's radius in cells at `age` seconds: fast at first, easing to a stop near half the stage's height. */
   radius(age: number) { return this.rows * 0.44 * (1 - Math.exp(-Math.max(0, age) / 0.85)); }
@@ -62,6 +89,7 @@ export class Shockwave implements Simulation {
     const a = (x * WX + y * WY) * f + 29.3, c = (-x * WY + y * WX) * f + 43.1;
     const streak = vnoise(a * 0.9 - t * 0.55 + s, c * 5.2) * 0.65 + vnoise(a * 2.1 - t * 0.9, c * 9.5 + s) * 0.35;
     const gust = vnoise(a * 0.45 - t * 0.3, c * 0.9 + s + 4.4);
+    this.gust = gust;
     return streak * smoothstep(0.38, 0.75, gust);
   }
   render(out: Float32Array) {
@@ -69,6 +97,7 @@ export class Shockwave implements Simulation {
     for (let y = 0, i = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++, i++) {
         const n = this.wind(x, y), h = heat[i];
+        this.dens[i] = n; this.gusts[i] = this.gust;
         out[i] = 0.01 + 0.11 * smoothstep(0.44, 0.74, n) + (h > 0 ? 0.5 * Math.min(1, h) * smoothstep(0.25, 0.6, n) : 0);
       }
     }
@@ -95,6 +124,30 @@ export class Shockwave implements Simulation {
         }
       }
     }
+    const tap = this.tap;
+    if (!tap?.live) return;
+    // The front's crest lights the streaks it is passing, shaded by its slope against a light from the upper left; the
+    // streaks it has crossed stay lit for a moment.
+    const amp = Shockwave.strength(tap.age), scale = 1 / Math.max(0.02, tap.front), dens = this.dens, crossed = this.crossed;
+    const H = tap.h, T = tap.trace;
+    for (let y = 1, i = cols + 1; y < rows - 1; y++, i += 2) {
+      for (let x = 1; x < cols - 1; x++, i++) {
+        const v = H[i] * scale;
+        if (v < 0.02 && T[i] * scale < 0.04) continue;
+        const sx = (H[i + 1] - H[i - 1]) * scale, sy = (H[i + cols] - H[i - cols]) * scale;
+        // One front, like the ring: a cell the crest has crossed draws no more crests (the drop's later swells stay dark).
+        let crest = v > 0 ? smoothstep(0.12, 0.6, v) : 0;
+        const state = crossed[i];
+        if (state === 2) crest = 0;
+        else if (state === 0 && crest > 0.5) crossed[i] = 1;
+        else if (state === 1 && crest < 0.05) crossed[i] = 2;
+        const lit = 0.75 + 0.5 * Math.max(-1, Math.min(1, (sx * 0.55 + sy * 0.8) * 2.4));
+        const rim = crest * lit * (0.5 + 0.5 * grain[i]) * (0.6 + 0.6 * smoothstep(0.2, 0.6, dens[i]));
+        const inner = smoothstep(0.2, 0.9, T[i] * scale) * (1 - crest) * smoothstep(0.25, 0.65, dens[i]);
+        const o = out[i] + amp * (1.5 * rim + 0.55 * inner);
+        out[i] = o > 1 ? 1 : o;
+      }
+    }
   }
   /** Gusts along the pointer's path: they brighten the streaks they reach. */
   move(x: number, y: number, dx: number, dy: number) {
@@ -111,13 +164,19 @@ export class Shockwave implements Simulation {
     }
     this.warm = true;
   }
-  /** One ring out of the press. */
-  press(x: number, y: number) { this.add(x, y, 1); }
+  /** One front out of the press: a wave over the wind, or the plain ring. */
+  press(x: number, y: number, tap: TapStyle = 'surface') {
+    if (tap === 'ring') { this.add(x, y, 1); return; }
+    this.tap ??= new SurfaceTap(this.cols, this.rows);
+    this.tap.fade = 2.2; this.tap.calm = 0;
+    if (this.crossed.length !== this.cols * this.rows) this.crossed = new Uint8Array(this.cols * this.rows); else this.crossed.fill(0);
+    this.tap.drop(x, y, 1, Math.max(2, this.rows * 0.045));
+  }
 }
 
 /** Wind over a field of letters: streaks drift in gusts; a click sends one ring out that eases to a stop and fades. */
 export const shockwave = simPreset({
-  id: 'shockwave', name: 'Shockwave', description: 'Wind over a field of letters: streaks drift in gusts and the cursor stirs them; a click sends a ring out that eases to a stop and fades.',
+  id: 'shockwave', name: 'Shockwave', description: 'Wind over a field of letters: streaks drift in gusts and the cursor stirs them; a click sends a front out over the wind that buckles in the gusts, eases to a stop and fades.',
   cellSize: 10, charset: SCATTER_LOOK.charset, detail: 1 / 4, graphite: SIM_GRAPHITE, feather: 0.16,
   create: seed => new Shockwave(seed),
   tune: SCATTER_LOOK.tune,

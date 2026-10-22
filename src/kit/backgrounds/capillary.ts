@@ -1,5 +1,6 @@
 import { smoothstep } from '../core';
 import { hash2, vnoise } from './shared';
+import { SurfaceTap, type TapStyle } from '../../surface/surface-tap';
 import { simPreset, SCATTER_LOOK, SIM_GRAPHITE, type Simulation } from './sim';
 
 /** The light the vein halos fall away from: up and to the left, so each vein has a crisp lit edge and a soft shaded one. */
@@ -24,7 +25,7 @@ export class Capillary implements Simulation {
   resize(cols: number, rows: number) {
     this.cols = cols; this.rows = rows;
     const n = cols * rows;
-    this.vein = new Float32Array(n); this.core = new Float32Array(n); this.light = new Float32Array(n); this.spare = new Float32Array(n);
+    this.vein = new Float32Array(n); this.core = new Float32Array(n); this.light = new Float32Array(n); this.spare = new Float32Array(n); this.wave = null;
     this.lit = false;
     const S = Math.max(6, rows * 0.46), warp = S * 0.42, fw = 1.4 / S, s = this.seed * 13.7;
     const gx = Math.ceil(cols / S) + 2, gy = Math.ceil(rows / S) + 2;
@@ -90,7 +91,20 @@ export class Capillary implements Simulation {
       this.light = a; this.spare = b;
       this.lit = most > 0;
     }
-    return this.lit || this.intro < 1;
+    const wave = this.wave;
+    if (wave?.live) {
+      wave.step(dt * pace, 0.3 + 0.7 * Math.exp(-wave.age / 0.6));
+      const { light, vein, core } = this, scale = 1 / Math.max(0.03, wave.front), fade = Math.exp(-wave.age / 1.2);
+      for (let i = 0; i < light.length; i++) {
+        const v = wave.h[i] * scale;
+        if (v <= 0.12) continue;
+        const l = smoothstep(0.12, 0.7, v) * fade * 1.4 * Math.min(1, vein[i] * 3.5 + core[i] * 1.5);
+        if (l > light[i]) light[i] = l;
+      }
+      this.lit = true;
+      if (fade < 0.05) wave.clear();
+    }
+    return this.lit || this.intro < 1 || !!wave?.live;
   }
 
   render(out: Float32Array) {
@@ -109,8 +123,25 @@ export class Capillary implements Simulation {
     this.ignite(x, y, this.rows * 0.13, Math.min(1.2, 0.7 + this.walked * 0.15));
     this.walked = 0;
   }
-  /** Floods the veins round the press; the light runs out along them. */
-  press(x: number, y: number) { this.ignite(x, y, this.rows * 0.18, 1.5); }
+  /**
+   * A press: by default (`tap: 'surface'`) a wave that runs fast along the veins and drags through the cells between, lighting
+   * the veins its crest crosses, so the flood follows the network outward; `'ring'` floods a round patch as before.
+   */
+  press(x: number, y: number, tap: TapStyle = 'surface') {
+    if (tap === 'ring') { this.ignite(x, y, this.rows * 0.18, 1.5); return; }
+    this.ignite(x, y, this.rows * 0.07, 1.4);
+    if (!this.wave) {
+      const wave = this.wave = new SurfaceTap(this.cols, this.rows);
+      for (let i = 0; i < this.vein.length; i++) {
+        const open = Math.min(1, this.core[i] * 1.6 + this.vein[i] * 0.6), s = 0.45 + 0.55 * open;
+        wave.speed[i] = s * s; wave.damp[i] = 0.4 + 1.4 * (1 - open);
+      }
+    }
+    this.wave.base = this.rows * 0.75;
+    this.wave.drop(x, y, 1, Math.max(1.5, this.rows * 0.03));
+    this.lit = true;
+  }
+  wave: SurfaceTap | null = null;
   leave() { this.walked = 0; }
 
   private ignite(x: number, y: number, R: number, amount: number) {
@@ -131,7 +162,7 @@ export class Capillary implements Simulation {
 
 /** A network of faint veins in letters; the cursor lights the veins it touches and the light runs along them. */
 export const capillary = simPreset({
-  id: 'capillary', name: 'Capillary', description: 'A faint network of veins in letters; the cursor lights the veins it touches and the light runs along them, a click floods them.',
+  id: 'capillary', name: 'Capillary', description: 'A faint network of veins in letters; the cursor lights the veins it touches and the light runs along them, and a click sends a wave out along them.',
   cellSize: 10, charset: SCATTER_LOOK.charset, detail: 1 / 4, graphite: SIM_GRAPHITE, feather: 0.16,
   create: seed => new Capillary(seed),
   tune: SCATTER_LOOK.tune,
