@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, handle, hexRgb, mountSurface, resolveColor, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, hexRgb, mixHex, mountSurface, resolveColor, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 /** What swims. A `school` is one shoal of small fish that move together; its `count` is how many fish are in it. */
 export type OceanKind = 'fish' | 'shark' | 'hammerhead' | 'manta' | 'jellyfish' | 'school';
@@ -20,7 +20,7 @@ export interface OceanOptions extends KitOptions {
   speed?: number;
   /** Multiplies every count. Default 1. */
   density?: number;
-  /** How far the depth layers go, 0 to 1: far creatures are smaller, fainter and slower. 0 puts everything on one plane. Default 0.7. */
+  /** How far the depth layers go, 0 to 1: far creatures are smaller, fainter and slower. 0 puts everything on one plane. Default 0.35. */
   depth?: number;
   /** An ink per kind, as a CSS colour or theme token (`--brand`). Kinds without one use `ink`. Draws in source colour. */
   palette?: Partial<Record<OceanKind, string>>;
@@ -38,6 +38,8 @@ export interface OceanOptions extends KitOptions {
   layer?: 'under' | 'over';
   /** Read to assistive technology. Without one the ocean is decoration. */
   label?: string;
+  /** A colour the ink leans toward, 40%, as the reference's bluish-grey bodies: a CSS colour or token, or `false` for the plain ink. Default `#8a96b8`. Ignored with `palette`. */
+  tint?: string | false;
   /** Sparse coloured letters, tinted tiles and white glints that twinkle across the bodies: `true` (default), `false`, or the share of lit tiles, up to 0.3. */
   accents?: boolean | number;
 }
@@ -444,15 +446,15 @@ function drawShark(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
   const kind = b.kind, pen = p.pen;
   // Fins and tail thicken to about a cell when the body is small, so they stay a run of tiles rather than specks.
   const small = Math.min(p.cw, p.ch) / L;
-  tail(p, sp, L, 0.19, 0.17 + small * 0.5, 1.2, 0.8, tone * 0.42);
-  fins(p, sp, kind, L, 5, 0.19, 0.2, 0.1 + small * 0.7, tone * 0.44);
-  fins(p, sp, kind, L, 10, 0.07, 0.06, 0.04 + small * 0.4, tone * 0.38);
+  tail(p, sp, L, 0.19, 0.17 + small * 0.5, 1.2, 0.8, tone * 0.55);
+  fins(p, sp, kind, L, 5, 0.19, 0.2, 0.1 + small * 0.7, tone * 0.56);
+  fins(p, sp, kind, L, 10, 0.07, 0.06, 0.04 + small * 0.4, tone * 0.5);
   // Shaded from the flanks in to the back, so the body reads as a rounded form: darker edges, a light spine.
-  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.4, 1.1);
-  fillBody(p, sp, kind, L, 0.72, 1, SPINE - 1, tone * 0.52, 0.75);
-  fillBody(p, sp, kind, L, 0.46, 1, SPINE - 3, tone * 0.66);
+  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.52, 1.1);
+  fillBody(p, sp, kind, L, 0.72, 1, SPINE - 1, tone * 0.66, 0.75);
+  fillBody(p, sp, kind, L, 0.46, 1, SPINE - 3, tone * 0.82);
   // The dorsal fin seen from above: a bright blade along the back.
-  fillBody(p, sp, kind, L, 0.3, 3, 9, tone * 0.82);
+  fillBody(p, sp, kind, L, 0.3, 3, 9, tone * 0.96);
   if (kind === 'hammerhead') {
     const fx = sp.ny[0], fy = -sp.nx[0], nx = sp.nx[0], ny = sp.ny[0], x = sp.x[0] - fx * 0.015 * L, y = sp.y[0] - fy * 0.015 * L;
     const span = 0.2 * L, deep = 0.055 * L;
@@ -581,7 +583,7 @@ const DEFAULT_CREATURES: OceanCreature[] = [
   { kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'shark', size: 0.5 },
   { kind: 'school', count: 40 }, { kind: 'school', count: 34 }, { kind: 'school', count: 30 }, { kind: 'school', count: 24 }, { kind: 'school', count: 20 },
 ];
-const DEFAULTS = { speed: 1, density: 1, depth: 0.7, interactive: true, ripples: true, edges: 'turn' as const, seed: 1, layer: 'under' as const, accents: true as boolean | number };
+const DEFAULTS = { speed: 1, density: 1, depth: 0.35, interactive: true, ripples: true, edges: 'turn' as const, seed: 1, layer: 'under' as const, accents: true as boolean | number, tint: '#8a96b8' as string | false };
 const MAX_SOURCE = 560;
 const WARM = 1.5;
 
@@ -635,7 +637,7 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
     const background = bg && bg !== 'transparent' ? resolveColor(bg, element) ?? 'transparent' : 'transparent';
     const a = o().accents;
     return {
-      mark: 'inlay', charset: OCEAN_CHARSET, cellSize: 15, cellAspect: 0.66, glyphScale: 0.82, fontWeight: 600, contrast: 1, background,
+      mark: 'inlay', charset: OCEAN_CHARSET, cellSize: 15, cellAspect: 0.66, glyphScale: 0.7, fontWeight: 500, contrast: 1, background,
       color: o().palette ? 'source' : 'ink', saturation: 1, accents: a === true ? 0.07 : typeof a === 'number' ? a : 0, shuffle: 2, sample: 'point', ...o().look,
     };
   };
@@ -646,7 +648,12 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
     kit: state,
     look,
     layer: o().layer,
-    ink: () => o().ink ?? '--ascii-ink-strong',
+    ink: () => {
+      const ink = o().ink ?? '--ascii-ink-strong', tint = o().tint;
+      if (!tint) return ink;
+      const a = resolveColor(ink, element), b = resolveColor(tint, element);
+      return a && b ? mixHex(a, b, 0.4) : ink;
+    },
     reducedMotion: () => o().reducedMotion,
     resolution: (w, h) => { const k = Math.min(0.6, MAX_SOURCE / Math.max(w, h)); return [Math.max(8, Math.round(w * k)), Math.max(8, Math.round(h * k))]; },
     onFail: () => { surface = null; styles.restore(); },

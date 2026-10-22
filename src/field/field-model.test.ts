@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
+import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, fieldWords, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
 
 describe('glyph field settings', () => {
   it('keeps words and multi-code-point glyphs as single cells', () => {
@@ -189,5 +189,11 @@ describe('field hover scope', () => {
     const outside = normalizeFieldSettings({ scope: 'outside' });
     expect(normalizeFieldSettings({ hover: 'lantern' }, outside).scope).toBe('outside');
     expect(normalizeFieldSettings({ scope: 'nope' as 'all' }).scope).toBe('all');
+  });
+  it('splits a charset into words for one word a row, and keeps the line and row settings in range', () => {
+    expect(fieldWords(' c0nn3ct pr0t3ct  bu1ld ')).toEqual([1, 7, 9, 7, 18, 5]);
+    const s = normalizeFieldSettings({ textRepeat: 'row', linePitch: 9, lineWeight: 0, sparkle: 1 });
+    expect([s.textRepeat, s.linePitch, s.lineWeight, s.sparkle]).toEqual(['row', 4, 0.2, 0.05]);
+    expect(normalizeFieldSettings({}).textRepeat).toBe('flow');
   });
 });

@@ -77,8 +77,9 @@ export function morphField(element: HTMLElement, options: MorphFieldOptions): Mo
   };
   load();
   const look = (): GlyphFieldOptions => ({
-    // Two cuts a cell: 11px cells space the stripes 5.5px apart across their 45-degree run, about 8px along a row.
-    mark: 'engraving', markAngle: -45, charset: ' .:-=+*#%@', cellSize: 11, cellAspect: 1, contrast: 1.4, levels: 'none', ...o().look,
+    // One bold cut a 6px cell, about 8.5px apart along a row at 45 degrees; the width steps cell by cell with the tone, and a
+    // few lit cells catch a twinkling speck.
+    mark: 'engraving', markAngle: -45, charset: ' .:-=+*#%@', cellSize: 6, cellAspect: 1, linePitch: 1, lineWeight: 1.1, sparkle: 0.006, contrast: 1.4, levels: 'none', ...o().look,
   });
   const styles = styleKeeper();
   const paintGrid = () => {

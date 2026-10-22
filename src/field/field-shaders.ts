@@ -75,6 +75,9 @@ uniform float uScopeMode;
 uniform vec2 uLevels;
 uniform int uMark;
 uniform float uScale, uClearFeather, uClearShape, uOrder;
+// Text order by rows: each word's first glyph index and length, and how many words there are (0 reads the charset as one stream).
+uniform vec2 uWords[8];
+uniform float uWordCount;
 uniform vec4 uClear;
 uniform vec4 uPulse[4];
 layout(location=0) out vec4 outInk;
@@ -380,6 +383,14 @@ void main(){
     // legible. Every letter is there; the tone sets how strongly it shows, so the words fade out toward the field's quiet edges.
     float n=max(1.,uCount-1.);
     index=tone>.015?1.+mod(cell.x+cell.y*(floor(n*.38)+1.),n):0.;
+    if(uWordCount>.5&&tone>.015){
+      // One word a row, repeated with a space between, rows taking the words in turn and each a few letters along.
+      int k=int(mod(cell.y,uWordCount));
+      vec2 word=uWords[0];
+      for(int i=1;i<8;i++)if(i==k)word=uWords[i];
+      float at=mod(cell.x+cell.y*3.,word.y+1.);
+      index=at<word.y?word.x+at:0.;
+    }
   }
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
@@ -410,6 +421,8 @@ uniform vec2 uDir;
 uniform int uMark;
 // Inlay accents: share of tiles, letter shuffle span, a seed that steps a few times a second, charset length.
 uniform vec4 uInlay;
+// Line marks: pitch in cell heights, weight, the share of cells that sparkle.
+uniform vec4 uLine;
 uniform vec4 uFade;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -518,10 +531,11 @@ void main(){
     } else if(uMark==18){
       // Tick: a smooth wash in the ink under a fine screen of short upright ticks, both following the tone, as a glow seen
       // through a printed screen: the ticks carry the texture in the mid tones and melt into the wash where it is brightest.
-      float tw=max(1.,floor(uPitch.x*.24+.5)),th=max(2.,floor(uPitch.y*.42+.5));
-      vec2 lo=floor(c-vec2(tw,th)*.5);
-      float bar=box(p,lo,lo+vec2(tw,th));
-      coverage=clamp(tone*tone*.92+bar*(.32+.3*tone)*(1.-tone*tone),0.,1.);
+      // Each tick is two small square dots, one above the other, as a printed screen's.
+      float tw=max(1.,floor(uPitch.x*.34+.5));
+      vec2 lo=floor(c-vec2(tw*.5,tw*1.5));
+      float bar=box(p,lo,lo+tw)+box(p,lo+vec2(0.,tw*2.),lo+vec2(tw,tw*3.));
+      coverage=clamp(tone*tone*.92+bar*(.5+.35*tone)*(1.-tone*tone),0.,1.);
     } else if(uMark==19){
       // Bayer: one gapped square a cell, on or off by a 4x4 ordered threshold at two strengths, so a picture steps through
       // empty, half and full squares in the brand's tones, as pixel-dithered art does.
@@ -570,12 +584,14 @@ void main(){
       rgb=col;
     } else if(uMark==12||uMark==13){
       // Engraving and crosshatch: parallel cuts whose weight follows the tone; crossings join only in the darker tones.
-      float cv=tone*(1.-ROUGH*grain*.3),px=uPitch.y;
-      coverage=cuts(w,DIR,.5,min(.47,.36*cv),px);
+      float cv=tone*(1.-ROUGH*grain*.3),px=uPitch.y,P=uLine.x,W=uLine.y*.72*P;
+      coverage=cuts(w,DIR,P,min(.94*P,W*cv),px);
       if(uMark==13){
-        coverage=max(coverage,cuts(w,vec2(-DIR.y,DIR.x),.5,min(.47,.36*max(0.,cv*1.5-.3)),px)*step(.2,cv));
-        coverage=max(coverage,cuts(w,normalize(DIR+vec2(-DIR.y,DIR.x)),.5,min(.47,.36*max(0.,cv*2.-1.2)),px)*step(.6,cv));
+        coverage=max(coverage,cuts(w,vec2(-DIR.y,DIR.x),P,min(.94*P,W*max(0.,cv*1.5-.3)),px)*step(.2,cv));
+        coverage=max(coverage,cuts(w,normalize(DIR+vec2(-DIR.y,DIR.x)),P,min(.94*P,W*max(0.,cv*2.-1.2)),px)*step(.6,cv));
       }
+      // Sparkle: now and then a lit cell catches a small bright square, picked afresh a few times a second.
+      if(uLine.z>0.&&tone>.2&&hash(cell*1.7+uInlay.z*.53)<uLine.z){float sq=max(1.,floor(side*.3+.5));vec2 lo=floor(c-sq*.5);float k=box(p,lo,lo+sq);coverage=max(coverage,k);rgb=mix(rgb,vec3(1.),k*.6);}
     } else if(uMark==14){
       // Woodblock: broad carved bands in five stepped weights, their edges wavering along the grain.
       float cv=ceil(tone*(1.-ROUGH*grain*.3)*5.)/5.,width=min(.94,.72*cv);

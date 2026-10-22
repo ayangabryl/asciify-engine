@@ -24,6 +24,13 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 - `cursorTrail` `spray`: square, hard-edged hatch patches snapped to the cells; the selection box is a hairline with a corner tag; tags are the ink's text on a translucent wash and hold before fading; `ambient` sprays patches, tags and now and then a box across the viewport on its own.
 - `wordmark` `assemble` gathers from finer pieces.
 
+- New in `asciify-engine/kit`: `navPill(nav, options)`, a soft pill behind a nav's links that slides to the hovered or focused link and fades when the pointer leaves (plain DOM; `selector`, `color`, `padding`, `duration`, `to()`).
+- `ocean`: bodies lean toward a bluish grey (`tint`, default `#8a96b8` at 40%, `false` for the plain ink); brighter tiles with lighter letters set in them; shallower depth by default (`depth` 0.35), so far sharks shrink less.
+- Field: `linePitch`, `lineWeight` and `sparkle` for the line marks; `textRepeat: 'row'` sets one word of a `glyphOrder: 'text'` charset a row, repeated, rows taking the words in turn. The `tick` mark's ticks are pairs of small square dots.
+- `morphField` defaults to one bold stripe a 6 px cell whose width steps cell by cell, with a few twinkling specks; `ditherGradient`'s glow has a full, flat core.
+- `globe`'s squares land on whole source pixels, so they read solid. `cursorTrail` spray patches vary cell by cell, so the hatching breaks into stepped segments.
+- `wordmark` `assemble` moves one field cell at a time, left to right with a little jitter, by whole cells, so every frame shows crisp characters.
+
 ## 4.31: ocean, and backgrounds you play with (estuary, capillary, shockwave)
 
 - New in `asciify-engine/kit`: `ocean(el, options)`, an ocean seen from above drawn as characters: fish, sharks, hammerheads, manta rays, jellyfish and schools of small fish, each a procedural body that swims with a travelling wave, steers, wanders and schools, in depth layers. The cursor scatters small fish and sharks turn to investigate; a press sends a ripple. Options `creatures`, `speed`, `density`, `depth`, `palette`, `background`, `interactive`, `ripples`, `edges`, `seed`, `layer`, `label`; handle `add`, `remove`, `count`. Shared GPU context, posters, still under reduced motion, paused off screen, deterministic for a seed.

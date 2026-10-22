@@ -12,6 +12,7 @@ import { decode, scrambleLetter, scriptFor, sweepText, SCRAMBLE_SCRIPTS } from '
 import { wordmark, scatterFrame } from './wordmark';
 import { cursorTrail, cursorTrailFrame } from './cursor-trail';
 import { entryProgress } from './core';
+import { navPill } from './nav-pill';
 import { useFakeDom, FakeElement } from './fake-dom-2a';
 
 const { env, run, flush, element, as, canvases } = useFakeDom(mount, support);
@@ -307,7 +308,7 @@ describe('cursorTrail spray', () => {
       set: (t, k, v) => { t[k as string] = v; return true; },
     }) as unknown as CanvasRenderingContext2D;
     cursorTrailFrame(pen, [{ x: 50, y: 50, t: 100, seed: 0, vx: 0, vy: 0 }], 'spray', 100, 800, 9, 1);
-    expect(rects).toEqual([[45, 45, 18, 18]]);
+    expect(rects).toEqual([[45, 45, 9, 9], [54, 45, 9, 9], [45, 54, 9, 9], [54, 54, 9, 9]]);
     const trail = cursorTrail({ style: 'spray', readout: true });
     env.body.dispatch('pointermove', { clientX: 300, clientY: 300, pointerType: 'mouse', buttons: 1 });
     env.body.dispatch('pointermove', { clientX: 380, clientY: 360, pointerType: 'mouse', buttons: 1 });
@@ -316,5 +317,28 @@ describe('cursorTrail spray', () => {
     const box = layer.children.find(el => el.tagName === 'DIV')!;
     expect(box.style.cssText).toContain('width:80px');
     trail.destroy();
+  });
+});
+
+describe('navPill', () => {
+  it('slides a pill behind the hovered link and fades it when the pointer leaves', () => {
+    const nav = element('NAV');
+    nav.rect = { left: 100, top: 10, width: 400, height: 40 };
+    const a = element('A'), b = element('A');
+    a.rect = { left: 120, top: 20, width: 60, height: 20 };
+    b.rect = { left: 220, top: 20, width: 80, height: 20 };
+    nav.appendChild(a); nav.appendChild(b);
+    const pill = navPill(as(nav));
+    const shape = nav.childNodes[0] as FakeElement;
+    a.dispatch('pointerover');
+    expect(shape.style.cssText).toContain('translate(8px,4px)');
+    expect(shape.style.cssText).toContain('width:84px');
+    b.dispatch('pointerover');
+    expect(shape.style.cssText).toContain('translate(108px,4px)');
+    expect(shape.style.cssText).toContain('transform 260ms');
+    nav.dispatch('pointerleave');
+    expect(shape.style.opacity).toBe('0');
+    pill.destroy();
+    expect(nav.childNodes).toHaveLength(2);
   });
 });
