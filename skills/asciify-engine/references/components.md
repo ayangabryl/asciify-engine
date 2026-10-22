@@ -506,6 +506,20 @@ const title = decode(heroTitle, { scramble: true, settle: 'text' });
 nextButton.onclick = () => hero.next();
 ```
 
+## stir-grow-ripple: Interactive hero background
+Category: Backgrounds
+
+Prompt:
+“Put an interactive ASCII background behind [our dark hero] with Asciify that visitors can stir, grow and ripple, with a small pill switcher: Estuary (soft blotches the cursor stirs), Capillary (thin veins that grow toward the cursor and burst from a click) and Shockwave (a click sends rings of characters outward). Faint by default so the headline reads, in our text token's ink, still under reduced motion.”
+
+```ts
+import { background, capillary, estuary, shockwave } from 'asciify-engine/kit';
+
+const modes = { estuary, capillary, shockwave };
+const bg = background(hero, { preset: estuary, clear: headline });
+pills.forEach(pill => (pill.onclick = () => bg.setPreset(modes[pill.dataset.mode])));
+```
+
 ## ascii-ocean: Ocean
 Category: Backgrounds
 

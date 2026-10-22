@@ -670,6 +670,21 @@ Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning o
 | `cascade` | Streaks falling in three depths: far ones faint and slow, near ones bright and quick | 11, 1, lantern |
 | `wordField` | Your word (`text`) as a flowing field of letters | 13, 1, trail |
 | `fluid` | The original Asciify hero: flowing folds with a wake behind the cursor | 7, 1, wake |
+| `estuary` | Soft blotches drifting on a slow current; the cursor stirs them into swirls that settle back, a click stirs harder | 9, 1, stir |
+| `capillary` | Thin branching veins: a faint resting network, new veins sprouting toward the cursor and bursting from a click, fading as they age | 8, 1, grow |
+| `shockwave` | A faint grain; a click sends rings of characters outward (a front and two echoes, slowing and fading), and the moving cursor leaves small gusts | 9, 1, rings |
+
+### Interactive simulations: estuary, capillary, shockwave
+
+Three presets are simulations the visitor plays with rather than scenes: each runs on a coarse grid on the CPU and draws into the field's source, so every mark and charset works (`look: { mark: 'dither' }`, `charset: 'braille'`), the ink follows the theme, and the defaults are faint enough for a headline on top. They answer the cursor and clicks (`cursor: false` turns both off), hold one still frame under reduced motion, pause off screen, and stop drawing once nothing moves: `capillary` and `shockwave` rest until the pointer wakes them, `estuary` drifts at any `speed` above 0 and with `speed: 0` waits to be stirred. None keeps a quiet middle by default; pass `clear: headline` for one.
+
+```ts
+import { background, capillary, estuary, shockwave } from 'asciify-engine/kit';
+
+const modes = { estuary, capillary, shockwave };
+const bg = background(hero, { preset: estuary, clear: headline });
+pills.forEach(pill => (pill.onclick = () => bg.setPreset(modes[pill.dataset.mode as keyof typeof modes])));
+```
 
 Retired presets are still exported, marked `@deprecated`, so code that imports them keeps running unchanged; they are no longer shown on the site or in these docs. Move to the closest current one: `halftone` → `drift` with `mark: 'dot'` (`cellSize: 14`), `dna` and `voidWell` → `halo`, `circuit` and `stars` → `constellation`, `aurora`, `fire`, `silk` and `veil` → `mesh`, `grid`, `weave` and `moire` → `interference`, `morph` and `noise` → `mesh`, `pulse` → `ripple`, `rain` → `cascade`, `terrain`, `dune` and `etch` → `contour`, `facet` → `caustics`, `wave` → `swell`. The retired canvas presets draw on a 2D canvas and also take `accent` and `dither`.
 
