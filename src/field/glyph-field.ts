@@ -681,7 +681,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
     gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
     gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
-    gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : 0);
+    gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0);
     gl.uniform1f(u.uScale, settings.scale);
     const zone = settings.clear;
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
@@ -732,6 +732,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform2f(p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
     gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
+    gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder === 'scatter' && settings.mark === 'glyph') ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (shared) host!.present(view!, width, height);
   };

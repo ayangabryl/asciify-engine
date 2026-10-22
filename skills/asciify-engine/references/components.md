@@ -510,7 +510,7 @@ nextButton.onclick = () => hero.next();
 Category: Backgrounds
 
 Prompt:
-“Put an interactive ASCII background behind [our dark hero] with Asciify that visitors can stir, grow and ripple, with a small pill switcher: Estuary (soft blotches the cursor stirs), Capillary (thin veins that grow toward the cursor and burst from a click) and Shockwave (a click sends rings of characters outward). Faint by default so the headline reads, in our text token's ink, still under reduced motion.”
+“Put an interactive ASCII background behind [our dark hero] with Asciify that visitors can stir, grow and ripple, with a small pill switcher: Estuary (smoke-soft currents of letters the cursor stirs and lights), Capillary (a faint network of veins the cursor lights, the light running along them) and Shockwave (wind streaks; a click sends one ring out that eases to a stop). Faint by default so the headline reads, in our text token's ink, still under reduced motion.”
 
 ```ts
 import { background, capillary, estuary, shockwave } from 'asciify-engine/kit';
@@ -524,12 +524,12 @@ pills.forEach(pill => (pill.onclick = () => bg.setPreset(modes[pill.dataset.mode
 Category: Backgrounds
 
 Prompt:
-“Put an ASCII ocean behind [our landing hero] with Asciify: [a shark, a hammerhead and a school of small fish, plus a jellyfish or two] seen from above, swimming with real tail beats, the school keeping together, far ones smaller and fainter. The cursor scatters the fish and the sharks turn to investigate; a click sends a ripple. Inked from our text token, behind the headline, still under reduced motion.”
+“Put an ASCII ocean behind [our landing hero] with Asciify: [three sharks of different sizes, a hammerhead and schools of small fish] seen from above as tiles of shaded letters, swimming with real tail beats, the school keeping together, far ones smaller and fainter. The cursor scatters the fish and the sharks turn to investigate; a click sends a ripple. Inked from our text token, behind the headline, still under reduced motion.”
 
 ```ts
 import { ocean } from 'asciify-engine/kit';
 
-ocean(hero, { creatures: [{ kind: 'shark' }, { kind: 'hammerhead' }, { kind: 'school', count: 32 }, { kind: 'jellyfish', count: 2 }], label: 'Sharks and fish swimming' });
+ocean(hero, { creatures: [{ kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'school', count: 24 }], label: 'Sharks and fish swimming' });
 ```
 
 ## ascii-globe: Globe of dots

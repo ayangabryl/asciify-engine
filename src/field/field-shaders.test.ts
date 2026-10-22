@@ -41,6 +41,14 @@ describe('glyph field programs', () => {
     // No mark samples anything but its own cell, so styles cost no extra passes or textures.
     expect(FIELD_COMPOSITE.match(/texelFetch\(uCells/g)).toHaveLength(1);
   });
+  it('scatters a fixed character per cell and carries scatter and inlay tone as ink strength the pixel pass reads back', () => {
+    const cell = fieldCellShader(false);
+    expect(cell).toContain('if(uOrder>1.5){');
+    expect(cell).toContain('if(uOrder>1.5||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;');
+    expect(FIELD_COMPOSITE).toContain('uniform vec4 uFade;');
+    expect(draw).toContain("settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0");
+    expect(FIELD_MARKS.indexOf('inlay')).toBe(17);
+  });
   it('generates every scene in its own branch of the cell pass, and keeps every scene a setting', () => {
     const cell = fieldCellShader(false);
     const ids = FIELD_SCENES.map(sceneId);

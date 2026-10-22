@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 const { mount, support } = vi.hoisted(() => ({ mount: vi.fn(), support: { on: true } }));
 vi.mock('../field', () => ({ isGlyphFieldSupported: () => support.on, mountGlyphField: mount }));
 
-import { ocean, bodyWidth, createSpine, createWorld, laySpine, spawn, despawn, stepWorld, advanceWorld, tint, SPINE, OCEAN_KINDS } from './ocean';
+import { ocean, bodyWidth, createSpine, createWorld, laySpine, spawn, despawn, stepWorld, advanceWorld, tint, SPINE, OCEAN_KINDS, OCEAN_CHARSET } from './ocean';
 import { useFakeDom } from './fake-dom-2a';
 
 const { env, run, flush, element, as, canvases } = useFakeDom(mount, support);
@@ -96,7 +96,7 @@ describe('ocean', () => {
     await flush();
     expect(canvases(host)).toHaveLength(1);
     expect(canvases(host)[0].style.zIndex).toBe('-1');
-    expect(mountLook()).toMatchObject({ mark: 'glyph', color: 'ink', background: 'transparent' });
+    expect(mountLook()).toMatchObject({ mark: 'inlay', charset: OCEAN_CHARSET, color: 'ink', background: 'transparent' });
     expect(host.textContent).toContain('Sharks and fish swimming');
     run(500);
     const frames = env.field.setSource.mock.calls.length;
@@ -132,9 +132,9 @@ describe('ocean', () => {
     const after = env.field.setSource.mock.calls.length;
     run(300);
     expect(env.field.setSource.mock.calls.length).toBe(after);
-    expect(o.count).toBe(1 + 1 + 1 + 4 + 2 + 28);
+    expect(o.count).toBe(1 + 1 + 1 + 1 + 18 + 14);
     o.update({ density: 2 });
-    expect(o.count).toBe(2 * (1 + 1 + 1 + 4 + 2 + 28));
+    expect(o.count).toBe(2 * (1 + 1 + 1 + 1 + 18 + 14));
     o.destroy();
     env.reduced = false;
     support.on = false;
