@@ -460,12 +460,12 @@ void main(){
       vec2 p=local+.5;
       float gap=max(1.,floor(min(uPitch.x,uPitch.y)*.08+.5));
       float plate=index>0.?smoothstep(.1,.28,strength)*box(p,vec2(0.),uPitch-gap):0.;
-      vec3 face=rgb*(.16+.84*strength*strength*(3.-2.*strength)),letter=mix(rgb*min(1.,.45+strength*1.4),face*.2,plate);
-      float speck=coverage*min(1.,strength*2.6);
+      // Tile and letter are the ink at two strengths over whatever ground lies below, so the inlay reads on light and dark pages:
+      // the tile strengthens with the tone and the letter is cut back toward the ground.
+      float face=(.18+.8*smoothstep(.05,.8,strength))*plate;
+      float speck=coverage*min(1.,strength*2.6)*(1.-plate);
       float grid=index>0.?0.:(1.-box(p,vec2(0.),uPitch-1.))*.035;
-      vec3 col=mix(face,letter,coverage);
-      float a=max(plate,speck);
-      rgb=a>0.?(plate>0.?col:rgb*min(1.,.45+strength*1.4)):rgb;
+      float a=mix(face,face*.22,coverage*plate)+speck;
       coverage=a>0.?a:grid;
     } else coverage*=strength;
   } else if(uMark==1){

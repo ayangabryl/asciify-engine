@@ -59,7 +59,7 @@ export class Shockwave implements Simulation {
   /** Streaks at a grid point, 0–1: long along the wind, thin across it, gathered in drifting gusts. */
   wind(x: number, y: number) {
     const f = this.freq, t = this.t, s = this.seed * 23.1;
-    const a = (x * WX + y * WY) * f, c = (-x * WY + y * WX) * f;
+    const a = (x * WX + y * WY) * f + 29.3, c = (-x * WY + y * WX) * f + 43.1;
     const streak = vnoise(a * 0.9 - t * 0.55 + s, c * 5.2) * 0.65 + vnoise(a * 2.1 - t * 0.9, c * 9.5 + s) * 0.35;
     const gust = vnoise(a * 0.45 - t * 0.3, c * 0.9 + s + 4.4);
     return streak * smoothstep(0.38, 0.75, gust);
