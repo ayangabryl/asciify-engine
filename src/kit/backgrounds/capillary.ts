@@ -1,109 +1,138 @@
-import { simPreset, rng, type Simulation } from './sim';
+import { smoothstep } from '../core';
+import { hash2, vnoise } from './shared';
+import { simPreset, SCATTER_LOOK, SIM_GRAPHITE, type Simulation } from './sim';
 
-const MAX_TIPS = 500;
-const STEP = 0.7;
+/** The light the vein halos fall away from: up and to the left, so each vein has a crisp lit edge and a soft shaded one. */
+const LX = 0.83, LY = -0.55;
 
 /**
- * Thin branching veins. A faint network is grown once from seeded tips; the pointer sprouts new veins from that network toward
- * itself and from its own path, each tip wandering, branching now and then and fading as it ages. Exported for tests.
+ * A network of veins, the walls between warped cells, laid once for the stage: thin cores that thicken here and there, each with a
+ * soft halo on its shaded side, faint at rest. The pointer lights the veins it touches and the light runs along them, thinning
+ * out with distance; a click floods them from that point. Static once the light has gone, so it costs nothing at rest.
+ * Exported for tests.
  */
 export class Capillary implements Simulation {
   cols = 0; rows = 0;
-  /** The resting network, and the live growth that fades. */
-  rest = new Float32Array(0); live = new Float32Array(0);
-  tips = 0;
-  readonly x = new Float32Array(MAX_TIPS); readonly y = new Float32Array(MAX_TIPS); readonly a = new Float32Array(MAX_TIPS);
-  readonly life = new Float32Array(MAX_TIPS); readonly span = new Float32Array(MAX_TIPS); readonly ink = new Float32Array(MAX_TIPS);
-  private random: () => number; private pull = { x: 0, y: 0, on: false }; private walked = 0; private fade = 0; private lit = false;
-  constructor(public seed = 1) { this.random = rng(seed); }
+  /** The resting network, 0–1 (core and halo), its core alone, and the light running along it. */
+  vein = new Float32Array(0); core = new Float32Array(0); light = new Float32Array(0);
+  private spare = new Float32Array(0);
+  /** 0 just shown, 1 fully faded in. Starts full, so a still frame (reduced motion) shows the whole network. */
+  intro = 1;
+  private started = false; private lit = false; private walked = 0;
+  constructor(public seed = 1) {}
 
   resize(cols: number, rows: number) {
     this.cols = cols; this.rows = rows;
-    this.rest = new Float32Array(cols * rows); this.live = new Float32Array(cols * rows);
-    this.random = rng(this.seed);
-    this.tips = 0; this.pull.on = false;
-    const r = this.random, seeds = Math.max(3, Math.round((cols * rows) / 2600));
-    for (let s = 0; s < seeds; s++) this.sprout(r() * cols, r() * rows, r() * Math.PI * 2, 60 + r() * 90, 1);
-    for (let guard = 0; this.tips && guard < 4000; guard++) this.grow(this.rest);
-    this.tips = 0;
-  }
-  sprout(x: number, y: number, angle: number, life: number, ink: number) {
-    if (this.tips >= MAX_TIPS) return;
-    const k = this.tips++;
-    this.x[k] = x; this.y[k] = y; this.a[k] = angle; this.life[k] = life; this.span[k] = life; this.ink[k] = ink;
-  }
-  /** One growth step for every tip, written into `grid`. */
-  grow(grid: Float32Array) {
-    const { cols, rows, x, y, a, life, span, ink } = this, r = this.random;
-    for (let k = this.tips - 1; k >= 0; k--) {
-      a[k] += (r() - 0.5) * 0.45;
-      if (this.pull.on && grid === this.live) {
-        const want = Math.atan2(this.pull.y - y[k], this.pull.x - x[k]);
-        let turn = want - a[k];
-        turn -= Math.PI * 2 * Math.floor((turn + Math.PI) / (Math.PI * 2));
-        a[k] += Math.max(-0.06, Math.min(0.06, turn)) * 0.6;
+    const n = cols * rows;
+    this.vein = new Float32Array(n); this.core = new Float32Array(n); this.light = new Float32Array(n); this.spare = new Float32Array(n);
+    this.lit = false;
+    const S = Math.max(6, rows * 0.46), warp = S * 0.42, fw = 1.4 / S, s = this.seed * 13.7;
+    const gx = Math.ceil(cols / S) + 2, gy = Math.ceil(rows / S) + 2;
+    const px = new Float32Array(gx * gy), py = new Float32Array(gx * gy);
+    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+      const k = j * gx + i;
+      px[k] = (i - 1 + 0.15 + 0.7 * hash2(i * 3 + 11 + this.seed * 7, j * 5 + 3)) * S;
+      py[k] = (j - 1 + 0.15 + 0.7 * hash2(i * 7 + 2, j * 3 + 17 + this.seed * 5)) * S;
+    }
+    for (let y = 0, o = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++, o++) {
+        // Warped, so the walls bend and wander instead of running straight between the cells.
+        const qx = x + (vnoise(x * fw + s, y * fw) - 0.5) * 2 * warp, qy = y + (vnoise(x * fw - 7.1, y * fw + s + 3.3) - 0.5) * 2 * warp;
+        const ci = Math.floor(qx / S) + 1, cj = Math.floor(qy / S) + 1;
+        let d1 = Infinity, d2 = Infinity, a = 0, b = 0;
+        for (let j = cj - 1; j <= cj + 1; j++) {
+          if (j < 0 || j >= gy) continue;
+          for (let i = ci - 1; i <= ci + 1; i++) {
+            if (i < 0 || i >= gx) continue;
+            const k = j * gx + i, dx = qx - px[k], dy = qy - py[k], d = dx * dx + dy * dy;
+            if (d < d1) { d2 = d1; b = a; d1 = d; a = k; } else if (d < d2) { d2 = d; b = k; }
+          }
+        }
+        // Distance to the wall between the two nearest cells, and which way that wall faces.
+        let nx = px[a] - px[b], ny = py[a] - py[b];
+        const span = Math.hypot(nx, ny) || 1;
+        nx /= span; ny /= span;
+        const e = (d2 - d1) / (2 * span);
+        const thick = 0.45 + 1.4 * smoothstep(0.5, 0.92, vnoise(x * fw * 0.6 + 9.1, y * fw * 0.6 - s));
+        const c = Math.exp(-((e / thick) ** 2));
+        const side = smoothstep(-0.1, 0.7, nx * LX + ny * LY);
+        const halo = Math.exp(-e / (thick * 4)) * 0.42 * side;
+        this.core[o] = c;
+        this.vein[o] = Math.min(1, c + halo) * (0.55 + 0.6 * vnoise(x * fw * 0.8 + s * 2, y * fw * 0.8 + 1.7));
       }
-      x[k] += Math.cos(a[k]) * STEP; y[k] += Math.sin(a[k]) * STEP;
-      life[k] -= 1;
-      const cx = x[k] | 0, cy = y[k] | 0;
-      if (life[k] <= 0 || x[k] < 0 || y[k] < 0 || cx >= cols || cy >= rows) { this.kill(k); continue; }
-      const i = cy * cols + cx, tone = ink[k] * (0.35 + 0.65 * (life[k] / span[k]));
-      if (tone > grid[i]) grid[i] = tone;
-      if (r() < 0.022 && this.tips < MAX_TIPS) this.sprout(x[k], y[k], a[k] + (r() < 0.5 ? -1 : 1) * (0.45 + r() * 0.6), life[k] * 0.8, ink[k] * 0.9);
     }
   }
-  private kill(k: number) {
-    const last = --this.tips;
-    if (k === last) return;
-    this.x[k] = this.x[last]; this.y[k] = this.y[last]; this.a[k] = this.a[last];
-    this.life[k] = this.life[last]; this.span[k] = this.span[last]; this.ink[k] = this.ink[last];
-  }
+
   step(dt: number, speed: number) {
-    if (!this.lit && !this.tips) return false;
-    const steps = Math.min(8, Math.round(dt * 60 * Math.max(0.25, speed) * 1.6));
-    for (let s = 0; s < steps && this.tips; s++) this.grow(this.live);
-    const decay = Math.exp(-dt * 0.4), live = this.live;
-    let most = 0;
-    for (let i = 0; i < live.length; i++) { const v = live[i] * decay; live[i] = v < 0.004 ? 0 : v; if (v > most) most = v; }
-    this.fade = most;
-    this.lit = most > 0;
-    if (!this.lit && !this.tips) this.pull.on = false;
-    return this.lit || this.tips > 0;
+    if (!this.started) { this.started = true; this.intro = 0; }
+    const pace = Math.max(0.25, speed);
+    if (this.intro < 1) this.intro = Math.min(1, this.intro + dt * pace / 0.7);
+    if (this.lit) {
+      // The light runs along the cores a cell or so a step, losing a little each cell, and fades everywhere.
+      const { cols, rows, core } = this, decay = Math.exp(-dt * pace * 0.7);
+      let a = this.light, b = this.spare, most = 0;
+      const passes = Math.max(1, Math.min(4, Math.round(dt * 60 * pace * 1.4)));
+      for (let pass = 0; pass < passes; pass++) {
+        for (let y = 0, i = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++, i++) {
+            let m = 0;
+            if (x > 0 && a[i - 1] > m) m = a[i - 1];
+            if (x < cols - 1 && a[i + 1] > m) m = a[i + 1];
+            if (y > 0 && a[i - cols] > m) m = a[i - cols];
+            if (y < rows - 1 && a[i + cols] > m) m = a[i + cols];
+            const spread = m * 0.98 * Math.min(1, core[i] * 1.6), own = a[i];
+            b[i] = own > spread ? own : spread;
+          }
+        }
+        const t = a; a = b; b = t;
+      }
+      for (let i = 0; i < a.length; i++) { const v = a[i] * decay; a[i] = v < 0.01 ? 0 : v; if (v > most) most = v; }
+      this.light = a; this.spare = b;
+      this.lit = most > 0;
+    }
+    return this.lit || this.intro < 1;
   }
+
   render(out: Float32Array) {
-    const { rest, live } = this;
-    for (let i = 0; i < out.length; i++) { const a = rest[i] * 0.16, b = live[i] * 0.9; out[i] = a > b ? a : b; }
+    const { vein, core, light, intro } = this, rest = 0.17 * intro * intro * (3 - 2 * intro);
+    for (let i = 0; i < out.length; i++) {
+      const l = light[i];
+      out[i] = vein[i] * rest + (l > 0 ? Math.min(1, l * 1.3) * Math.min(1, 1.2 * core[i] + 1.5 * vein[i]) * 0.9 : 0);
+    }
   }
-  /** Sprouts from the resting veins near the pointer, growing toward it, and now and then from the pointer's own path. */
+
+  /** Lights the veins under the pointer: the faster it moves, the more. */
   move(x: number, y: number, dx: number, dy: number) {
     if (!this.cols) return;
-    this.pull.x = x; this.pull.y = y; this.pull.on = true;
     this.walked += Math.hypot(dx, dy);
-    if (this.walked < 2.5) return;
+    if (this.walked < 0.6) return;
+    this.ignite(x, y, this.rows * 0.13, Math.min(1.2, 0.7 + this.walked * 0.15));
     this.walked = 0;
-    const r = this.random, R = Math.max(this.cols, this.rows) * 0.12;
-    for (let tries = 0; tries < 6; tries++) {
-      const px = x + (r() - 0.5) * 2 * R, py = y + (r() - 0.5) * 2 * R, cx = px | 0, cy = py | 0;
-      if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows || this.rest[cy * this.cols + cx] < 0.3) continue;
-      this.sprout(px, py, Math.atan2(y - py, x - px) + (r() - 0.5), 30 + r() * 40, 0.8);
-      break;
+  }
+  /** Floods the veins round the press; the light runs out along them. */
+  press(x: number, y: number) { this.ignite(x, y, this.rows * 0.18, 1.5); }
+  leave() { this.walked = 0; }
+
+  private ignite(x: number, y: number, R: number, amount: number) {
+    const { cols, rows, light, vein } = this, r = Math.ceil(R * 1.8);
+    for (let j = Math.max(0, Math.floor(y - r)); j < Math.min(rows, Math.ceil(y + r)); j++) {
+      for (let i = Math.max(0, Math.floor(x - r)); i < Math.min(cols, Math.ceil(x + r)); i++) {
+        const ex = i - x, ey = j - y, d2 = (ex * ex + ey * ey) / (R * R);
+        if (d2 > 3.2) continue;
+        const k = j * cols + i, v = amount * Math.exp(-d2) * Math.min(1, vein[k] * 3);
+        if (v > light[k]) light[k] = v;
+      }
     }
-    this.sprout(x, y, Math.atan2(dy, dx) + Math.PI + (r() - 0.5) * 2, 20 + r() * 30, 0.7);
     this.lit = true;
   }
-  /** A burst of veins out of the press. */
-  press(x: number, y: number) {
-    const r = this.random;
-    for (let k = 0; k < 9; k++) this.sprout(x, y, (k / 9) * Math.PI * 2 + r() * 0.5, 50 + r() * 60, 1);
-    this.lit = true;
-  }
-  leave() { this.pull.on = false; }
-  get level() { return this.fade; }
+  /** The brightest light on the network now. */
+  get level() { let m = 0; for (let i = 0; i < this.light.length; i++) if (this.light[i] > m) m = this.light[i]; return m; }
 }
 
-/** Thin branching veins: a faint network at rest, and new veins that grow toward the cursor and burst from a click. */
+/** A network of faint veins in letters; the cursor lights the veins it touches and the light runs along them. */
 export const capillary = simPreset({
-  id: 'capillary', name: 'Capillary', description: 'Thin branching veins: a faint network at rest, new veins that grow toward the cursor and burst from a click.',
-  cellSize: 8, charset: ' .·:-+*', detail: 1 / 3,
+  id: 'capillary', name: 'Capillary', description: 'A faint network of veins in letters; the cursor lights the veins it touches and the light runs along them, a click floods them.',
+  cellSize: 10, charset: SCATTER_LOOK.charset, detail: 1 / 4, graphite: SIM_GRAPHITE, feather: 0.16,
   create: seed => new Capillary(seed),
+  tune: SCATTER_LOOK.tune,
 });

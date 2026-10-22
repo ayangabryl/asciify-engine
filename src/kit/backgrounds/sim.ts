@@ -29,7 +29,22 @@ export interface SimSpec {
   create(seed: number): Simulation;
   /** The preset's own tone settings. */
   tune?: (s: BackgroundSettings) => GlyphFieldOptions;
+  /** Its default ink per ground. Default the field graphite. */
+  graphite?: { light: string; dark: string };
+  /** How far round a `clear` element the field fades, as a share of the shorter side. Default 0.3. */
+  feather?: number;
 }
+
+/**
+ * Letters as a lit texture: every cell keeps one character from `a-zA-Z0-9` and the tone sets how brightly it shows, so the
+ * simulations read as a dark screen of type that glows where something happens. Fine cells, twice as tall as wide.
+ */
+export const SCATTER_LOOK = {
+  charset: ' abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+  tune: (s: BackgroundSettings): GlyphFieldOptions => markOf(s, 'glyph') === 'dot' ? {} : { glyphOrder: 'scatter', cellAspect: 0.5, glyphScale: 0.78, blend: 'off' },
+};
+/** A firmer graphite than the GPU grounds': the scatter look carries tone in opacity, so the ink is the brightest a letter gets. */
+export const SIM_GRAPHITE = { light: '#3f3d39', dark: '#d2cfc8' };
 
 const MAX_GRID = 240;
 const INTERACTIVE = 'button, a, input, select, summary, textarea, label';
@@ -70,11 +85,11 @@ function mountSim(context: BackgroundContext, spec: SimSpec): BackgroundRun | nu
       return {
         color: 'ink', shade: 0, background: 'transparent', levels: 'none', blend: 'on', maxPixelRatio: 2, hover: 'none',
         ...(mark === 'dot' ? { mark: 'dot', ...dotCells(s) } : { mark: 'glyph', charset: s.charset ?? spec.charset, ...glyphCells(s) }),
-        clear: s.clear ? { element: s.clear, padding: 0, feather: 0.3, shape: 'ellipse' } : false,
+        clear: s.clear ? { element: s.clear, padding: 0, feather: spec.feather ?? 0.3, shape: 'ellipse' } : false,
         ...spec.tune?.(s), ...s.look,
       } satisfies GlyphFieldOptions;
     },
-    ink: dark => context.ink(dark) ?? (dark ? FIELD_GRAPHITE.dark : FIELD_GRAPHITE.light),
+    ink: dark => context.ink(dark) ?? (dark ? (spec.graphite ?? FIELD_GRAPHITE).dark : (spec.graphite ?? FIELD_GRAPHITE).light),
     resolution: (w, h) => {
       const k = Math.min(spec.detail ?? 1 / 3, MAX_GRID / Math.max(w, h));
       return [Math.max(8, Math.round(w * k)), Math.max(8, Math.round(h * k))];

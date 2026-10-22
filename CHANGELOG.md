@@ -5,6 +5,13 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## Unreleased
+
+- Field: `glyphOrder: 'scatter'` gives each cell one fixed character picked from the charset and lets the tone set its opacity, so a field of letters glows and fades like a lit screen of type (fades toward the ground in light and dark themes alike). A field of scattered letters takes the global look.
+- Field: `mark: 'inlay'` sets each character into a gapped tile shaded by the tone, dark letters in light tiles; faint cells keep a speck of a character and empty ones a hairline grid.
+- `ocean` redrawn: inlaid tiles in 15 px cells with a letter ramp (`' .\',:;-toxXS%#8@'`), sharks shaded from dark flanks to a light back, larger and bolder with wider pectoral fins and a stronger bend through turns; default cast three sharks, a hammerhead and two schools; a press's ring is a faint shimmer of specks.
+- `estuary`, `capillary` and `shockwave` redrawn as a dark screen of scattered letters (`a-zA-Z0-9`, 5 × 10 px cells, opacity carrying the tone): `estuary` is smoke-soft warped currents the cursor stirs and lights along their own contours, fading over two seconds; `capillary` a faint network of veins (warped cell walls with a soft shaded side) where the cursor and clicks light the veins and the light runs along them; `shockwave` wind streaks drifting in gusts, the cursor brightening them, a click sending one ring that eases to a stop and fades.
+
 ## 4.31: ocean, and backgrounds you play with (estuary, capillary, shockwave)
 
 - New in `asciify-engine/kit`: `ocean(el, options)`, an ocean seen from above drawn as characters: fish, sharks, hammerheads, manta rays, jellyfish and schools of small fish, each a procedural body that swims with a travelling wave, steers, wanders and schools, in depth layers. The cursor scatters small fish and sharks turn to investigate; a press sends a ripple. Options `creatures`, `speed`, `density`, `depth`, `palette`, `background`, `interactive`, `ripples`, `edges`, `seed`, `layer`, `label`; handle `add`, `remove`, `count`. Shared GPU context, posters, still under reduced motion, paused off screen, deterministic for a seed.

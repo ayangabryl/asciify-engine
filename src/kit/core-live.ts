@@ -504,9 +504,12 @@ export function liveField(config: LiveConfig): Live {
   let shownReady = false, wiping: ReturnType<typeof sweep> = null, unwatch = () => {};
   const still = !config.ownPoster && kit?.current.poster ? poster(host, kit.current.poster, config.place, kit, canvas) : null;
 
-  /** The global look applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). */
+  /**
+   * The global look applies to glyph fields that opted in and whose own characters are not letters (a word or a brand). Letters
+   * scattered as a texture (`glyphOrder: 'scatter'`) are no word, so those fields take the look too.
+   */
   const wanted = (): { mark: FieldMark; charset?: string } | undefined => {
-    if (!look || kit?.current.globalLook === false || ((merged.mark ?? 'glyph') !== 'glyph' && !config.glyphs) || LETTER.test(merged.charset ?? '')) return undefined;
+    if (!look || kit?.current.globalLook === false || ((merged.mark ?? 'glyph') !== 'glyph' && !config.glyphs) || (merged.glyphOrder !== 'scatter' && LETTER.test(merged.charset ?? ''))) return undefined;
     const style = look.style ? KIT_STYLES[look.style] : undefined;
     const mark: FieldMark = style?.mark ?? 'glyph';
     const charset = mark === 'glyph' ? look.charset || (style && 'charset' in style ? style.charset : undefined) : undefined;

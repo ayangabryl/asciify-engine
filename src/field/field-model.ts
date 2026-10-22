@@ -15,10 +15,12 @@ export type FieldScene = typeof FIELD_SCENES[number];
  * tiles (`pixel`, `mosaic`, `lego`, `voxel`, `disco`, `hex`, `led`) fade with the tone in ink colour and stay solid in source
  * colour; `dither` lights whole cells through a 4x4 Bayer screen; `cmyk` separates the cell's colour into offset ink dots;
  * the print marks (`stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) carry the tone in their size.
+ * `inlay` sets each character into a gapped tile whose shade follows the tone, dark letters in light tiles; faint cells keep
+ * only a speck of a character and empty cells a hairline grid, so shapes read as solid inlaid bodies with frayed edges.
  * Every mark but `dot` leaves empty the cells the charset would leave blank.
  */
 export const FIELD_MARKS = ['glyph', 'dot', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dither', 'hex', 'led', 'cmyk',
-  'stipple', 'engraving', 'crosshatch', 'woodblock', 'risograph', 'pointillism'] as const;
+  'stipple', 'engraving', 'crosshatch', 'woodblock', 'risograph', 'pointillism', 'inlay'] as const;
 export type FieldMark = typeof FIELD_MARKS[number];
 /**
  * An area the field keeps quiet, so content above it stays readable. Coordinates are fractions of the field,
@@ -111,9 +113,11 @@ export interface GlyphFieldSettings {
   /**
    * `tone` (default) picks each cell's glyph by its tone, from empty to dense. `text` reads the charset after its blank in order
    * along each row (each row a few letters on), so a word or phrase stays legible as text-as-art: every letter shows from a tone of
-   * 0.6, and below it a fine 4x4 screen thins them out toward the quiet edges.
+   * 0.6, and below it a fine 4x4 screen thins them out toward the quiet edges. `scatter` gives every cell its own fixed character
+   * picked at random from the charset and lets the tone set its opacity instead, so a field of letters (say `a-zA-Z0-9`) glows and
+   * fades like a lit terminal rather than changing glyph with the tone. Glyph mark only.
    */
-  glyphOrder: 'tone' | 'text';
+  glyphOrder: 'tone' | 'text' | 'scatter';
   color: FieldColor;
   ink: string;
   /** Color the wake lifts characters toward. 'auto' brightens each character's own color, so the wake never turns white. */
@@ -289,7 +293,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     mark: FIELD_MARKS.includes(input.mark as FieldMark) ? input.mark as FieldMark : base.mark,
     dotScale: clamp(input.dotScale, 0.1, 1.4, base.dotScale),
     markAngle: clamp(input.markAngle, -360, 360, base.markAngle),
-    glyphOrder: input.glyphOrder === 'text' || input.glyphOrder === 'tone' ? input.glyphOrder : base.glyphOrder,
+    glyphOrder: input.glyphOrder === 'text' || input.glyphOrder === 'tone' || input.glyphOrder === 'scatter' ? input.glyphOrder : base.glyphOrder,
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),
     highlight: input.highlight === 'auto' ? 'auto' : hex(input.highlight, base.highlight),

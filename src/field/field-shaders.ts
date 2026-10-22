@@ -371,7 +371,11 @@ void main(){
     upper=fract(level)>(BAYER[q.y*4+q.x]+.5)/16.?1.:0.;
   }
   float index=min(uCount-1.,floor(level)+upper+(flick>.5&&tone>.02?1.:0.));
-  if(uOrder>.5){
+  if(uOrder>1.5){
+    // Scatter order: each cell keeps one character picked from the charset by a hash of its place, and the tone sets how
+    // strongly it shows rather than which character it is, so a field of letters brightens and fades like a lit screen.
+    index=tone>.008?1.+min(uCount-2.,floor(hash(cell*.731+vec2(19.17,3.71))*(uCount-1.))):0.;
+  } else if(uOrder>.5){
     // Text order: the charset after its blank is read in sequence along each row, each row a few letters on, so words stay
     // legible. Every letter shows from a tone of .6; below it a 4x4 Bayer screen thins them out toward the field's quiet edges.
     ivec2 q=ivec2(mod(cell,4.));
@@ -381,13 +385,15 @@ void main(){
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
+  // Scatter and inlay carry the tone in the ink's strength, which the pixel pass reads back as opacity or tile shade.
+  if(uOrder>1.5||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;
   vec3 lifted=uHighlightAuto>.5?ink/max(max(ink.r,ink.g),max(ink.b,.06)):uHighlight;
   ink=mix(ink,lifted,wake*.7);
   if(spot>0.)ink=mix(ink,clamp(rgb/max(max(rgb.r,rgb.g),max(rgb.b,.08))*(.45+.55*tone),0.,1.),spot);
   float underAlpha=max(uBackground.a,min(1.,max(glow.r,max(glow.g,glow.b))));
   vec3 under=min(uBackground.rgb*uBackground.a+glow,vec3(underAlpha));
   // Glyphs keep their atlas index, exact in 8 bits; the other marks keep the tone, and empty where the charset is blank.
-  outInk=vec4(ink,uMark==0?index/255.:uMark==1?(tone>.003?tone:0.):index>0.?max(tone,1./255.):0.);
+  outInk=vec4(ink,uMark==0||uMark==17?index/255.:uMark==1?(tone>.003?tone:0.):index>0.?max(tone,1./255.):0.);
   outUnder=vec4(under,underAlpha);
 }`;
 
@@ -403,6 +409,7 @@ uniform vec2 uResolution, uCell, uPitch;
 uniform float uColumns, uDotScale, uSourceColor;
 uniform vec2 uDir;
 uniform int uMark;
+uniform vec4 uFade;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 // The Studio's print defaults: roughness .35, seed 7, registration .2 and its coral second ink. The screen angle is uDir (-35deg).
@@ -435,11 +442,32 @@ void main(){
   vec2 local=frag-cell*uPitch;
   float coverage;
   vec3 rgb=ink.rgb;
-  if(uMark==0){
+  // Scatter and inlay: the cell's strength, read back from its ink, and the ink itself at full strength.
+  float strength=1.;
+  if(uFade.w>.5){
+    float top=max(rgb.r,max(rgb.g,rgb.b));
+    strength=uSourceColor>.5?top:clamp(top/max(max(uFade.r,max(uFade.g,uFade.b)),.004),0.,1.);
+    rgb=uSourceColor>.5?rgb/max(top,.004):uFade.rgb;
+  }
+  if(uMark==0||uMark==17){
     float index=floor(ink.a*255.+.5);
     ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
     vec2 texel=floor(local-floor((uPitch-uCell)*.5));
     coverage=all(greaterThanEqual(texel,vec2(0.)))&&all(lessThan(texel,uCell))?texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(texel),0).a:0.;
+    if(uMark==17){
+      // Inlay: a gapped tile in the ink, lighter the denser the cell, with its character set into it in a darker shade. Faint
+      // cells keep only the character, so a shape's edge frays into specks; empty cells show a hairline grid.
+      vec2 p=local+.5;
+      float gap=max(1.,floor(min(uPitch.x,uPitch.y)*.08+.5));
+      float plate=index>0.?smoothstep(.1,.28,strength)*box(p,vec2(0.),uPitch-gap):0.;
+      vec3 face=rgb*(.16+.84*strength*strength*(3.-2.*strength)),letter=mix(rgb*min(1.,.45+strength*1.4),face*.2,plate);
+      float speck=coverage*min(1.,strength*2.6);
+      float grid=index>0.?0.:(1.-box(p,vec2(0.),uPitch-1.))*.035;
+      vec3 col=mix(face,letter,coverage);
+      float a=max(plate,speck);
+      rgb=a>0.?(plate>0.?col:rgb*min(1.,.45+strength*1.4)):rgb;
+      coverage=a>0.?a:grid;
+    } else coverage*=strength;
   } else if(uMark==1){
     // Halftone: dot area follows tone, so midtones read true; edges are antialiased to one device pixel.
     float r=sqrt(ink.a)*min(uPitch.x,uPitch.y)*.5*uDotScale;

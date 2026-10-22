@@ -7,6 +7,7 @@ import { background } from '../background';
 import { capillary, Capillary } from './capillary';
 import { estuary, Estuary } from './estuary';
 import { shockwave, Shockwave } from './shockwave';
+import { SCATTER_LOOK } from './sim';
 import { useFakeDom } from '../fake-dom-2a';
 
 const { env, run, flush, element, as, canvases } = useFakeDom(mount, support);
@@ -14,33 +15,39 @@ const sum = (a: Float32Array) => a.reduce((s, v) => s + v, 0);
 const lookOf = () => mount.mock.calls[mount.mock.calls.length - 1]?.[1] as Record<string, unknown>;
 
 describe('capillary', () => {
-  it('grows the same faint resting network for a seed, and veins toward the pointer that fade and settle', () => {
+  it('lays the same faint network for a seed, fades it in, and runs light along it from the pointer until it settles', () => {
     const a = new Capillary(2), b = new Capillary(2), out = new Float32Array(120 * 80);
     a.resize(120, 80); b.resize(120, 80);
-    expect(Array.from(a.rest)).toEqual(Array.from(b.rest));
+    expect(Array.from(a.vein)).toEqual(Array.from(b.vein));
     a.render(out);
-    expect(Math.max(...out)).toBeLessThanOrEqual(0.17);
-    expect(out.filter(v => v > 0).length).toBeGreaterThan(200);
+    expect(Math.max(...out)).toBeLessThanOrEqual(0.2);
+    expect(out.filter(v => v > 0.05).length).toBeGreaterThan(400);
+    expect(a.step(1 / 60, 1)).toBe(true);
+    expect(a.intro).toBeLessThan(0.1);
+    for (let i = 0; i < 60; i++) a.step(1 / 60, 1);
+    expect(a.intro).toBe(1);
+    expect(a.step(1 / 60, 1)).toBe(false);
     a.press(60, 40);
-    expect(a.tips).toBe(9);
-    for (let i = 0; i < 30; i++) a.step(1 / 60, 1);
+    a.step(1 / 60, 1);
+    const near = a.level;
+    for (let i = 0; i < 20; i++) a.step(1 / 60, 1);
     a.render(out);
+    expect(near).toBeGreaterThan(0.5);
     expect(Math.max(...out)).toBeGreaterThan(0.4);
+    // The light has run out along the veins beyond where it landed.
+    const lit = (r: number) => { let n = 0; for (let y = 0; y < 80; y++) for (let x = 0; x < 120; x++) if (Math.hypot(x - 60, y - 40) > r && a.light[y * 120 + x] > 0.05) n++; return n; };
+    expect(lit(24)).toBeGreaterThan(0);
     let moving = true;
     for (let i = 0; i < 60 * 30 && moving; i++) moving = a.step(1 / 30, 1);
     expect(moving).toBe(false);
-    expect(a.tips).toBe(0);
-    expect(sum(a.live)).toBe(0);
+    expect(sum(a.light)).toBe(0);
   });
 
-  it('turns a pointer-grown vein toward the pointer', () => {
-    const c = new Capillary(1);
-    c.resize(200, 100);
-    c.move(150, 50, 0, 0); c.move(150, 50, 3, 0);
-    c.sprout(50, 50, Math.PI / 2, 200, 1);
-    const k = c.tips - 1;
-    for (let i = 0; i < 40; i++) c.grow(c.live);
-    expect(Math.cos(c.a[k])).toBeGreaterThan(0);
+  it('shows the whole network in a still frame that never stepped', () => {
+    const c = new Capillary(1), out = new Float32Array(100 * 60);
+    c.resize(100, 60);
+    c.render(out);
+    expect(Math.max(...out)).toBeGreaterThan(0.08);
   });
 });
 
@@ -65,22 +72,24 @@ describe('estuary', () => {
 });
 
 describe('shockwave', () => {
-  it('sends a front and two echoes that spread, slow and fade', () => {
+  it('sends one ring that eases to a stop and fades, over streaks that drift', () => {
     const s = new Shockwave(1), out = new Float32Array(100 * 100);
     s.resize(100, 100);
-    expect(s.step(1 / 60, 1)).toBe(false);
+    expect(s.step(1 / 60, 0)).toBe(false);
+    expect(s.step(1 / 60, 1)).toBe(true);
+    s.render(out);
+    expect(Math.max(...out)).toBeLessThan(0.2);
     s.press(50, 50);
-    expect(s.count).toBe(3);
+    expect(s.count).toBe(1);
     for (let i = 0; i < 30; i++) s.step(1 / 60, 1);
     s.render(out);
     const r = Math.round(s.radius(0.5));
     expect(out[50 * 100 + 50 + r]).toBeGreaterThan(out[50 * 100 + 50] + 0.1);
     expect(s.radius(1) - s.radius(0.5)).toBeLessThan(s.radius(0.5));
-    let moving = true;
-    for (let i = 0; i < 60 * 10 && moving; i++) moving = s.step(1 / 30, 1);
-    expect(moving).toBe(false);
-    s.render(out);
-    expect(Math.max(...out)).toBeLessThan(0.04);
+    expect(s.radius(10)).toBeLessThan(100 * 0.45);
+    for (let i = 0; i < 30 * 5; i++) s.step(1 / 30, 1);
+    expect(s.count).toBe(0);
+    expect(s.step(1 / 60, 0)).toBe(false);
   });
 });
 
@@ -88,11 +97,11 @@ describe('simulation presets', () => {
   it.each([capillary, estuary, shockwave])('$id mounts under the content, wakes on the pointer and idles once settled', async preset => {
     const host = element();
     host.rect = { left: 0, top: 0, width: 600, height: 300 };
-    const bg = background(as(host), { preset, speed: preset === estuary ? 0 : 1 });
+    const bg = background(as(host), { preset, speed: preset === capillary ? 1 : 0 });
     await flush();
     expect(canvases(host)).toHaveLength(1);
-    expect(lookOf()).toMatchObject({ mark: 'glyph', charset: preset === capillary ? ' .·:-+*' : expect.any(String), hover: 'none' });
-    run(200);
+    expect(lookOf()).toMatchObject({ mark: 'glyph', charset: SCATTER_LOOK.charset, glyphOrder: 'scatter', cellAspect: 0.5, hover: 'none' });
+    run(1200);
     const idle = env.field.setSource.mock.calls.length;
     run(300);
     expect(env.field.setSource.mock.calls.length).toBe(idle);

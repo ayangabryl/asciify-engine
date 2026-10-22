@@ -49,7 +49,7 @@ export const markOf = (s: BackgroundSettings, own: BackgroundMark): BackgroundMa
 
 /** The cells the glyph presets draw characters in: the site's mono at its drift proportions. */
 export const glyphCells = (s: BackgroundSettings): GlyphFieldOptions => ({
-  font: '"Geist Mono", ui-monospace, monospace', fontWeight: 400, cellSize: s.cellSize, cellAspect: 0.62, glyphScale: 0.86,
+  font: '"Geist Mono", ui-monospace, "SF Mono", Menlo, monospace', fontWeight: 400, cellSize: s.cellSize, cellAspect: 0.62, glyphScale: 0.86,
 });
 /** Square cells for the halftone. */
 export const dotCells = (s: BackgroundSettings): GlyphFieldOptions => ({ cellSize: s.cellSize, cellAspect: 1, dotScale: 0.68 });

@@ -120,12 +120,14 @@ describe('glyph field halftone and clear zones', () => {
     const turned = normalizeFieldSettings({ mark: 'engraving', markAngle: 90, glyphOrder: 'text' });
     expect([turned.markAngle, turned.glyphOrder]).toEqual([90, 'text']);
     expect(normalizeFieldSettings({ markAngle: 'x' as unknown as number, glyphOrder: 'rows' as 'text' }).glyphOrder).toBe('tone');
+    expect(normalizeFieldSettings({ glyphOrder: 'scatter' }).glyphOrder).toBe('scatter');
     expect(settings.clear).toMatchObject({ x: 0.2, y: 0.3, width: 0.5, height: 0.4, shape: 'rect' });
     expect(normalizeFieldSettings({ clear: false }, settings).clear).toBe(false);
   });
   it('accepts every Studio tile and print mark, and keeps the current mark for anything else', () => {
     for (const mark of FIELD_MARKS) expect(normalizeFieldSettings({ mark }).mark).toBe(mark);
     expect(FIELD_MARKS.slice(0, 2)).toEqual(['glyph', 'dot']);
+    expect(FIELD_MARKS[FIELD_MARKS.length - 1]).toBe('inlay');
     const lego = normalizeFieldSettings({ mark: 'lego' });
     expect(normalizeFieldSettings({ mark: 'bricks' as never }, lego).mark).toBe('lego');
     expect(normalizeFieldSettings({ mark: 'toString' as never }).mark).toBe('glyph');

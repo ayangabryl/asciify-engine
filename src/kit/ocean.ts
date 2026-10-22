@@ -14,7 +14,7 @@ export interface OceanCreature {
 }
 
 export interface OceanOptions extends KitOptions {
-  /** What swims. Default a shark, a hammerhead, a manta, four fish, two jellyfish and a school of 28. */
+  /** What swims. Default three sharks of different sizes, a hammerhead and two schools. */
   creatures?: OceanCreature[];
   /** Swimming pace, 0 holds everything; 1 is natural. Default 1. */
   speed?: number;
@@ -73,8 +73,8 @@ interface Species {
 export const SPECIES: Record<OceanKind, Species> = {
   fish: { len: 0.13, speed: 0.55, beat: 2.1, amp: 0.07, waves: 0.9, turn: 1.8, prey: true, hunter: false },
   school: { len: 0.055, speed: 1.15, beat: 3.6, amp: 0.08, waves: 0.9, turn: 3.4, prey: true, hunter: false },
-  shark: { len: 0.44, speed: 0.2, beat: 0.75, amp: 0.05, waves: 0.75, turn: 0.5, prey: false, hunter: true },
-  hammerhead: { len: 0.4, speed: 0.22, beat: 0.8, amp: 0.05, waves: 0.75, turn: 0.55, prey: false, hunter: true },
+  shark: { len: 0.5, speed: 0.3, beat: 0.8, amp: 0.065, waves: 0.75, turn: 0.6, prey: false, hunter: true },
+  hammerhead: { len: 0.46, speed: 0.3, beat: 0.85, amp: 0.065, waves: 0.75, turn: 0.6, prey: false, hunter: true },
   manta: { len: 0.2, speed: 0.3, beat: 0.42, amp: 0.025, waves: 0.5, turn: 0.4, prey: false, hunter: false },
   jellyfish: { len: 0.085, speed: 0.4, beat: 0.6, amp: 0, waves: 0, turn: 0.35, prey: false, hunter: false },
 };
@@ -86,7 +86,7 @@ export const SPECIES: Record<OceanKind, Species> = {
 export function bodyWidth(kind: OceanKind, s: number) {
   s = clamp(s);
   if (kind === 'shark' || kind === 'hammerhead') {
-    const peak = 0.3, max = kind === 'shark' ? 0.085 : 0.072;
+    const peak = 0.3, max = kind === 'shark' ? 0.1 : 0.085;
     return max * (s < peak ? (s / peak) ** (kind === 'shark' ? 0.6 : 0.4) : ((1 - s) / (1 - peak)) ** 1.35) + 0.008 * s;
   }
   if (kind === 'manta') return s < 0.5 ? 0.09 * Math.sin(Math.PI * (s / 0.5) ** 0.8) : 0;
@@ -422,14 +422,15 @@ function drawFish(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
 
 function drawShark(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
   const kind = b.kind, pen = p.pen;
-  tail(p, sp, L, 0.17, 0.15, 1.2, 0.8, tone * 0.8);
-  fins(p, sp, kind, L, 5, 0.19, 0.13, 0.08, tone * 0.78);
-  fins(p, sp, kind, L, 10, 0.06, 0.05, 0.035, tone * 0.65);
-  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.7);
-  fillBody(p, sp, kind, L, 0.6, 1, SPINE - 1, tone * 0.84);
-  fillBody(p, sp, kind, L, 0.24, 2, SPINE - 3, tone * 0.92);
+  tail(p, sp, L, 0.19, 0.17, 1.2, 0.8, tone * 0.62);
+  fins(p, sp, kind, L, 5, 0.25, 0.17, 0.1, tone * 0.6);
+  fins(p, sp, kind, L, 10, 0.07, 0.06, 0.04, tone * 0.5);
+  // Shaded from the flanks in to the back, so the body reads as a rounded form: dark edges, a light spine.
+  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.45);
+  fillBody(p, sp, kind, L, 0.72, 1, SPINE - 1, tone * 0.64);
+  fillBody(p, sp, kind, L, 0.46, 1, SPINE - 3, tone * 0.86);
   // The dorsal fin seen from above: a bright blade along the back.
-  fillBody(p, sp, kind, L, 0.14, 5, 8, tone);
+  fillBody(p, sp, kind, L, 0.3, 3, 9, tone);
   if (kind === 'hammerhead') {
     const fx = sp.ny[0], fy = -sp.nx[0], nx = sp.nx[0], ny = sp.ny[0], x = sp.x[0] - fx * 0.015 * L, y = sp.y[0] - fy * 0.015 * L;
     const span = 0.2 * L, deep = 0.055 * L;
@@ -535,8 +536,8 @@ export function drawWorld(pen: CanvasRenderingContext2D, world: OceanWorld, spin
   for (let o = 0; o < order.length; o++) {
     const b = bodies[order[o]];
     if (!b) continue;
-    const sp = SPECIES[b.kind], L = bodyLength(world, b, depth), tone = 1 - 0.5 * b.z * depth;
-    const bend = clamp(b.speed > 1 ? (b.omega * L) / b.speed * 0.5 : 0, -1.1, 1.1);
+    const sp = SPECIES[b.kind], L = bodyLength(world, b, depth), tone = 1 - 0.32 * b.z * depth;
+    const bend = clamp(b.speed > 1 ? (b.omega * L) / b.speed * 0.7 : 0, -1.6, 1.6);
     p.kind = OCEAN_KINDS.indexOf(b.kind);
     if (b.kind === 'jellyfish') laySpine(spine, b.x, b.y, b.heading, bend, L * 1.9, b.phase * 0.5, 0.02, 0.6);
     else if (b.kind === 'manta') laySpine(spine, b.x + Math.cos(b.heading) * L * 0.5, b.y + Math.sin(b.heading) * L * 0.5, b.heading, bend, L * 2, b.phase, sp.amp, sp.waves);
@@ -551,8 +552,11 @@ const DRAW: Pen = { pen: null as unknown as CanvasRenderingContext2D, styles: []
 
 /* ---------------- Component ---------------- */
 
+/** Specks for a body's frayed edge, then letters and marks that fill a cell more and more. */
+export const OCEAN_CHARSET = " .',:;-toxXS%#8@";
+
 const DEFAULT_CREATURES: OceanCreature[] = [
-  { kind: 'shark' }, { kind: 'hammerhead' }, { kind: 'manta' }, { kind: 'fish', count: 4 }, { kind: 'jellyfish', count: 2 }, { kind: 'school', count: 28 },
+  { kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'shark', size: 0.5 }, { kind: 'school', count: 18 }, { kind: 'school', count: 14 },
 ];
 const DEFAULTS = { speed: 1, density: 1, depth: 0.7, interactive: true, ripples: true, edges: 'turn' as const, seed: 1, layer: 'under' as const };
 const MAX_SOURCE = 560;
@@ -606,7 +610,7 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
     const bg = o().background;
     const background = bg && bg !== 'transparent' ? resolveColor(bg, element) ?? 'transparent' : 'transparent';
     return {
-      mark: 'glyph', charset: ' .:-=+*#%@', cellSize: 7, cellAspect: 0.62, glyphScale: 0.92, contrast: 1, background,
+      mark: 'inlay', charset: OCEAN_CHARSET, cellSize: 15, cellAspect: 0.66, glyphScale: 0.82, fontWeight: 600, contrast: 1, background,
       color: o().palette ? 'source' : 'ink', saturation: 1, ...o().look,
     };
   };
@@ -647,7 +651,7 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
     if (!o().interactive || !o().ripples || event.button !== 0 || !surface) return;
     at(event);
     world.burst.x = world.pointer.x; world.burst.y = world.pointer.y; world.burst.at = world.t;
-    surface.field.pulse({ x: world.burst.x, y: world.burst.y, strength: 0.5 });
+    surface.field.pulse({ x: world.burst.x, y: world.burst.y, strength: 0.1 });
     surface.kick();
   };
   if (surface) {
