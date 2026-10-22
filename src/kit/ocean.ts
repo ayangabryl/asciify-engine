@@ -291,7 +291,7 @@ export function stepWorld(world: OceanWorld, dt: number, settings: StepSettings)
 
     if (b.group >= 0) {
       let ax = 0, ay = 0, cx = 0, cy = 0, sx = 0, sy = 0, n = 0;
-      const sep = L * 0.9, see = L * 4;
+      const sep = L * 0.9, see = L * 7;
       for (let j = 0; j < bodies.length; j++) {
         const o = bodies[j];
         if (o === b || o.group !== b.group) continue;
@@ -302,8 +302,8 @@ export function stepWorld(world: OceanWorld, dt: number, settings: StepSettings)
       }
       if (n) {
         const an = Math.hypot(ax, ay) || 1, cn = Math.hypot(cx, cy) || 1;
-        dx += (ax / an) * 1.1 + (cx / cn) * 0.7 + sx * 1.8;
-        dy += (ay / an) * 1.1 + (cy / cn) * 0.7 + sy * 1.8;
+        dx += (ax / an) * 1.1 + (cx / cn) * 1.1 + sx * 1.8;
+        dy += (ay / an) * 1.1 + (cy / cn) * 1.1 + sy * 1.8;
       }
     }
 
