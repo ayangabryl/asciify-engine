@@ -17,10 +17,12 @@ export type FieldScene = typeof FIELD_SCENES[number];
  * the print marks (`stipple`, `engraving`, `crosshatch`, `woodblock`, `risograph`, `pointillism`) carry the tone in their size.
  * `inlay` sets each character into a gapped tile whose shade follows the tone, dark letters in light tiles; faint cells keep
  * only a speck of a character and empty cells a hairline grid, so shapes read as solid inlaid bodies with frayed edges.
+ * `tick` lays a smooth wash in the ink under a fine screen of short upright ticks, a printed glow. `bayer` draws one gapped square a
+ * cell, empty, half or full by a 4x4 ordered threshold (`dotScale` sets the square's share of the cell).
  * Every mark but `dot` leaves empty the cells the charset would leave blank.
  */
 export const FIELD_MARKS = ['glyph', 'dot', 'pixel', 'mosaic', 'lego', 'voxel', 'disco', 'dither', 'hex', 'led', 'cmyk',
-  'stipple', 'engraving', 'crosshatch', 'woodblock', 'risograph', 'pointillism', 'inlay'] as const;
+  'stipple', 'engraving', 'crosshatch', 'woodblock', 'risograph', 'pointillism', 'inlay', 'tick', 'bayer'] as const;
 export type FieldMark = typeof FIELD_MARKS[number];
 /**
  * An area the field keeps quiet, so content above it stays readable. Coordinates are fractions of the field,
@@ -110,10 +112,19 @@ export interface GlyphFieldSettings {
    * as CSS `rotate` does: 0 runs the cuts horizontally, 90 vertically, -45 rising to the right. Default -35, the Studio's.
    */
   markAngle: number;
+  /** For `mark: 'inlay'`: the share of lit tiles, 0 to 0.3, that carry a coloured letter, a tinted tile or a white glint, picked afresh a few times a second. Default 0. */
+  accents: number;
+  /** For `mark: 'inlay'`: how many places, 0 to 4, a dense cell's character may step through the upper charset a few times a second, so tiles flicker through letters rather than band by tone. Default 0. */
+  shuffle: number;
+  /**
+   * `area` (default) averages the source over each cell, so a shape's edge ramps through the charset. `point` reads the source at
+   * the cell's centre, so drawn shapes land as whole cells with crisp edges, as tiled art does.
+   */
+  sample: 'area' | 'point';
   /**
    * `tone` (default) picks each cell's glyph by its tone, from empty to dense. `text` reads the charset after its blank in order
-   * along each row (each row a few letters on), so a word or phrase stays legible as text-as-art: every letter shows from a tone of
-   * 0.6, and below it a fine 4x4 screen thins them out toward the quiet edges. `scatter` gives every cell its own fixed character
+   * along each row (each row a few letters on), so a word or phrase stays legible as text-as-art: every letter is there and the tone
+   * sets its opacity (with the glyph mark), so the words fade out softly toward the quiet edges. `scatter` gives every cell its own fixed character
    * picked at random from the charset and lets the tone set its opacity instead, so a field of letters (say `a-zA-Z0-9`) glows and
    * fades like a lit terminal rather than changing glyph with the tone. Glyph mark only.
    */
@@ -195,6 +206,9 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   mark: 'glyph',
   dotScale: 0.9,
   markAngle: -35,
+  accents: 0,
+  shuffle: 0,
+  sample: 'area',
   glyphOrder: 'tone',
   color: 'ink',
   ink: '#f3ba32',
@@ -284,7 +298,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
   };
   return {
     charset,
-    cellSize: clamp(input.cellSize, 3, 96, base.cellSize),
+    cellSize: clamp(input.cellSize, 1, 96, base.cellSize),
     cellAspect: clamp(input.cellAspect, 0.3, 2, base.cellAspect),
     cellFit: input.cellFit === 'fill' || input.cellFit === 'pixel' ? input.cellFit : base.cellFit,
     font: typeof input.font === 'string' && input.font.trim() ? input.font : base.font,
@@ -293,6 +307,9 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     mark: FIELD_MARKS.includes(input.mark as FieldMark) ? input.mark as FieldMark : base.mark,
     dotScale: clamp(input.dotScale, 0.1, 1.4, base.dotScale),
     markAngle: clamp(input.markAngle, -360, 360, base.markAngle),
+    accents: clamp(input.accents, 0, 0.3, base.accents),
+    shuffle: clamp(input.shuffle, 0, 4, base.shuffle),
+    sample: input.sample === 'point' || input.sample === 'area' ? input.sample : base.sample,
     glyphOrder: input.glyphOrder === 'text' || input.glyphOrder === 'tone' || input.glyphOrder === 'scatter' ? input.glyphOrder : base.glyphOrder,
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),

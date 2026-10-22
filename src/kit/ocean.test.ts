@@ -132,9 +132,9 @@ describe('ocean', () => {
     const after = env.field.setSource.mock.calls.length;
     run(300);
     expect(env.field.setSource.mock.calls.length).toBe(after);
-    expect(o.count).toBe(1 + 1 + 1 + 1 + 18 + 14);
+    expect(o.count).toBe(1 + 1 + 1 + 1 + 40 + 34 + 30 + 24 + 20);
     o.update({ density: 2 });
-    expect(o.count).toBe(2 * (1 + 1 + 1 + 1 + 18 + 14));
+    expect(o.count).toBe(260); // doubled, the default cast meets the cap
     o.destroy();
     env.reduced = false;
     support.on = false;

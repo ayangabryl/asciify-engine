@@ -17,3 +17,14 @@ export function isLand(lat: number, lon: number) {
   const i = row * 180 + col;
   return (bits[i >> 3] >> (i & 7)) & 1 ? true : false;
 }
+
+/**
+ * Land as a soft share from 0 to 1, read between the map's 2-degree cells, so a coastline drawn finer than the map curves rather
+ * than stepping in 2-degree squares: threshold it at 0.5.
+ */
+export function landShare(lat: number, lon: number) {
+  const fy = (90 - lat) / 2 - 0.5, fx = (lon + 180) / 2 - 0.5;
+  const y0 = Math.floor(fy), x0 = Math.floor(fx), ty = fy - y0, tx = fx - x0;
+  const at = (y: number, x: number) => (isLand(90 - (Math.min(89, Math.max(0, y)) + 0.5) * 2, (((x % 180) + 180) % 180 + 0.5) * 2 - 180) ? 1 : 0);
+  return (at(y0, x0) * (1 - tx) + at(y0, x0 + 1) * tx) * (1 - ty) + (at(y0 + 1, x0) * (1 - tx) + at(y0 + 1, x0 + 1) * tx) * ty;
+}

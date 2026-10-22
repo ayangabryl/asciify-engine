@@ -41,7 +41,7 @@ export function wordArt(word: string, font = DEFAULTS.font, weight = DEFAULTS.fo
   return canvas;
 }
 
-const TILE = 24;
+const TILE = 10;
 /**
  * The word's art with every piece displaced toward a scattered place: `progress` 0 is fully scattered (and faded), 1 the word
  * itself. Pieces settle in a staggered order. Exported for tests.
