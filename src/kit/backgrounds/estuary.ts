@@ -46,7 +46,8 @@ export class Estuary implements Simulation {
   /** The currents at a grid point: smoke-like, warped twice, a little wider than tall, 0–1. */
   water(x: number, y: number) {
     const f = this.freq, t = this.t, s = this.seed * 17.3;
-    const px = x * f * 0.68 + t, py = y * f - t * 0.3;
+    // Well away from the lattice's origin, where the hash repeats along a row.
+    const px = x * f * 0.68 + t + 31.4 + s, py = y * f - t * 0.3 + 57.9;
     const wx = vnoise(px * 0.8 + s, py * 0.8) + 0.5 * vnoise(px * 1.9 - t * 0.7, py * 1.9 + 2.1) - 0.75;
     const wy = vnoise(px * 0.8 - t * 0.5, py * 0.8 + s + 5.2) + 0.5 * vnoise(px * 1.9 + 7.7, py * 1.9 - t * 0.6) - 0.75;
     const qx = px + wx * 2.2, qy = py + wy * 1.6;
