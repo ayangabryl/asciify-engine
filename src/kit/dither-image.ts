@@ -11,9 +11,12 @@ export interface DitherImageOptions extends KitOptions {
    * `'transparent'` to keep the element's own background. Default `['transparent', '--ascii-ink-strong']`.
    */
   tones?: [string, string];
-  /** The mark the image is drawn in: `dither` (Bayer dots), `pixel`, `mosaic`, `dot`, `engraving`, `stipple`, … Default `dither`. */
+  /**
+   * The mark the image is drawn in: `bayer` (one gapped square a cell, empty, half or full by an ordered threshold, as pixel-dithered
+   * brand art), `dither` (fine Bayer dots), `pixel`, `mosaic`, `dot`, `engraving`, `stipple`, … Default `bayer`.
+   */
   mark?: FieldMark;
-  /** Cell size in CSS px. Default 5. */
+  /** Cell size in CSS px. Default 6. */
   cellSize?: number;
   /** `visible` develops the image in from blank when it scrolls into view, `scroll` ties that to scroll position, `none` shows it at once. Default `visible`. */
   reveal?: 'none' | 'visible' | 'scroll';
@@ -30,9 +33,9 @@ export interface DitherImageHandle extends KitHandle<DitherImageOptions> {
   replay(): void;
 }
 
-const DEFAULTS = { tones: ['transparent', '--ascii-ink-strong'] as [string, string], mark: 'dither' as FieldMark, cellSize: 5, reveal: 'visible' as const, duration: 1100 };
+const DEFAULTS = { tones: ['transparent', '--ascii-ink-strong'] as [string, string], mark: 'bayer' as FieldMark, cellSize: 6, reveal: 'visible' as const, duration: 1100 };
 
-/** An image drawn in a brand's two tones as dither, pixels, dots or engraving, developing in as it scrolls into view. */
+/** An image drawn in a brand's two tones as ordered pixel squares, dither, dots or engraving, developing in as it scrolls into view. */
 export function ditherImage(element: HTMLElement, options: DitherImageOptions = {}): DitherImageHandle {
   const state = { current: { ...DEFAULTS, ...options } };
   const o = () => state.current;
@@ -45,7 +48,7 @@ export function ditherImage(element: HTMLElement, options: DitherImageOptions = 
     const ground = o().tones[0];
     const background = ground === 'transparent' ? 'transparent' : resolveColor(ground, element, dark ? '#000000' : '#ffffff') ?? 'transparent';
     return {
-      mark: o().mark, charset: ' .:-=+*#%@', cellSize: o().cellSize, cellAspect: 1, levels: 'auto', contrast: 1.1, fit: 'cover',
+      mark: o().mark, charset: ' .:-=+*#%@', cellSize: o().cellSize, cellAspect: 1, dotScale: 0.84, levels: 'auto', contrast: 1.1, fit: 'cover',
       focus: o().focus ?? { x: 0.5, y: 0.5 }, background, ...o().look,
       // The reveal lowers every tone together, so the screen fills in from its lightest marks to its darkest, as a print develops.
       brightness: (o().look?.brightness ?? 0) - (1 - level),

@@ -127,7 +127,7 @@ describe('glyph field halftone and clear zones', () => {
   it('accepts every Studio tile and print mark, and keeps the current mark for anything else', () => {
     for (const mark of FIELD_MARKS) expect(normalizeFieldSettings({ mark }).mark).toBe(mark);
     expect(FIELD_MARKS.slice(0, 2)).toEqual(['glyph', 'dot']);
-    expect(FIELD_MARKS[FIELD_MARKS.length - 1]).toBe('inlay');
+    expect(FIELD_MARKS[FIELD_MARKS.length - 1]).toBe('bayer');
     const lego = normalizeFieldSettings({ mark: 'lego' });
     expect(normalizeFieldSettings({ mark: 'bricks' as never }, lego).mark).toBe('lego');
     expect(normalizeFieldSettings({ mark: 'toString' as never }).mark).toBe('glyph');

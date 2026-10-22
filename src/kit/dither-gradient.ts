@@ -10,12 +10,14 @@ export interface DitherLight {
   radius?: number;
   /** Peak tone, 0 to 1. Default 1. */
   strength?: number;
+  /** Height over width of the light's ellipse: below 1 a wide, low glow like a sunrise on the edge. Default 1. */
+  aspect?: number;
 }
 
 export interface DitherGradientOptions extends KitOptions {
-  /** The lights the gradient is made of. Default one broad light rising from just below the bottom edge. */
+  /** The lights the gradient is made of. Default one wide, low glow rising from just below the bottom edge. */
   lights?: DitherLight[];
-  /** Tone of the ground between the lights, 0 to 1. Default 0.05. */
+  /** Tone of the ground between the lights, 0 to 1: with the default `tick` mark it sets how strongly the fine screen shows there. Default 0.12. */
   base?: number;
   /** How much the lights drift and breathe, 0 (still: draws once, then idles) to 1. Default 0.35. */
   motion?: number;
@@ -30,7 +32,7 @@ export interface DitherGradientHandle extends KitHandle<DitherGradientOptions> {
   setLights(lights: DitherLight[]): void;
 }
 
-const DEFAULTS = { lights: [{ x: 0.5, y: 1.08, radius: 0.62, strength: 1 }] as DitherLight[], base: 0.05, motion: 0.35, follow: 0.06, layer: 'under' as const };
+const DEFAULTS = { lights: [{ x: 0.5, y: 1.02, radius: 0.44, strength: 1, aspect: 0.52 }] as DitherLight[], base: 0.12, motion: 0.35, follow: 0.06, layer: 'under' as const };
 const MAX_SOURCE = 180;
 const grey = (v: number) => { const n = Math.round(clamp(v) * 255); return `rgb(${n},${n},${n})`; };
 
@@ -45,6 +47,9 @@ export function ditherGradientFrame(pen: CanvasRenderingContext2D, w: number, h:
     const x = (light.x + sway * Math.sin(t * 0.17 + i * 1.7) + (i === 0 ? lean.x : 0)) * w;
     const y = (light.y + sway * Math.cos(t * 0.13 + i * 2.3) + (i === 0 ? lean.y : 0)) * h;
     const r = Math.max(1, (light.radius ?? 0.6) * side * breathe), s = clamp(light.strength ?? 1);
+    const a = Math.max(0.05, light.aspect ?? 1);
+    pen.save();
+    pen.translate(x, y); pen.scale(1, a); pen.translate(-x, -y);
     const g = pen.createRadialGradient(x, y, 0, x, y, r);
     // A soft-shouldered falloff, so the dither steps through every level rather than banding at the rim.
     g.addColorStop(0, grey(s));
@@ -52,13 +57,15 @@ export function ditherGradientFrame(pen: CanvasRenderingContext2D, w: number, h:
     g.addColorStop(0.7, grey(s * 0.2));
     g.addColorStop(1, grey(0));
     pen.fillStyle = g;
-    pen.fillRect(0, 0, w, h);
+    pen.fillRect(0, y - r, w, 2 * r);
+    pen.restore();
   });
   pen.globalCompositeOperation = 'source-over';
 }
 
 /**
- * A gradient of soft lights drawn as a two-tone dither: the field's ink on the element's own background. The lights drift and
+ * A gradient of soft lights drawn as a smooth wash under a fine screen of upright ticks (the `tick` mark; `look.mark: 'dither'` for a
+ * two-tone Bayer dither): the field's ink on the element's own background. The lights drift and
  * breathe gently and the first leans toward the pointer. With `motion: 0` and the pointer away it draws once and idles; reduced
  * motion draws one still frame.
  */
@@ -66,7 +73,8 @@ export function ditherGradient(element: HTMLElement, options: DitherGradientOpti
   const state = { current: { ...DEFAULTS, ...options } };
   const o = () => state.current;
   const lean = { x: 0, y: 0, tx: 0, ty: 0 };
-  const look = (): GlyphFieldOptions => ({ mark: 'dither', charset: ' .:-=+*#%@', cellSize: 6, cellAspect: 1, contrast: 1, ...o().look });
+  // A fine screen of upright ticks over a smooth wash: 4.4 x 6.5px cells, a printed glow rather than a coarse dither.
+  const look = (): GlyphFieldOptions => ({ mark: 'tick', charset: ' .:-=+*#%@', cellSize: 6.5, cellAspect: 0.68, contrast: 1, ...o().look });
 
   let surface: Surface | null = null;
   surface = mountSurface({

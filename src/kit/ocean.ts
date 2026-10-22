@@ -38,6 +38,8 @@ export interface OceanOptions extends KitOptions {
   layer?: 'under' | 'over';
   /** Read to assistive technology. Without one the ocean is decoration. */
   label?: string;
+  /** Sparse coloured letters, tinted tiles and white glints that twinkle across the bodies: `true` (default), `false`, or the share of lit tiles, up to 0.3. */
+  accents?: boolean | number;
 }
 
 export interface OceanHandle extends KitHandle<OceanOptions> {
@@ -202,7 +204,7 @@ export function spawn(world: OceanWorld, kind: OceanKind, count: number, size = 
   const cx = world.w * (0.15 + 0.7 * r()), cy = world.h * (0.15 + 0.7 * r()), heading = r() * TAU, z = r();
   for (let i = 0; i < n; i++) {
     const school = group >= 0;
-    const spread = school ? SPECIES.school.len * size * u * 0.8 * Math.sqrt(n) : 0;
+    const spread = school ? SPECIES.school.len * size * u * 0.85 * Math.sqrt(n) : 0;
     const a = r() * TAU, d = Math.sqrt(r()) * spread;
     world.bodies.push({
       id: world.nextId++, kind, size,
@@ -291,7 +293,7 @@ export function stepWorld(world: OceanWorld, dt: number, settings: StepSettings)
 
     if (b.group >= 0) {
       let ax = 0, ay = 0, cx = 0, cy = 0, sx = 0, sy = 0, n = 0;
-      const sep = L * 0.9, see = L * 7;
+      const sep = L * 1.0, see = L * 8;
       for (let j = 0; j < bodies.length; j++) {
         const o = bodies[j];
         if (o === b || o.group !== b.group) continue;
@@ -349,22 +351,33 @@ export function tint(rgb: number[], tone: number) {
   return rgb.map(v => v + (255 - v) * k);
 }
 
-interface Pen { pen: CanvasRenderingContext2D; styles: (string[] | null)[]; kind: number }
+interface Pen { pen: CanvasRenderingContext2D; styles: (string[] | null)[]; kind: number; cw: number; ch: number }
 const style = (p: Pen, tone: number) => {
   const own = p.styles[p.kind];
   return own ? own[Math.round(clamp(tone) * (SHADES - 1))] : grays()[Math.round(clamp(tone) * 255)];
 };
 
-function fillBody(p: Pen, sp: Spine, kind: OceanKind, length: number, k: number, from: number, to: number, tone: number) {
+/**
+ * Half a body's width at spine point `i`, held to at least `least` cells where the body is thick, so a small or distant body
+ * keeps a solid run of tiles rather than fraying into specks; the floor eases off toward the snout and the tail stalk.
+ */
+function half(p: Pen, kind: OceanKind, length: number, k: number, i: number, least: number) {
+  const s = i / SPINE, w = bodyWidth(kind, s) * length * k;
+  if (!least) return w;
+  const taper = Math.min(1, s / 0.12) * (s < 0.65 ? 1 : 1 - 0.3 * Math.min(1, (s - 0.65) / 0.2));
+  return Math.max(w, least * k * Math.min(p.cw, p.ch) * taper);
+}
+
+function fillBody(p: Pen, sp: Spine, kind: OceanKind, length: number, k: number, from: number, to: number, tone: number, least = 0) {
   const pen = p.pen;
   pen.fillStyle = style(p, tone);
   pen.beginPath();
   for (let i = from; i <= to; i++) {
-    const w = bodyWidth(kind, i / SPINE) * length * k;
+    const w = half(p, kind, length, k, i, least);
     if (i === from) pen.moveTo(sp.x[i] + sp.nx[i] * w, sp.y[i] + sp.ny[i] * w); else pen.lineTo(sp.x[i] + sp.nx[i] * w, sp.y[i] + sp.ny[i] * w);
   }
   for (let i = to; i >= from; i--) {
-    const w = bodyWidth(kind, i / SPINE) * length * k;
+    const w = half(p, kind, length, k, i, least);
     pen.lineTo(sp.x[i] - sp.nx[i] * w, sp.y[i] - sp.ny[i] * w);
   }
   pen.closePath();
@@ -407,6 +420,13 @@ const SHADOW = 0;
 
 function drawFish(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
   const kind = b.kind, small = kind === 'school';
+  if (small && L < 8 * p.cw) {
+    // A schooling fish a few cells long reads as one faint dash, as it does at sea from above: a cell-sized bar at the tone of
+    // the charset's dash, faint enough that it draws the character with next to no tile.
+    p.pen.fillStyle = style(p, 0.15);
+    p.pen.fillRect(Math.floor(b.x / p.cw) * p.cw, Math.floor(b.y / p.ch) * p.ch, p.cw, p.ch);
+    return;
+  }
   tail(p, sp, L, small ? 0.2 : 0.22, 0.14, 1, 1, tone * 0.8);
   if (!small) fins(p, sp, kind, L, 5, 0.09, 0.08, 0.05, tone * 0.7);
   fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.72);
@@ -422,15 +442,17 @@ function drawFish(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
 
 function drawShark(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
   const kind = b.kind, pen = p.pen;
-  tail(p, sp, L, 0.19, 0.17, 1.2, 0.8, tone * 0.62);
-  fins(p, sp, kind, L, 5, 0.25, 0.17, 0.1, tone * 0.6);
-  fins(p, sp, kind, L, 10, 0.07, 0.06, 0.04, tone * 0.5);
-  // Shaded from the flanks in to the back, so the body reads as a rounded form: dark edges, a light spine.
-  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.45);
-  fillBody(p, sp, kind, L, 0.72, 1, SPINE - 1, tone * 0.64);
-  fillBody(p, sp, kind, L, 0.46, 1, SPINE - 3, tone * 0.86);
+  // Fins and tail thicken to about a cell when the body is small, so they stay a run of tiles rather than specks.
+  const small = Math.min(p.cw, p.ch) / L;
+  tail(p, sp, L, 0.19, 0.17 + small * 0.5, 1.2, 0.8, tone * 0.42);
+  fins(p, sp, kind, L, 5, 0.19, 0.2, 0.1 + small * 0.7, tone * 0.44);
+  fins(p, sp, kind, L, 10, 0.07, 0.06, 0.04 + small * 0.4, tone * 0.38);
+  // Shaded from the flanks in to the back, so the body reads as a rounded form: darker edges, a light spine.
+  fillBody(p, sp, kind, L, 1, 0, SPINE, tone * 0.4, 1.1);
+  fillBody(p, sp, kind, L, 0.72, 1, SPINE - 1, tone * 0.52, 0.75);
+  fillBody(p, sp, kind, L, 0.46, 1, SPINE - 3, tone * 0.66);
   // The dorsal fin seen from above: a bright blade along the back.
-  fillBody(p, sp, kind, L, 0.3, 3, 9, tone);
+  fillBody(p, sp, kind, L, 0.3, 3, 9, tone * 0.82);
   if (kind === 'hammerhead') {
     const fx = sp.ny[0], fy = -sp.nx[0], nx = sp.nx[0], ny = sp.ny[0], x = sp.x[0] - fx * 0.015 * L, y = sp.y[0] - fy * 0.015 * L;
     const span = 0.2 * L, deep = 0.055 * L;
@@ -529,14 +551,14 @@ function drawJelly(p: Pen, sp: Spine, b: OceanBody, L: number, tone: number) {
 }
 
 /** Draws the world into `pen` in its own CSS pixels, far to near. Exported for tests. */
-export function drawWorld(pen: CanvasRenderingContext2D, world: OceanWorld, spine: Spine, depth: number, styles: (string[] | null)[] = []) {
+export function drawWorld(pen: CanvasRenderingContext2D, world: OceanWorld, spine: Spine, depth: number, styles: (string[] | null)[] = [], cell: [number, number] = [0, 0]) {
   const p: Pen = DRAW;
-  p.pen = pen; p.styles = styles;
+  p.pen = pen; p.styles = styles; p.cw = cell[0]; p.ch = cell[1];
   const { bodies, order } = world;
   for (let o = 0; o < order.length; o++) {
     const b = bodies[order[o]];
     if (!b) continue;
-    const sp = SPECIES[b.kind], L = bodyLength(world, b, depth), tone = 1 - 0.32 * b.z * depth;
+    const sp = SPECIES[b.kind], L = bodyLength(world, b, depth), tone = 1 - 0.2 * b.z * depth;
     const bend = clamp(b.speed > 1 ? (b.omega * L) / b.speed * 0.7 : 0, -1.6, 1.6);
     p.kind = OCEAN_KINDS.indexOf(b.kind);
     if (b.kind === 'jellyfish') laySpine(spine, b.x, b.y, b.heading, bend, L * 1.9, b.phase * 0.5, 0.02, 0.6);
@@ -548,17 +570,18 @@ export function drawWorld(pen: CanvasRenderingContext2D, world: OceanWorld, spin
     else drawJelly(p, spine, b, L, tone);
   }
 }
-const DRAW: Pen = { pen: null as unknown as CanvasRenderingContext2D, styles: [], kind: 0 };
+const DRAW: Pen = { pen: null as unknown as CanvasRenderingContext2D, styles: [], kind: 0, cw: 0, ch: 0 };
 
 /* ---------------- Component ---------------- */
 
-/** Specks for a body's frayed edge, then letters and marks that fill a cell more and more. */
-export const OCEAN_CHARSET = " .',:;-toxXS%#8@";
+/** Specks for a body's frayed edge, a dash (two steps wide, so a fish straddling cells still reads as one) for a distant fish, then letters and marks that fill a cell more and more. */
+export const OCEAN_CHARSET = " .--',:;toxXS%#8@";
 
 const DEFAULT_CREATURES: OceanCreature[] = [
-  { kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'shark', size: 0.5 }, { kind: 'school', count: 18 }, { kind: 'school', count: 14 },
+  { kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'shark', size: 0.5 },
+  { kind: 'school', count: 40 }, { kind: 'school', count: 34 }, { kind: 'school', count: 30 }, { kind: 'school', count: 24 }, { kind: 'school', count: 20 },
 ];
-const DEFAULTS = { speed: 1, density: 1, depth: 0.7, interactive: true, ripples: true, edges: 'turn' as const, seed: 1, layer: 'under' as const };
+const DEFAULTS = { speed: 1, density: 1, depth: 0.7, interactive: true, ripples: true, edges: 'turn' as const, seed: 1, layer: 'under' as const, accents: true as boolean | number };
 const MAX_SOURCE = 560;
 const WARM = 1.5;
 
@@ -573,6 +596,7 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
   const o = () => state.current;
   const styles = styleKeeper();
   const spine = createSpine();
+  const cell: [number, number] = [10, 15];
   const tables: (string[] | null)[] = OCEAN_KINDS.map(() => null);
   const label = o().label ? srOnly(o().label) : null;
   let world = createWorld(0, 0, o().seed, o().edges), built = false, paintedAt = 0, surface: Surface | null = null;
@@ -609,9 +633,10 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
   const look = (): GlyphFieldOptions => {
     const bg = o().background;
     const background = bg && bg !== 'transparent' ? resolveColor(bg, element) ?? 'transparent' : 'transparent';
+    const a = o().accents;
     return {
       mark: 'inlay', charset: OCEAN_CHARSET, cellSize: 15, cellAspect: 0.66, glyphScale: 0.82, fontWeight: 600, contrast: 1, background,
-      color: o().palette ? 'source' : 'ink', saturation: 1, ...o().look,
+      color: o().palette ? 'source' : 'ink', saturation: 1, accents: a === true ? 0.07 : typeof a === 'number' ? a : 0, shuffle: 2, sample: 'point', ...o().look,
     };
   };
   retable();
@@ -632,7 +657,10 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
       paintedAt = now;
       if (!still) advanceWorld(world, dt, settings());
       pen.setTransform(width / w, 0, 0, height / h, 0, 0);
-      drawWorld(pen, world, spine, clamp(o().depth), tables);
+      // The field's grid in CSS pixels, whole device pixels a cell as it lays them out, so a one-cell fish lands on one cell.
+      const lk = look(), dpr = Math.min(2, globalThis.devicePixelRatio || 1), ch = Math.max(2, Math.round((lk.cellSize ?? 15) * dpr));
+      cell[0] = Math.max(2, Math.round(ch * (lk.cellAspect ?? 0.66))) / dpr; cell[1] = ch / dpr;
+      drawWorld(pen, world, spine, clamp(o().depth), tables, cell);
       return !still && o().speed > 0;
     },
   });

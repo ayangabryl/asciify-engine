@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, handle, house, mountSurface, srOnly, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, handle, house, mountSurface, resolveColor, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 /** A frame to morph through: an image URL or element, a canvas, a video, or a function that draws white-on-black each frame. */
 export type MorphSource = string | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | ((pen: CanvasRenderingContext2D, w: number, h: number, now: number) => void);
@@ -7,10 +7,15 @@ export type MorphSource = string | HTMLImageElement | HTMLCanvasElement | HTMLVi
 export interface MorphFieldOptions extends KitOptions {
   /** The frames, in order. A function source animates every frame (a turning scene); the others are stills or video. */
   sources: MorphSource[];
-  /** Ms each frame holds before the next morphs in. Default 3200. */
+  /** Ms each frame holds before the next morphs in. Default 4200. */
   hold?: number;
-  /** Ms a morph takes. Default 1000. */
+  /** Ms a morph takes. Default 750. */
   transition?: number;
+  /**
+   * A fine grid of small square dots on the element's ground under the stripes, as a printed hero's: `true` for the ink at 55%, or a CSS colour or
+   * token. Set as the element's background image (restored on destroy). Default false.
+   */
+  grid?: boolean | string;
   /** Cycle through the frames on its own. Default true; off under reduced motion. */
   autoplay?: boolean;
   /** `cover` fills the element, cropping; `contain` fits inside it. Default `cover`. */
@@ -32,7 +37,7 @@ export interface MorphFieldHandle extends KitHandle<MorphFieldOptions> {
   readonly index: number;
 }
 
-const DEFAULTS = { hold: 3200, transition: 1000, autoplay: true, fit: 'cover' as const, layer: 'under' as const };
+const DEFAULTS = { hold: 4200, transition: 750, autoplay: true, fit: 'cover' as const, layer: 'under' as const, grid: false as boolean | string };
 
 type Loaded = HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | ((pen: CanvasRenderingContext2D, w: number, h: number, now: number) => void);
 const size = (s: Exclude<Loaded, (...a: never[]) => void>) =>
@@ -72,8 +77,19 @@ export function morphField(element: HTMLElement, options: MorphFieldOptions): Mo
   };
   load();
   const look = (): GlyphFieldOptions => ({
-    mark: 'engraving', markAngle: -45, charset: ' .:-=+*#%@', cellSize: 7, cellAspect: 1, contrast: 1.15, levels: 'none', ...o().look,
+    // Two cuts a cell: 11px cells space the stripes 5.5px apart across their 45-degree run, about 8px along a row.
+    mark: 'engraving', markAngle: -45, charset: ' .:-=+*#%@', cellSize: 11, cellAspect: 1, contrast: 1.4, levels: 'none', ...o().look,
   });
+  const styles = styleKeeper();
+  const paintGrid = () => {
+    const g = o().grid;
+    if (!g) { styles.restore(); return; }
+    const ink = typeof g === 'string' ? resolveColor(g, element) ?? g : resolveColor(o().ink ?? '--ascii-ink-strong', element) ?? '#ffffff';
+    // Small square dots on a 9px pitch, as an SVG tile so the squares stay crisp at any zoom.
+    const rect = `<rect x='3.25' y='3.25' width='2.5' height='2.5' fill='${ink}'${typeof g === 'string' ? '' : " fill-opacity='.55'"}/>`;
+    styles.set(element, 'background-image', `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'>${rect}</svg>`)}")`);
+    styles.set(element, 'background-size', '9px 9px');
+  };
   const animated = (s: Loaded | undefined) => typeof s === 'function' || (!!s && 'videoWidth' in s && !s.paused);
 
   let surface: Surface | null = null;
@@ -129,17 +145,19 @@ export function morphField(element: HTMLElement, options: MorphFieldOptions): Mo
   }
   if (surface) {
     if (label) element.appendChild(label);
+    paintGrid();
     schedule();
   }
 
   return handle(() => surface, state, next => {
     if (next.sources !== sources) { sources = next.sources; load(); index = Math.min(index, Math.max(0, loaded.length - 1)); }
     if (label) label.textContent = next.label ?? '';
+    if (surface) paintGrid();
     schedule();
     surface?.refresh();
   }, {
     next: () => go(index + 1),
     go,
     get index() { return index; },
-  }, () => { clearTimeout(timer); label?.remove(); });
+  }, () => { clearTimeout(timer); label?.remove(); styles.restore(); });
 }

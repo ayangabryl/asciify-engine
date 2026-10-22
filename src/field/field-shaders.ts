@@ -377,16 +377,15 @@ void main(){
     index=tone>.008?1.+min(uCount-2.,floor(hash(cell*.731+vec2(19.17,3.71))*(uCount-1.))):0.;
   } else if(uOrder>.5){
     // Text order: the charset after its blank is read in sequence along each row, each row a few letters on, so words stay
-    // legible. Every letter shows from a tone of .6; below it a 4x4 Bayer screen thins them out toward the field's quiet edges.
-    ivec2 q=ivec2(mod(cell,4.));
+    // legible. Every letter is there; the tone sets how strongly it shows, so the words fade out toward the field's quiet edges.
     float n=max(1.,uCount-1.);
-    index=tone>.04+(BAYER[q.y*4+q.x]+.5)/16.*.56?1.+mod(cell.x+cell.y*(floor(n*.38)+1.),n):0.;
+    index=tone>.015?1.+mod(cell.x+cell.y*(floor(n*.38)+1.),n):0.;
   }
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
   vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
-  // Scatter and inlay carry the tone in the ink's strength, which the pixel pass reads back as opacity or tile shade.
-  if(uOrder>1.5||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;
+  // Scatter, text and inlay carry the tone in the ink's strength, which the pixel pass reads back as opacity or tile shade.
+  if(uOrder>1.5||(uOrder>.5&&uMark==0)||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;
   vec3 lifted=uHighlightAuto>.5?ink/max(max(ink.r,ink.g),max(ink.b,.06)):uHighlight;
   ink=mix(ink,lifted,wake*.7);
   if(spot>0.)ink=mix(ink,clamp(rgb/max(max(rgb.r,rgb.g),max(rgb.b,.08))*(.45+.55*tone),0.,1.),spot);
@@ -409,6 +408,8 @@ uniform vec2 uResolution, uCell, uPitch;
 uniform float uColumns, uDotScale, uSourceColor;
 uniform vec2 uDir;
 uniform int uMark;
+// Inlay accents: share of tiles, letter shuffle span, a seed that steps a few times a second, charset length.
+uniform vec4 uInlay;
 uniform vec4 uFade;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -451,6 +452,10 @@ void main(){
   }
   if(uMark==0||uMark==17){
     float index=floor(ink.a*255.+.5);
+    // Inlay shuffle: every tiled cell takes a letter from the upper charset, traded for a neighbour a few times a second, so a
+    // tiled body flickers through its letters rather than banding by tone; the tile's shade still carries the tone.
+    float hs=hash(cell*.917+uInlay.z*1.37);
+    if(uMark==17&&uInlay.y>0.&&index>0.&&(index>=uInlay.w*.62||strength>=.2))index=clamp(max(index,ceil(uInlay.w*.62)+1.)+floor((hs-.5)*(2.*uInlay.y+1.)),ceil(uInlay.w*.62),uInlay.w-1.);
     ivec2 tile=ivec2(int(mod(index,uColumns)),int(floor(index/uColumns)));
     vec2 texel=floor(local-floor((uPitch-uCell)*.5));
     coverage=all(greaterThanEqual(texel,vec2(0.)))&&all(lessThan(texel,uCell))?texelFetch(uAtlas,tile*ivec2(uCell)+ivec2(texel),0).a:0.;
@@ -459,13 +464,25 @@ void main(){
       // cells keep only the character, so a shape's edge frays into specks; empty cells show a hairline grid.
       vec2 p=local+.5;
       float gap=max(1.,floor(min(uPitch.x,uPitch.y)*.08+.5));
-      float plate=index>0.?smoothstep(.1,.28,strength)*box(p,vec2(0.),uPitch-gap):0.;
+      float plate=index>0.?smoothstep(.2,.32,strength)*box(p,vec2(0.),uPitch-gap):0.;
       // Tile and letter are the ink at two strengths over whatever ground lies below, so the inlay reads on light and dark pages:
       // the tile strengthens with the tone and the letter is cut back toward the ground.
       float face=(.18+.8*smoothstep(.05,.8,strength))*plate;
-      float speck=coverage*min(1.,strength*2.6)*(1.-plate);
+      // With shuffle on, tiles also vary a little in shade, as worn inlay does.
+      if(uInlay.y>0.)face*=.8+.34*hs;
+      float speck=coverage*min(1.,strength*6.)*(1.-plate);
       float grid=index>0.?0.:(1.-box(p,vec2(0.),uPitch-1.))*.035;
       float a=mix(face,face*.22,coverage*plate)+speck;
+      // Accents: a few lit tiles carry a coloured letter, a tinted tile or a white glint, picked afresh with the seed.
+      float ha=hash(cell*1.31+uInlay.z*.71+vec2(7.3,1.9));
+      if(plate>0.&&ha<uInlay.x){
+        float pick=hash(cell+uInlay.z*2.11+vec2(3.1,8.7));
+        vec3 hue=pick<.16?vec3(.86,.27,.27):pick<.3?vec3(.92,.55,.2):pick<.42?vec3(.9,.78,.25):pick<.58?vec3(.35,.72,.38):pick<.72?vec3(.3,.72,.8):pick<.84?vec3(.32,.42,.92):vec3(.66,.42,.86);
+        float kind=ha/uInlay.x;
+        if(kind<.55){float k=coverage*plate;rgb=mix(rgb,hue,k);a=mix(a,1.,k);}
+        else if(kind<.88){rgb=mix(rgb,hue,.55);}
+        else{float k=coverage*plate;rgb=mix(rgb,vec3(1.),1.-k);a=mix(max(a,.96),face*.3,k);}
+      }
       coverage=a>0.?a:grid;
     } else coverage*=strength;
   } else if(uMark==1){
@@ -498,6 +515,22 @@ void main(){
       // Disco: a gapped mirror tile, its upper facet catching light and its lower in shade.
       coverage=box(p,vec2(0.),uPitch-gap)*fade;
       rgb=q.y<.35?mix(rgb,vec3(1.),.1+grain*.25):q.y>.65?rgb*.75:rgb;
+    } else if(uMark==18){
+      // Tick: a smooth wash in the ink under a fine screen of short upright ticks, both following the tone, as a glow seen
+      // through a printed screen: the ticks carry the texture in the mid tones and melt into the wash where it is brightest.
+      float tw=max(1.,floor(uPitch.x*.24+.5)),th=max(2.,floor(uPitch.y*.42+.5));
+      vec2 lo=floor(c-vec2(tw,th)*.5);
+      float bar=box(p,lo,lo+vec2(tw,th));
+      coverage=clamp(tone*tone*.92+bar*(.32+.3*tone)*(1.-tone*tone),0.,1.);
+    } else if(uMark==19){
+      // Bayer: one gapped square a cell, on or off by a 4x4 ordered threshold at two strengths, so a picture steps through
+      // empty, half and full squares in the brand's tones, as pixel-dithered art does.
+      ivec2 b=ivec2(mod(cell,4.));
+      float th=(BAYER[b.y*4+b.x]+.5)/16.,g=max(1.,floor(min(uPitch.x,uPitch.y)*(1.-uDotScale)+.5));
+      float lvl=tone>.5+th*.5?1.:tone>th*.5?.5:0.;
+      // An empty cell keeps a small faint square, so the ground reads as a dot grid that the picture fills.
+      vec2 d=floor(c-max(1.,floor(min(uPitch.x,uPitch.y)*.3))*.5);
+      coverage=lvl>0.?box(p,vec2(0.),uPitch-g)*lvl:box(p,d,d+max(1.,floor(min(uPitch.x,uPitch.y)*.3)))*.35;
     } else if(uMark==7){
       // Dither: an ordered 4x4 Bayer screen at about five dots a cell, lit where the cell's tone passes the threshold.
       ivec2 b=ivec2(mod(floor(frag/max(1.,floor(side/5.))),4.));

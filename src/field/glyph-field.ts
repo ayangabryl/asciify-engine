@@ -710,7 +710,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(u.uTime, time);
     gl.uniform1f(u.uDrift, motion ? settings.drift : 0);
     gl.uniform1f(u.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
-    gl.uniform1f(u.uLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5));
+    gl.uniform1f(u.uLod, settings.sample === 'point' ? 0 : Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5));
     gl.uniform1f(u.uSaturation, settings.saturation);
     gl.uniform1f(u.uShade, settings.shade);
     gl.uniform1f(u.uBackdrop, source ? settings.backdrop : 0);
@@ -731,8 +731,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(p.uDotScale, settings.dotScale);
     gl.uniform2f(p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
     gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
+    gl.uniform4f(p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
     gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
-    gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder === 'scatter' && settings.mark === 'glyph') ? 1 : 0);
+    gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (shared) host!.present(view!, width, height);
   };

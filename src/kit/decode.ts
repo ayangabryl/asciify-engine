@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
-import { clamp, entryProgress, handle, hash, house, mountSurface, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { clamp, entryProgress, handle, hash, house, mountSurface, prefersReduced, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 export interface DecodeOptions extends KitOptions {
   /** Text to draw instead of the element's own, centred and as large as fits; `\n` breaks lines. By default the element's text is drawn exactly where the browser lays it out. */
@@ -12,12 +12,20 @@ export interface DecodeOptions extends KitOptions {
    */
   trigger?: 'visible' | 'manual' | 'scroll';
   /**
-   * Flip through other alphabets before landing: `true` for the built-in set (kana, Hangul, accented Latin, Cyrillic, Greek, then
-   * digits and signs) or your own list, one string of letters per alphabet. Each flip fills every unresolved letter from one
-   * alphabet, drawn in the element's font at the letter's own place; letters lock left to right over the last 60% of the run.
-   * The default `duration` becomes 1400.
+   * Scramble the element's own HTML text instead of drawing a field: a front sweeps left to right turning each letter into flickering
+   * letters of another alphabet, and a second front a few letters behind it sets the real letters down, in the element's own font
+   * and size. `true` uses the built-in alphabets (kana, Hangul, Han, accented Latin, Cyrillic, Greek, signs), a new one each run, or
+   * the alphabet of the word it is heading to; or give your own list, one string of letters per alphabet. No WebGL is needed.
+   * The default `duration` becomes 900.
    */
   scramble?: boolean | string[];
+  /**
+   * With `scramble`: words to cycle the element's first text through, as a headline that greets in several languages
+   * ("Connect", "つながる", "Conectar"). Each change sweeps from the old word to the new one, then holds for `hold` ms.
+   */
+  cycle?: string[];
+  /** Ms each word of `cycle` holds. Default 2600. */
+  hold?: number;
   /** Decode again when the pointer enters. Default true. */
   replayOnHover?: boolean;
   /** `glyphs` keeps the headline in characters; `text` hands back to the crisp HTML text at the end. Default `glyphs`. */
@@ -34,6 +42,7 @@ const DEFAULTS = { duration: 800, trigger: 'visible' as 'visible' | 'manual' | '
 export const SCRAMBLE_SCRIPTS = [
   'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん',
   '가나다라마바사아자차카타파하연결함께성장미래교류접',
+  '连接通建联合共创未来网络云端世界开放协作数据',
   'ÁÀÂÄÃÅÆÇÉÈÊËÍÌÎÏÑÓÒÔÖØŒÚÙÛÜÝŸßÐÞ',
   'БГДЖЗИЙЛПФЦЧШЩЪЫЬЭЮЯ',
   'ΑΒΓΔΘΛΞΠΣΦΨΩαβγδεζηθλμξπσφψω',
@@ -48,6 +57,30 @@ export function scrambleLetter(letter: string, i: number, flip: number, locked: 
   return script[Math.floor(hash(i * 3.1 + flip, flip * 0.7 + i) * script.length)] ?? letter;
 }
 const RESOLUTION = 2;
+
+/** The alphabet a word flickers through on its way in: the built-in one holding its letters, else accented Latin. Exported for tests. */
+export function scriptFor(word: string, scripts: string[], fallback: number) {
+  for (const script of scripts) if ([...word].some(char => char.trim() && script.includes(char))) return script;
+  if ([...word].some(char => char.charCodeAt(0) > 0x2e80)) return scripts.find(s => /[\u4e00-\u9fff]/.test(s)) ?? scripts[fallback % scripts.length];
+  return scripts.find(s => s.includes('É')) ?? scripts[fallback % scripts.length];
+}
+
+/**
+ * One frame of the sweep from `from` to `to`, `t` seconds in, `step` seconds a letter: past the trailing front the new letters,
+ * between the fronts letters of `script` (fresh every `flicker`), ahead of them the old ones. Exported for tests.
+ */
+export function sweepText(from: string, to: string, t: number, step: number, script: string, lag = 3, flicker = 0.05) {
+  const a = [...from], b = [...to], n = Math.max(a.length, b.length), letters = [...script];
+  const lead = Math.floor(t / step), set = lead - lag, tick = Math.floor(t / flicker);
+  let out = '';
+  for (let i = 0; i < n; i++) {
+    if (i < set) { out += b[i] ?? ''; continue; }
+    if (i >= lead) { out += a[i] ?? ''; continue; }
+    const real = b[i] ?? a[i] ?? '';
+    out += !real.trim() ? real : letters[Math.floor(hash(i * 7.3 + tick, tick * 0.37 + i) * letters.length)] ?? real;
+  }
+  return { text: out, done: set >= n };
+}
 
 /** A soft value-noise cloud that drifts with `t`, feathered toward the edges. */
 export function driftNoise(noise: HTMLCanvasElement, t: number, feather = 0.82) {
@@ -136,22 +169,11 @@ function paintGivenText(pen: CanvasRenderingContext2D, element: HTMLElement, tex
 
 /** A headline that condenses out of a drifting field of characters, left to right through a flickering band. */
 export function decode(element: HTMLElement, options: DecodeOptions = {}): DecodeHandle {
+  if (options.scramble) return scrambleText(element, options);
   const state = { current: { ...DEFAULTS, ...options } };
   const styles = styleKeeper();
   const art = document.createElement('canvas'), noise = document.createElement('canvas');
-  if (options.duration === undefined && options.scramble) state.current.duration = 1400;
-  let start = -1, artKey = '', showing = false, ran = false, surface: Surface | null = null, letters: DecodeLetter[] = [], scrolled = 0;
-  const scripts = () => (Array.isArray(state.current.scramble) && state.current.scramble.length ? state.current.scramble : SCRAMBLE_SCRIPTS);
-  /** The flipping headline: locked letters as they are, the rest from the flip's alphabet, each at its own place. */
-  const paintScramble = (pen: CanvasRenderingContext2D, flip: number, locked: number) => {
-    pen.fillStyle = '#fff'; pen.textAlign = 'center'; pen.textBaseline = 'alphabetic';
-    letters.forEach((letter, i) => {
-      const shown = scrambleLetter(letter.char, i, flip, locked, scripts());
-      if (!shown.trim()) return;
-      pen.font = letter.font;
-      pen.fillText(shown, letter.x + letter.w / 2, letter.y, Math.max(1, letter.w * 1.2));
-    });
-  };
+  let start = -1, artKey = '', showing = false, ran = false, surface: Surface | null = null, scrolled = 0;
   const look = (): GlyphFieldOptions => ({
     mark: 'glyph', charset: ' .:-=+*#%@', font: '"Geist Mono", ui-monospace, monospace', fontWeight: 500,
     cellSize: 4.5, cellAspect: 0.62, glyphScale: 0.92, contrast: 1.35, hover: 'trail', trail: { strength: 0.6, radius: 0.2 },
@@ -165,10 +187,8 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
     art.width = w; art.height = h;
     const pen = art.getContext('2d')!;
     pen.fillStyle = '#000'; pen.fillRect(0, 0, w, h);
-    letters = [];
-    const collect = state.current.scramble ? letters : undefined;
-    if (state.current.text !== undefined) paintGivenText(pen, element, state.current.text, w, h, collect);
-    else paintOwnText(pen, element, element.getBoundingClientRect(), (w / (element.getBoundingClientRect().width || 1)), collect);
+    if (state.current.text !== undefined) paintGivenText(pen, element, state.current.text, w, h);
+    else paintOwnText(pen, element, element.getBoundingClientRect(), (w / (element.getBoundingClientRect().width || 1)));
   };
 
   surface = mountSurface({
@@ -188,7 +208,6 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
         const p = still ? 1 : scrolled;
         if (p >= 1) { if (!textEnd) pen.drawImage(art, 0, 0); return false; }
         if (p <= 0) return false;
-        if (o.scramble) { paintScramble(pen, Math.floor(p * 48), Math.floor(clamp((p - 0.25) / 0.75) * letters.length)); return false; }
         const edge = p * w;
         pen.drawImage(art, 0, 0, Math.max(1, edge), h, 0, 0, Math.max(1, edge), h);
         return false;
@@ -201,12 +220,6 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
         return false;
       }
       const t = now - start, drift = o.duration * 0.3, sweep = o.duration * 0.7;
-      if (o.scramble) {
-        if (t >= o.duration) { if (!textEnd) pen.drawImage(art, 0, 0); finish(); return false; }
-        const locked = Math.floor(house(clamp((t - o.duration * 0.4) / (o.duration * 0.6))) * letters.length);
-        paintScramble(pen, Math.floor(t / 65), locked);
-        return true;
-      }
       const nw = Math.max(2, Math.ceil(w / 20)), nh = Math.max(2, Math.ceil(h / 20));
       if (noise.width !== nw || noise.height !== nh) { noise.width = nw; noise.height = nh; }
       driftNoise(noise, t / 1000);
@@ -302,3 +315,104 @@ export function decode(element: HTMLElement, options: DecodeOptions = {}): Decod
 }
 
 export const DECODE_DEFAULTS = DEFAULTS;
+
+/** `decode` with `scramble`: the element's own text sweeps through another alphabet and lands, in HTML, with no field. */
+function scrambleText(element: HTMLElement, options: DecodeOptions): DecodeHandle {
+  const state = { current: { ...DEFAULTS, duration: 900, hold: 2600, ...options } };
+  const o = () => state.current;
+  const scripts = () => (Array.isArray(o().scramble) && (o().scramble as string[]).length ? o().scramble as string[] : SCRAMBLE_SCRIPTS);
+  const reduced = () => !!(o().reducedMotion ?? prefersReduced());
+  // The text nodes, read once: their own words are what a plain scramble lands back on.
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) if (node.data.trim()) nodes.push(node);
+  const own = nodes.map(node => node.data);
+  const label = element.getAttribute('aria-label');
+  let raf = 0, timer: ReturnType<typeof setTimeout> | undefined, runs = 0, word = 0, destroyed = false, scrolled = 0;
+  let job: { from: string[]; to: string[]; script: string; start: number } | null = null;
+  const write = (texts: string[]) => texts.forEach((text, i) => { if (nodes[i] && nodes[i].data !== text) nodes[i].data = text; });
+  const current = () => nodes.map(node => node.data);
+  const settle = () => {
+    if (label === null) element.removeAttribute('aria-label'); else element.setAttribute('aria-label', label);
+  };
+  const frame = (now: number) => {
+    raf = 0;
+    if (!job || destroyed) return;
+    const t = Math.max(0, now - job.start) / 1000;
+    const letters = Math.max(...job.to.map(x => [...x].length), ...job.from.map(x => [...x].length), 1);
+    const step = (o().duration / 1000) / (letters + 3);
+    let done = true, offset = 0;
+    write(job.to.map((to, i) => {
+      // Text nodes sweep as one line: each starts where the one before it ended.
+      const r = sweepText(job!.from[i] ?? '', to, t - offset * step, step, job!.script);
+      offset += Math.max([...to].length, [...(job!.from[i] ?? '')].length);
+      if (!r.done) done = false;
+      return r.text;
+    }));
+    if (done) { write(job.to); job = null; settle(); next(); return; }
+    raf = requestAnimationFrame(frame);
+  };
+  const go = (to: string[]) => {
+    if (destroyed || !nodes.length) return;
+    if (reduced()) { write(to); next(); return; }
+    cancelAnimationFrame(raf);
+    const target = to.join(' ');
+    element.setAttribute('aria-label', o().cycle ? target : own.join(' '));
+    job = { from: current(), to, script: o().scramble === true ? scriptFor(target, scripts(), runs) : scripts()[runs % scripts().length], start: performance.now() };
+    runs++;
+    raf = requestAnimationFrame(frame);
+  };
+  const next = () => {
+    const words = o().cycle;
+    if (!words?.length || destroyed) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (typeof document !== 'undefined' && document.hidden) { next(); return; }
+      word = (word + 1) % words.length;
+      go([words[word], ...own.slice(1)]);
+    }, o().hold);
+  };
+  const run = () => {
+    const words = o().cycle;
+    go(words?.length ? [words[word], ...own.slice(1)] : own);
+  };
+  // The same triggers as a field decode: in view, on hover, by hand, or with scroll position.
+  const onScroll = () => {
+    const p = entryProgress(element);
+    if (Math.abs(p - scrolled) < 0.002 || reduced()) return;
+    scrolled = p;
+    const letters = Math.max(1, ...own.map(x => [...x].length)), step = 1 / (letters + 3);
+    let offset = 0;
+    write(own.map(text => { const r = sweepText(text, text, p - offset * step, step, scripts()[0]); offset += [...text].length; return p >= 1 ? text : r.text; }));
+  };
+  const scrolling = o().trigger === 'scroll' && typeof window !== 'undefined';
+  if (scrolling) { window.addEventListener('scroll', onScroll, { passive: true }); scrolled = -1; onScroll(); }
+  let seen = false;
+  const view = o().trigger === 'visible' && typeof IntersectionObserver === 'function'
+    ? new IntersectionObserver(([entry]) => { if (entry.isIntersecting && !seen) run(); seen = entry.isIntersecting; }, { threshold: 0.5 })
+    : null;
+  if (view) view.observe(element);
+  else if (o().trigger === 'visible') run();
+  let inside = false;
+  const onEnter = () => { if (inside) return; inside = true; if (o().replayOnHover && !job && o().trigger !== 'scroll' && !o().cycle) run(); };
+  const onLeave = () => { inside = false; };
+  element.addEventListener('pointerenter', onEnter);
+  element.addEventListener('pointermove', onEnter);
+  element.addEventListener('pointerleave', onLeave);
+  if (o().cycle?.length && o().trigger === 'manual') next();
+
+  const h = handle(() => null, state, () => {}, { replay: run }, () => {
+    destroyed = true;
+    cancelAnimationFrame(raf);
+    clearTimeout(timer);
+    view?.disconnect();
+    if (scrolling) window.removeEventListener('scroll', onScroll);
+    element.removeEventListener('pointerenter', onEnter);
+    element.removeEventListener('pointermove', onEnter);
+    element.removeEventListener('pointerleave', onLeave);
+    if (!o().cycle) write(own);
+    settle();
+  });
+  // No field to fail: the scramble works wherever the DOM does.
+  return Object.defineProperty(h, 'supported', { get: () => !destroyed });
+}

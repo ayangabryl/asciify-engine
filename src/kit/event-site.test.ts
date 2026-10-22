@@ -8,7 +8,7 @@ import { isLand } from './land';
 import { morphField, drawMorphSource } from './morph-field';
 import { ditherGradient, ditherGradientFrame } from './dither-gradient';
 import { ditherImage } from './dither-image';
-import { decode, scrambleLetter, SCRAMBLE_SCRIPTS } from './decode';
+import { decode, scrambleLetter, scriptFor, sweepText, SCRAMBLE_SCRIPTS } from './decode';
 import { wordmark, scatterFrame } from './wordmark';
 import { cursorTrail, cursorTrailFrame } from './cursor-trail';
 import { entryProgress } from './core';
@@ -52,7 +52,7 @@ describe('globe', () => {
     expect(host.textContent).toContain('Our network');
     expect(host.style.getPropertyValue('touch-action')).toBe('pan-y');
     run(1000);
-    expect(g.lon).toBeGreaterThan(5);
+    expect(g.lon).toBeLessThan(-5); // eastward: the facing longitude falls
     g.update({ speed: 0 });
     run(200);
     const calls = env.field.setSource.mock.calls.length;
@@ -149,7 +149,7 @@ describe('ditherGradient', () => {
     const host = element();
     const d = ditherGradient(as(host), { motion: 0 });
     await flush();
-    expect(mountLook()).toMatchObject({ mark: 'dither' });
+    expect(mountLook()).toMatchObject({ mark: 'tick' });
     expect(canvases(host)[0].style.zIndex).toBe('-1');
     run(200);
     const idle = env.field.setSource.mock.calls.length;
@@ -172,7 +172,7 @@ describe('ditherImage', () => {
     const d = ditherImage(as(host), { tones: ['#0b1b4a', '#3a5bff'], duration: 400 });
     await flush();
     expect(img.style.getPropertyValue('visibility')).toBe('hidden');
-    expect(last(mount.mock.calls)?.[1]).toMatchObject({ mark: 'dither', background: '#0b1b4a', ink: '#3a5bff', label: 'Field' });
+    expect(last(mount.mock.calls)?.[1]).toMatchObject({ mark: 'bayer', background: '#0b1b4a', ink: '#3a5bff', label: 'Field' });
     expect(lastLook().brightness).toBe(-1);
     last(env.visibility)!([{ isIntersecting: true }]);
     run(500);
@@ -206,19 +206,33 @@ describe('decode scramble and scroll', () => {
     expect(SCRAMBLE_SCRIPTS.length).toBeGreaterThan(3);
   });
 
-  it('scrambles on hover and hands back to the HTML text', async () => {
+  it('sweeps the HTML text through another alphabet on hover and lands on it, with no field', async () => {
     const link = element('A');
     link.textContent = 'Speakers';
-    const d = decode(as(link), { scramble: ['ABC'], trigger: 'manual', settle: 'text' });
-    await flush();
-    expect(link.style.getPropertyValue('-webkit-text-fill-color')).toBe('');
+    const text = link.childNodes[0] as unknown as { data: string };
+    const calls = mount.mock.calls.length;
+    const d = decode(as(link), { scramble: ['XYZ'], trigger: 'manual', duration: 600 });
+    expect(mount.mock.calls.length).toBe(calls);
+    expect(d.supported).toBe(true);
     link.dispatch('pointerenter');
-    expect(link.style.getPropertyValue('-webkit-text-fill-color')).toBe('transparent');
+    run(250);
+    expect(text.data).not.toBe('Speakers');
+    expect(text.data.length).toBe(8);
+    expect([...text.data].some(c => 'XYZ'.includes(c))).toBe(true);
     run(700);
-    expect(link.style.getPropertyValue('-webkit-text-fill-color')).toBe('transparent');
-    run(900);
-    expect(link.style.getPropertyValue('-webkit-text-fill-color')).toBe('');
+    expect(text.data).toBe('Speakers');
     d.destroy();
+  });
+
+  it('sweeps between words: new letters behind, flicker between the fronts, old letters ahead', () => {
+    expect(sweepText('Hallo', 'Hola', 0, 0.1, 'ab').text).toBe('Hallo');
+    const mid = sweepText('Hallo', 'Hola', 0.45, 0.1, 'ab');
+    expect(mid.text.slice(0, 1)).toBe('H');
+    expect(mid.text.slice(4)).toBe('o');
+    expect(mid.done).toBe(false);
+    expect(sweepText('Hallo', 'Hola', 2, 0.1, 'ab')).toEqual({ text: 'Hola', done: true });
+    expect(scriptFor('연결', SCRAMBLE_SCRIPTS, 0)).toContain('결');
+    expect(scriptFor('Conectar', SCRAMBLE_SCRIPTS, 0)).toContain('É');
   });
 
   it('follows scroll position and idles while the page is still', async () => {
@@ -286,13 +300,21 @@ describe('cursorTrail spray', () => {
     trail.destroy();
   });
 
-  it('draws the box outline in the frame', () => {
+  it('draws square hatch patches snapped to the cells, and the drag box as a hairline in the DOM', async () => {
     const rects: number[][] = [];
     const pen = new Proxy({} as Record<string, unknown>, {
-      get: (t, k) => (k in t ? t[k as string] : k === 'strokeRect' ? (...a: number[]) => rects.push(a) : k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}),
+      get: (t, k) => (k in t ? t[k as string] : k === 'fillRect' ? (...a: number[]) => rects.push(a) : () => {}),
       set: (t, k, v) => { t[k as string] = v; return true; },
     }) as unknown as CanvasRenderingContext2D;
-    cursorTrailFrame(pen, [], 'spray', 100, 800, 9, 1, { x0: 50, y0: 60, x1: 10, y1: 20, t: 0 });
-    expect(rects).toEqual([[10, 20, 40, 40]]);
+    cursorTrailFrame(pen, [{ x: 50, y: 50, t: 100, seed: 0, vx: 0, vy: 0 }], 'spray', 100, 800, 9, 1);
+    expect(rects).toEqual([[45, 45, 18, 18]]);
+    const trail = cursorTrail({ style: 'spray', readout: true });
+    env.body.dispatch('pointermove', { clientX: 300, clientY: 300, pointerType: 'mouse', buttons: 1 });
+    env.body.dispatch('pointermove', { clientX: 380, clientY: 360, pointerType: 'mouse', buttons: 1 });
+    await flush();
+    const layer = env.body.children.find(el => el.dataset.asciiCursor !== undefined)!;
+    const box = layer.children.find(el => el.tagName === 'DIV')!;
+    expect(box.style.cssText).toContain('width:80px');
+    trail.destroy();
   });
 });

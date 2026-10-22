@@ -44,7 +44,7 @@ describe('glyph field programs', () => {
   it('scatters a fixed character per cell and carries scatter and inlay tone as ink strength the pixel pass reads back', () => {
     const cell = fieldCellShader(false);
     expect(cell).toContain('if(uOrder>1.5){');
-    expect(cell).toContain('if(uOrder>1.5||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;');
+    expect(cell).toContain('if(uOrder>1.5||(uOrder>.5&&uMark==0)||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;');
     expect(FIELD_COMPOSITE).toContain('uniform vec4 uFade;');
     expect(draw).toContain("settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0");
     expect(FIELD_MARKS.indexOf('inlay')).toBe(17);
