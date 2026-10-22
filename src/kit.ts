@@ -46,6 +46,8 @@ export { cursorTrail } from './kit/cursor-trail';
 export type { CursorTrailOptions, CursorTrailHandle, CursorTrailStyle } from './kit/cursor-trail';
 export { globe } from './kit/globe';
 export type { GlobeOptions, GlobeHandle, GlobePoint } from './kit/globe';
+export { ocean, OCEAN_KINDS } from './kit/ocean';
+export type { OceanOptions, OceanHandle, OceanCreature, OceanKind } from './kit/ocean';
 export { morphField } from './kit/morph-field';
 export type { MorphFieldOptions, MorphFieldHandle, MorphSource } from './kit/morph-field';
 export { ditherGradient } from './kit/dither-gradient';

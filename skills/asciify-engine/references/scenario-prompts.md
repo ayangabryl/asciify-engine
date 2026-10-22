@@ -94,3 +94,6 @@ The website uses the published renderer's native Trail. A chain-shaped tonal ove
 
 “Draw [image] with `ditherImage` in our two tones `[ground token, ink token]`, mark [dither/pixel/dot/engraving], developing in on scroll (`reveal: 'scroll'`). Keep the `<img>` in the markup with its `alt` as the fallback and accessible name. Compare cell sizes 4–8 on desktop and phone, and both themes.”
 
+## 22. An ASCII ocean behind the hero
+
+“Put an ASCII ocean behind our landing hero with `ocean` from `asciify-engine/kit`: [a shark, a hammerhead, a manta, a few fish, two jellyfish and a school of 30 small fish], inked from [our text token] (or a `palette` per kind from our brand tokens), `layer: 'under'` so the headline and CTA stay real HTML above it. The cursor scatters the fish and the sharks turn to investigate; a click sends a ripple. Pick a `seed` we like, keep the busiest creatures off the headline (fewer, or a lower `density` on phones), give it a `label` or leave it decorative, and a `poster` for the first viewport in both themes. Reduced motion shows a still composition; it pauses off screen. Check light and dark, a 390px phone and WebGL off.”
