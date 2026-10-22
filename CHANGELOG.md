@@ -5,7 +5,7 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
-## Unreleased
+## 4.32: surface-aware taps, ocean accents, navPill and matched event-site pieces
 
 - Taps read the surface they land on. A click on `shockwave`, `estuary` or `capillary` sends a damped 2D wave over the preset's own field instead of a fixed ring: `shockwave`'s front is carried downwind, slows and buckles in dense gusts and lights the streaks it crosses; `estuary`'s slows in the dense currents and lights them along their contours; `capillary`'s runs along the veins. Over a photo or video, a press (and `pulse()`) on the glyph field sends the wave over the picture: fast over water, sky and smooth areas, slow on detail, held back by edges and the subject's outline so it wraps round the subject; water rings with glints, sky swells, busy ground shudders briefly, shaded by the photo's own light. The medium follows a video frame by frame. `tap: 'ring'` (background option and field setting) keeps the plain ring; the field also takes `tap: 'none'`. Skipped under reduced motion.
 - Field: `glyphOrder: 'scatter'` gives each cell one fixed character picked from the charset and lets the tone set its opacity, so a field of letters glows and fades like a lit screen of type (fades toward the ground in light and dark themes alike). A field of scattered letters takes the global look.
