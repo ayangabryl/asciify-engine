@@ -1,7 +1,7 @@
 import type { GlyphField, GlyphFieldOptions } from '../field';
-import { CHARACTER_SETS } from '../studio/characters';
+import { CHARACTER_SETS, resolveCharset } from '../studio/characters';
 import { mergeOptions, prefersReduced, type KitHandle, type KitOptions } from './core';
-import { disposeKit, setPosterSource } from './core-live';
+import { disposeKit, ownsCharset, setPosterSource } from './core-live';
 import { tapStyle, type TapStyle } from '../surface/surface-tap';
 
 /** `true` follows the pointer with the preset's own response; the GPU presets also take a named hover. */
@@ -119,11 +119,7 @@ const num = (value: number | undefined, fallback: number, lo: number, hi: number
 
 /** A named set, or your own characters; a custom ramp gains the empty first step the templates expect. */
 export function backgroundCharset(charset: string | undefined): string | undefined {
-  if (!charset) return undefined;
-  if (charset === 'dots') return DOTS;
-  const named = (CHARACTER_SETS as Record<string, { chars: string } | undefined>)[charset];
-  if (named && Object.prototype.hasOwnProperty.call(CHARACTER_SETS, charset)) return named.chars;
-  return charset.startsWith(' ') ? charset : ' ' + charset;
+  return charset === 'dots' ? DOTS : resolveCharset(charset);
 }
 
 /**
@@ -139,6 +135,7 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
   let picture = options.poster;
   const framed = (next: BackgroundOptions): BackgroundOptions => ({ ...next, poster: next.preset === pictured ? picture : undefined });
   const state = { current: framed({ ...options }) };
+  ownsCharset(state);
   let run: BackgroundRun | null = null, paused = false, destroyed = false;
   const leaving = new Set<{ run: BackgroundRun; timer: ReturnType<typeof setTimeout> }>();
 

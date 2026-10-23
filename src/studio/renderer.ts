@@ -6,6 +6,7 @@ import { SourceWarpProcessor } from './warps';
 import { isStudioPrintStyle } from './print-model';
 import { createPrintPainter } from './print-renderer';
 import { hasAmbientMotion, hasPatternMotion } from './activity';
+import { WIDE_FONT, isWideGlyph } from './characters';
 import { sampleAmbient, scaleMotion, motionSource, isLightMotion } from '../surface/ambient-motion';
 import { buildPhotoCues, PHOTO_CUE_STRIDE, type PhotoCues } from '../surface/photo-cues';
 import {
@@ -522,9 +523,14 @@ export function createStudioRendererCore(
           atlas.ctx.textAlign = "center";
           atlas.ctx.fillStyle =
             state.colorMode === "accent" ? state.ink : "#ffffff";
-          chars.forEach((char, i) =>
-            atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2),
-          );
+          // Full-width glyphs (kanji) take the Japanese faces, sized to the cell's width so they never spill into a neighbour.
+          const wideFont = `${Math.max(3, Math.min(font, Math.floor(cell * 0.98)))}px ${WIDE_FONT}`;
+          chars.forEach((char, i) => {
+            if (!isWideGlyph(char)) { atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2); return; }
+            atlas.ctx.font = wideFont;
+            atlas.ctx.fillText(char, i * aw + aw / 2, ah / 2);
+            atlas.ctx.font = `${font}px monospace`;
+          });
           // Measure each glyph's ink once per atlas, for tone-to-glyph matching.
           inkCoverage = null;
           inkKey = "";

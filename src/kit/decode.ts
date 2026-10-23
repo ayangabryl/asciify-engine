@@ -1,5 +1,6 @@
 import type { GlyphFieldOptions } from '../field';
 import { clamp, entryProgress, handle, hash, house, mountSurface, prefersReduced, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { resolveCharset } from '../studio/characters';
 
 export interface DecodeOptions extends KitOptions {
   /** Text to draw instead of the element's own, centred and as large as fits; `\n` breaks lines. By default the element's text is drawn exactly where the browser lays it out. */
@@ -320,7 +321,9 @@ export const DECODE_DEFAULTS = DEFAULTS;
 function scrambleText(element: HTMLElement, options: DecodeOptions): DecodeHandle {
   const state = { current: { ...DEFAULTS, duration: 900, hold: 2600, ...options } };
   const o = () => state.current;
-  const scripts = () => (Array.isArray(o().scramble) && (o().scramble as string[]).length ? o().scramble as string[] : SCRAMBLE_SCRIPTS);
+  // A `charset` is the one alphabet the letters flip through.
+  const chosen = () => resolveCharset(o().charset)?.replace(/\s/g, '');
+  const scripts = () => chosen() ? [chosen()!] : Array.isArray(o().scramble) && (o().scramble as string[]).length ? o().scramble as string[] : SCRAMBLE_SCRIPTS;
   const reduced = () => !!(o().reducedMotion ?? prefersReduced());
   // The text nodes, read once: their own words are what a plain scramble lands back on.
   const nodes: Text[] = [];
@@ -358,7 +361,7 @@ function scrambleText(element: HTMLElement, options: DecodeOptions): DecodeHandl
     cancelAnimationFrame(raf);
     const target = to.join(' ');
     element.setAttribute('aria-label', o().cycle ? target : own.join(' '));
-    job = { from: current(), to, script: o().scramble === true ? scriptFor(target, scripts(), runs) : scripts()[runs % scripts().length], start: performance.now() };
+    job = { from: current(), to, script: o().scramble === true && !chosen() ? scriptFor(target, scripts(), runs) : scripts()[runs % scripts().length], start: performance.now() };
     runs++;
     raf = requestAnimationFrame(frame);
   };

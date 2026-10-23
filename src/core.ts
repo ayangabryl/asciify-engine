@@ -64,7 +64,8 @@ export { asciifyWebcam } from './core/webcam';
 export type { BigTextOptions } from './core/big-text';
 export { asciifyText, renderTextToCanvas } from './core/big-text';
 
-export { CHARACTER_SETS } from './studio/characters';
+export { CHARACTER_SETS, resolveCharset } from './studio/characters';
+export type { CharacterSetName } from './studio/characters';
 
 /** Data-only catalog; renderer implementations remain in the optional /studio entry. */
 export { STUDIO_STYLES } from './studio/model';

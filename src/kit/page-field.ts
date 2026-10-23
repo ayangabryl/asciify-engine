@@ -1,6 +1,6 @@
 import { isGlyphFieldSupported, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
 import { BASE_LOOK, isDark, mergeOptions, prefersReduced, resolveColor, styleKeeper, type KitOptions } from './core';
-import { disposeKit, liveField, poster, setPosterSource } from './core-live';
+import { disposeKit, liveField, poster, setPosterSource, withCharset, kitCharset } from './core-live';
 import { cancelFieldFrame, requestFieldFrame, watchTheme } from '../field/field-gl';
 
 /**
@@ -72,7 +72,7 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
   const ink = () => resolveColor(config.ink(dark), host, dark ? '#d8d6cf' : '#1d1d1b') ?? '#888888';
   const live = liveField({
     host, canvas, kit, place, ownPoster: config.ownPoster, glyphs: config.glyphs, source: config.source ?? null,
-    options: () => ({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink(), interactionTarget: host, label: config.label ?? '' }),
+    options: () => ({ ...withCharset({ ...BASE_LOOK, ...config.look(dark) }, kitCharset(kit)), ...motion(), ink: ink(), interactionTarget: host, label: config.label ?? '' }),
     onMount: (_, mounted) => {
       if (!config.label) { mounted.removeAttribute('role'); mounted.removeAttribute('aria-label'); mounted.setAttribute('aria-hidden', 'true'); }
       config.onMount?.();
@@ -83,7 +83,7 @@ export function mountPageField(config: PageFieldConfig): PageField | null {
   const field = live.field;
 
   let themeFrame = false;
-  const refresh = () => { if (destroyed) return; dark = isDark(host); field.update({ ...BASE_LOOK, ...config.look(dark), ...motion(), ink: ink() }); };
+  const refresh = () => { if (destroyed) return; dark = isDark(host); field.update({ ...withCharset({ ...BASE_LOOK, ...config.look(dark) }, kitCharset(kit)), ...motion(), ink: ink() }); };
   const rethemeNow = () => { themeFrame = false; refresh(); };
   const retheme = () => {
     if (themeFrame || destroyed) return;

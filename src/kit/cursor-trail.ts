@@ -1,6 +1,7 @@
 import { isGlyphFieldSupported, type GlyphField, type GlyphFieldOptions } from '../field';
 import { watchMotionPreference, watchPointer, watchVisibility } from '../field/field-gl';
 import { InkTrail } from '../surface/ink-trail';
+import { resolveCharset } from '../studio/characters';
 import { hash, mergeOptions, mountSurface, prefersReduced, resolveColor, type KitHandle, type KitOptions, type PaintFrame, type Surface } from './core';
 
 export type CursorTrailStyle = 'trail' | 'wake' | 'water' | 'sparkle' | 'spray';
@@ -12,7 +13,7 @@ export interface CursorTrailOptions extends KitOptions {
    * path (a drag draws a hairline selection box). Default `trail`.
    */
   style?: CursorTrailStyle;
-  /** Characters from empty to dense; the head of the trail takes the last one. Default ` .:-=+*#%@`. */
+  /** A named set or characters from empty to dense; the head of the trail takes the last one. `spray` switches to glyph patches. Default ` .:-=+*#%@`. */
   charset?: string;
   /** Cell width in CSS pixels. Default 9. */
   cellSize?: number;
@@ -47,7 +48,7 @@ export interface CursorTrailHandle extends KitHandle<CursorTrailOptions> {
   clear(): void;
 }
 
-const DEFAULTS = { style: 'trail' as CursorTrailStyle, charset: ' .:-=+*#%@', cellSize: 9, zIndex: 1000 };
+const DEFAULTS = { style: 'trail' as CursorTrailStyle, cellSize: 9, zIndex: 1000 };
 const QUIET = 'input, textarea, select, [contenteditable], dialog, [role="dialog"], [role="alertdialog"], [data-ascii-cursor-skip]';
 const MAX = { trail: 64, wake: 48, water: 20, sparkle: 140, spray: 90 } as const;
 const RES = 0.5;
@@ -176,7 +177,7 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
 
   // `trail` takes the wordmark's own glyphs, so its tail and a field's trail read as one.
   const look = (): GlyphFieldOptions => ({
-    mark: 'glyph', charset: o().charset, cellSize: o().cellSize,
+    mark: 'glyph', charset: resolveCharset(o().charset) ?? ' .:-=+*#%@', cellSize: o().cellSize,
     ...(o().style === 'trail' ? { font: '"Geist", Arial, sans-serif', fontWeight: 500, cellAspect: 0.8, glyphScale: 0.8, shade: 0, levels: 'none' as const }
       : o().style === 'spray' ? { mark: 'engraving' as const, markAngle: -45, cellAspect: 1, shade: 0, sample: 'point' as const } : { cellAspect: 0.62, glyphScale: 0.92, shade: 0.6 }),
     contrast: 1, ...o().look,
@@ -249,7 +250,7 @@ export function cursorTrail(options: CursorTrailOptions = {}): CursorTrailHandle
     document.body.appendChild(host);
     surface = mountSurface({
       host,
-      kit: { get current() { return { lazy: false, globalLook: o().globalLook ?? false }; } },
+      kit: { get current() { return { lazy: false, globalLook: o().globalLook ?? false, charset: o().charset }; } },
       look,
       ink: () => o().ink ?? '--ascii-ink',
       resolution: RES,

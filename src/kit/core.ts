@@ -1,5 +1,5 @@
 import { isGlyphFieldSupported, type GlyphField, type GlyphFieldOptions } from '../field';
-import { disposeKit, liveField, poster, setPosterSource } from './core-live';
+import { disposeKit, liveField, poster, setPosterSource, withCharset, kitCharset } from './core-live';
 import { ambientFactor, cancelFieldFrame, requestFieldFrame, watchMotionPreference, watchPointer, watchTheme, watchVisibility } from '../field/field-gl';
 
 /** Options every kit component takes. */
@@ -19,6 +19,12 @@ export interface KitOptions {
   poster?: string;
   /** `false` keeps this field's own characters when `setGlobalLook` re-skins the page. Default true. */
   globalLook?: boolean;
+  /**
+   * The characters drawn: a named set (`'standard'`, `'blocks'`, `'braille'`, `'fish'`, `'kanji'`, any key of `CHARACTER_SETS`)
+   * or your own, empty to dense. A component drawn in marks (dots, dither, ticks, engraving) switches to glyphs. Given, it is
+   * kept over the page's `setGlobalLook`. Default: the component's own.
+   */
+  charset?: string;
 }
 
 /** The handle every kit component returns. Component handles add their own methods. */
@@ -278,7 +284,7 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
   const unwatchInput = watchPointer({ target: host, move: event => { inputAt = event.timeStamp; }, leave() {} });
   const live = liveField({
     host, canvas: first, kit, place,
-    options: () => ({ ...BASE_LOOK, ...config.look(), ink: ink(), interactionTarget: host, label: '' }),
+    options: () => ({ ...withCharset({ ...BASE_LOOK, ...config.look() }, kitCharset(kit)), ink: ink(), interactionTarget: host, label: '' }),
     onMount: (mounted, canvas) => {
       settledSources.set(canvas, settled);
       canvas.removeAttribute('role');
@@ -395,7 +401,7 @@ export function mountSurface(config: SurfaceConfig): Surface | null {
     get canvas() { return live.canvas; },
     get live() { return live.live; },
     kick,
-    refresh() { if (destroyed) return; dark = isDark(host); field.update({ ...BASE_LOOK, ...config.look(), ink: ink() }); kick(); },
+    refresh() { if (destroyed) return; dark = isDark(host); field.update({ ...withCharset({ ...BASE_LOOK, ...config.look() }, kitCharset(kit)), ink: ink() }); kick(); },
     still,
     dark: () => dark,
     box,
