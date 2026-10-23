@@ -5,6 +5,12 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.1: one clean, consistent shockwave
+
+- **`shockwave` taps are a clean ring by default.** One pressure front with the same shape and timing on every press: it expands fast and eases out (quint-out), a crisp rim with a sharp leading edge lights the streaks it passes and the streaks just behind it glow a moment, all faded out by 1.6 s. No reflections, secondary rings, ringing or bounce-back; the wind leans it a touch downwind as it opens but it never wobbles. Presses stack screen-blended, so overlaps brighten without burning out; past four at once the oldest fades out in 0.18 s. `tap: 'surface'` keeps the 4.32 wave over the wind as an opt-in. The background's `tap` option now defaults to each preset's own (`shockwave` `'ring'`, `estuary` and `capillary` `'surface'`).
+- **`shockwave`'s cursor speaks the same language.** A soft round brush stamped evenly along the path brightens the streaks by how fast the pointer moves (speed smoothed, so the glow does not flicker with the event rate), never stacking past that level, and fades on the rings' clock. No more beads on fast moves or extra brightness from more pointer events.
+- **Surface taps settle instead of bouncing.** `estuary` and `capillary` calm the wave behind its front, so one front crosses the field and the drop does not keep ringing. Over a photo or video the wave has no pull back to rest (the source of the bounce), is calmed behind the front, damps faster on water, sky and ground, and the subject's outline and strong edges hold it back softly enough to wrap it without throwing echoes back.
+
 ## 4.32: surface-aware taps, fish and kanji charsets, charset on every component, ocean accents, navPill, matched event-site pieces
 
 - **Two new character sets, `fish` and `kanji`.** `CHARACTER_SETS.fish` is the ocean's letters as a ramp (` .'-,:;txoSX%#8@`); `CHARACTER_SETS.kanji` (Kanji (Japanese)) is common Jōyō kanji from the lightest strokes to the heaviest (` 一二人小大中日本目田長間語書曜驚霧`). Both are ordered by measured ink like every other set, and work in the Studio, the glyph field, backgrounds and every kit component. `resolveCharset(name | chars)` is exported from `/core` and `/kit`.
