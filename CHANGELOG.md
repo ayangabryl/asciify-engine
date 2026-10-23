@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.4: a finer shockwave ring
+
+- **`shockwave`'s ring is thin and crisp.** The default tap now lights a narrow band of whole letters, about a row and a half, at a nearly even brightness with a short antialiased edge on both sides, instead of a soft three-row glow. It holds together through the first second with only small, irregular breaks, then frays into arcs from about 1.3 s as it fades. The streaks just inside it light faintly for the first second. Timing, radius curve and stacking are unchanged from 4.32.3.
+
 ## 4.32.3: an organic shockwave ring
 
 - **`shockwave`'s tap is a ring of lit letters, not a drawn circle.** The default `tap: 'ring'` lights the field's own fixed letters in a band two to three rows thick, slightly out of round, bright in clumps and thin in places (low-frequency noise round the ring plus each letter's grain), with the streaks inside lighting for a moment as it passes. It opens on `r = 0.43·H·(1 − e^(−(t + 0.1)/0.85))` (H the stage height) and fades as `e^(−(t/2)²)`; as it fades its thin places open and it breaks into arcs that dissolve, gone by about 4 s. Every press has the same timing and character; only the patch pattern changes. Still one ring per press, no echoes or bounce; presses stack screen-blended and past four the oldest fades out quickly. `tap: 'surface'` is unchanged.
