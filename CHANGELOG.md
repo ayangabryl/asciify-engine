@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.6: the shockwave front spreads like smoke
+
+- **`shockwave`'s ring is no longer a circle.** Its front is warped by a field of broad lumps in space (2–6 round the ring) that grows as it spreads and drifts downwind, so the outline billows and flattens in places instead of wobbling in place; the ring is carried a little downwind too. The rim's thickness varies round it, its leading edge is frayed letter by letter, and it is lit most where the wind's streaks are, so it reads as wisps of lit smoke. Matched to the reference by outline: deviation from a circle about 0.11 of the radius (reference 0.11) and the same share in modes 2–6. The lumps move continuously with the wind and the ring, so nothing shimmers; every press has the same character and only the pattern changes.
+
 ## 4.32.5: shockwave matched to its reference by measurement
 
 - **`shockwave`'s ring has the reference's cross-section.** The default tap lights a dense band of letters about 3% of the stage height across (25 px at 800 px tall): flat and bright for about 1.2% of the height behind the front, a crisp outer edge, a short ramp in from the inside. A broad, dimmer band of lit streaks trails it by 0.3–0.5 s and the disc between holds a faint fill, as in the reference. The radius follows `0.436·H·(1 − e^(−(t + 0.09)/0.82))` and the rim fades as `e^(−(t/1.6)²)`; a few small breaks early, opening into arcs as it fades. Fitted to the reference's per-cell tone maps: radial-profile error 0.15 of the rim's peak (4.32.4: 0.42).
