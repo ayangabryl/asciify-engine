@@ -6,21 +6,27 @@ import { SurfaceTap, type TapStyle } from '../../surface/surface-tap';
 const MAX_RINGS = 6;
 /** Rings drawn at full strength at once; a newer press retires the oldest with a short fade. */
 const LIVE_RINGS = 4;
-// Each ring: x, y, age (s), strength, age it was retired at (-1 while live).
-const STRIDE = 5;
+// Each ring: x, y, age (s), strength, age it was retired at (-1 while live), its patch seed.
+const STRIDE = 6;
 /** The wind: rising gently to the right. */
 const WX = Math.cos(-0.42), WY = Math.sin(-0.42);
-/** One timing family for the whole preset: a ring's life, and the cursor's glow fading on the same clock. */
-const LIFE = 1.6, GLOW_TAU = 0.5, RETIRE = 0.18;
-const quintOut = (u: number) => 1 - (1 - u) ** 5;
+/** The cursor's glow fades on this clock; a retired ring fades out over RETIRE. */
+const GLOW_TAU = 0.5, RETIRE = 0.18;
+/** The ring opens on r = REACH·rows·(1 − e^(−(t + LEAD)/EASE)) and fades as e^(−(t/FADE)²), measured off the reference. */
+const REACH = 0.43, LEAD = 0.1, EASE = 0.85, FADE = 2.0;
+/** Value noise read round a circle of `k` lobes' scale: seamless in angle, so the pattern never shows a seam. */
+/** The cursor brush's reach along the wind: twice as far downwind as up. */
+const a0 = (along: number) => along > 0 ? 2.1 : 1.05;
+const around = (cx: number, cy: number, k: number, s: number) => vnoise(cx * k + s, cy * k + s * 1.7);
 
 /**
  * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click (`tap: 'ring'`, the default)
- * sends one pressure front out: a clean ring that expands fast and eases out (quint-out over 1.6 s), its crisp rim lighting
- * the streaks it passes, fading out on the same curve. Every ring has the same shape and timing; a press stacks on the
- * ones still out, and past four the oldest fades out quickly. `tap: 'surface'` sends a wave over the wind instead, slowed
- * and bent by the gusts. The cursor brightens the streaks along its path by how fast it moves, fading on the same clock.
- * Exported for tests.
+ * sends one pressure front out, drawn in the field's own letters: a band two to three rows thick that opens fast and eases
+ * to a stop, slightly out of round, bright in clumps and thin in places, the streaks inside it lighting for a moment. As it
+ * fades its thin places open into gaps and it breaks into arcs that dissolve. Every ring has the same timing and character;
+ * only its patch pattern differs. A press stacks on the rings still out, and past four the oldest fades out quickly.
+ * `tap: 'surface'` sends a wave over the wind instead, slowed and bent by the gusts. The cursor brightens the streaks near
+ * its path, smeared downwind. Exported for tests.
  */
 export class Shockwave implements Simulation {
   cols = 0; rows = 0; t = 0;
@@ -35,7 +41,7 @@ export class Shockwave implements Simulation {
   gust = 0;
   /** The gusts at each cell as last drawn, 0–1. */
   gusts = new Float32Array(0);
-  private freq = 0.05; private warm = false; private vel = 0;
+  private freq = 0.05; private warm = false; private vel = 0; private presses = 0;
   constructor(public seed = 1) {}
   resize(cols: number, rows: number) {
     this.cols = cols; this.rows = rows;
@@ -55,16 +61,19 @@ export class Shockwave implements Simulation {
     if (this.count >= MAX_RINGS) this.drop(0);
     const k = this.count++ * STRIDE;
     this.rings[k] = x; this.rings[k + 1] = y; this.rings[k + 2] = 0; this.rings[k + 3] = strength; this.rings[k + 4] = -1;
+    this.rings[k + 5] = (this.seed * 7.31 + ++this.presses * 13.7) % 97;
   }
   private drop(n: number) {
     this.rings.copyWithin(n * STRIDE, (n + 1) * STRIDE, this.count * STRIDE);
     this.count--;
   }
-  /** A ring's strength at `age` seconds: a 60 ms rise, then an ease-out fade to nothing at 1.6 s. */
-  static strength(age: number) { return age >= LIFE ? 0 : smoothstep(0, 0.06, age) * (1 - age / LIFE) ** 1.5; }
+  /** The surface tap's strength at `age` seconds: a 60 ms rise, then an ease-out fade to nothing at 1.6 s. */
+  static strength(age: number) { return age >= 1.6 ? 0 : smoothstep(0, 0.06, age) * (1 - age / 1.6) ** 1.5; }
+  /** A ring's brightness at `age` seconds: a 60 ms rise, held near full for half a second, then gone by about 3.5 s. */
+  static glow(age: number) { return smoothstep(0, 0.06, age) * Math.exp(-((age / FADE) ** 2)); }
   private amp(k: number) {
     const r = this.rings, age = r[k + 2], out = r[k + 4];
-    return r[k + 3] * Shockwave.strength(age) * (out < 0 ? 1 : 1 - smoothstep(0, RETIRE, age - out));
+    return r[k + 3] * Shockwave.glow(age) * (out < 0 ? 1 : 1 - smoothstep(0, RETIRE, age - out));
   }
   step(dt: number, speed: number) {
     const pace = Math.max(0.2, speed);
@@ -98,10 +107,10 @@ export class Shockwave implements Simulation {
     }
     return speed > 0 || this.count > 0 || this.warm || !!tap?.live;
   }
-  /** How far a ring travels before it stops, in cells: a little over half the stage's diagonal from the press. */
-  get reach() { return 0.26 * Math.hypot(this.cols, this.rows); }
-  /** The ring's radius in cells at `age` seconds: quint-out, most of the way out in the first half second. */
-  radius(age: number) { return this.reach * quintOut(Math.min(1, Math.max(0, age) / LIFE)); }
+  /** How far a ring travels before it stops, in cells: 0.43 of the stage's height. */
+  get reach() { return REACH * this.rows; }
+  /** The ring's radius in cells at `age` seconds: an exponential ease to a stop, 60% of the way out by 0.67 s. */
+  radius(age: number) { return this.reach * (1 - Math.exp(-(Math.max(0, age) + LEAD) / EASE)); }
   /** Streaks at a grid point, 0–1: long along the wind, thin across it, gathered in drifting gusts. */
   wind(x: number, y: number) {
     const f = this.freq, t = this.t, s = this.seed * 23.1;
@@ -124,24 +133,36 @@ export class Shockwave implements Simulation {
     for (let m = 0; m < this.count; m++) {
       const k = m * STRIDE, amp = this.amp(k);
       if (amp <= 0.002) continue;
-      const age = rings[k + 2], u = Math.min(1, age / LIFE), r = this.radius(age);
-      // The wind leans the whole ring a touch downwind as it opens: a skew, never a wobble.
-      const lean = rows * 0.03 * quintOut(u), cx = rings[k] + WX * lean, cy = rings[k + 1] + WY * lean;
-      // A pressure front: a crisp leading edge and a softer trailing one, a little wider as it slows.
-      const thick = rows * 0.012 + r * 0.03, outer = thick * 0.55, inner = thick * 1.4;
-      const reach = r + outer * 3;
+      const age = rings[k + 2], seed = rings[k + 5], r = this.radius(age), cx = rings[k], cy = rings[k + 1];
+      // A band two to three rows thick, its leading edge a little crisper than its trailing one.
+      const sig = Math.max(2.4, rows * 0.031) / 2.355, outer = sig * 0.85, inner = sig * 1.2;
+      // Its thin places open as it fades, so the ring breaks into arcs and dissolves rather than dimming evenly.
+      const gap = 0.15 + 0.25 * smoothstep(0.3, 2.0, age), soft = 0.12;
+      const wake = 0.6 * smoothstep(0, 0.1, age) * Math.exp(-((age / 0.55) ** 2));
+      const wob = r * 0.035, reach = r + wob + outer * 3.2;
       const y0 = Math.max(0, Math.floor(cy - reach)), y1 = Math.min(rows, Math.ceil(cy + reach));
       const x0 = Math.max(0, Math.floor(cx - reach)), x1 = Math.min(cols, Math.ceil(cx + reach));
+      const rIn = Math.max(0, r - wob - inner * 3.2);
       for (let y = y0; y < y1; y++) {
         const ey = y - cy;
         for (let x = x0, i = y * cols + x0; x < x1; x++, i++) {
           const ex = x - cx, d = Math.sqrt(ex * ex + ey * ey);
-          if (d > reach) continue;
-          const q = d > r ? (d - r) / outer : (r - d) / inner, rim = Math.exp(-q * q);
+          if (d > reach || (d < rIn && wake < 0.01)) continue;
+          const ux = d > 0 ? ex / d : 1, uy = d > 0 ? ey / d : 0;
+          // Out of round by a few percent, the same shape all the way out: it scales, it never shimmers.
+          const re = r + wob * (2 * around(ux, uy, 1.3, seed + 11) - 1);
+          const q = d > re ? (d - re) / outer : (re - d) / inner, band = Math.exp(-0.5 * q * q);
           const lit = smoothstep(0.15, 0.6, dens[i]);
-          // The streaks just passed stay lit a moment behind the rim.
-          const wake = d < r ? Math.exp(-(r - d) / (r * 0.3 + 1)) * lit : 0;
-          const add = amp * (rim * (0.55 + 0.6 * lit) * (0.85 + 0.15 * grain[i]) * 1.15 + 0.55 * wake);
+          let add = 0;
+          if (band > 0.01) {
+            // Clumps and thin places round the ring, then the field's own grain per letter.
+            const patch = 0.62 * around(ux, uy, 1.7, seed) + 0.38 * around(ux, uy, 4.2, seed + 5.3);
+            const keep = smoothstep(gap, gap + soft, patch) * (0.45 + 1.0 * patch);
+            add = band * keep * (0.5 + 0.5 * lit) * (0.55 + 0.45 * grain[i]) * 3.4;
+          }
+          // The streak texture inside the ring lights for a moment as it passes.
+          if (d < re) add += wake * lit * (1 - band);
+          add *= amp;
           // Screen, not add: stacked rings brighten without burning out to flat white.
           out[i] = 1 - (1 - out[i]) * (1 - (add > 1 ? 1 : add));
         }
@@ -173,14 +194,14 @@ export class Shockwave implements Simulation {
     }
   }
   /**
-   * The pointer brightens the streaks along its path: a soft round brush stamped evenly along the segment since the last
-   * event, as bright as the pointer is fast (smoothed, so the glow does not flicker with the event rate), never stacking
-   * past that, and fading on the rings' clock.
+   * The pointer brightens the streaks near its path: a soft brush stretched along the wind, with a longer tail downwind,
+   * stamped evenly along the segment since the last event, as bright as the pointer is fast (smoothed, so the glow does not
+   * flicker with the event rate), never stacking past that, and fading on a half-second clock.
    */
   move(x: number, y: number, dx: number, dy: number) {
     const m = Math.hypot(dx, dy);
     if (!m || !this.cols) return;
-    const { cols, rows, heat } = this, R = rows * 0.085, r = Math.ceil(R * 2.1);
+    const { cols, rows, heat } = this, R = rows * 0.075, r = Math.ceil(R * 4.4);
     this.vel += (Math.min(m, rows * 0.2) - this.vel) * 0.35;
     const level = 0.3 + 0.7 * smoothstep(0, rows * 0.05, this.vel);
     const steps = Math.max(1, Math.ceil(m / (R * 0.3)));
@@ -188,7 +209,8 @@ export class Shockwave implements Simulation {
       const px = x - dx * (1 - s / steps), py = y - dy * (1 - s / steps);
       for (let j = Math.max(0, Math.floor(py - r)); j < Math.min(rows, Math.ceil(py + r)); j++) {
         for (let i = Math.max(0, Math.floor(px - r)); i < Math.min(cols, Math.ceil(px + r)); i++) {
-          const ex = i - px, ey = j - py, d2 = (ex * ex + ey * ey) / (R * R);
+          const ex = i - px, ey = j - py, a = (ex * WX + ey * WY) / (a0(ex * WX + ey * WY) * R), c = (ey * WX - ex * WY) / (R * 0.7);
+          const d2 = a * a + c * c;
           if (d2 > 4.4) continue;
           const k = j * cols + i, v = level * Math.exp(-d2);
           if (v > heat[k]) heat[k] = v;
@@ -198,7 +220,7 @@ export class Shockwave implements Simulation {
     this.warm = true;
   }
   leave() { this.vel = 0; }
-  /** One front out of the press: the clean ring (default), or a wave over the wind. */
+  /** One front out of the press: the ring of lit letters (default), or a wave over the wind. */
   press(x: number, y: number, tap: TapStyle = 'ring') {
     if (tap === 'ring') { this.add(x, y, 1); return; }
     this.tap ??= new SurfaceTap(this.cols, this.rows);
@@ -208,9 +230,9 @@ export class Shockwave implements Simulation {
   }
 }
 
-/** Wind over a field of letters: streaks drift in gusts; a click sends one clean ring out that eases to a stop and fades. */
+/** Wind over a field of letters: streaks drift in gusts; a click sends one ring of lit letters out that eases to a stop and breaks up. */
 export const shockwave = simPreset({
-  id: 'shockwave', name: 'Shockwave', description: 'Wind over a field of letters: streaks drift in gusts and the cursor stirs them; a click sends one clean pressure ring out that eases to a stop and fades.',
+  id: 'shockwave', name: 'Shockwave', description: 'Wind over a field of letters: streaks drift in gusts and the cursor stirs them; a click sends one ring of lit letters out that eases to a stop and breaks into arcs as it fades.',
   cellSize: 10, charset: SCATTER_LOOK.charset, detail: 1 / 4, graphite: SIM_GRAPHITE, feather: 0.16,
   create: seed => new Shockwave(seed),
   tune: SCATTER_LOOK.tune,
