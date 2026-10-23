@@ -92,21 +92,22 @@ describe('shockwave', () => {
     expect(s.count).toBe(0);
     expect(s.step(1 / 60, 0)).toBe(false);
   });
-  it('defaults to the clean ring: one front, never back once it fades, the same every press, capped when stacked', () => {
+  it('defaults to one ring of lit letters: never back once it fades, the same timing every press, capped when stacked', () => {
     const s = new Shockwave(1);
     s.resize(120, 80);
     s.press(60, 40);
     expect(s.count).toBe(1);
     expect(s.tap).toBeNull();
     let last = 0;
-    for (let t = 0.05; t < 1.6; t += 0.05) { const r = s.radius(t); expect(r).toBeGreaterThanOrEqual(last); last = r; }
+    for (let t = 0.05; t < 3; t += 0.05) { const r = s.radius(t); expect(r).toBeGreaterThanOrEqual(last); last = r; }
+    expect(s.radius(0.67) / s.reach).toBeCloseTo(0.6, 1);
     let prev = Infinity;
-    for (let t = 0.1; t < 1.7; t += 0.05) { const a = Shockwave.strength(t); expect(a).toBeLessThanOrEqual(prev); prev = a; }
-    expect(Shockwave.strength(1.6)).toBe(0);
+    for (let t = 0.1; t < 4; t += 0.05) { const a = Shockwave.glow(t); expect(a).toBeLessThanOrEqual(prev); prev = a; }
+    expect(Shockwave.glow(5)).toBeLessThan(0.002);
     for (let i = 0; i < 9; i++) s.press(10 + i * 10, 40);
     expect(s.count).toBeLessThanOrEqual(6);
     let live = 0;
-    for (let n = 0; n < s.count; n++) if (s.rings[n * 5 + 4] < 0) live++;
+    for (let n = 0; n < s.count; n++) if (s.rings[n * 6 + 4] < 0) live++;
     expect(live).toBe(4);
   });
 });

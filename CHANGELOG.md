@@ -5,6 +5,11 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.3: an organic shockwave ring
+
+- **`shockwave`'s tap is a ring of lit letters, not a drawn circle.** The default `tap: 'ring'` lights the field's own fixed letters in a band two to three rows thick, slightly out of round, bright in clumps and thin in places (low-frequency noise round the ring plus each letter's grain), with the streaks inside lighting for a moment as it passes. It opens on `r = 0.43·H·(1 − e^(−(t + 0.1)/0.85))` (H the stage height) and fades as `e^(−(t/2)²)`; as it fades its thin places open and it breaks into arcs that dissolve, gone by about 4 s. Every press has the same timing and character; only the patch pattern changes. Still one ring per press, no echoes or bounce; presses stack screen-blended and past four the oldest fades out quickly. `tap: 'surface'` is unchanged.
+- **The `shockwave` cursor glow is smeared along the wind.** The brush is stretched along the streaks, with a longer tail downwind, so the cursor brightens the streaks near its path rather than a round spot.
+
 ## 4.32.2: text-shaped clearing
 
 - **Backgrounds keep clear of text, not of an oval.** `background(el, { clear })` also takes rects in viewport CSS px, or a function that returns them (such as every line box of the copy from `Range.getClientRects()`). The field quiets only right behind each rect and keeps flowing round and between the lines, bending a little away from their edges, so it fills the whole viewport instead of leaving a hole in the middle. Taps and the cursor's glow pass behind the text, quieted by the same map, never stopped at a hard edge. Tune it with `clearPadding` (px fully quiet round each rect, default 8), `clearSoftness` (px the quiet falls off over, default 28) and `clearStrength` (0–1, default 0.85). A function is read once per drawn frame and the field wakes on scroll, so return the same array until something moves; the map is rasterised on the CPU only when the rects change and sampled as one small texture. An element still clears a soft oval as before.

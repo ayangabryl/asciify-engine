@@ -32,9 +32,9 @@ export interface BackgroundOptions extends KitOptions {
    */
   cursor?: BackgroundCursor;
   /**
-   * How a click answers, for the presets that take one (`shockwave`, `estuary`, `capillary`). `'ring'` is one clean front with
-   * the same shape and timing every time: `shockwave`'s default, a crisp ring that expands fast, eases out and fades in about
-   * 1.6 s (`estuary` a round glow, `capillary` a round flood). `'surface'` sends a damped wave over the preset's own field: it
+   * How a click answers, for the presets that take one (`shockwave`, `estuary`, `capillary`). `'ring'` is one front with the
+   * same timing every time: `shockwave`'s default, a patchy ring of lit letters that opens fast, eases to a stop and breaks
+   * into arcs as it fades (`estuary` a round glow, `capillary` a round flood). `'surface'` sends a damped wave over the preset's own field: it
    * slows and bends on dense areas and slips through open ones (`estuary`'s and `capillary`'s default).
    */
   tap?: TapStyle;
