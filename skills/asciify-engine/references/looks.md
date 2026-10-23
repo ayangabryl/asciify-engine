@@ -56,6 +56,13 @@ try {
 
 Common sizes: desktop 3840×2160 (`referenceWidth: 960`), phone 1290×2796 (`430`), square post 2160×2160 (`720`), A4 at 300 dpi 2480×3508 (`620`). Stills are bounded at 4096 pixels a side and 16 megapixels, so larger print sizes need a lower dpi. MP4 needs a WebCodecs encoder and even dimensions; report an encoder error rather than switching format silently. Hover is live only and is never recorded.
 
+## Character sets
+
+Every set is a first-class ramp, ordered by measured ink from empty to dense, and every one works in the Studio (`charset: CHARACTER_SETS.kanji.chars`), the glyph field and every kit component (`charset: 'kanji'`): Classic ASCII (`standard`), Asciify, Minimal, Detailed, Letters, Technical, Tonal blocks, Braille, Fish and Kanji (Japanese).
+
+- **Fish** (`fish`, ` .'-,:;txoSX%#8@`): the ocean's letters as a ramp, specks and dashes for faint tones, `t o x` for the body, `S X % # 8 @` for the densest. A hand-set, organic texture for creatures, water and photos of living things.
+- **Kanji (Japanese)** (`kanji`, ` 一二人小大中日本目田長間語書曜驚霧`): common Jōyō kanji ordered from the lightest strokes (一) to the heaviest (霧), measured the same way as the other sets. Drawn in square cells in the system Japanese faces (Hiragino Sans, Yu Gothic, Noto Sans JP), so the forms are Japanese. Suits bold, graphic subjects at cells of 8px and up; at very small cells it reads as a fine texture.
+
 ## How to choose
 
 - The person names a look, or describes one ("newsprint", "riso", "phosphor", "Lego", "engraving", "film still"): use the entry, then adjust only what they asked for.

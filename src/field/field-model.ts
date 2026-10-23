@@ -1,5 +1,6 @@
 /** Pure option handling for the GPU glyph field, kept free of DOM and WebGL so it can be tested in Node. */
 import { normalizeHoverScope, type HoverScope } from '../surface/hover-guide';
+import { isWideGlyph } from '../studio/characters';
 
 export type FieldColor = 'ink' | 'source';
 export type FieldFit = 'cover' | 'contain';
@@ -161,6 +162,11 @@ export interface GlyphFieldSettings {
   blend: 'auto' | 'coarse' | 'on' | 'off';
   /** Glyph color saturation in source color mode. */
   saturation: number;
+  /**
+   * A gradient map in ink colour mode: two to six `#rrggbb` stops the tone runs through, faintest light first, in place of the
+   * one `ink`. The `tick` mark draws its wash in the ramp and its ticks a step up it. Empty (default) draws in `ink`.
+   */
+  ramp: string[];
   /** How far darker tones dim the ink, so same-density glyphs such as words still carry the image. 0 is one flat ink. */
   shade: number;
   /** Opacity of a soft, blurred copy of the source behind the characters. 0 draws characters only. */
@@ -244,6 +250,7 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   levels: 'auto',
   blend: 'auto',
   saturation: 1.1,
+  ramp: [],
   shade: 0.5,
   backdrop: 0,
   fit: 'cover',
@@ -291,6 +298,25 @@ export function fieldGlyphs(charset: string): string[] {
   return glyphs.filter(glyph => glyph !== '\n' && glyph !== '\r' && glyph !== '\t').slice(0, 256);
 }
 
+/** Most of the charset's visible glyphs are full width, so its cells are drawn square. */
+export { isWideGlyph };
+export function isWideCharset(charset: string) {
+  const glyphs = fieldGlyphs(charset).filter(glyph => glyph.trim());
+  return glyphs.length > 0 && glyphs.filter(isWideGlyph).length * 2 > glyphs.length;
+}
+
+// Full-width glyphs in a tall cell would be squeezed or clipped: glyph and inlay cells for a wide charset are at least square.
+const squareCells = (mark: unknown, base: FieldMark, charset: string) => {
+  const m = FIELD_MARKS.includes(mark as FieldMark) ? mark : base;
+  return (m === 'glyph' || m === 'inlay') && isWideCharset(charset);
+};
+
+const rampOf = (value: unknown, fallback: string[]) => {
+  if (!Array.isArray(value)) return fallback;
+  const stops = value.map(stop => hex(stop, '')).filter(Boolean).slice(0, 6);
+  return stops.length >= 2 ? stops : [];
+};
+
 /** Mount options may carry an element-based clear zone; normalizing ignores it, since only a mounted field can measure it. */
 type ClearElementLike = { element: unknown } | { nodeType: number };
 export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & { clear?: GlyphFieldInput['clear'] | ClearElementLike } = {}, base: GlyphFieldSettings = DEFAULT_FIELD_SETTINGS): GlyphFieldSettings {
@@ -323,7 +349,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
   return {
     charset,
     cellSize: clamp(input.cellSize, 1, 96, base.cellSize),
-    cellAspect: clamp(input.cellAspect, 0.3, 2, base.cellAspect),
+    cellAspect: squareCells(input.mark, base.mark, charset) ? Math.max(1, clamp(input.cellAspect, 0.3, 2, base.cellAspect)) : clamp(input.cellAspect, 0.3, 2, base.cellAspect),
     cellFit: input.cellFit === 'fill' || input.cellFit === 'pixel' ? input.cellFit : base.cellFit,
     font: typeof input.font === 'string' && input.font.trim() ? input.font : base.font,
     fontWeight: Math.round(clamp(input.fontWeight, 100, 900, base.fontWeight)),
@@ -342,6 +368,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     color: input.color === 'source' || input.color === 'ink' ? input.color : base.color,
     ink: hex(input.ink, base.ink),
     highlight: input.highlight === 'auto' ? 'auto' : hex(input.highlight, base.highlight),
+    ramp: rampOf(input.ramp, base.ramp),
     background: input.background === 'transparent' ? 'transparent' : hex(input.background, base.background),
     brightness: clamp(input.brightness, -1, 1, base.brightness),
     contrast: clamp(input.contrast, 0, 4, base.contrast),

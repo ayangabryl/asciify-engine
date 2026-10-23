@@ -1,6 +1,7 @@
 import type { GlyphFieldOptions } from '../field';
 import { clamp, handle, hash, house, mountSurface, prefersReduced, smoothstep, type KitHandle, type KitOptions, type Surface } from './core';
 import { injectStyle } from './capture';
+import { resolveCharset } from '../studio/characters';
 
 export type StreamState = 'idle' | 'streaming' | 'done' | 'stopped';
 
@@ -21,7 +22,7 @@ export interface StreamTextOptions extends KitOptions {
   transition?: 'flicker' | 'roll';
   /** Ms one character rolls under `transition: 'roll'`; each next character starts `stagger` ms later. Default 300. */
   roll?: number;
-  /** Glyphs a character rolls through. Default `#%*+=-:`. */
+  /** Glyphs a character rolls through. Default `#%*+=-:`, or the `charset`'s characters when one is given. */
   glyphs?: string;
 }
 
@@ -41,6 +42,14 @@ export interface StreamTextHandle extends KitHandle<StreamTextOptions> {
 }
 
 const DEFAULTS = { caret: true, settle: 60, stagger: 18, reasoningLines: 2, transition: 'flicker' as 'flicker' | 'roll', roll: 300, glyphs: '#%*+=-:' };
+const rolled = new Map<string, string[]>();
+/** The glyphs a roll runs through: the `charset`'s, when one is given, else `glyphs`. Split by code point, so kanji roll whole. */
+const rollGlyphs = (o: { glyphs: string; charset?: string }) => {
+  const key = o.charset ? resolveCharset(o.charset)!.replace(/\s/g, '') || o.glyphs : o.glyphs;
+  let list = rolled.get(key);
+  if (!list) rolled.set(key, (list = [...key]));
+  return list;
+};
 const EASE = 'cubic-bezier(.16, 1, .3, 1)';
 const CSS = `
 :where(.ascii-reasoning){display:grid;grid-template-rows:1fr;transition:grid-template-rows 260ms ${EASE},opacity 200ms ${EASE}}
@@ -156,7 +165,7 @@ export function streamText(element: HTMLElement, options: StreamTextOptions = {}
       if (p <= 0) return true;
       const top = b.y + (b.h - line) / 2, mid = top + (line - ascent - descent) / 2 + ascent;
       const count = 3 + (char.seed % 3);
-      const column = [...Array.from({ length: count }, (_, j) => o.glyphs[Math.floor(hash(j, char.seed) * o.glyphs.length)] ?? ''), char.span.textContent ?? ''];
+      const column = [...Array.from({ length: count }, (_, j) => rollGlyphs(o)[Math.floor(hash(j, char.seed) * rollGlyphs(o).length)] ?? ''), char.span.textContent ?? ''];
       const offset = (1 - spin) * (column.length - 1) * line;
       pen.save();
       pen.beginPath(); pen.rect(b.x - 2, top, b.w + 4, line); pen.clip();

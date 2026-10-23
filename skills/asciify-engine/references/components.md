@@ -549,13 +549,13 @@ regionButtons.forEach(b => (b.onclick = () => earth.rotateTo(Number(b.dataset.lo
 Category: Backgrounds
 
 Prompt:
-“Light [our call-to-action panel] with Asciify: a soft glow rising from the bottom edge, drawn as a fine two-tone dither in [a light tint] on [our brand colour], drifting gently and leaning toward the cursor. The button and copy sit over the quiet part.”
+“Light [our call-to-action panel] with Asciify: a sunrise glow rising from the bottom edge, drawn as a printed glow, a smooth wash through a warm ramp from [our brand colour] to [a cream tint] under a fine dithered screen of upright ticks, drifting slowly, leaning toward the cursor with a soft light that follows it. The button and copy sit over the quiet part.”
 
 ```ts
 import { ditherGradient } from 'asciify-engine/kit';
 
-// the panel has the brand background; the ink is the dither's light tone
-const glow = ditherGradient(ctaPanel, { ink: '--brand-tint', lights: [{ x: 0.5, y: 1.08, radius: 0.62 }] });
+// the panel has the brand background; the ramp runs from just above it to the glow's cream core
+const glow = ditherGradient(ctaPanel, { colors: ['#ff7a2e', '#ff9445', '#ffb56c', '#ffd8a0', '#fff4dc'], lights: [{ x: 0.5, y: 1.04, radius: 0.5, aspect: 0.5 }] });
 ```
 
 ## dither-image: Two-tone photo

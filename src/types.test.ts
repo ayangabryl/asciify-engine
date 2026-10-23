@@ -11,7 +11,7 @@ describe('current catalogs', () => {
     for(const key of ['CHARSETS','ART_STYLE_PRESETS','CHARSET_SEQUENCES','LIVING_STYLE_PRESETS']) expect(core).not.toHaveProperty(key);
   });
   it('retains the curated alphabets and the curated render styles', () => {
-    expect(Object.keys(CHARACTER_SETS)).toEqual(['standard','asciify','minimal','detailed','letters','technical','blocks','braille']);
+    expect(Object.keys(CHARACTER_SETS)).toEqual(['standard','asciify','minimal','detailed','letters','technical','blocks','braille','fish','kanji']);
     expect(STUDIO_STYLES).toEqual(['ascii','blocks','braille','dots','lines','cross','diagonal','diamond','mixed','pixel','mosaic','lego','voxel','disco','dither','hex','led','cmyk','stipple','engraving','crosshatch','woodblock','risograph','pointillism']);
   });
   it('rejects removed shortcuts with migration guidance', () => {

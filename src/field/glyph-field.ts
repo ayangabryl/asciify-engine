@@ -4,12 +4,13 @@ import {
   ambientFactor, cancelFieldFrame, fieldContext, markShared, observeSize, observeView, requestFieldFrame, watchFonts, watchMotionPreference, watchPointer, watchVisibility,
   type FieldClient, type PointerClient, type SharedAtlas,
 } from './field-gl';
+import { WIDE_FONT, isWideGlyph } from '../studio/characters';
 import { InkTrail } from '../surface/ink-trail';
 import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
 import { buildPhotoCues, type PhotoCues } from '../surface/photo-cues';
 import { SurfaceTap, photoMedium, shadePhotoTap } from '../surface/surface-tap';
 import {
-  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
+  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels,  fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
   type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
@@ -111,7 +112,9 @@ function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, share
   context.fillStyle = '#fff';
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
-  context.font = atlasFont(settings, layout);
+  const font = atlasFont(settings, layout), size = Math.max(1, layout.height * settings.glyphScale);
+  const wideFont = `${settings.fontWeight} ${size}px ${WIDE_FONT}, ${settings.font}`;
+  context.font = font;
   const capital = context.measureText('M');
   const ascent = capital.actualBoundingBoxAscent || layout.height * settings.glyphScale * 0.7;
   const descent = capital.actualBoundingBoxDescent || 0;
@@ -119,20 +122,35 @@ function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, share
   glyphs.forEach((glyph, index) => {
     const x = (index % layout.columns) * layout.width + layout.width / 2;
     const y = Math.floor(index / layout.columns) * layout.height + baseline;
-    const measured = context.measureText(glyph).width;
+    const wide = isWideGlyph(glyph);
     context.save();
     context.beginPath();
     context.rect(x - layout.width / 2, y - baseline, layout.width, layout.height);
     context.clip();
-    context.translate(x, y);
-    if (measured > layout.width * 0.96) context.scale((layout.width * 0.96) / measured, 1);
-    context.fillText(glyph, 0, 0);
+    if (wide) {
+      // A full-width glyph is set in the Japanese stack, centred on its own box and scaled evenly to fit the cell, never squeezed.
+      context.font = wideFont;
+      const m = context.measureText(glyph);
+      const gw = Math.max(m.width, (m.actualBoundingBoxLeft || 0) + (m.actualBoundingBoxRight || 0));
+      const gh = (m.actualBoundingBoxAscent || size * 0.88) + (m.actualBoundingBoxDescent || size * 0.12);
+      const fit = Math.min(1, (layout.width * 0.94) / Math.max(1, gw), (layout.height * 0.94) / Math.max(1, gh));
+      context.translate(x, Math.floor(index / layout.columns) * layout.height + layout.height / 2);
+      context.scale(fit, fit);
+      context.translate(((m.actualBoundingBoxLeft || 0) - (m.actualBoundingBoxRight || 0)) / 2, ((m.actualBoundingBoxAscent || size * 0.88) - (m.actualBoundingBoxDescent || size * 0.12)) / 2);
+      context.fillText(glyph, 0, 0);
+      context.font = font;
+    } else {
+      const measured = context.measureText(glyph).width;
+      context.translate(x, y);
+      if (measured > layout.width * 0.96) context.scale((layout.width * 0.96) / measured, 1);
+      context.fillText(glyph, 0, 0);
+    }
     context.restore();
   });
   // Painted with the font still loading, the atlas is painted again when it arrives.
   let final = true;
   const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
-  try { final = fonts?.check ? fonts.check(context.font, glyphs.join('')) : true; } catch { /* an unparsable font: as it is */ }
+  try { final = fonts?.check ? fonts.check(font, glyphs.join('')) : true; } catch { /* an unparsable font: as it is */ }
   if (shared) queueMicrotask(() => { paint.width = paint.height = 1; });
   return { image: paint as TexImageSource, final };
 }
@@ -686,6 +704,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
 
   // Values derived from settings and the source, recomputed only when those change.
   let derivedFor: GlyphFieldSettings | null = null;
+  const rampData = new Float32Array(18);
   let inkColor: [number, number, number] = [0, 0, 0], highlightColor: [number, number, number] = [1, 1, 1], backgroundColor = [0, 0, 0, 0];
   let map = fieldSourceRect(1, 1, 1, 1, 'cover'), mapFor: GlyphFieldSettings | null = null, mapWidth = 0, mapHeight = 0, mapSourceWidth = 0, mapSourceHeight = 0;
   const derive = () => {
@@ -694,6 +713,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       inkColor = parseFieldColor(settings.ink);
       highlightColor = parseFieldColor(settings.highlight === 'auto' ? '#ffffff' : settings.highlight);
       backgroundColor = settings.background === 'transparent' ? [0, 0, 0, 0] : [...parseFieldColor(settings.background), 1];
+      rampData.fill(0);
+      settings.ramp.forEach((stop, i) => rampData.set(parseFieldColor(stop), i * 3));
     }
     if (mapFor !== settings || mapWidth !== width || mapHeight !== height || mapSourceWidth !== sourceWidth || mapSourceHeight !== sourceHeight) {
       mapFor = settings; mapWidth = width; mapHeight = height; mapSourceWidth = sourceWidth; mapSourceHeight = sourceHeight;
@@ -757,6 +778,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     }
     gl.uniform4fv(u.uPulse, pulseUniform);
     gl.uniform3fv(u.uInk, inkColor);
+    gl.uniform3fv(u.uRamp, rampData);
+    gl.uniform1f(u.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
     gl.uniform3fv(u.uHighlight, highlightColor);
     gl.uniform1f(u.uHighlightAuto, settings.highlight === 'auto' ? 1 : 0);
     gl.uniform4fv(u.uBackground, backgroundColor);
@@ -795,6 +818,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform4f(p.uLine, settings.linePitch, settings.lineWeight, settings.sparkle, 0);
     gl.uniform4f(p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
     gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
+    gl.uniform3fv(p.uRamp, rampData);
+    gl.uniform1f(p.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
     gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (shared) host!.present(view!, width, height);

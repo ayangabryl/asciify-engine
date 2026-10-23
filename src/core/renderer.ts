@@ -19,6 +19,7 @@ import {
 } from './utils';
 import { computeHoverEffect } from './animation';
 import { advanceHover, createHoverState, type HoverState, type RenderHover } from './hover';
+import { WIDE_FONT, isWideGlyph } from '../studio/characters';
 
 // Re-export AsciiFrame for downstream consumers that import from this module
 export type { AsciiFrame };
@@ -1227,14 +1228,16 @@ function drawFrameToCanvas(
     }
   } else {
     const charAspect = 0.55;
-    const fontSize = Math.min(cellW / charAspect, cellH) * 0.9;
+    // Full-width glyphs (kanji) are an em wide: sized to the cell's shorter side in the Japanese faces, so they never overlap.
+    const wide = [...(options.customText || options.charset)].some(isWideGlyph);
+    const fontSize = wide ? Math.min(cellW, cellH) * 0.92 : Math.min(cellW / charAspect, cellH) * 0.9;
     const useFastRect = false;
 
     if (!useFastRect) {
       const isEmoji = /\p{Extended_Pictographic}/u.test(options.customText || options.charset);
       ctx.font = isEmoji
         ? `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`
-        : `${fontSize}px "JetBrains Mono", monospace`;
+        : wide ? `${fontSize}px "JetBrains Mono", ${WIDE_FONT}` : `${fontSize}px "JetBrains Mono", monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
     }

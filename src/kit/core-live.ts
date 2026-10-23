@@ -1,6 +1,7 @@
 import { mountGlyphField, type FieldMark, type FieldSource, type GlyphField, type GlyphFieldOptions } from '../field';
 import { currentFieldContext, isSharedFieldCanvas } from '../field/field-gl';
 import { prewarmGlyphAtlas } from '../field/glyph-field';
+import { CHARACTER_SETS, resolveCharset } from '../studio/characters';
 
 /**
  * The Studio's 24 render styles as the glyph field draws them: the glyph-like styles are ramps, the halftone is the dot mark,
@@ -52,11 +53,40 @@ export interface LiveOptions {
   poster?: string;
   globalLook?: boolean;
   reducedMotion?: boolean;
+  charset?: string;
 }
 
 /** What the engine draws when a look names no charset, so clearing the global look puts it back. */
 const ENGINE_CHARSET = ' .,:-=+*#%@';
 const LETTER = /\p{L}/u;
+// Ramps that hold letters but spell no word (fish, kanji, the ocean's own), so the global look may replace them.
+const RAMPS = new Set<string>(Object.values(CHARACTER_SETS).map(set => set.chars));
+/** @internal A component's own letter ramp that is a texture, not a word. */
+export const registerRamp = (charset: string) => { RAMPS.add(charset); };
+/** Marks that draw the charset's characters; every other mark draws its own shapes from the tone. */
+const CHARACTER_MARKS: ReadonlySet<FieldMark> = new Set<FieldMark>(['glyph', 'inlay']);
+export const drawsCharacters = (mark: FieldMark | undefined) => CHARACTER_MARKS.has(mark ?? 'glyph');
+/** Cells for a field in another mark once it draws characters: tall cells, at least 7px, so glyphs read. */
+export const glyphCells = (own: GlyphFieldOptions): GlyphFieldOptions => ({ cellSize: Math.max(7, own.cellSize ?? 8), cellAspect: 0.62, glyphScale: 0.9 });
+
+const drawsOwnCharset = new WeakSet<object>();
+/** @internal A component that resolves `charset` into its own look (backgrounds, with their `'dots'`), so the surface leaves it. */
+export const ownsCharset = (kit: object) => { drawsOwnCharset.add(kit); };
+/** The `charset` option a surface lays over the component's look. */
+export const kitCharset = (kit: { current: LiveOptions } | undefined) => (kit && !drawsOwnCharset.has(kit) ? kit.current.charset : undefined);
+
+/**
+ * A component's `charset` option over its look: a named set (`CHARACTER_SETS`) or your own characters. A field that draws
+ * characters keeps its mark and takes the new ramp, balanced to the house weight; a field in another mark (dots, dither, ticks,
+ * engraving, pixels) switches to glyphs in cells sized for them.
+ */
+export function withCharset(own: GlyphFieldOptions, charset: string | undefined): GlyphFieldOptions {
+  const chars = resolveCharset(charset);
+  if (!chars) return own;
+  if (drawsCharacters(own.mark)) return { ...own, charset: chars, ...balanceCharset(chars, own) };
+  const cells = { ...own, ...glyphCells(own) };
+  return { ...cells, mark: 'glyph', charset: chars, ...balanceCharset(chars, cells) };
+}
 
 /* ---------------- Global look ---------------- */
 
@@ -509,10 +539,13 @@ export function liveField(config: LiveConfig): Live {
    * scattered as a texture (`glyphOrder: 'scatter'`) are no word, so those fields take the look too.
    */
   const wanted = (): { mark: FieldMark; charset?: string } | undefined => {
-    if (!look || kit?.current.globalLook === false || ((merged.mark ?? 'glyph') !== 'glyph' && !config.glyphs) || (merged.glyphOrder !== 'scatter' && LETTER.test(merged.charset ?? ''))) return undefined;
+    // A `charset` the component was given is its own choice, kept over the page's look.
+    if (!look || kit?.current.globalLook === false || kit?.current.charset) return undefined;
+    if ((!drawsCharacters(merged.mark) && !config.glyphs) || (merged.glyphOrder !== 'scatter' && !RAMPS.has(merged.charset ?? '') && LETTER.test(merged.charset ?? ''))) return undefined;
     const style = look.style ? KIT_STYLES[look.style] : undefined;
-    const mark: FieldMark = style?.mark ?? 'glyph';
-    const charset = mark === 'glyph' ? look.charset || (style && 'charset' in style ? style.charset : undefined) : undefined;
+    // A charset alone keeps a character mark (an inlay stays tiled); a style brings its own mark.
+    const mark: FieldMark = style?.mark ?? (drawsCharacters(merged.mark) ? merged.mark ?? 'glyph' : 'glyph');
+    const charset = drawsCharacters(mark) ? look.charset || (style && 'charset' in style ? style.charset : undefined) : undefined;
     return style || charset ? { mark, charset } : undefined;
   };
   const own = (): GlyphFieldOptions => ({
@@ -523,7 +556,7 @@ export function liveField(config: LiveConfig): Live {
   const lookOptions = (want: { mark: FieldMark; charset?: string }): GlyphFieldOptions => {
     if (!want.charset) return { ...own(), mark: want.mark };
     // A halftone given characters lays them out as the glyph fields do: its own cells are square and spaced for dots.
-    const cells = config.glyphs && (merged.mark ?? 'glyph') !== 'glyph' ? config.glyphs() : {};
+    const cells = config.glyphs && !drawsCharacters(merged.mark) ? config.glyphs() : {};
     return { ...cells, mark: want.mark, charset: want.charset, ...balanceCharset(want.charset, { ...merged, ...cells }) };
   };
   /** What changes since the look last applied: the look's options, the field's own back, or null for nothing. */

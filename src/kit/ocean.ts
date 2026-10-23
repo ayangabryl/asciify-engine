@@ -1,4 +1,5 @@
 import type { GlyphFieldOptions } from '../field';
+import { registerRamp } from './core-live';
 import { clamp, handle, hexRgb, mixHex, mountSurface, resolveColor, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
 
 /** What swims. A `school` is one shoal of small fish that move together; its `count` is how many fish are in it. */
@@ -578,6 +579,7 @@ const DRAW: Pen = { pen: null as unknown as CanvasRenderingContext2D, styles: []
 
 /** Specks for a body's frayed edge, a dash (two steps wide, so a fish straddling cells still reads as one) for a distant fish, then letters and marks that fill a cell more and more. */
 export const OCEAN_CHARSET = " .--',:;toxXS%#8@";
+registerRamp(OCEAN_CHARSET);
 
 const DEFAULT_CREATURES: OceanCreature[] = [
   { kind: 'shark' }, { kind: 'shark', size: 0.7 }, { kind: 'hammerhead', size: 0.85 }, { kind: 'shark', size: 0.5 },
@@ -665,7 +667,8 @@ export function ocean(element: HTMLElement, options: OceanOptions = {}): OceanHa
       if (!still) advanceWorld(world, dt, settings());
       pen.setTransform(width / w, 0, 0, height / h, 0, 0);
       // The field's grid in CSS pixels, whole device pixels a cell as it lays them out, so a one-cell fish lands on one cell.
-      const lk = look(), dpr = Math.min(2, globalThis.devicePixelRatio || 1), ch = Math.max(2, Math.round((lk.cellSize ?? 15) * dpr));
+      // The field's own settings, so a swapped charset's cells (square for kanji) are the ones drawn to.
+      const lk = surface?.field.settings ?? look(), dpr = Math.min(2, globalThis.devicePixelRatio || 1), ch = Math.max(2, Math.round((lk.cellSize ?? 15) * dpr));
       cell[0] = Math.max(2, Math.round(ch * (lk.cellAspect ?? 0.66))) / dpr; cell[1] = ch / dpr;
       drawWorld(pen, world, spine, clamp(o().depth), tables, cell);
       return !still && o().speed > 0;

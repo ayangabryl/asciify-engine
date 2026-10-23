@@ -1,5 +1,6 @@
 import type { GlyphFieldOptions } from '../field';
 import { clamp, handle, hash, house, mountSurface, prefersReduced, smoothstep, srOnly, styleKeeper, type KitHandle, type KitOptions, type Surface } from './core';
+import { resolveCharset } from '../studio/characters';
 
 export type ThinkingState = 'thinking' | 'streaming' | 'done';
 
@@ -16,7 +17,7 @@ export interface ThinkingOptions extends KitOptions {
   roll?: number;
   /** Ms between neighbouring characters as the wave runs across the label. Default 55. */
   wave?: number;
-  /** Glyphs the label rolls through. Default `#%*+=-:`. */
+  /** Glyphs the label rolls through. Default `#%*+=-:`, or the `charset`'s characters when one is given. */
   glyphs?: string;
   /** Called on each state change; `seconds` is how long it thought, once known. For a status you render yourself. */
   onState?: (state: ThinkingState, seconds: number) => void;
@@ -35,6 +36,14 @@ export interface ThinkingHandle extends KitHandle<ThinkingOptions> {
 }
 
 const DEFAULTS = { start: true, stagger: 38, roll: 520, wave: 55, glyphs: '#%*+=-:' };
+const rolled = new Map<string, string[]>();
+/** The glyphs a roll runs through: the `charset`'s, when one is given, else `glyphs`. Split by code point, so kanji roll whole. */
+const rollGlyphs = (o: { glyphs: string; charset?: string }) => {
+  const key = o.charset ? resolveCharset(o.charset)!.replace(/\s/g, '') || o.glyphs : o.glyphs;
+  let list = rolled.get(key);
+  if (!list) rolled.set(key, (list = [...key]));
+  return list;
+};
 const WORD_MS = 260, REST_MS = 420;
 const thinkingLabel = 'Thinking…';
 const doneLabel = (s: number) => `Thought for ${s}s`;
@@ -102,7 +111,7 @@ export function thinking(element: HTMLElement, options: ThinkingOptions = {}): T
           const b = box(cell), mid = b.y + (b.h - ascent - descent) / 2 + ascent, x = b.x + b.w / 2;
           // Settling runs from the old letter to the new one; the wave runs from a letter back to itself.
           const from = settling ? (previous[i] ?? ' ') : cell.textContent, to = cell.textContent;
-          const column = [from, ...Array.from({ length: 3 }, (_, j) => o.glyphs[Math.floor(hash(j + i * 7, Math.floor(started)) * o.glyphs.length)] ?? ''), to];
+          const column = [from, ...Array.from({ length: 3 }, (_, j) => rollGlyphs(o)[Math.floor(hash(j + i * 7, Math.floor(started)) * rollGlyphs(o).length)] ?? ''), to];
           const offset = house(p) * (column.length - 1) * b.h;
           pen.save();
           pen.beginPath(); pen.rect(b.x - 2, b.y, b.w + 4, b.h); pen.clip();

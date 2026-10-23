@@ -52,7 +52,7 @@ export { navPill } from './kit/nav-pill';
 export type { NavPillOptions, NavPillHandle } from './kit/nav-pill';
 export { morphField } from './kit/morph-field';
 export type { MorphFieldOptions, MorphFieldHandle, MorphSource } from './kit/morph-field';
-export { ditherGradient } from './kit/dither-gradient';
+export { ditherGradient, DITHER_RAMPS } from './kit/dither-gradient';
 export type { DitherGradientOptions, DitherGradientHandle, DitherLight } from './kit/dither-gradient';
 export { ditherImage } from './kit/dither-image';
 export type { DitherImageOptions, DitherImageHandle } from './kit/dither-image';
@@ -125,3 +125,5 @@ export type { TemplateDraw, TemplateFrame } from './kit/backgrounds/canvas';
 // core integration
 export { setFieldBudget, getFieldBudget, setGlobalLook, getGlobalLook, subscribeGlobalLook, KIT_STYLES } from './kit/core-live';
 export type { GlobalLook, KitStyle } from './kit/core-live';
+export { CHARACTER_SETS, resolveCharset } from './studio/characters';
+export type { CharacterSetName } from './studio/characters';

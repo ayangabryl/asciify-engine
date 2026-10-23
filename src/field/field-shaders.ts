@@ -59,6 +59,16 @@ uniform sampler2D uSource, uFluid;
 uniform vec2 uResolution, uCell;
 uniform float uCount, uBlend;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+uniform vec3 uRamp[6];
+uniform float uRampCount;
+// The gradient map: the tone run through the ramp's stops, evenly spaced, faintest first.
+vec3 rampAt(float t){
+  float x=clamp(t,0.,1.)*(uRampCount-1.);
+  int i=int(min(floor(x),uRampCount-2.));
+  vec3 a=uRamp[0],b=uRamp[1];
+  for(int k=1;k<5;k++)if(k==i){a=uRamp[k];b=uRamp[k+1];}
+  return mix(a,b,clamp(x-float(i),0.,1.));
+}
 uniform vec4 uSourceMap;
 uniform int uScene;
 uniform vec3 uInk, uHighlight;
@@ -402,7 +412,8 @@ void main(){
   }
   vec3 hue=rgb/max(max(rgb.r,rgb.g),max(rgb.b,.03));
   hue=mix(vec3(dot(hue,vec3(.2126,.7152,.0722))),hue,uSaturation);
-  vec3 ink=mix(uInk*mix(1.,.3+.7*tone,uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
+  vec3 base=uRampCount>1.5?rampAt(tone):uInk;
+  vec3 ink=mix(base*mix(1.,.3+.7*tone,uRampCount>1.5?0.:uShade),clamp(hue*(.38+.62*tone),0.,1.),uSourceColor);
   // Scatter, text and inlay carry the tone in the ink's strength, which the pixel pass reads back as opacity or tile shade.
   if(uOrder>1.5||(uOrder>.5&&uMark==0)||uMark==17)ink=mix(uInk,hue,uSourceColor)*tone;
   vec3 lifted=uHighlightAuto>.5?ink/max(max(ink.r,ink.g),max(ink.b,.06)):uHighlight;
@@ -434,6 +445,16 @@ uniform vec4 uLine;
 uniform vec4 uFade;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+uniform vec3 uRamp[6];
+uniform float uRampCount;
+// The gradient map: the tone run through the ramp's stops, evenly spaced, faintest first.
+vec3 rampAt(float t){
+  float x=clamp(t,0.,1.)*(uRampCount-1.);
+  int i=int(min(floor(x),uRampCount-2.));
+  vec3 a=uRamp[0],b=uRamp[1];
+  for(int k=1;k<5;k++)if(k==i){a=uRamp[k];b=uRamp[k+1];}
+  return mix(a,b,clamp(x-float(i),0.,1.));
+}
 // The Studio's print defaults: roughness .35, seed 7, registration .2 and its coral second ink. The screen angle is uDir (-35deg).
 const float ROUGH=.35,SEED=7.;
 const vec3 SECOND=vec3(.925,.404,.322);
@@ -537,13 +558,23 @@ void main(){
       coverage=box(p,vec2(0.),uPitch-gap)*fade;
       rgb=q.y<.35?mix(rgb,vec3(1.),.1+grain*.25):q.y>.65?rgb*.75:rgb;
     } else if(uMark==18){
-      // Tick: a smooth wash in the ink under a fine screen of short upright ticks, both following the tone, as a glow seen
-      // through a printed screen: the ticks carry the texture in the mid tones and melt into the wash where it is brightest.
-      // Each tick is two small square dots, one above the other, as a printed screen's.
-      float tw=max(1.,floor(uPitch.x*.34+.5));
-      vec2 lo=floor(c-vec2(tw*.5,tw*1.5));
-      float bar=box(p,lo,lo+tw)+box(p,lo+vec2(0.,tw*2.),lo+vec2(tw,tw*3.));
-      coverage=clamp(tone*tone*.92+bar*(.5+.35*tone)*(1.-tone*tone),0.,1.);
+      // Tick: a printed glow. A smooth wash carries the light; over it every cell holds one short upright tick whose strength
+      // steps through four levels by a 4x4 ordered threshold, so the mid tones read as a crisp dither of ticks that brightens
+      // toward the light and melts into the wash at its core. With a ramp the wash runs through it and the ticks sit a step up.
+      ivec2 b=ivec2(mod(cell,4.));
+      float th=(BAYER[b.y*4+b.x]+.5)/16.;
+      float tw=max(1.,floor(uPitch.x*.28+.5)),tl=max(2.,floor(uPitch.y*.46+.5));
+      vec2 lo=floor(c-vec2(tw,tl)*.5);
+      float bar=box(p,lo,lo+vec2(tw,tl));
+      float lvl=clamp(floor(tone*4.+th)/4.,0.,1.);
+      float melt=1.-smoothstep(.7,.96,tone);
+      float at=bar*melt*(.42+.58*lvl);
+      bool ramped=uRampCount>1.5&&uSourceColor<.5;
+      float aw=ramped?pow(smoothstep(.08,.88,tone),1.4):tone*tone*.92;
+      vec3 W=ramped?rampAt(tone):rgb,T=ramped?rampAt(min(1.,lvl+.38)):rgb;
+      float a=at+aw*(1.-at);
+      rgb=a>0.?(T*at+W*aw*(1.-at))/a:W;
+      coverage=a;
     } else if(uMark==19){
       // Bayer: one gapped square a cell, on or off by a 4x4 ordered threshold at two strengths, so a picture steps through
       // empty, half and full squares in the brand's tones, as pixel-dithered art does.
