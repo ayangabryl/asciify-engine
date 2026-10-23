@@ -15,7 +15,10 @@ const GLOW_TAU = 0.5, RETIRE = 0.18;
 /** The ring opens on r = REACH·rows·(1 − e^(−(t + LEAD)/EASE)) and fades as e^(−(t/FADE)²), measured off the reference. */
 const REACH = 0.436, LEAD = 0.09, EASE = 0.82, FADE = 1.6;
 /** The rim's cross-section and the trailing band, in fractions of the stage height, and their strengths. */
-const RIM = { out0: 0.004, out1: 0.017, in0: 0.01, in1: 0.028, gain: 0.62, gap0: 0.22, gap1: 0.14, trail: 0.23, trailW: 0.025, trailFade: 2.0, fill: 0.05 };
+/** The smoke: warp of the front as a fraction of its radius (early, added late), lump size and drift as fractions of the
+ * stage height (drift per second), the ring's downwind carry, thickness variation, and how dim the rim is between streaks. */
+const SMOKE = { warp0: 0.07, warp1: 0.28, size: 0.3, flow: 0.08, carry: 0.025, thick0: 0.45, thick1: 0.6, wisp0: 0.45 };
+const RIM = { out0: 0.004, out1: 0.017, in0: 0.01, in1: 0.028, gain: 0.85, gap0: 0.22, gap1: 0.14, trail: 0.23, trailW: 0.025, trailFade: 2.0, fill: 0.05 };
 /** Value noise read round a circle of `k` lobes' scale: seamless in angle, so the pattern never shows a seam. */
 /** The cursor brush's reach along the wind: twice as far downwind as up. */
 const a0 = (along: number) => along > 0 ? 2.1 : 1.05;
@@ -23,9 +26,9 @@ const around = (cx: number, cy: number, k: number, s: number) => vnoise(cx * k +
 
 /**
  * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click (`tap: 'ring'`, the default)
- * sends one pressure front out, drawn in the field's own letters: a dense band about 3% of the stage height across with a
- * crisp outer edge, slightly out of round, that opens fast and eases to a stop, a broad dimmer band of lit streaks trailing
- * it. As it fades its breaks widen and it frays into arcs that dissolve. Every ring has the same timing and character;
+ * sends one pressure front out, drawn in the field's own letters: a dense band about 3% of the stage height across whose
+ * outline billows like smoke (broad lumps that grow and drift downwind, uneven thickness, a frayed leading edge, lit most
+ * along the wind's streaks), opening fast and easing to a stop, a broad dimmer band of lit streaks trailing it. As it fades its breaks widen and it frays into arcs that dissolve. Every ring has the same timing and character;
  * only its patch pattern differs. A press stacks on the rings still out, and past four the oldest fades out quickly.
  * `tap: 'surface'` sends a wave over the wind instead, slowed and bent by the gusts. The cursor brightens the streaks near
  * its path, smeared downwind. Exported for tests.
@@ -146,28 +149,40 @@ export class Shockwave implements Simulation {
       // A broad, dim band of lit streaks trails the rim, a second softer front about 0.3–0.5 s behind it.
       const r2 = this.radius(age - (0.36 + 0.15 * smoothstep(0.4, 1.33, age))), s2 = Math.max(1, px * RIM.trailW);
       const a2 = held * RIM.trail * smoothstep(0, 0.1, age) * Math.exp(-((age / RIM.trailFade) ** 4));
-      const wob = r * 0.025, reach = r + wob + o1;
-      const y0 = Math.max(0, Math.floor(cy - reach)), y1 = Math.min(rows, Math.ceil(cy + reach));
-      const x0 = Math.max(0, Math.floor(cx - reach)), x1 = Math.min(cols, Math.ceil(cx + reach));
+      // Smoke, not a drawn circle: the front's distance is warped by a field of broad lumps in space (2–6 round the ring),
+      // growing as it spreads and drifting downwind, so it billows; the whole ring is carried a little downwind too.
+      const lump = r * (SMOKE.warp0 + SMOKE.warp1 * smoothstep(0.3, 1.4, age)), carry = px * SMOKE.carry * (1 - Math.exp(-age / 0.6));
+      const ox = cx + WX * carry, oy = cy + WY * carry, flow = px * SMOKE.flow * age, sc = 1 / (px * SMOKE.size);
+      const fx = -WX * flow + seed * 3.1, fy = -WY * flow + seed * 1.9;
+      const thick = SMOKE.thick0 + SMOKE.thick1 * smoothstep(0.3, 1.4, age);
+      const reach = r + lump + o1 * (1 + thick) + 1;
+      const y0 = Math.max(0, Math.floor(oy - reach)), y1 = Math.min(rows, Math.ceil(oy + reach));
+      const x0 = Math.max(0, Math.floor(ox - reach)), x1 = Math.min(cols, Math.ceil(ox + reach));
       for (let y = y0; y < y1; y++) {
-        const ey = y - cy;
+        const ey = y - oy;
         for (let x = x0, i = y * cols + x0; x < x1; x++, i++) {
-          const ex = x - cx, d = Math.sqrt(ex * ex + ey * ey);
+          const ex = x - ox, d = Math.sqrt(ex * ex + ey * ey);
           if (d > reach) continue;
-          const ux = d > 0 ? ex / d : 1, uy = d > 0 ? ey / d : 0;
-          // Out of round by a few percent, the same shape all the way out: it scales, it never shimmers.
-          const re = r + wob * (2 * around(ux, uy, 1.3, seed + 11) - 1), e = d - re;
-          const band = e >= 0 ? 1 - smoothstep(o0, o1, e) : smoothstep(-i1, -i0, e);
+          // The lumps live in space and scale with the ring, so the outline changes smoothly: no shimmer frame to frame.
+          const wx = x * sc + fx, wy = y * sc + fy;
+          const w = 0.7 * vnoise(wx, wy) + 0.3 * vnoise(wx * 2.3 + 17.1, wy * 2.3 + 5.7) - 0.5;
+          const re = r + 2 * lump * w, e = d - re;
+          if (e > o1 * (1 + thick) + 0.5) continue;
+          // Uneven thickness round the rim, and a leading edge frayed letter by letter.
+          const tf = 1 + thick * 2 * (vnoise(wx * 1.7 + 41.3, wy * 1.7 + 9.2) - 0.5), fray = 0.55 + 0.9 * ((grain[i] * 7.31) % 1);
+          const band = e >= 0 ? 1 - smoothstep(o0 * tf * fray, o1 * tf * fray, e) : smoothstep(-i1 * tf, -i0 * tf, e);
           const lit = smoothstep(0.15, 0.6, dens[i]);
           let add = 0;
           if (band > 0) {
-            // Unevenness round the ring and per letter; the breaks are where the patch noise runs thin.
+            const ux = d > 0 ? ex / d : 1, uy = d > 0 ? ey / d : 0;
+            // Breaks where the patch noise runs thin; lit most where the wind's streaks are, so it reads as wisps.
             const patch = 0.5 * around(ux, uy, 2.6, seed) + 0.5 * around(ux, uy, 7.5, seed + 5.3);
             const keep = smoothstep(gap, gap + soft, patch) * (0.7 + 0.6 * patch);
-            add = amp * RIM.gain * band * keep * (0.85 + 0.15 * lit) * (0.65 + 0.35 * grain[i]);
+            const wisp = SMOKE.wisp0 + (1 - SMOKE.wisp0) * smoothstep(0.1, 0.55, dens[i]);
+            add = amp * RIM.gain * band * keep * wisp * (0.65 + 0.35 * grain[i]);
           }
           if (e < 0) {
-            const q = (d - r2) / s2;
+            const q = (d - (r2 + 2 * lump * w * (r2 / Math.max(1, r)))) / s2;
             add += lit * (a2 * Math.exp(-0.5 * q * q) + amp * RIM.fill * (d > r2 ? 1 : 0.5)) * (1 - band);
           }
           // Screen, not add: stacked rings brighten without burning out to flat white.
