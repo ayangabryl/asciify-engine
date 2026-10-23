@@ -1,5 +1,5 @@
 import { FluidField, paintLiquidSource } from '../../surface/fluid-field';
-import type { BackgroundContext, BackgroundPreset, BackgroundRun } from '../background';
+import { clearOf, type BackgroundContext, type BackgroundPreset, type BackgroundRun } from '../background';
 import { mountSurface } from '../core';
 
 /** The original Asciify hero ramp. */
@@ -31,7 +31,7 @@ function mountFluid(context: BackgroundContext): BackgroundRun | null {
         cellFit: 'fill', maxPixelRatio: 1.5,
         // asciify-engine's contrast 0.1, then its floor onto the ramp, which the field's rounding meets half a step lower.
         // The folds part round a `clear` element, so the hero's copy reads over them.
-        clear: s.clear ? { element: s.clear, padding: 8, feather: 0.22, shape: 'ellipse' } : false,
+        clear: clearOf(s, { padding: 8, feather: 0.22, shape: 'ellipse' }),
         color: 'ink', shade: 0, levels: 'none', fit: 'cover', gamma: 1, contrast: CONTRAST, brightness: (0.5 - 128 / 255) * (CONTRAST - 1) - 0.5 / Math.max(1, Array.from(s.charset ?? RAMP).length - 1), ...s.look,
       };
     },

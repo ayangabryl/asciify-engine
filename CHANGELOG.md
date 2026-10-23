@@ -5,6 +5,11 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.2: text-shaped clearing
+
+- **Backgrounds keep clear of text, not of an oval.** `background(el, { clear })` also takes rects in viewport CSS px, or a function that returns them (such as every line box of the copy from `Range.getClientRects()`). The field quiets only right behind each rect and keeps flowing round and between the lines, bending a little away from their edges, so it fills the whole viewport instead of leaving a hole in the middle. Taps and the cursor's glow pass behind the text, quieted by the same map, never stopped at a hard edge. Tune it with `clearPadding` (px fully quiet round each rect, default 8), `clearSoftness` (px the quiet falls off over, default 28) and `clearStrength` (0–1, default 0.85). A function is read once per drawn frame and the field wakes on scroll, so return the same array until something moves; the map is rasterised on the CPU only when the rects change and sampled as one small texture. An element still clears a soft oval as before.
+- **Glyph field `clear: { rects, padding, softness, strength, bend }`.** The same text-shaped map on `mountGlyphField` and every field-driven kit piece.
+
 ## 4.32.1: one clean, consistent shockwave
 
 - **`shockwave` taps are a clean ring by default.** One pressure front with the same shape and timing on every press: it expands fast and eases out (quint-out), a crisp rim with a sharp leading edge lights the streaks it passes and the streaks just behind it glow a moment, all faded out by 1.6 s. No reflections, secondary rings, ringing or bounce-back; the wind leans it a touch downwind as it opens but it never wobbles. Presses stack screen-blended, so overlaps brighten without burning out; past four at once the oldest fades out in 0.18 s. `tap: 'surface'` keeps the 4.32 wave over the wind as an opt-in. The background's `tap` option now defaults to each preset's own (`shockwave` `'ring'`, `estuary` and `capillary` `'surface'`).

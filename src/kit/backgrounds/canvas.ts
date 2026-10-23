@@ -85,7 +85,7 @@ export function mountCanvas(context: BackgroundContext, draw: TemplateDraw, warm
     pen.globalCompositeOperation = 'source-over';
     for (; warm > 0; warm--) draw(pen, w, h, phase, smooth, frame);
     draw(pen, w, h, phase, smooth, frame);
-    clearZone(s.clear);
+    clearZone(s.clear && typeof s.clear === 'object' && !Array.isArray(s.clear) ? s.clear as HTMLElement : false);
     cost = cost * 0.9 + (performance.now() - begin) * 0.1;
     canvas.dataset.painted = '';
   };

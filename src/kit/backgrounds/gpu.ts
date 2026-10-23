@@ -1,5 +1,5 @@
 import type { FieldClearZone, FieldScene, GlyphFieldOptions } from '../../field';
-import type { BackgroundContext, BackgroundMark, BackgroundPreset, BackgroundRun, BackgroundSettings } from '../background';
+import { clearOf, type BackgroundContext, type BackgroundMark, type BackgroundPreset, type BackgroundRun, type BackgroundSettings } from '../background';
 import { mountPageField, type PageField } from '../page-field';
 
 export type FieldHover = 'trail' | 'fluid' | 'lantern' | 'none';
@@ -89,7 +89,7 @@ export function scenePreset(spec: ScenePreset): BackgroundPreset {
           ...(mark === 'dot' ? { mark: 'dot', ...dotCells(s) } : { mark: 'glyph', charset: s.charset ?? charset, ...glyphCells(s) }),
           hover: hoverOf(s, hover), lantern: { radius: 0.14, strength: 0.45, trail: 0.8, follow: 9 }, trail: { strength: 0.8, radius: 0.35 },
           fluid: { radius: 0.09, refraction: 0.03, glow: 0.6 },
-          clear: s.clear ? { element: s.clear, padding: 0, feather, shape: 'ellipse' } : middle,
+          clear: clearOf(s, { padding: 0, feather, shape: 'ellipse' }, middle),
           ...spec.tune?.(s, dark),
         };
       }, graphite, own === 'dot' ? s => ({ ...glyphCells(s), charset }) : undefined);
