@@ -13,7 +13,9 @@ const WX = Math.cos(-0.42), WY = Math.sin(-0.42);
 /** The cursor's glow fades on this clock; a retired ring fades out over RETIRE. */
 const GLOW_TAU = 0.5, RETIRE = 0.18;
 /** The ring opens on r = REACH·rows·(1 − e^(−(t + LEAD)/EASE)) and fades as e^(−(t/FADE)²), measured off the reference. */
-const REACH = 0.43, LEAD = 0.1, EASE = 0.85, FADE = 2.0;
+const REACH = 0.436, LEAD = 0.09, EASE = 0.82, FADE = 1.6;
+/** The rim's cross-section and the trailing band, in fractions of the stage height, and their strengths. */
+const RIM = { out0: 0.004, out1: 0.017, in0: 0.01, in1: 0.028, gain: 0.62, gap0: 0.22, gap1: 0.14, trail: 0.23, trailW: 0.025, trailFade: 2.0, fill: 0.05 };
 /** Value noise read round a circle of `k` lobes' scale: seamless in angle, so the pattern never shows a seam. */
 /** The cursor brush's reach along the wind: twice as far downwind as up. */
 const a0 = (along: number) => along > 0 ? 2.1 : 1.05;
@@ -21,9 +23,9 @@ const around = (cx: number, cy: number, k: number, s: number) => vnoise(cx * k +
 
 /**
  * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click (`tap: 'ring'`, the default)
- * sends one pressure front out, drawn in the field's own letters: a thin, crisp band about a row and a half thick that opens
- * fast and eases to a stop, slightly out of round, with only small breaks, the streaks inside it lighting faintly. As it
- * fades its breaks widen and it frays into arcs that dissolve. Every ring has the same timing and character;
+ * sends one pressure front out, drawn in the field's own letters: a dense band about 3% of the stage height across with a
+ * crisp outer edge, slightly out of round, that opens fast and eases to a stop, a broad dimmer band of lit streaks trailing
+ * it. As it fades its breaks widen and it frays into arcs that dissolve. Every ring has the same timing and character;
  * only its patch pattern differs. A press stacks on the rings still out, and past four the oldest fades out quickly.
  * `tap: 'surface'` sends a wave over the wind instead, slowed and bent by the gusts. The cursor brightens the streaks near
  * its path, smeared downwind. Exported for tests.
@@ -126,7 +128,7 @@ export class Shockwave implements Simulation {
       for (let x = 0; x < cols; x++, i++) {
         const n = this.wind(x, y), h = heat[i];
         this.dens[i] = n; this.gusts[i] = this.gust;
-        out[i] = 0.01 + 0.11 * smoothstep(0.44, 0.74, n) + (h > 0 ? 0.7 * Math.min(1, h) * (0.15 + 0.85 * smoothstep(0.25, 0.6, n)) : 0);
+        out[i] = 0.01 + 0.04 * smoothstep(0.52, 0.8, n) + (h > 0 ? 0.7 * Math.min(1, h) * (0.15 + 0.85 * smoothstep(0.25, 0.6, n)) : 0);
       }
     }
     const dens = this.dens;
@@ -134,35 +136,40 @@ export class Shockwave implements Simulation {
       const k = m * STRIDE, amp = this.amp(k);
       if (amp <= 0.002) continue;
       const age = rings[k + 2], seed = rings[k + 5], r = this.radius(age), cx = rings[k], cy = rings[k + 1];
-      // A thin band of whole letters, about a row and a half: a flat top with a short antialiased edge on both sides.
-      const half = Math.max(0.9, rows * 0.0095), edge = 0.6;
-      // Small irregular breaks that only open wide late, so the ring holds together and then frays into arcs.
-      const gap = 0.17 + 0.28 * smoothstep(0.8, 2.0, age), soft = 0.08;
-      const wake = 0.22 * smoothstep(0, 0.1, age) * Math.exp(-((age / 0.85) ** 2)), trail = rows * 0.045;
-      const wob = r * 0.025, reach = r + wob + half + edge;
+      const g = Shockwave.glow(age), held = g > 1e-4 ? amp / g : 0;
+      // The rim, in fractions of the stage height (measured off the reference): flat and dense for about 1.2% of the height
+      // behind the front, a crisp outer edge, and a short ramp in from the inside; about 3% across at half height.
+      const px = rows, o0 = Math.max(0.3, px * RIM.out0), o1 = Math.max(o0 + 0.5, px * RIM.out1);
+      const i0 = Math.max(0.6, px * RIM.in0), i1 = Math.max(i0 + 0.6, px * RIM.in1);
+      // Breaks: a few small ones early, opening wide only as it fades.
+      const gap = RIM.gap0 + RIM.gap1 * smoothstep(0.5, 1.6, age), soft = 0.08;
+      // A broad, dim band of lit streaks trails the rim, a second softer front about 0.3–0.5 s behind it.
+      const r2 = this.radius(age - (0.36 + 0.15 * smoothstep(0.4, 1.33, age))), s2 = Math.max(1, px * RIM.trailW);
+      const a2 = held * RIM.trail * smoothstep(0, 0.1, age) * Math.exp(-((age / RIM.trailFade) ** 4));
+      const wob = r * 0.025, reach = r + wob + o1;
       const y0 = Math.max(0, Math.floor(cy - reach)), y1 = Math.min(rows, Math.ceil(cy + reach));
       const x0 = Math.max(0, Math.floor(cx - reach)), x1 = Math.min(cols, Math.ceil(cx + reach));
-      const rIn = Math.max(0, r - wob - half - edge);
       for (let y = y0; y < y1; y++) {
         const ey = y - cy;
         for (let x = x0, i = y * cols + x0; x < x1; x++, i++) {
           const ex = x - cx, d = Math.sqrt(ex * ex + ey * ey);
-          if (d > reach || (d < rIn && wake < 0.01)) continue;
+          if (d > reach) continue;
           const ux = d > 0 ? ex / d : 1, uy = d > 0 ? ey / d : 0;
           // Out of round by a few percent, the same shape all the way out: it scales, it never shimmers.
-          const re = r + wob * (2 * around(ux, uy, 1.3, seed + 11) - 1);
-          const band = 1 - smoothstep(half, half + edge, Math.abs(d - re));
+          const re = r + wob * (2 * around(ux, uy, 1.3, seed + 11) - 1), e = d - re;
+          const band = e >= 0 ? 1 - smoothstep(o0, o1, e) : smoothstep(-i1, -i0, e);
           const lit = smoothstep(0.15, 0.6, dens[i]);
           let add = 0;
           if (band > 0) {
-            // Slight unevenness round the ring and per letter; the breaks are where the patch noise runs thin.
+            // Unevenness round the ring and per letter; the breaks are where the patch noise runs thin.
             const patch = 0.5 * around(ux, uy, 2.6, seed) + 0.5 * around(ux, uy, 7.5, seed + 5.3);
-            const keep = smoothstep(gap, gap + soft, patch) * (0.75 + 0.5 * patch);
-            add = band * keep * (0.8 + 0.2 * lit) * (0.7 + 0.3 * grain[i]) * 1.5;
+            const keep = smoothstep(gap, gap + soft, patch) * (0.7 + 0.6 * patch);
+            add = amp * RIM.gain * band * keep * (0.85 + 0.15 * lit) * (0.65 + 0.35 * grain[i]);
           }
-          // The streak texture inside the ring lights for a moment as it passes.
-          if (d < re) add += wake * lit * (1 - band) * (0.5 + Math.exp(-(re - d) / trail));
-          add *= amp;
+          if (e < 0) {
+            const q = (d - r2) / s2;
+            add += lit * (a2 * Math.exp(-0.5 * q * q) + amp * RIM.fill * (d > r2 ? 1 : 0.5)) * (1 - band);
+          }
           // Screen, not add: stacked rings brighten without burning out to flat white.
           out[i] = 1 - (1 - out[i]) * (1 - (add > 1 ? 1 : add));
         }
