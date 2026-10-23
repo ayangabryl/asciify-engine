@@ -2,7 +2,7 @@ import type { GlyphField, GlyphFieldOptions } from '../field';
 import { CHARACTER_SETS, resolveCharset } from '../studio/characters';
 import { mergeOptions, prefersReduced, type KitHandle, type KitOptions } from './core';
 import { disposeKit, ownsCharset, setPosterSource } from './core-live';
-import { tapStyle, type TapStyle } from '../surface/surface-tap';
+import type { TapStyle } from '../surface/surface-tap';
 
 /** `true` follows the pointer with the preset's own response; the GPU presets also take a named hover. */
 export type BackgroundCursor = boolean | 'trail' | 'fluid' | 'lantern';
@@ -32,9 +32,10 @@ export interface BackgroundOptions extends KitOptions {
    */
   cursor?: BackgroundCursor;
   /**
-   * How a click answers, for the presets that take one (`shockwave`, `estuary`, `capillary`). `'surface'` (default) sends a wave
-   * over the preset's own field: it slows, bends and breaks on dense areas and slips through open ones. `'ring'` keeps the
-   * earlier response (an even ring, a round glow or flood).
+   * How a click answers, for the presets that take one (`shockwave`, `estuary`, `capillary`). `'ring'` is one clean front with
+   * the same shape and timing every time: `shockwave`'s default, a crisp ring that expands fast, eases out and fades in about
+   * 1.6 s (`estuary` a round glow, `capillary` a round flood). `'surface'` sends a damped wave over the preset's own field: it
+   * slows and bends on dense areas and slips through open ones (`estuary`'s and `capillary`'s default).
    */
   tap?: TapStyle;
   /** GPU presets: characters (`'glyph'`) or halftone dots (`'dot'`). Default: the preset's own; a `charset` asks for characters. */
@@ -55,7 +56,8 @@ export interface BackgroundSettings {
   cellSize: number;
   charset: string | undefined;
   cursor: BackgroundCursor;
-  tap: TapStyle;
+  /** The asked-for tap, or undefined for the preset's own default. */
+  tap: TapStyle | undefined;
   mark: BackgroundMark | undefined;
   clear: HTMLElement | false;
   dither: number;
@@ -147,7 +149,7 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
       charset: backgroundCharset(o.charset),
       // A `look.hover` of 'none' (the components dialog's Cursor: Off) turns the response off for every preset, canvas ones too.
       cursor: o.look?.hover === 'none' ? false : o.cursor ?? p.cursor,
-      tap: tapStyle(o.tap),
+      tap: o.tap === 'ring' || o.tap === 'surface' ? o.tap : undefined,
       mark: o.mark === 'glyph' || o.mark === 'dot' ? o.mark : undefined,
       clear: o.clear ?? false,
       dither: num(o.dither, 0, 0, 1),

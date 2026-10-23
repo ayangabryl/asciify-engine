@@ -111,6 +111,8 @@ export class Estuary implements Simulation {
     if (tap === 'ring') { this.glow(x, y, this.rows * 0.24, 1); return; }
     this.glow(x, y, this.rows * 0.06, 0.8);
     this.tap ??= new SurfaceTap(this.cols, this.rows);
+    // Calm behind the front: one wave crosses the currents, with no rings left ringing at the drop.
+    this.tap.calm = 8;
     this.tap.drop(x, y, 1, Math.max(1.5, this.rows * 0.03));
   }
   private glow(x: number, y: number, R: number, amount: number) {

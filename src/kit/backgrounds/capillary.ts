@@ -137,7 +137,7 @@ export class Capillary implements Simulation {
         wave.speed[i] = s * s; wave.damp[i] = 0.4 + 1.4 * (1 - open);
       }
     }
-    this.wave.base = this.rows * 0.75;
+    this.wave.base = this.rows * 0.75; this.wave.calm = 8;
     this.wave.drop(x, y, 1, Math.max(1.5, this.rows * 0.03));
     this.lit = true;
   }

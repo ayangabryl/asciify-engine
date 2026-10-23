@@ -92,14 +92,31 @@ describe('shockwave', () => {
     expect(s.count).toBe(0);
     expect(s.step(1 / 60, 0)).toBe(false);
   });
+  it('defaults to the clean ring: one front, never back once it fades, the same every press, capped when stacked', () => {
+    const s = new Shockwave(1);
+    s.resize(120, 80);
+    s.press(60, 40);
+    expect(s.count).toBe(1);
+    expect(s.tap).toBeNull();
+    let last = 0;
+    for (let t = 0.05; t < 1.6; t += 0.05) { const r = s.radius(t); expect(r).toBeGreaterThanOrEqual(last); last = r; }
+    let prev = Infinity;
+    for (let t = 0.1; t < 1.7; t += 0.05) { const a = Shockwave.strength(t); expect(a).toBeLessThanOrEqual(prev); prev = a; }
+    expect(Shockwave.strength(1.6)).toBe(0);
+    for (let i = 0; i < 9; i++) s.press(10 + i * 10, 40);
+    expect(s.count).toBeLessThanOrEqual(6);
+    let live = 0;
+    for (let n = 0; n < s.count; n++) if (s.rings[n * 5 + 4] < 0) live++;
+    expect(live).toBe(4);
+  });
 });
 
 describe('surface tap', () => {
-  it('by default sends a front over the wind that the wind carries and that fades', () => {
+  it('on request sends a front over the wind that the wind carries and that fades', () => {
     const s = new Shockwave(1), out = new Float32Array(160 * 90);
     s.resize(160, 90);
     s.step(1 / 60, 1); s.render(out);
-    s.press(80, 45);
+    s.press(80, 45, 'surface');
     expect(s.count).toBe(0);
     expect(s.tap?.live).toBe(true);
     for (let i = 0; i < 36; i++) { s.step(1 / 60, 1); s.render(out); }

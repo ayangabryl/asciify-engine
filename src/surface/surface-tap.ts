@@ -153,11 +153,12 @@ export function photoMedium(tap: SurfaceTap, cues: PhotoCues, light: [number, nu
       const smoothness = 1 - smooth(0.2, 0.8, detail);
       const s = Math.max(0.12, Math.max(open, 0.2 + 0.65 * smoothness) * (1 - 0.45 * smooth(0.55, 0.95, depth) * (1 - water)));
       speed[i] = s * s;
-      // Water keeps its rings, sky lets its swell settle slowly, smooth ground lets it ring briefly, busy ground stops it in a
-      // few tenths of a second.
+      // Water carries the front furthest, sky lets its swell settle, smooth ground lets it pass briefly, busy ground stops it
+      // in a few tenths of a second.
       const ground = Math.max(0, 1 - open);
-      damp[i] = 0.3 * water + 1.1 * sky * (1 - water) + ground * (0.9 + 6.5 * smooth(0.25, 0.9, detail));
-      wall[i] = Math.min(0.85, 0.75 * smooth(0.12, 0.35, dz) * (1 - water * 0.6) + 0.22 * smooth(0.6, 1, edge) * (1 - open));
+      damp[i] = 0.9 * water + 1.6 * sky * (1 - water) + ground * (1.4 + 6.5 * smooth(0.25, 0.9, detail));
+      // Soft walls: enough to slow and wrap the front round the subject, too little to throw it back as an echo.
+      wall[i] = Math.min(0.4, 0.35 * smooth(0.12, 0.35, dz) * (1 - water * 0.6) + 0.1 * smooth(0.6, 1, edge) * (1 - open));
       gx += (x / (cols - 1) - 0.5) * glow; gy += (y / (rows - 1) - 0.5) * glow; gw += glow;
     }
   }

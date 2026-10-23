@@ -320,7 +320,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       gl.bindTexture(gl.TEXTURE_2D, tapTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     }
-    tap.base = Math.min(cols, rows) * 1.1; tap.mass = 50; tap.fade = 1.6;
+    // No pull back to rest and a strong calm behind the front: one front that settles, never a bounce.
+    tap.base = Math.min(cols, rows) * 1.1; tap.mass = 0; tap.calm = 7; tap.fade = 1.6;
     readTapMedium(); tapRead = videoFrames;
     tap.drop(x * (cols - 1), y * (rows - 1), strength, 2.2);
     wake();
