@@ -21,9 +21,9 @@ const around = (cx: number, cy: number, k: number, s: number) => vnoise(cx * k +
 
 /**
  * Wind over a dark field of letters: long thin streaks in gusty patches drift downwind. A click (`tap: 'ring'`, the default)
- * sends one pressure front out, drawn in the field's own letters: a band two to three rows thick that opens fast and eases
- * to a stop, slightly out of round, bright in clumps and thin in places, the streaks inside it lighting for a moment. As it
- * fades its thin places open into gaps and it breaks into arcs that dissolve. Every ring has the same timing and character;
+ * sends one pressure front out, drawn in the field's own letters: a thin, crisp band about a row and a half thick that opens
+ * fast and eases to a stop, slightly out of round, with only small breaks, the streaks inside it lighting faintly. As it
+ * fades its breaks widen and it frays into arcs that dissolve. Every ring has the same timing and character;
  * only its patch pattern differs. A press stacks on the rings still out, and past four the oldest fades out quickly.
  * `tap: 'surface'` sends a wave over the wind instead, slowed and bent by the gusts. The cursor brightens the streaks near
  * its path, smeared downwind. Exported for tests.
@@ -134,15 +134,15 @@ export class Shockwave implements Simulation {
       const k = m * STRIDE, amp = this.amp(k);
       if (amp <= 0.002) continue;
       const age = rings[k + 2], seed = rings[k + 5], r = this.radius(age), cx = rings[k], cy = rings[k + 1];
-      // A band two to three rows thick, its leading edge a little crisper than its trailing one.
-      const sig = Math.max(2.4, rows * 0.031) / 2.355, outer = sig * 0.85, inner = sig * 1.2;
-      // Its thin places open as it fades, so the ring breaks into arcs and dissolves rather than dimming evenly.
-      const gap = 0.15 + 0.25 * smoothstep(0.3, 2.0, age), soft = 0.12;
-      const wake = 0.6 * smoothstep(0, 0.1, age) * Math.exp(-((age / 0.55) ** 2));
-      const wob = r * 0.035, reach = r + wob + outer * 3.2;
+      // A thin band of whole letters, about a row and a half: a flat top with a short antialiased edge on both sides.
+      const half = Math.max(0.9, rows * 0.0095), edge = 0.6;
+      // Small irregular breaks that only open wide late, so the ring holds together and then frays into arcs.
+      const gap = 0.17 + 0.28 * smoothstep(0.8, 2.0, age), soft = 0.08;
+      const wake = 0.22 * smoothstep(0, 0.1, age) * Math.exp(-((age / 0.85) ** 2)), trail = rows * 0.045;
+      const wob = r * 0.025, reach = r + wob + half + edge;
       const y0 = Math.max(0, Math.floor(cy - reach)), y1 = Math.min(rows, Math.ceil(cy + reach));
       const x0 = Math.max(0, Math.floor(cx - reach)), x1 = Math.min(cols, Math.ceil(cx + reach));
-      const rIn = Math.max(0, r - wob - inner * 3.2);
+      const rIn = Math.max(0, r - wob - half - edge);
       for (let y = y0; y < y1; y++) {
         const ey = y - cy;
         for (let x = x0, i = y * cols + x0; x < x1; x++, i++) {
@@ -151,17 +151,17 @@ export class Shockwave implements Simulation {
           const ux = d > 0 ? ex / d : 1, uy = d > 0 ? ey / d : 0;
           // Out of round by a few percent, the same shape all the way out: it scales, it never shimmers.
           const re = r + wob * (2 * around(ux, uy, 1.3, seed + 11) - 1);
-          const q = d > re ? (d - re) / outer : (re - d) / inner, band = Math.exp(-0.5 * q * q);
+          const band = 1 - smoothstep(half, half + edge, Math.abs(d - re));
           const lit = smoothstep(0.15, 0.6, dens[i]);
           let add = 0;
-          if (band > 0.01) {
-            // Clumps and thin places round the ring, then the field's own grain per letter.
-            const patch = 0.62 * around(ux, uy, 1.7, seed) + 0.38 * around(ux, uy, 4.2, seed + 5.3);
-            const keep = smoothstep(gap, gap + soft, patch) * (0.45 + 1.0 * patch);
-            add = band * keep * (0.5 + 0.5 * lit) * (0.55 + 0.45 * grain[i]) * 3.4;
+          if (band > 0) {
+            // Slight unevenness round the ring and per letter; the breaks are where the patch noise runs thin.
+            const patch = 0.5 * around(ux, uy, 2.6, seed) + 0.5 * around(ux, uy, 7.5, seed + 5.3);
+            const keep = smoothstep(gap, gap + soft, patch) * (0.75 + 0.5 * patch);
+            add = band * keep * (0.8 + 0.2 * lit) * (0.7 + 0.3 * grain[i]) * 1.5;
           }
           // The streak texture inside the ring lights for a moment as it passes.
-          if (d < re) add += wake * lit * (1 - band);
+          if (d < re) add += wake * lit * (1 - band) * (0.5 + Math.exp(-(re - d) / trail));
           add *= amp;
           // Screen, not add: stacked rings brighten without burning out to flat white.
           out[i] = 1 - (1 - out[i]) * (1 - (add > 1 ? 1 : add));
