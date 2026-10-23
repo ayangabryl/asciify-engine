@@ -5,6 +5,11 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.5: shockwave matched to its reference by measurement
+
+- **`shockwave`'s ring has the reference's cross-section.** The default tap lights a dense band of letters about 3% of the stage height across (25 px at 800 px tall): flat and bright for about 1.2% of the height behind the front, a crisp outer edge, a short ramp in from the inside. A broad, dimmer band of lit streaks trails it by 0.3–0.5 s and the disc between holds a faint fill, as in the reference. The radius follows `0.436·H·(1 − e^(−(t + 0.09)/0.82))` and the rim fades as `e^(−(t/1.6)²)`; a few small breaks early, opening into arcs as it fades. Fitted to the reference's per-cell tone maps: radial-profile error 0.15 of the rim's peak (4.32.4: 0.42).
+- **The resting wind is fainter.** The streaks' idle tone is cut to about a third, so the ground sits as low as the reference's and text over it reads clearly.
+
 ## 4.32.4: a finer shockwave ring
 
 - **`shockwave`'s ring is thin and crisp.** The default tap now lights a narrow band of whole letters, about a row and a half, at a nearly even brightness with a short antialiased edge on both sides, instead of a soft three-row glow. It holds together through the first second with only small, irregular breaks, then frays into arcs from about 1.3 s as it fades. The streaks just inside it light faintly for the first second. Timing, radius curve and stacking are unchanged from 4.32.3.

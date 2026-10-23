@@ -85,7 +85,9 @@ describe('shockwave', () => {
     for (let i = 0; i < 30; i++) s.step(1 / 60, 1);
     s.render(out);
     const r = Math.round(s.radius(0.5));
-    expect(out[50 * 100 + 50 + r]).toBeGreaterThan(out[50 * 100 + 50] + 0.1);
+    let rim = 0;
+    for (let a = 0; a < 64; a++) rim += out[Math.round(50 + r * Math.sin(a / 64 * Math.PI * 2)) * 100 + Math.round(50 + r * Math.cos(a / 64 * Math.PI * 2))] / 64;
+    expect(rim).toBeGreaterThan(out[50 * 100 + 50] + 0.1);
     expect(s.radius(1) - s.radius(0.5)).toBeLessThan(s.radius(0.5));
     expect(s.radius(10)).toBeLessThan(100 * 0.45);
     for (let i = 0; i < 30 * 5; i++) s.step(1 / 30, 1);
