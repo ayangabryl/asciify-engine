@@ -654,9 +654,28 @@ bg.update({ cursor: false });     // no pointer response, for any preset
 
 Presets are separate exports, so a page pays only for the ones it imports. Each GPU preset is a small object over the shared `asciify-engine/field` build (about 23 KB gzip) that every field component uses; `fluid` adds its solver (about 3 KB). To offer a menu of several, import those you list.
 
-Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for dots; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `fish`, `kanji`, `dots`; on a dot preset it asks for characters), `mark` (`'glyph'` or `'dot'`; default the preset's own), `cursor` (pointer response: `false` turns it off, `true` keeps the preset's own, or name `'trail' | 'fluid' | 'lantern'`; a `look.hover` of `'none'` also turns it off), `clear` (an element to keep clear: the field fades out round it; without one each preset keeps its own quiet middle), `opacity` (default 1, `fluid` 0.7, `swell` 0.6), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (raw glyph-field settings on top, such as `{ mark: 'stipple' }` for a render style) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`; `field` is the preset's `GlyphField` (for `field.pulse()`).
+Options: `preset` (required), `palette` (one ink or `{ light, dark }`, winning over `color` and `ink`; default the preset's graphite for the ground), `color` (one ink for both grounds), `speed` (0–5, default the preset's tuned pace, the Speed control on the site), `cellSize` (character size in CSS px, dot spacing for dots; default the preset's), `charset` (characters from empty to dense, or a named set: `standard`, `asciify`, `minimal`, `detailed`, `letters`, `technical`, `blocks`, `braille`, `fish`, `kanji`, `dots`; on a dot preset it asks for characters), `mark` (`'glyph'` or `'dot'`; default the preset's own), `cursor` (pointer response: `false` turns it off, `true` keeps the preset's own, or name `'trail' | 'fluid' | 'lantern'`; a `look.hover` of `'none'` also turns it off), `clear` (an element to keep clear: the field fades out in a soft oval round it; without one each preset keeps its own quiet middle. 4.32.2: or rects in viewport CSS px, or a function returning them, for a text-shaped clear map: the field quiets only right behind each rect, keeps flowing round and between them and bends a little away from their edges; taps and the cursor's glow pass behind the text, quieted by the same map. A function is read once per drawn frame and the field wakes on scroll, so return the same array until something moves; see below), `clearPadding` (rects: CSS px fully quiet round each, default 8), `clearSoftness` (rects: CSS px the quiet falls off over, default 28), `clearStrength` (rects: how much of the field goes behind them, 0–1, default 0.85), `opacity` (default 1, `fluid` 0.7, `swell` 0.6), `text` (`wordField`'s word, default `ASCIIFY`), plus `ink`, `look` (raw glyph-field settings on top, such as `{ mark: 'stipple' }` for a render style) and `reducedMotion`. Methods: `setPreset(preset)`; getter `preset`; `field` is the preset's `GlyphField` (for `field.pulse()`).
 
 `swell` draws halftone dots by default. `mark: 'glyph'` or a `charset` writes the same waves in characters (Geist Mono cells, 0.62 wide), and a global look does the same while it is set: a charset or glyph-like style gives it characters, a tile or print style its mark, and `setGlobalLook(null)` gives it its dots back. Every other preset draws characters by default and takes `mark: 'dot'` for a halftone.
+
+Text-shaped clearing (4.32.2), as on asciify.org: measure the line boxes of the text that sits straight on the field, re-measuring only when something moved, and hand the engine the function.
+
+```ts
+let rects: DOMRect[] = [], dirty = true;
+const range = document.createRange();
+const read = () => {
+  if (!dirty) return rects;
+  dirty = false;
+  rects = [...hero.querySelectorAll('h1, p')].flatMap(el => { range.selectNodeContents(el); return [...range.getClientRects()]; });
+  rects.push(...[...hero.querySelectorAll('.btn')].map(el => el.getBoundingClientRect()));
+  return rects;
+};
+const mark = () => { dirty = true; };
+addEventListener('scroll', mark, { passive: true, capture: true });
+new ResizeObserver(mark).observe(document.body);
+document.fonts.addEventListener('loadingdone', mark);
+background(document.querySelector('.page-bg')!, { preset: shockwave, clear: read, clearPadding: 4, clearSoftness: 24 });
+```
 
 `fluid` lays its cells out as the site's hero does: a whole number of 7 × 12.07 px cells (`cellSize` / 0.58 tall) stretched to fill the stage exactly, so rows keep their place down a tall page, drawn at up to 1.5 device pixels per CSS pixel. It does this through the field's `cellFit: 'fill'` (see glyph-field.md), and parts round `clear`.
 

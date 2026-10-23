@@ -1,5 +1,5 @@
 import type { GlyphFieldOptions } from '../../field';
-import type { BackgroundContext, BackgroundPreset, BackgroundRun, BackgroundSettings } from '../background';
+import { clearOf, type BackgroundContext, type BackgroundPreset, type BackgroundRun, type BackgroundSettings } from '../background';
 import { mountSurface } from '../core';
 import { FIELD_GRAPHITE, glyphCells, dotCells, markOf } from './gpu';
 import type { TapStyle } from '../../surface/surface-tap';
@@ -87,7 +87,7 @@ function mountSim(context: BackgroundContext, spec: SimSpec): BackgroundRun | nu
       return {
         color: 'ink', shade: 0, background: 'transparent', levels: 'none', blend: 'on', maxPixelRatio: 2, hover: 'none',
         ...(mark === 'dot' ? { mark: 'dot', ...dotCells(s) } : { mark: 'glyph', charset: s.charset ?? spec.charset, ...glyphCells(s) }),
-        clear: s.clear ? { element: s.clear, padding: 0, feather: spec.feather ?? 0.3, shape: 'ellipse' } : false,
+        clear: clearOf(s, { padding: 0, feather: spec.feather ?? 0.3, shape: 'ellipse' }),
         ...spec.tune?.(s), ...s.look,
       } satisfies GlyphFieldOptions;
     },

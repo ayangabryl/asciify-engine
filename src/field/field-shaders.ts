@@ -92,6 +92,9 @@ uniform vec4 uClear;
 uniform vec4 uPulse[4];
 uniform sampler2D uTapMap;
 uniform float uTapOn;
+uniform sampler2D uClearMap;
+uniform float uClearMapOn, uClearBend;
+uniform vec2 uClearTexel;
 layout(location=0) out vec4 outInk;
 layout(location=1) out vec4 outUnder;
 ${FLUID_CODEC(packed)}
@@ -309,6 +312,14 @@ void main(){
   }
   vec2 drift=uDrift*.006*vec2(sin(uv.y*5.3+uTime*.6),cos(uv.x*4.1-uTime*.5));
   vec2 sampleAt=uv-vec2(fluid.x/aspect,-fluid.y)*uRefraction*bend+drift;
+  float keep=0.;
+  if(uClearMapOn>0.){
+    // Text-shaped clear map: quiet right behind the content, and the field leans away from its edges so it flows round them.
+    keep=texture(uClearMap,uv).r;
+    vec2 t=uClearTexel*1.5;
+    vec2 g=vec2(texture(uClearMap,uv+vec2(t.x,0.)).r-texture(uClearMap,uv-vec2(t.x,0.)).r,texture(uClearMap,uv+vec2(0.,t.y)).r-texture(uClearMap,uv-vec2(0.,t.y)).r);
+    sampleAt+=g*vec2(1./aspect,1.)*uClearBend;
+  }
   float spot=0.;
   if(uHoverMode==4||uHoverMode==5){
     vec2 d=(uv-uLight.xy)*vec2(aspect,1.);
@@ -377,6 +388,7 @@ void main(){
     tone=clamp(tone+(lift*1.25+tap.b)*uTapOn,0.,1.);
   }
   tone*=1.-uVignette*smoothstep(.35,1.05,length((uv-.5)*vec2(min(aspect,1.8),1.)*2.));
+  if(uClearMapOn>0.)tone*=1.-uClearMapOn*smoothstep(0.,1.,keep);
   if(uClear.z>0.){
     // Clear zone: the field fades out around content so text above it stays readable.
     vec2 half_=uClear.zw*.5*vec2(aspect,1.),q=(uv-uClear.xy-uClear.zw*.5)*vec2(aspect,1.);

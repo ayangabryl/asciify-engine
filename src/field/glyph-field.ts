@@ -10,8 +10,8 @@ import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
 import { buildPhotoCues, type PhotoCues } from '../surface/photo-cues';
 import { SurfaceTap, photoMedium, shadePhotoTap } from '../surface/surface-tap';
 import {
-  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels,  fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor,
-  type GlyphFieldInput, type GlyphFieldSettings,
+  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels,  fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor, fieldClearGrid, rasterClearMap,
+  type FieldRect, type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
 export type FieldSource = string | HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | ImageBitmap;
@@ -21,7 +21,7 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
    * Keep the field quiet around content: an element (followed through layout changes), an element with
    * `padding` (CSS px), `feather` (fraction of the shorter side) and `shape`, a zone in field fractions, or `false`.
    */
-  clear?: GlyphFieldInput['clear'] | HTMLElement | FieldClearElement;
+  clear?: GlyphFieldInput['clear'] | HTMLElement | FieldClearElement | FieldClearRects;
   /** Image or video URL, or a decoded element. Without one, `scene` draws generated motion. */
   source?: FieldSource | null;
   /** Where pointer movement is read. Defaults to the window, so overlaid text never blocks the wake. */
@@ -32,6 +32,23 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
 }
 
 export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect' }
+
+/**
+ * A text-shaped clear map: the field quiets right behind these rects (viewport CSS px, such as text line boxes from
+ * `Range.getClientRects()`) and keeps flowing round and between them. A function is read once per drawn frame (and the field
+ * wakes on scroll), so return the same array while nothing moved; a new array with the same numbers costs a compare.
+ */
+export interface FieldClearRects {
+  rects: readonly FieldRect[] | (() => readonly FieldRect[]);
+  /** CSS px kept fully quiet round each rect. Default 8. */
+  padding?: number;
+  /** CSS px the quiet falls off over. Default 28. */
+  softness?: number;
+  /** How much of the field goes, 0–1, right behind the rects. Default 0.85. */
+  strength?: number;
+  /** How far the field bends away from the rects at their edges, 0–1. Default 0.5. */
+  bend?: number;
+}
 
 export interface GlyphField {
   readonly canvas: HTMLCanvasElement;
@@ -196,11 +213,14 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const isElement = (value: unknown): value is HTMLElement => typeof HTMLElement !== 'undefined' && value instanceof HTMLElement;
   const splitClear = (input: GlyphFieldOptions): { element: FieldClearElement | null; rest: GlyphFieldInput } => {
     const clear = input.clear as unknown;
+    if (isRects(clear)) return { element: null, rest: { ...input, clear: false } as GlyphFieldInput };
     if (isElement(clear)) return { element: { element: clear }, rest: { ...input, clear: undefined } as GlyphFieldInput };
     if (clear && typeof clear === 'object' && isElement((clear as FieldClearElement).element)) return { element: clear as FieldClearElement, rest: { ...input, clear: undefined } as GlyphFieldInput };
     return { element: null, rest: input as GlyphFieldInput };
   };
+  const isRects = (value: unknown): value is FieldClearRects => !!value && typeof value === 'object' && 'rects' in value;
   let clearElement = splitClear(options).element;
+  let clearRects: FieldClearRects | null = isRects(options.clear) ? options.clear : null;
   let settings = normalizeFieldSettings(splitClear(options).rest);
   const onError = options.onError;
   // The page's shared context draws the frame and a 2D blit shows it here. A canvas from another document, or one that already
@@ -259,6 +279,47 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (JSON.stringify(previous) === JSON.stringify(zone)) return;
     settings = { ...settings, clear: zone };
     dirty = true;
+  };
+  // The text-shaped clear map: rasterised on the CPU only when the rects or the canvas change, uploaded as one byte per texel.
+  let clearTexture: WebGLTexture | null = null, clearMap = new Uint8Array(0), clearCols = 0, clearRows = 0, clearOn = false;
+  let clearSeen: readonly FieldRect[] | null = null, clearKey = new Float64Array(0), clearStale = true;
+  const pollClear = () => {
+    if (!clearRects) { if (clearOn) { clearOn = false; dirty = true; } return; }
+    const input = clearRects.rects, rects = typeof input === 'function' ? input() : input;
+    if (rects === clearSeen && !clearStale) return;
+    clearSeen = rects;
+    const box = canvas.getBoundingClientRect();
+    const [cols, rows] = fieldClearGrid(box.width, box.height);
+    const key = new Float64Array(rects.length * 4 + 6);
+    key[0] = box.left; key[1] = box.top; key[2] = box.width; key[3] = box.height;
+    key[4] = clearRects.padding ?? 8; key[5] = clearRects.softness ?? 28;
+    rects.forEach((r, i) => { key[6 + i * 4] = r.left; key[7 + i * 4] = r.top; key[8 + i * 4] = r.width; key[9 + i * 4] = r.height; });
+    const same = !clearStale && key.length === clearKey.length && key.every((v, i) => v === clearKey[i]);
+    clearStale = false;
+    if (same && clearOn) return;
+    clearKey = key;
+    clearMap = rasterClearMap(rects, box, cols, rows, key[4], key[5], clearMap);
+    if (lost) return;
+    clearTexture ??= texture(gl.LINEAR);
+    gl.bindTexture(gl.TEXTURE_2D, clearTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    if (cols !== clearCols || rows !== clearRows) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, cols, rows, 0, gl.RED, gl.UNSIGNED_BYTE, clearMap);
+    else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RED, gl.UNSIGNED_BYTE, clearMap);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    clearCols = cols; clearRows = rows; clearOn = true;
+    dirty = true;
+  };
+  const onScrollClear = () => { dirty = true; wake(); };
+  // Only a clear map read from a function follows the page's scrolling; nothing else listens.
+  let scrolling = false;
+  const syncScroll = () => {
+    const want = !!clearRects && typeof clearRects.rects === 'function' && typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+    if (want === scrolling) return;
+    scrolling = want;
+    if (want) window.addEventListener('scroll', onScrollClear, { passive: true, capture: true });
+    else window.removeEventListener('scroll', onScrollClear, { capture: true });
   };
   // Lantern: the light glides toward the pointer, and its recent positions fade as a short tail.
   // Loupe and Reveal ride the lantern's glide and fade; only the shader response differs.
@@ -770,6 +831,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
     gl.uniform1f(u.uClearFeather, zone ? zone.feather : 0.1);
     gl.uniform1f(u.uClearShape, zone && zone.shape === 'rect' ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D, clearTexture ?? sourceTexture); gl.uniform1i(u.uClearMap, 8);
+    const mapOn = clearOn && !!clearRects && !!clearTexture;
+    gl.uniform1f(u.uClearMapOn, mapOn ? Math.min(1, Math.max(0, clearRects!.strength ?? 0.85)) : 0);
+    gl.uniform1f(u.uClearBend, mapOn ? Math.min(1, Math.max(0, clearRects!.bend ?? 0.5)) * 0.035 : 0);
+    gl.uniform2f(u.uClearTexel, 1 / Math.max(1, clearCols), 1 / Math.max(1, clearRows));
     const nowMs = performance.now();
     pulseUniform.fill(0);
     for (let i = 0; i < pulses.length; i++) {
@@ -868,6 +934,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         simulating = true;
         if (!pulses.length) dirty = true;
       }
+      if (clearRects) pollClear();
       if (compiled && (simulating || dirty || (moving && now - drawnAt >= ambientMs * ambientFactor()))) {
         draw();
         drawnAt = now;
@@ -939,7 +1006,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     else { pulses = [...pulses, { x: point[0], y: 1 - point[1], born: performance.now(), strength: 1 }].slice(-4); wake(); }
   }
 
-  const onResize = () => { const resized = measure(); measureClear(); if (resized || dirty) wake(); };
+  const onResize = () => { const resized = measure(); measureClear(); if (clearRects) { clearStale = true; dirty = true; } if (resized || dirty) wake(); };
   let unobserveClear = clearElement ? observeSize(clearElement.element, onResize) : () => {};
   unwatch.push(observeSize(canvas, onResize), () => unobserveClear());
   // Paused only well off screen: a field scrolling in is already drawing, and a paused one keeps its last frame on its canvas.
@@ -947,6 +1014,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   unwatch.push(watchVisibility(() => { if (!document.hidden) { dirty = true; wake(); } }));
   unwatch.push(watchMotionPreference(() => { dirty = true; wake(); }));
   unwatch.push(watchFonts(onFontsLoaded));
+  syncScroll();
+  unwatch.push(() => { clearRects = null; syncScroll(); });
 
   const onLost = (event?: Event) => { event?.preventDefault(); lost = true; if (raf) cancelFieldFrame(frame); raf = false; };
   const onRestored = () => {
@@ -955,6 +1024,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     shaders.length = 0; vertexShader = null; atlasEntry = null;
     cellProgram = pixelProgram = fluidProgram = null; cells = null;
     fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false; scopeTexture = null; scopeOn = false; tapTexture = null; tap = null; tapOn = false;
+    clearTexture = null; clearOn = false; clearCols = clearRows = 0; clearStale = true;
     try { init(); dirty = true; wake(); } catch (error) { report(error); }
   };
   const client: FieldClient = {
@@ -1119,6 +1189,10 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         clearElement = element;
         unobserveClear = element ? observeSize(element.element, onResize) : () => {};
       } else if ('clear' in next) clearElement = element;
+      if ('clear' in next) {
+        const rects = isRects(next.clear) ? next.clear : null;
+        if (rects !== clearRects) { clearRects = rects; clearStale = true; dirty = true; syncScroll(); wake(); }
+      }
       settings = normalizeFieldSettings(element ? { ...rest, clear: settings.clear } : rest, settings);
       measureClear();
       if (next.label) canvas.setAttribute('aria-label', next.label);
@@ -1198,6 +1272,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         gl.deleteTexture(sourceTexture);
         if (trailTexture) gl.deleteTexture(trailTexture);
         if (scopeTexture) gl.deleteTexture(scopeTexture);
+        if (clearTexture) gl.deleteTexture(clearTexture);
         if (shared) {
           host!.releaseAtlas(atlasEntry, onAtlas);
           stable?.release();

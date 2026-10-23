@@ -318,7 +318,7 @@ const rampOf = (value: unknown, fallback: string[]) => {
 };
 
 /** Mount options may carry an element-based clear zone; normalizing ignores it, since only a mounted field can measure it. */
-type ClearElementLike = { element: unknown } | { nodeType: number };
+type ClearElementLike = { element: unknown } | { nodeType: number } | { rects: unknown };
 export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & { clear?: GlyphFieldInput['clear'] | ClearElementLike } = {}, base: GlyphFieldSettings = DEFAULT_FIELD_SETTINGS): GlyphFieldSettings {
   const charset = typeof input.charset === 'string' && fieldGlyphs(input.charset).length >= 2 ? input.charset : base.charset;
   const fluidBase = base.fluid || DEFAULT_FIELD_FLUID;
@@ -336,7 +336,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     };
   })();
   const scene = FIELD_SCENES.includes(input.scene as FieldScene) ? input.scene as FieldScene : base.scene;
-  const elementLike = !!input.clear && typeof input.clear === 'object' && ('element' in input.clear || 'nodeType' in input.clear);
+  const elementLike = !!input.clear && typeof input.clear === 'object' && ('element' in input.clear || 'nodeType' in input.clear || 'rects' in input.clear);
   const clearInput = input.clear === undefined || elementLike ? base.clear : input.clear as Partial<FieldClearZone> | false;
   const clear: FieldClearZone | false = !clearInput ? false : {
     x: clamp(clearInput.x, -0.5, 1.5, 0.25),
@@ -507,5 +507,50 @@ export function fieldWords(charset: string): number[] {
     while (i < glyphs.length && glyphs[i].trim()) i++;
     out.push(start, i - start);
   }
+  return out;
+}
+
+export interface FieldRect { left: number; top: number; width: number; height: number }
+
+/** Mask texels per CSS pixel for a text-shaped clear map, capped so the long side stays at most `max` texels. */
+export function fieldClearGrid(width: number, height: number, max = 256): [number, number] {
+  const k = Math.min(1 / 6, max / Math.max(1, width, height));
+  return [Math.max(2, Math.round(width * k)), Math.max(2, Math.round(height * k))];
+}
+
+/**
+ * A soft keep-clear map from content rects (CSS px, the same space as `box`), `cols × rows` bytes, bottom row first like the
+ * field's uv. Each rect, grown by `padding`, is fully quiet; outside it the quiet falls off over about `softness` pixels
+ * (three box blurs, close to a Gaussian), so lines a little apart run together and the gaps between blocks stay open.
+ */
+export function rasterClearMap(rects: readonly FieldRect[], box: FieldRect, cols: number, rows: number, padding = 8, softness = 28, out = new Uint8Array(cols * rows)): Uint8Array {
+  const n = cols * rows;
+  if (out.length !== n) out = new Uint8Array(n);
+  out.fill(0);
+  if (!(box.width > 0 && box.height > 0) || !rects.length) return out;
+  const sx = cols / box.width, sy = rows / box.height;
+  const radius = Math.max(0, Math.round(softness / 2.56 * sx));
+  const grow = padding + softness * 0.5;
+  for (const rect of rects) {
+    if (!(rect.width > 0 && rect.height > 0)) continue;
+    const x0 = Math.max(0, Math.round((rect.left - grow - box.left) * sx)), x1 = Math.min(cols, Math.round((rect.left + rect.width + grow - box.left) * sx));
+    const y0 = Math.max(0, Math.round((rect.top - grow - box.top) * sy)), y1 = Math.min(rows, Math.round((rect.top + rect.height + grow - box.top) * sy));
+    for (let y = y0; y < y1; y++) out.fill(255, (rows - 1 - y) * cols + x0, (rows - 1 - y) * cols + Math.max(x0, x1));
+  }
+  if (!radius) return out;
+  const line = new Float32Array(Math.max(cols, rows)), sum = new Float32Array(Math.max(cols, rows) + 1);
+  const blur = (count: number, stride: number, start: number) => {
+    for (let pass = 0; pass < 3; pass++) {
+      for (let i = 0; i < count; i++) line[i] = out[start + i * stride];
+      sum[0] = 0;
+      for (let i = 0; i < count; i++) sum[i + 1] = sum[i] + line[i];
+      for (let i = 0; i < count; i++) {
+        const a = Math.max(0, i - radius), b = Math.min(count, i + radius + 1);
+        out[start + i * stride] = Math.round((sum[b] - sum[a]) / (b - a));
+      }
+    }
+  };
+  for (let y = 0; y < rows; y++) blur(cols, 1, y * cols);
+  for (let x = 0; x < cols; x++) blur(rows, cols, x);
   return out;
 }

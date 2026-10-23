@@ -1,4 +1,4 @@
-import type { GlyphField, GlyphFieldOptions } from '../field';
+import type { GlyphField, GlyphFieldOptions, FieldClearElement, FieldClearRects } from '../field';
 import { CHARACTER_SETS, resolveCharset } from '../studio/characters';
 import { mergeOptions, prefersReduced, type KitHandle, type KitOptions } from './core';
 import { disposeKit, ownsCharset, setPosterSource } from './core-live';
@@ -40,8 +40,20 @@ export interface BackgroundOptions extends KitOptions {
   tap?: TapStyle;
   /** GPU presets: characters (`'glyph'`) or halftone dots (`'dot'`). Default: the preset's own; a `charset` asks for characters. */
   mark?: BackgroundMark;
-  /** An element to keep clear: the field fades out around it so text over it stays readable. */
-  clear?: HTMLElement | false;
+  /**
+   * What to keep clear. An element: the field fades out in a soft oval round it. Rects (viewport CSS px), or a function
+   * returning them: a text-shaped clear map, where the field quiets only right behind each rect (say every line box of a
+   * headline and paragraph, from `Range.getClientRects()`) and keeps flowing round and between them, bending a little away
+   * from their edges; taps and the cursor's glow pass behind the text, quieted by the same map. A function is read once per
+   * drawn frame and again on scroll, so return the same array until something moves.
+   */
+  clear?: HTMLElement | false | BackgroundClearRects;
+  /** Rects only: CSS px kept fully quiet round each rect. Default 8. */
+  clearPadding?: number;
+  /** Rects only: CSS px the quiet falls off over. Default 28. */
+  clearSoftness?: number;
+  /** Rects only: how much of the field goes right behind them, 0–1. Default 0.85. */
+  clearStrength?: number;
   /** Canvas opacity, 0–1. Default 1 (`fluid` 0.7). */
   opacity?: number;
   /** Ordered dither, 0–1, for the presets that tone with density. Default 0. */
@@ -49,6 +61,9 @@ export interface BackgroundOptions extends KitOptions {
   /** `wordField` only: the word drawn. Default `ASCIIFY`. */
   text?: string;
 }
+
+/** Content rects to keep clear, in viewport CSS px, or a function that returns them. */
+export type BackgroundClearRects = FieldClearRects['rects'];
 
 /** The settings a preset draws with, resolved from the options and the preset's defaults. */
 export interface BackgroundSettings {
@@ -59,7 +74,9 @@ export interface BackgroundSettings {
   /** The asked-for tap, or undefined for the preset's own default. */
   tap: TapStyle | undefined;
   mark: BackgroundMark | undefined;
-  clear: HTMLElement | false;
+  clear: HTMLElement | false | BackgroundClearRects;
+  /** The text-shaped clear map's tuning, when `clear` is rects. */
+  clearMap: { padding: number; softness: number; strength: number };
   dither: number;
   accent: string | undefined;
   text: string;
@@ -152,6 +169,7 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
       tap: o.tap === 'ring' || o.tap === 'surface' ? o.tap : undefined,
       mark: o.mark === 'glyph' || o.mark === 'dot' ? o.mark : undefined,
       clear: o.clear ?? false,
+      clearMap: { padding: num(o.clearPadding, 8, 0, 400), softness: num(o.clearSoftness, 28, 0, 600), strength: num(o.clearStrength, 0.85, 0, 1) },
       dither: num(o.dither, 0, 0, 1),
       accent: o.accent,
       text: o.text?.trim() || 'ASCIIFY',
@@ -244,4 +262,11 @@ export function background(element: HTMLElement, options: BackgroundOptions): Ba
     },
   };
   return handle;
+}
+
+/** The field's `clear` for a preset: a text-shaped map for rects, a soft oval round an element, or the preset's own. */
+export function clearOf(s: BackgroundSettings, zone: Omit<FieldClearElement, 'element'>, fallback: GlyphFieldOptions['clear'] = false): GlyphFieldOptions['clear'] {
+  const clear = s.clear;
+  if (typeof clear === 'function' || Array.isArray(clear)) return { rects: clear as BackgroundClearRects, ...s.clearMap };
+  return clear ? { element: clear as HTMLElement, ...zone } : fallback;
 }

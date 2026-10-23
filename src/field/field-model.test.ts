@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, fieldWords, activeFieldHover, fieldClearFromRects, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
+import { DEFAULT_FIELD_SETTINGS, FIELD_MARKS, fieldWords, activeFieldHover, fieldClearFromRects, fieldClearGrid, rasterClearMap, fieldCellLayout, fieldGlyphs, fieldLevels, fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor } from './field-model';
 
 describe('glyph field settings', () => {
   it('keeps words and multi-code-point glyphs as single cells', () => {
@@ -195,5 +195,25 @@ describe('field hover scope', () => {
     const s = normalizeFieldSettings({ textRepeat: 'row', linePitch: 9, lineWeight: 0, sparkle: 1 });
     expect([s.textRepeat, s.linePitch, s.lineWeight, s.sparkle]).toEqual(['row', 4, 0.2, 0.05]);
     expect(normalizeFieldSettings({}).textRepeat).toBe('flow');
+  });
+});
+
+describe('text-shaped clear map', () => {
+  const box = { left: 0, top: 0, width: 600, height: 300 };
+  it('is quiet behind a rect, open well away from it, and bottom row first', () => {
+    const [cols, rows] = fieldClearGrid(600, 300);
+    expect([cols, rows]).toEqual([100, 50]);
+    const map = rasterClearMap([{ left: 240, top: 30, width: 120, height: 24 }], box, cols, rows, 8, 28);
+    const at = (x: number, y: number) => map[(rows - 1 - Math.floor(y / 6)) * cols + Math.floor(x / 6)];
+    expect(at(300, 42)).toBeGreaterThan(245);
+    expect(at(300, 200)).toBe(0);
+    expect(at(20, 42)).toBe(0);
+    const edge = at(300, 54 + 8 + 14);
+    expect(edge).toBeGreaterThan(40);
+    expect(edge).toBeLessThan(215);
+  });
+  it('is empty without rects or a box', () => {
+    expect(rasterClearMap([], box, 10, 5).every(v => v === 0)).toBe(true);
+    expect(rasterClearMap([{ left: 0, top: 0, width: 10, height: 10 }], { ...box, width: 0 }, 10, 5).every(v => v === 0)).toBe(true);
   });
 });

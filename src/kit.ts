@@ -80,7 +80,7 @@ export { pullRefresh } from './kit/pull-refresh';
 export type { PullRefreshOptions, PullRefreshHandle, PullState } from './kit/pull-refresh';
 // backgrounds
 export { background, backgroundCharset } from './kit/background';
-export type { BackgroundOptions, BackgroundHandle, BackgroundPreset, BackgroundContext, BackgroundRun, BackgroundSettings, BackgroundCursor, BackgroundCharset, BackgroundMark } from './kit/background';
+export type { BackgroundOptions, BackgroundHandle, BackgroundPreset, BackgroundContext, BackgroundRun, BackgroundSettings, BackgroundCursor, BackgroundCharset, BackgroundMark, BackgroundClearRects } from './kit/background';
 // The curated set: GPU scenes that follow setGlobalLook and take `cursor: false`.
 export { swell } from './kit/backgrounds/swell';
 export { drift } from './kit/backgrounds/drift';
