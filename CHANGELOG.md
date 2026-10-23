@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.7
+
+- `shockwave`: the click front is a smooth circle again. The 4.32.6 warp bent it into lobes that read as snaking; the smoky look now comes from the wind itself: the rim lights the field's own streaks, so it shows as thin diagonal wisps along a clean ring, breaking into arcs as it fades.
+
 ## 4.32.6: the shockwave front spreads like smoke
 
 - **`shockwave`'s ring is no longer a circle.** Its front is warped by a field of broad lumps in space (2–6 round the ring) that grows as it spreads and drifts downwind, so the outline billows and flattens in places instead of wobbling in place; the ring is carried a little downwind too. The rim's thickness varies round it, its leading edge is frayed letter by letter, and it is lit most where the wind's streaks are, so it reads as wisps of lit smoke. Matched to the reference by outline: deviation from a circle about 0.11 of the radius (reference 0.11) and the same share in modes 2–6. The lumps move continuously with the wind and the ring, so nothing shimmers; every press has the same character and only the pattern changes.

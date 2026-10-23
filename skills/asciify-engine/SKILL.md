@@ -2,13 +2,13 @@
 name: asciify-engine
 description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
 metadata:
-  tested-engine: "4.32.6"
+  tested-engine: "4.32.7"
   updated: "2026-10-17"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.32.6**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.32.7**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
