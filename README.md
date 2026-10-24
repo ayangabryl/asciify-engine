@@ -100,9 +100,11 @@ npm run build
 
 <!-- sponsors:start -->
 
-Asciify is free and open source. [Sponsor its development](https://asciify.org/sponsor) on GitHub Sponsors.
+<p align="center"><a href="https://asciify.org/sponsor"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.asciify.org/sponsors-dark.svg"><img src="https://cdn.asciify.org/sponsors.svg" alt="Asciify sponsors" width="720"></picture></a></p>
 
-<p align="center"><a href="https://asciify.org/sponsor">Your logo here</a></p>
+<p align="center"><sub>Backers: <a href="https://releasetime.io/">ReleaseTime</a></sub></p>
+
+Asciify is free and open source. [Become a sponsor](https://asciify.org/sponsor).
 
 <!-- sponsors:end -->
 
