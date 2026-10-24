@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.8
+
+- README: the sponsors section shows a live picture from `https://cdn.asciify.org/sponsors.svg` (dark: `sponsors-dark.svg`), so the npm page shows current sponsors without a new release. No code changes.
+
 ## 4.32.7
 
 - `shockwave`: the click front is a smooth circle again. The 4.32.6 warp bent it into lobes that read as snaking; the smoky look now comes from the wind itself: the rim lights the field's own streaks, so it shows as thin diagonal wisps along a clean ring, breaking into arcs as it fades.
