@@ -1,10 +1,11 @@
 name: Sponsors
 
 # Refreshes the README's sponsors section from https://cdn.asciify.org/sponsors.json, which the
-# asciify.org upload worker writes after matching GitHub Sponsors to sponsor applications.
+# asciify.org upload worker writes from active sponsorships. The picture above the list is live
+# (https://cdn.asciify.org/sponsors.svg), so it stays current on npm too.
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:

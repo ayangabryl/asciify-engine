@@ -1,5 +1,5 @@
 // Rewrites the README's sponsors section from asciify.org's active-sponsor manifest.
-// The manifest is public and written by the upload worker's GitHub Sponsors sync, so this needs no token.
+// The manifest is public and written by the upload worker's sponsor sync (Dodo Payments), so this needs no token.
 //   node scripts/update-sponsors.mjs            update README.md in place
 //   node scripts/update-sponsors.mjs --check    exit 1 if README.md is out of date
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -8,42 +8,26 @@ const MANIFEST = process.env.SPONSORS_MANIFEST_URL ?? 'https://cdn.asciify.org/s
 const README = new URL('../README.md', import.meta.url);
 const START = '<!-- sponsors:start -->';
 const END = '<!-- sponsors:end -->';
-// Sizes; keep in step with README_SIZE in the site's SponsorPreview.tsx. Partners and Backers show their wordmark at
-// this height (or their square mark a little larger); Supporters show their GitHub avatar.
+// The picture is drawn live by the upload worker (GET /sponsors.svg), so npm, whose README is frozen at publish, still
+// shows current sponsors. The text links below it keep the section accessible and clickable on GitHub.
+const PICTURE = '<p align="center"><a href="https://asciify.org/sponsor"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.asciify.org/sponsors-dark.svg"><img src="https://cdn.asciify.org/sponsors.svg" alt="Asciify sponsors" width="720"></picture></a></p>';
 const GROUPS = [
-  { tier: 'partner', title: 'Partners', size: 56 },
-  { tier: 'backer', title: 'Backed by', size: 32 },
-  { tier: 'supporter', title: 'Supporters', size: 36 },
+  { tier: 'partner', title: 'Partners' },
+  { tier: 'backer', title: 'Backers' },
+  { tier: 'supporter', title: 'Supporters' },
 ];
 
 const escape = value => String(value).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const avatar = (url, size) => `${url}${url.includes('?') ? '&' : '?'}s=${size * 2}`;
-
-function entry(sponsor, size, logos) {
-  const href = escape(sponsor.url);
-  const name = escape(sponsor.name);
-  if (logos && sponsor.logo) {
-    const dark = sponsor.logoDark ? `<source media="(prefers-color-scheme: dark)" srcset="${escape(sponsor.logoDark)}">` : '';
-    return `<a href="${href}" title="${name}"><picture>${dark}<img src="${escape(sponsor.logo)}" height="${size}" alt="${name}"></picture></a>`;
-  }
-  if (logos) {
-    const mark = sponsor.mark ?? avatar(sponsor.avatar, size + 8);
-    return `<a href="${href}" title="${name}"><img src="${escape(mark)}" width="${size + 8}" height="${size + 8}" alt="${name}"></a>`;
-  }
-  return `<a href="${href}" title="${name}"><img src="${escape(avatar(sponsor.avatar, size))}" width="${size}" height="${size}" alt="${name}"></a>`;
-}
 
 export function render(manifest) {
   const sponsors = (manifest.sponsors ?? []).filter(sponsor => !sponsor.until || Date.parse(sponsor.until) > Date.now());
-  const lines = [START, '', 'Asciify is free and open source. [Sponsor its development](https://asciify.org/sponsor) on GitHub Sponsors.', ''];
-  for (const group of GROUPS) {
-    const members = sponsors.filter(sponsor => sponsor.tier === group.tier);
-    if (!members.length) continue;
-    const logos = group.tier !== 'supporter';
-    lines.push(`<h3 align="center">${group.title}</h3>`, '', `<p align="center">${members.map(sponsor => entry(sponsor, group.size, logos)).join('&nbsp;&nbsp;')}</p>`, '');
+  const lines = [START, '', PICTURE, ''];
+  const groups = GROUPS.map(group => [group, sponsors.filter(sponsor => sponsor.tier === group.tier)]).filter(([, members]) => members.length);
+  if (groups.length) {
+    const text = groups.map(([group, members]) => `${group.title}: ${members.map(sponsor => `<a href="${escape(sponsor.url)}">${escape(sponsor.name)}</a>`).join(', ')}`);
+    lines.push(`<p align="center"><sub>${text.join('<br>')}</sub></p>`, '');
   }
-  if (!sponsors.length) lines.push('<p align="center"><a href="https://asciify.org/sponsor">Your logo here</a></p>', '');
-  lines.push(END);
+  lines.push('Asciify is free and open source. [Become a sponsor](https://asciify.org/sponsor).', '', END);
   return lines.join('\n');
 }
 
