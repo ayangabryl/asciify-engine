@@ -5,6 +5,19 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.33.0 (unreleased)
+
+### Added
+
+- **`asciify-engine/headless`** (experimental): `toAsciiGrid` converts raw pixels to characters with no DOM, in Node, Deno, Bun, workers and edge runtimes; `gridToText`, `gridToAnsi`, `gridToSvg` and `gridToHtml` write it out. `'shape'` mode matches each cell's strokes against every printable ASCII glyph (measured from DejaVu Sans Mono); `'tone'` is the classic ramp. `dither: 'ordered'` and `previous` keep video calm frame to frame. `ASCII_SYMBOLS` is a punctuation-only set. 4.7 kB gzipped. See `references/headless.md`.
+- **Custom field effects** (experimental): `defineFieldEffect` with `displace` and `shade` GLSL snippets, live params (tween them with GSAP or Motion), the eased pointer, and up to four stacked; pass them as `effects` to `mountGlyphField` or `update`. A snippet that fails to compile is reported through `onError` and the field draws without it.
+- **Live field sources**: `live: true` for a canvas redrawn every frame (three.js, React Three Fiber, games, charts). The field uploads it each frame at the display's rate, and `redraw()` uploads it in the task that rendered it. Levels and the hover scope are measured a few times a second, so a live source is no longer read back on the CPU each frame. Example: `examples/three-live.ts`.
+- STABILITY.md, SECURITY.md and CONTRIBUTING.md; visual baselines in CI (`npm run test:visual`); a comparison benchmark with other ASCII renderers (`bench/`, report in `docs/benchmarks/`).
+
+### Looks changed
+
+- None. Every visual baseline (19 kit components, presets and field marks, light and dark) is pixel-identical to 4.32.9. Without `effects`, the field's shader program is byte-for-byte the one before.
+
 ## 4.32.9
 
 - Package description, keywords and README rewritten to describe the engine as it is today, for npm and for agents (context7). No code changes.

@@ -92,7 +92,9 @@
     "THIRD_PARTY.md",
     "licenses",
     "examples/living-image.ts",
-    "examples/glyph-field.ts"
+    "examples/glyph-field.ts",
+    "examples/three-live.ts",
+    "STABILITY.md"
   ],
   "scripts": {
     "build": "tsup",

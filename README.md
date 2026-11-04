@@ -70,11 +70,20 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 
 - **Kit** (`/kit`): interface components and the curated asciify.org backgrounds, one call each.
 - **Media** (`asciify-engine`, `/core`): images, GIFs, video, webcam and text to ASCII on a canvas, with scroll-scrubbed video, chroma key and source crop.
-- **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset.
+- **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset. Bring your own design with **custom effects** (a few lines of GLSL for your own hovers, reveals and motion, tweenable with GSAP or Motion), and draw **live 3D**: a three.js or React Three Fiber canvas becomes characters every frame.
+- **Headless** (`/headless`): pixels to text with no DOM, in Node, workers and edge runtimes, for OG images, emails, CLIs and READMEs. Shape-aware: edges become `/ \ | _ ( )`, not just denser dots. Text, ANSI colour, SVG and HTML output; 4.7 kB.
 - **Hover and motion** (`/hover`): pointer effects and still-image motions for media on your page.
 - **Studio** (`/studio`): render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
 - **Agent skill**: the house design, every component's prompt and snippet, and the full API, for Claude Code, Cursor, Codex and other agents.
 - **Built for host pages**: no work at import, safe under SSR, tree-shaken per component, TypeScript types, ESM and CommonJS.
+
+## How it compares
+
+Measured against aalib.js, three.js `AsciiEffect`, the postprocessing `ASCIIEffect`, @sister.software/asciify and a naive ramp on the same pictures and grid: level with aalib on photographs, ahead of every renderer tested on line art and type, about twelve times faster than aalib, and the only one that converts pixels to text without a browser. Method, numbers and the weak spots are in the [benchmark report](docs/benchmarks/2026-11-04-ascii-renderers.md).
+
+## Stability
+
+How things look is part of the API: patch releases never change rendered output, and CI compares every kit component, preset and field mark with stored screenshots. See [STABILITY.md](STABILITY.md) for versioning, deprecation and the runtime promises, and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Docs
 
@@ -94,7 +103,7 @@ npm test
 npm run build
 ```
 
-`npm run test:browser` serves the browser regression page. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+`npm run test:visual` checks the visual baselines and `npm run test:browser` serves the browser regression page; see [CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Sponsors
 

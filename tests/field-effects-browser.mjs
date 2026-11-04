@@ -84,6 +84,23 @@ try {
     check('the field keeps drawing without the broken effect', result.drawn > 0);
     await page.close();
   }
+  {
+    // The custom effect in skills/asciify-engine/references/glyph-field.md must compile as documented.
+    const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    await page.goto(origin);
+    const doc = await fs.readFile(path.join(root, 'skills/asciify-engine/references/glyph-field.md'), 'utf8');
+    const shade = /shade: `([\s\S]*?)`,/.exec(doc)?.[1];
+    const reported = await page.evaluate(async shade => {
+      const f = await import('/field.js'), errors = [];
+      const swell = f.defineFieldEffect({ name: 'brand-swell', params: { radius: 0.18, strength: 0.9 }, shade });
+      const field = f.mountGlyphField(document.getElementById('c'), { scene: 'waves', hover: 'none', effects: [swell], onError: e => errors.push(e.message) });
+      await Promise.race([field.ready, new Promise(r => setTimeout(r, 3000))]);
+      await new Promise(r => setTimeout(r, 300));
+      return errors;
+    }, shade);
+    check('the documented effect example compiles', !!shade && !reported.length, reported.join(' | ').slice(0, 160) || (shade ? '' : 'example not found'));
+    await page.close();
+  }
   for (const live of [true, false]) {
     const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
     await page.goto(origin);

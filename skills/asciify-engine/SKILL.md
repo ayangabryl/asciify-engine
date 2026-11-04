@@ -19,7 +19,7 @@ Use the published `asciify-engine` npm package. Tested against **4.32.9**. Check
 npm install asciify-engine@latest
 ```
 
-Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
+Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/headless` for pixels to text with no DOM (servers, edge, terminals); `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
 
 ## Start here: kit first
 
@@ -41,6 +41,9 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | Their video in characters on the page | Kit `asciiVideo` |
 | Their photo, video or GIF converted, optionally answering the cursor | Advanced: `asciify` / `asciifyVideo` / `asciifyGif`, plus `mountHover` from `/hover` |
 | A full-bleed field with a look the kit has no option for | Advanced: `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)) |
+| A hover, reveal or motion in the brand's own design, beyond the built-in ones | `defineFieldEffect` with `mountGlyphField` ([glyph-field.md](references/glyph-field.md#custom-effects-433-experimental)) |
+| A three.js / React Three Fiber scene, game or app canvas drawn live as characters | `mountGlyphField(canvas, { source: renderer.domElement, live: true })` ([glyph-field.md](references/glyph-field.md#live-sources-3d-scenes-and-app-canvases-433)) |
+| ASCII on a server, at the edge or in a terminal: OG images, emails, CLI banners, READMEs, bots | `toAsciiGrid` from `asciify-engine/headless` ([headless.md](references/headless.md)) |
 | Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
 | Several media and text layers in one artwork | Advanced: `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
@@ -220,6 +223,12 @@ From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risogr
 ### Lively images and interaction starting points (4.10)
 
 `STUDIO_ANIMATION_PRESETS` provides six editable motion/hover pairings through `/studio` and `/hover`. Apply `motion` and `hover` to an existing Studio player to keep the source and art style; do not treat the pairings as additional art styles. Read [studio-effects.md](references/studio-effects.md#lively-images-410) for exact new IDs, loop limits and the live component example.
+
+### Headless, custom effects and live sources (4.33)
+
+`asciify-engine/headless` converts pixels to text with no DOM (Node, workers, edge), matching glyph shapes rather than tone
+alone. `/field` gains `defineFieldEffect` (the brand's own hovers and motion, in GLSL) and `live: true` sources (3D and app
+canvases, every frame). Both new APIs are experimental for now; see STABILITY.md in the package.
 
 ### GPU glyph fields (4.11) and the kit (4.13)
 

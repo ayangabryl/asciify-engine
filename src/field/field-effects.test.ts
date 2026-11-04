@@ -26,7 +26,9 @@ describe('field effects', () => {
     effect.params.strength = 0.5;
     effect.params.strength = 0.5;
     expect(redraw).toHaveBeenCalledTimes(1);
-    expect(() => { (effect.params as Record<string, number>).missing = 1; }).toThrow(/no param/);
+    // Other keys (an animation library's bookkeeping) are kept and draw nothing.
+    (effect.params as Record<string, unknown>)._gsap = {};
+    expect(redraw).toHaveBeenCalledTimes(1);
     stop();
     effect.params.radius = 0.3;
     expect(redraw).toHaveBeenCalledTimes(1);

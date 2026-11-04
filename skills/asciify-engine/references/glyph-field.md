@@ -69,6 +69,55 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 
 `update(options)` merges and rebuilds only what changed (the atlas for type changes, the simulation for resolution changes). `setSource(source)` swaps media. `pointer(x, y)` moves the wake in CSS pixels relative to the canvas (`pointer(null)` lifts it), which is useful for an intro stroke. `redraw()` draws immediately, so you can copy the canvas with `drawImage` in the same task, for example to cross-fade between looks.
 
+## Custom effects (4.33, experimental)
+
+When a design needs its own hover, reveal or motion, write it as an effect instead of forking the field. An effect is a few
+lines of GLSL the field runs for every cell, every frame, at the display's refresh rate, after its own hovers and before its
+clear zones (so text stays readable). The field keeps the atlas, sizing, pointer, reduced motion and cleanup.
+
+```ts
+import { defineFieldEffect, mountGlyphField } from 'asciify-engine/field';
+
+const swell = defineFieldEffect({
+  name: 'brand-swell',
+  params: { radius: 0.18, strength: 0.9 },
+  shade: `
+    float d = distance(uv * vec2(aspect, 1.), pointer * vec2(aspect, 1.));
+    float k = smoothstep(params.radius, 0., d) * params.strength * pointerOn;
+    tone += k * .6;
+    glyph += floor(k * 2.);
+    ink = vec3(1., .78, .3); inkAmount = k;
+  `,
+});
+const field = mountGlyphField(canvas, { source: '/hero.jpg', hover: 'none', effects: [swell] });
+gsap.to(swell.params, { strength: 0, duration: 0.6 }); // params are live: setting one redraws
+```
+
+- **Inputs**: `uv` (0–1 from the top left), `cell`, `aspect`, `time` (field motion seconds; still under reduced motion),
+  `pointer` and `pointerOn` (eases in and out), `motion` (0 under reduced motion), `color` (the source colour, in `shade`),
+  and `hash`, `noise`, `fbm`.
+- **`displace`** runs before the cell samples its source and may write `at`, the position sampled: lenses, ripples, pulls.
+- **`shade`** may write `tone` (0–1), `glyph` (steps along the charset), `ink` and `inkAmount`.
+- Set `animate: true` for an effect that moves over `time` on its own. Up to four effects stack in order, eight params each.
+- An effect that fails to compile is reported through `onError` and the field draws without effects. Never build effect code
+  from user input.
+
+## Live sources: 3D scenes and app canvases (4.33)
+
+A canvas that is redrawn every frame (a three.js or React Three Fiber scene, a game, a chart) is a live source: pass
+`live: true` and call `field.redraw()` right after the source renders. The field uploads it each frame at the display's rate
+and measures its levels a few times a second, so it is never read back on the CPU per frame.
+
+```ts
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(480, 270, false);          // the size the field samples; it can be small
+const field = mountGlyphField(canvas, { source: renderer.domElement, live: true });
+function loop() { renderer.render(scene, camera); field.redraw(); requestAnimationFrame(loop); }
+```
+
+A WebGL canvas without `preserveDrawingBuffer` is only readable in the task that drew it, hence `redraw()` after `render()`.
+See `examples/three-live.ts` in the package. Honour reduced motion by not animating the scene.
+
 ## Halftone for interfaces (4.12)
 
 Product pages, docs, pricing and SaaS heroes want a background that is calm, works in light and dark themes, and never fights the copy. Use dots, the drift scene, a clear zone around the content, and `pulse()` for interface events:

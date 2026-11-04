@@ -79,7 +79,8 @@ export function defineFieldEffect<P extends FieldEffectParams = FieldEffectParam
   const notify = () => listeners.forEach(redraw => redraw());
   const params = new Proxy(initial, {
     set(target, key, value) {
-      if (typeof key !== 'string' || !keys.includes(key)) throw new Error(`Field effect "${name}" has no param "${String(key)}".`);
+      // Animation libraries keep their own bookkeeping on the object they tween (GSAP's `_gsap`): kept, but it draws nothing.
+      if (typeof key !== 'string' || !keys.includes(key)) return Reflect.set(target, key, value);
       const next = Number(value);
       if (!Number.isFinite(next)) return true;
       if ((target as FieldEffectParams)[key] !== next) { (target as FieldEffectParams)[key] = next; notify(); }
