@@ -57,10 +57,10 @@ const kitEsm: Options = {
 export default defineConfig([
   {
     ...shared,
-    entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts'],
+    entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/headless.ts'],
     format: ['esm', 'cjs'],
     esbuildPlugins: [workerSource, workerChunk],
-    dts: { entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/kit.ts'] },
+    dts: { entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/kit.ts', 'src/headless.ts'] },
     clean: true,
     // After the clean build, so nothing races its clean.
     async onSuccess() {
