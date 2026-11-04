@@ -93,3 +93,22 @@ describe('grid output', () => {
     expect(gridToHtml(grid, { background: '#000' })).toMatch(/^<pre style="[^"]*background:#000/);
   });
 });
+
+describe('video settings', () => {
+  const frame = (shift: number) => picture(320, 200, (x, y) => 0.5 + 0.5 * Math.sin((x + shift) / 17) * Math.cos(y / 11));
+  it('ordered dither leaves exact black and white alone', () => {
+    expect(gridToText(toAsciiGrid(picture(80, 40, () => 0), { columns: 20, levels: 'none', dither: 'ordered' })).trim()).toBe('');
+  });
+  it('a previous frame keeps still cells still', () => {
+    const a = toAsciiGrid(frame(0), { columns: 60, dither: 'ordered' });
+    const same = toAsciiGrid(frame(0), { columns: 60, dither: 'ordered', previous: a });
+    expect(same.lines).toEqual(a.lines);
+    const moved = toAsciiGrid(frame(0.4), { columns: 60, dither: 'ordered' }), kept = toAsciiGrid(frame(0.4), { columns: 60, dither: 'ordered', previous: a });
+    const changes = (g: { lines: readonly string[] }) => g.lines.reduce((n, line, r) => n + [...line].filter((ch, c) => ch !== a.lines[r][c]).length, 0);
+    expect(changes(kept)).toBeLessThanOrEqual(changes(moved));
+  });
+  it('ignores a previous grid of another size', () => {
+    const a = toAsciiGrid(frame(0), { columns: 40 });
+    expect(toAsciiGrid(frame(0), { columns: 60, previous: a }).lines).toEqual(toAsciiGrid(frame(0), { columns: 60 }).lines);
+  });
+});
