@@ -179,6 +179,29 @@ const s = mountSurface({ host: el, look: () => ({ mark: 'glyph', cellSize: 6 }),
   paint: ({ pen, w, h, now, still }) => { pen.fillStyle = '#fff'; pen.fillRect(0, 0, (w * (now % 1000)) / 1000, h); return !still; } });
 ```
 
+## elementSource (4.33, experimental)
+
+Draws a live element (a card, a form, a whole view) as a field source, so it can be shown in characters and stay in step as it
+changes: a page transition from the real view, a hover that turns a card to type, a section drawn in its own UI.
+
+```ts
+import { elementSource } from 'asciify-engine/kit';
+import { mountGlyphField } from 'asciify-engine/field';
+
+let field;
+const source = elementSource(card, { onFrame: () => field?.redraw() });
+field = mountGlyphField(overlay, { source: source.canvas, live: true });
+// later: field.destroy(); source.destroy();
+```
+
+- **Real pixels** where the browser supports HTML-in-Canvas (Chromium behind a flag for now): put the element as the only child
+  of a `<canvas layoutsubtree>`. The canvas shows the element, still interactive, and is the source. `supportsHtmlInCanvas()`
+  says whether the API is there.
+- **Everywhere else** a painted likeness: boxes, borders, media as blocks (never their pixels, so cross-origin images cannot
+  taint it) and each word where the browser laid it out, repainted when the element's size, text, attributes or form values
+  change. `source.mode` is `'native'` or `'painted'`.
+- `scale` (default 1) is source pixels per CSS pixel; `mode: 'painted'` forces the likeness.
+
 ## Performance and integration
 
 A page can hold every kit component at once. The shared core keeps the GPU cost to what is on screen:

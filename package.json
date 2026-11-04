@@ -115,7 +115,8 @@
     "test:visual": "node tests/visual-browser.mjs",
     "test:effects": "node tests/field-effects-browser.mjs",
     "test:headless": "node tests/headless-node.mjs",
-    "build:glyphs": "node scripts/build-glyph-table.mjs"
+    "build:glyphs": "node scripts/build-glyph-table.mjs",
+    "test:element": "node tests/element-source-browser.mjs"
   },
   "keywords": [
     "ascii",

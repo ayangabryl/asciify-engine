@@ -69,6 +69,9 @@ jobs:
       - name: Field effects and live sources
         run: npm run test:effects
 
+      - name: Element sources (with and without HTML-in-Canvas)
+        run: npm run test:element
+
       - name: Upload differences
         if: failure()
         uses: actions/upload-artifact@v4

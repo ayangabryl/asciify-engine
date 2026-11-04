@@ -15,6 +15,7 @@ Browser checks use Playwright's Chromium (`npx playwright install chromium`):
 ```bash
 npm run test:visual    # screenshots of kit components, presets and field marks against tests/visual/baselines
 npm run test:effects   # custom field effects and live sources
+npm run test:element   # elementSource, with and without HTML-in-Canvas
 npm run test:browser   # the interactive regression page (open the printed URL)
 ```
 

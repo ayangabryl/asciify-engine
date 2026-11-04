@@ -43,6 +43,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | A full-bleed field with a look the kit has no option for | Advanced: `mountGlyphField` from `/field` ([glyph-field.md](references/glyph-field.md)) |
 | A hover, reveal or motion in the brand's own design, beyond the built-in ones | `defineFieldEffect` with `mountGlyphField` ([glyph-field.md](references/glyph-field.md#custom-effects-433-experimental)) |
 | A three.js / React Three Fiber scene, game or app canvas drawn live as characters | `mountGlyphField(canvas, { source: renderer.domElement, live: true })` ([glyph-field.md](references/glyph-field.md#live-sources-3d-scenes-and-app-canvases-433)) |
+| Their own UI (a card, a form, a view) drawn in characters, live, for a transition or a hover | `elementSource` from `/kit` as a `live` field source ([kit.md](references/kit.md#elementsource-433-experimental)) |
 | ASCII on a server, at the edge or in a terminal: OG images, emails, CLI banners, READMEs, bots | `toAsciiGrid` from `asciify-engine/headless` ([headless.md](references/headless.md)) |
 | Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |

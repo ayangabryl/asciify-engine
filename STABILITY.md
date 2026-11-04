@@ -20,6 +20,7 @@ New APIs may ship marked **experimental** in their doc comment and in the change
 | --- | --- | --- |
 | `defineFieldEffect` and `effects` on `/field` | 4.33.0 | The GLSL inputs and outputs may gain members; existing ones keep their meaning. |
 | `asciify-engine/headless` | 4.33.0 | Output for a given input may improve in minor releases (see below). |
+| `elementSource` on `/kit` | 4.33.0 | Follows the HTML-in-Canvas API, which is still changing in browsers. |
 
 ## How things look is part of the API
 
