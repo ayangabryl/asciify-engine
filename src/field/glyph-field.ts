@@ -1,4 +1,5 @@
 import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
+import { MAX_FIELD_EFFECTS, effectUniforms, type FieldEffect } from './field-effects';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import {
   ambientFactor, cancelFieldFrame, fieldContext, markShared, observeSize, observeView, requestFieldFrame, watchFonts, watchMotionPreference, watchPointer, watchVisibility,
@@ -29,6 +30,17 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
   /** Accessible name for the canvas. */
   label?: string;
   onError?: (error: Error) => void;
+  /**
+   * Custom effects from `defineFieldEffect`, run in order on every cell after the field's own hovers (up to four). An effect
+   * that fails to compile is reported through `onError` and the field draws without effects.
+   */
+  effects?: readonly FieldEffect[];
+  /**
+   * The source changes every frame: a canvas a 3D scene or an app draws into. The field uploads it each frame it draws, at the
+   * display's refresh rate, and measures its levels a few times a second rather than every frame. Call `redraw()` right after
+   * the source renders to show that exact frame (a WebGL canvas without `preserveDrawingBuffer` is only readable then).
+   */
+  live?: boolean;
 }
 
 export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect' }
@@ -203,6 +215,8 @@ export function isGlyphFieldSupported(options: { allowSoftware?: boolean } = {})
   return found === 'gpu' || (found === 'software' && !!options.allowSoftware);
 }
 
+const sameEffects = (a: readonly FieldEffect[], b: readonly FieldEffect[]) => a.length === b.length && a.every((effect, i) => effect === b[i]);
+
 /**
  * A GPU character field: every cell samples the source once and draws its glyph texel for texel,
  * while a small advected fluid bends the sampling and lifts characters under the cursor.
@@ -265,6 +279,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const ambientMs = ambientInterval();
   const wordData = new Float32Array(16);
   let raf = false, last = 0, time = 0, dirty = true, destroyed = false, lost = false, failed = false, paused = false, visible = true;
+  // Custom effects, the pointer they read (eased in and out), and whether the source is a live canvas uploaded every frame.
+  let effects: readonly FieldEffect[] = (options.effects ?? []).slice(0, MAX_FIELD_EFFECTS);
+  let live = !!options.live;
+  let unsubscribeEffects: (() => void)[] = [];
+  const fx = { target: null as [number, number] | null, at: [-1, -1] as [number, number], presence: 0, data: new Float32Array(MAX_FIELD_EFFECTS * 8) };
   let previous: [number, number] | null = null, pending: { from: [number, number]; to: [number, number] } | null = null;
   // Slow frames for about a second drop the field to 1x pixels, then to no ambient motion; the wake keeps working.
   let frameCost = 1 / 60, slowFrames = 0, degraded = 0;
@@ -476,7 +495,21 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     entry.locations = locations;
     return true;
   };
-  const programsReady = (wait = false) => !!cellProgram && !!pixelProgram && linked(cellProgram, wait) && linked(pixelProgram, wait);
+  const programsReady = (wait = false): boolean => {
+    if (!cellProgram || !pixelProgram) return false;
+    try {
+      if (!linked(cellProgram, wait)) return false;
+    } catch (error) {
+      // A custom effect that does not compile must not take the field down: report it and draw without effects.
+      if (!effects.length) throw error;
+      const names = effects.map(effect => effect.name).join(', ');
+      setEffects([]);
+      buildPrograms();
+      report(new Error(`Field effects (${names}) did not compile, so the field draws without them. ${error instanceof Error ? error.message : String(error)}`));
+      return false;
+    }
+    return linked(pixelProgram, wait);
+  };
   const texture = (filter: number) => {
     const handle = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, handle);
@@ -567,7 +600,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (cellProgram && !shared) gl.deleteProgram(cellProgram.program);
     if (pixelProgram && !shared) gl.deleteProgram(pixelProgram.program);
     releaseCells();
-    cellProgram = link(fieldCellShader(packed));
+    cellProgram = link(fieldCellShader(packed, effects));
     pixelProgram = link(FIELD_COMPOSITE);
     // Without parallel compilation the check blocks either way, so a broken driver still throws from mount.
     if (shared ? !host!.canCompileInParallel : !parallel) programsReady(true);
@@ -663,8 +696,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const uploadSource = () => {
     if (!source) return;
     const now = performance.now();
-    if (!(source instanceof HTMLVideoElement) || now - levelsAt > 1500) { measureLevels(); levelsAt = now; }
-    if (!(source instanceof HTMLVideoElement) || now - scopeAt > 160) { measureScope(); scopeAt = now; }
+    // A video or live canvas changes every frame; reading its pixels back on the CPU each time would stall the GPU, so its
+    // levels and hover scope are measured a few times a second.
+    const moving = source instanceof HTMLVideoElement || live;
+    if (!moving || now - levelsAt > 1500) { measureLevels(); levelsAt = now; }
+    if (!moving || now - scopeAt > 160) { measureScope(); scopeAt = now; }
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -718,7 +754,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const playingVideo = source instanceof HTMLVideoElement && !source.paused && !source.ended;
     if (playingVideo) return true;
     if (reduced()) return false;
-    return (!source && settings.scene !== 'none') || settings.drift > 0;
+    return (!source && settings.scene !== 'none') || settings.drift > 0 || effects.some(effect => effect.animate);
   };
 
   const stepFluid = (dt: number, now: number) => {
@@ -866,6 +902,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(u.uShade, settings.shade);
     gl.uniform1f(u.uBackdrop, source ? settings.backdrop : 0);
     gl.uniform2f(u.uLevels, source && settings.levels === 'auto' ? levels[0] : 0, source && settings.levels === 'auto' ? levels[1] : 1);
+    if (effects.length) setEffectUniforms(cellProgram!.locations!);
     gl.bindVertexArray(vertexArray);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -893,10 +930,40 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
 
   // The first frame draws even off screen, so a field mounted ahead of the viewport is ready when it scrolls in.
-  const live = () => !destroyed && !lost && !failed && !empty && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
+  const drawable = () => !destroyed && !lost && !failed && !empty && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
+  function setEffects(next: readonly FieldEffect[]) {
+    unsubscribeEffects.forEach(stop => stop());
+    effects = next.slice(0, MAX_FIELD_EFFECTS);
+    const redrawForParams = () => { dirty = true; wake(); };
+    unsubscribeEffects = effects.map(effect => effect.subscribe(redrawForParams));
+    if (!effects.length) { fx.target = null; fx.presence = 0; }
+  }
+  // The pointer effects read: it follows the real one closely and fades in and out over about 150 ms. True while it moves.
+  function stepEffectPointer(dt: number) {
+    const goal = fx.target && !paused ? 1 : 0;
+    let moving = false;
+    if (fx.target) {
+      if (fx.presence === 0) fx.at = [...fx.target];
+      const k = 1 - Math.exp(-dt / 0.035);
+      const dx = fx.target[0] - fx.at[0], dy = fx.target[1] - fx.at[1];
+      if (Math.abs(dx) + Math.abs(dy) > 1e-4) { fx.at = [fx.at[0] + dx * k, fx.at[1] + dy * k]; moving = true; }
+    }
+    if (fx.presence !== goal) {
+      const step = dt / 0.15;
+      fx.presence = goal > fx.presence ? Math.min(goal, fx.presence + step) : Math.max(goal, fx.presence - step);
+      moving = true;
+    }
+    return moving;
+  }
+  function setEffectUniforms(at: Record<string, WebGLUniformLocation | null>) {
+    gl.uniform4fv(at.uFx, effectUniforms(effects, fx.data));
+    gl.uniform4f(at.uFxPointer, fx.at[0], fx.at[1], fx.presence, reduced() ? 0 : 1);
+    gl.uniform1f(at.uFxTime, time);
+  }
+  setEffects(effects);
   const frame = (now: number) => {
     raf = false;
-    if (!live()) return;
+    if (!drawable()) return;
     const elapsed = (now - last) / 1000;
     const dt = Math.min(1 / 30, Math.max(1 / 480, elapsed));
     last = now;
@@ -915,6 +982,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const compiled = programsReady();
       const moving = animated();
       if (moving) time += dt * settings.speed;
+      // A live canvas is new every frame it is drawn: it uploads and redraws at the display's rate, like a playing video.
+      if (live && source && !(source instanceof HTMLVideoElement) && !paused) { uploadSource(); dirty = true; }
       if (source instanceof HTMLVideoElement && source.readyState >= 2 && videoFresh) {
         if (!('requestVideoFrameCallback' in source)) videoFresh = true; else videoFresh = false;
         uploadSource();
@@ -929,6 +998,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       // Draw once more after the wake settles, so the last frame is clean.
       if (hover === 'trail') { const wasActive = !!inkTrail?.active; simulating = stepTrail(dt) || simulating; if (wasActive && !inkTrail?.active) dirty = true; }
       if (tap?.live || tapOn) { simulating = stepTap(dt) || simulating; if (!tapOn) dirty = true; }
+      if (effects.length && stepEffectPointer(dt)) simulating = true;
       if (pulses.length) {
         for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].born >= 2400) pulses.splice(i, 1);
         simulating = true;
@@ -941,14 +1011,14 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         dirty = false;
         if (readyPending && (!sourceToken || source)) { readyPending = false; resolveReady(); }
       }
-      if (moving || simulating || pending || !compiled) { raf = true; requestFieldFrame(frame); }
+      if (moving || simulating || pending || !compiled || (live && source && !paused)) { raf = true; requestFieldFrame(frame); }
     } catch (error) {
       failed = true;
       report(error);
     }
   };
   function wake() {
-    if (raf || !live()) return;
+    if (raf || !drawable()) return;
     last = performance.now();
     raf = true;
     requestFieldFrame(frame);
@@ -962,6 +1032,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     return [x, 1 - y];
   };
   const moveTo = (point: [number, number] | null) => {
+    if (effects.length && !paused) { fx.target = point ? [point[0], 1 - point[1]] : null; wake(); }
     const hover = activeFieldHover(settings);
     if (hover === 'none' || paused) { previous = null; lantern.target = null; return; }
     if (lanternLike(hover)) {
@@ -990,7 +1061,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (target === window) pointerClient.inside = !!point;
     moveTo(point);
   };
-  const onPointerLeave = () => { previous = null; inkTrail?.leave(); if (lantern.target) { lantern.target = null; wake(); } };
+  const onPointerLeave = () => { previous = null; inkTrail?.leave(); if (fx.target) { fx.target = null; wake(); } if (lantern.target) { lantern.target = null; wake(); } };
   const target: HTMLElement | Window = options.interactionTarget ?? window;
   // The page's one pointer listener serves every field (an element in a shadow root or another document is listened to directly).
   // A field scrolled out of reach skips moves elsewhere on the page, once the pointer has left it.
@@ -1208,6 +1279,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const fluidChanged = wasFluid !== wantsFluid() || (settings.fluid && before.fluid && settings.fluid.resolution !== before.fluid.resolution);
       if (fluidChanged) resizeFluid();
       if ('source' in next) void setSource(next.source ?? null);
+      if ('live' in next) live = !!next.live;
+      if ('effects' in next && !sameEffects(next.effects ?? [], effects)) { setEffects(next.effects ?? []); if (!lost) buildPrograms(); }
       dirty = true;
       wake();
     },
@@ -1222,7 +1295,12 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       try {
         // This frame is now on the canvas: the frame loop need not draw it again (a kit surface redraws each frame it paints).
         // Before the first frame, programs still compiling in parallel are not waited for: the loop draws as soon as they link.
-        if (programsReady(!(readyPending && (shared ? host!.canCompileInParallel : !!parallel)))) { draw(); if (!readyPending) dirty = false; }
+        if (programsReady(!(readyPending && (shared ? host!.canCompileInParallel : !!parallel)))) {
+          // A live source is read now, in the task that rendered it.
+          if (live && source && !(source instanceof HTMLVideoElement)) uploadSource();
+          draw();
+          if (!readyPending) dirty = false;
+        }
       } catch (error) {
         failed = true;
         report(error);
@@ -1258,6 +1336,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       if (raf) cancelFieldFrame(frame);
       raf = false;
       unwatch.forEach(stop => stop());
+      unsubscribeEffects.forEach(stop => stop());
       if (shared) host!.leave(client);
       else {
         canvas.removeEventListener('webglcontextlost', onLost);

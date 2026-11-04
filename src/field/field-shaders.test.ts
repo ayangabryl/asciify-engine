@@ -8,7 +8,7 @@ import { FIELD_MARKS, FIELD_SCENES, normalizeFieldSettings } from './field-model
 const declared = (shader: string) => new Set([...shader.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(([, names]) => names.split(',').map(name => name.trim().replace(/\[\d+\]$/, ''))));
 const used = (code: string, object: string) => new Set([...code.matchAll(new RegExp(`\\b${object}\\.(u[A-Z]\\w*)`, 'g'))].map(([, name]) => name));
 const field = readFileSync(new URL('./glyph-field.ts', import.meta.url), 'utf8');
-const draw = field.slice(field.indexOf('const draw = () =>'), field.indexOf('const live = () =>'));
+const draw = field.slice(field.indexOf('const draw = () =>'), field.indexOf('const drawable = () =>'));
 const fluid = field.slice(field.indexOf('const stepFluid ='), field.indexOf('const draw = () =>'));
 
 describe('glyph field programs', () => {

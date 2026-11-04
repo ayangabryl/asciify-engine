@@ -1,4 +1,5 @@
 /** GLSL ES 3.00 programs for the glyph field. Each draws one fullscreen triangle without vertex buffers. */
+import { effectSource, type FieldEffect } from './field-effects';
 import type { FieldScene } from './field-model';
 
 /** The cell shader's `uScene` for each generated scene; 0 is a media source and 3 draws nothing. */
@@ -52,7 +53,7 @@ void main(){
  * tone, hover and pulse response, and writes the cell's ink with its glyph index (or dot tone) plus what lies under it.
  * Cell row 0 is the top row, so the composite reads it with texelFetch.
  */
-export const fieldCellShader = (packed: boolean) => `#version 300 es
+const fieldCellShaderBase = (packed: boolean) => `#version 300 es
 precision highp float;
 precision highp sampler2D;
 uniform sampler2D uSource, uFluid;
@@ -437,6 +438,28 @@ void main(){
   outInk=vec4(ink,uMark==0||uMark==17?index/255.:uMark==1?(tone>.003?tone:0.):index>0.?max(tone,1./255.):0.);
   outUnder=vec4(under,underAlpha);
 }`;
+
+/**
+ * The cell pass. Without effects it is the field's own program, unchanged; with them, their GLSL is spliced in at two points:
+ * `displace` blocks just before the source is sampled, `shade` blocks after the hovers and before clear zones and vignette.
+ */
+export const fieldCellShader = (packed: boolean, effects: readonly FieldEffect[] = []) => {
+  const base = fieldCellShaderBase(packed);
+  const fx = effectSource(effects);
+  if (!fx) return base;
+  const splice = (code: string, anchor: string, insert: string, before = false) => {
+    const at = code.indexOf(anchor);
+    if (at < 0 || code.indexOf(anchor, at + 1) >= 0) throw new Error(`The cell pass lost its effect anchor: ${anchor}`);
+    return before ? code.slice(0, at) + insert + code.slice(at) : code.slice(0, at + anchor.length) + insert + code.slice(at + anchor.length);
+  };
+  let code = splice(base, 'void main(){', `${fx.declarations}\n`, true);
+  code = splice(code, 'float aspect=uResolution.x/uResolution.y;', '\n  vec2 pointer=uFxPointer.xy;float pointerOn=uFxPointer.z,motion=uFxPointer.w,time=uFxTime;\n  vec3 fxInk=vec3(0.);float fxInkAmount=0.,fxGlyph=0.;');
+  code = splice(code, '+drift;\n', `${fx.displace}\n`);
+  code = splice(code, '  tone*=1.-uVignette*', `${fx.shade}\n  tone=clamp(tone,0.,1.);\n`, true);
+  code = splice(code, "+(flick>.5&&tone>.02?1.:0.));", '\n  if(tone>.008)index=clamp(index+floor(fxGlyph+.5),tone>.008?1.:0.,uCount-1.);');
+  code = splice(code, 'ink=mix(ink,lifted,wake*.7);', '\n  ink=mix(ink,clamp(fxInk,0.,1.),clamp(fxInkAmount,0.,1.));');
+  return code;
+};
 
 /**
  * The pixel pass: reads its cell and draws the glyph texel for texel from the atlas, the halftone dot, or one of the Studio's
