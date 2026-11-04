@@ -39,8 +39,8 @@ gridToHtml(grid);                 // a <pre>; add aria-hidden or a label where y
 
 ## Video and animation
 
-Pass `dither: 'ordered'` and the previous grid each frame. On a slow pan this changes about 9 % of cells per frame, against
-31 % with the still defaults, at the same fidelity:
+Pass `dither: 'ordered'` and the previous grid each frame. On a slow pan this changes about 10 % of cells per frame, against
+26 % with the still defaults, at nearly the same fidelity:
 
 ```ts
 let previous = null;
@@ -52,7 +52,7 @@ for (const frame of frames) {
 
 ## Quality and cost
 
-Shape matching was measured against other renderers (aalib.js, three.js AsciiEffect, a naive ramp) on held-out photos, line
-art and type: level with aalib on photos, ahead of everything tested on line art and type, a 1080p frame in about 25 ms on one
-core, 4.7 kB gzipped. Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
+Shape matching was measured against other renderers (aalib.js, ascii.rest, three.js AsciiEffect, a naive ramp) on photos it
+was not tuned on, line art and type: ahead on photos up close and level with aalib at a distance, ahead of everything tested on
+line art and type, a 1080p frame in about 25 ms on one core, 4.7 kB gzipped. Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
 closely in that family. The output for a given input is deterministic and identical across runtimes.

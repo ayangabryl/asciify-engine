@@ -79,7 +79,7 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 
 ## How it compares
 
-Measured against aalib.js, three.js `AsciiEffect`, the postprocessing `ASCIIEffect`, @sister.software/asciify and a naive ramp on the same pictures and grid: level with aalib on photographs, ahead of every renderer tested on line art and type, about twelve times faster than aalib, and the only one that converts pixels to text without a browser. Method, numbers and the weak spots are in the [benchmark report](docs/benchmarks/2026-11-04-ascii-renderers.md).
+Measured against aalib.js, ascii.rest (the Cloudflare-sponsored ASCII library), three.js `AsciiEffect`, the postprocessing `ASCIIEffect`, @sister.software/asciify and a naive ramp, on the same pictures and grid, with photos the engine was not tuned on: ahead on photographs up close and level with aalib at a distance (better than aalib on both measures on 15 of 20 photos), ahead of every renderer tested on line art and type, and about ten times faster than aalib. Method, numbers and the weak spots are in the [benchmark report](docs/benchmarks/2026-11-04-ascii-renderers.md).
 
 ## Stability
 

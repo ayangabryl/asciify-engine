@@ -12,6 +12,7 @@ const AAImage = aaImageModule.default?.default ?? aaImageModule.default;
 const aaFactory = aaModule.default?.default ?? aaModule.default ?? aaModule;
 const HTMLRenderer = htmlRendererModule.HTMLRenderer ?? htmlRendererModule.default?.HTMLRenderer;
 import { toAsciiGrid } from '../src/headless.ts';
+import { drawing as asciiRestDrawing } from 'ascii.rest/kit';
 import { tuneHeadless } from '../src/headless/grid.ts';
 import { asciiText } from '../src/core.ts';
 import { mountGlyphField } from '../src/field.ts';
@@ -86,6 +87,26 @@ export const TEXT_RENDERERS = {
     for (let r = 0; r < rows; r++) { let line = ''; for (let c = 0; c < columns; c++) line += image.data[r * columns + c].char; out.push(line); }
     return out;
   },
+  // ascii.rest (sponsored by Cloudflare): its own image drawing, in its two styles for pictures. It trims an image to its ink
+  // and adds a margin of 2 columns and 1 row; with the background kept and the margin cut off, it covers the whole picture.
+  // It sizes the grid itself from `width` (columns, margin included) and its own cell shape, so its rows may differ slightly.
+  ...Object.fromEntries(['logo', 'shade'].map(style => [`ascii.rest (${style})`, (picture, columns, rows) => {
+    const { data, width, height } = pixelsOf(picture);
+    // Its default: a plain ground (the black of the line and type images) is taken out and the drawing trimmed to the ink,
+    // so it is scored against the same trimmed part of the picture.
+    const d = asciiRestDrawing(data, width, height, { width: columns + 4, height: Math.min(120, rows + 2), style, color: false, invert: false });
+    const art = d.art.slice(1, -1).map(line => line.slice(2, -2));
+    if (d.ground) {
+      const g = [1, 3, 5].map(i => parseInt(d.ground.slice(i, i + 2), 16));
+      let x0 = width, y0 = height, x1 = -1, y1 = -1;
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        if (Math.abs(data[i] - g[0]) + Math.abs(data[i + 1] - g[1]) + Math.abs(data[i + 2] - g[2]) > 48) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+      }
+      if (x1 >= x0) window.lastCrop = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    }
+    return art;
+  }])),
   'asciify-engine core asciiText (4.32)': (picture, columns, rows) => {
     const fontSize = 10, charAspect = 1 / CELL_ASPECT;
     return asciiText(picture, { fontSize, charAspect, charSpacing: 1 }, columns * fontSize, Math.round(rows * fontSize / charAspect)).split('\n').slice(0, rows).map(l => l.padEnd(columns).slice(0, columns));
@@ -222,4 +243,6 @@ export function timeIt(fn, runs = 7) {
   return +times.sort((a, b) => a - b)[Math.floor(runs / 2)].toFixed(2);
 }
 
-Object.assign(window, { bench: { loadPicture, syntheticLines, syntheticText, gridRows, TEXT_RENDERERS, PIXEL_RENDERERS, drawText, score, panFrames, churn, timeIt, fontMetrics, CELL_ASPECT } });
+export function cropped(picture, c) { const out = document.createElement('canvas'); out.width = c.w; out.height = c.h; out.getContext('2d').drawImage(picture, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h); return out; }
+
+Object.assign(window, { bench: { cropped, loadPicture, syntheticLines, syntheticText, gridRows, TEXT_RENDERERS, PIXEL_RENDERERS, drawText, score, panFrames, churn, timeIt, fontMetrics, CELL_ASPECT } });

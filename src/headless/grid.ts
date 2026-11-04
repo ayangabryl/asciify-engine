@@ -78,7 +78,7 @@ const SUB = GLYPH_COLS * GLYPH_ROWS;
 // matching a glyph a third of a cell off centre.
 let DIM_WEIGHT = 2, STRUCTURE = 0.05, EXTRA_INK = 1, SOFTEN = 0.5, TONE_WEIGHT = 256, SHIFT_COST = 0.15;
 // How much worse a kept character (see `previous`) may be than the best one, in shape cells and in fill cells.
-let KEEP_MARGIN = 0.6, KEEP_TONE = 0.04;
+let KEEP_MARGIN = 0.6, KEEP_TONE = 0.04, FILL_ALL: 'all' | 'symbols' | 'classic' = 'symbols', INK_SCALE = 1.45, STROKE_UNSCALED = true;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 /**
  * Spreads each sub-cell a little into its neighbours across and down (weight `amount` shared between the two), so a stroke a
@@ -95,13 +95,14 @@ function soften(v: Float32Array, at: number, out: Float32Array, amount: number) 
   }
 }
 const FILL = ' .:-=+*#%@';
+const FILL_SYMBOLS = ` .,:;'\`"^-_~=+*<>!?|/\\()[]{}#%@&$`;
 /** @internal For tuning only. */
-const DEFAULTS = { dimWeight: DIM_WEIGHT, structure: STRUCTURE, extraInk: EXTRA_INK, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE };
+const DEFAULTS = { dimWeight: DIM_WEIGHT, structure: STRUCTURE, extraInk: EXTRA_INK, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, fillAll: FILL_ALL, inkScale: INK_SCALE, strokeUnscaled: STROKE_UNSCALED, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE };
 /** @internal For the benchmark's parameter search only; called with nothing, restores the defaults. */
 export const tuneHeadless = (t: Partial<typeof DEFAULTS> = {}) => {
   const v = { ...DEFAULTS, ...t };
   DIM_WEIGHT = v.dimWeight; STRUCTURE = v.structure; EXTRA_INK = v.extraInk; SOFTEN = v.soften; TONE_WEIGHT = v.toneWeight; SHIFT_COST = v.shiftCost;
-  KEEP_MARGIN = v.keepMargin; KEEP_TONE = v.keepTone;
+  KEEP_MARGIN = v.keepMargin; KEEP_TONE = v.keepTone; FILL_ALL = v.fillAll; INK_SCALE = v.inkScale; STROKE_UNSCALED = v.strokeUnscaled;
   table = null;
 };
 let table: { coverage: Float32Array; mean: Float32Array; shape: Float32Array; weight: Float32Array } | null = null;
@@ -269,19 +270,25 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   const shapeMode = mode === 'shape' && allKnown;
   // Flat cells, with no structure inside, take a fill character by tone; only cells with an edge or a stroke are matched by
   // shape. The fill ramp is the classic one, kept to the characters the charset allows.
-  const fill = shapeMode ? glyphs.map((_, g) => g).filter(g => FILL.includes(glyphs[g])) : glyphs.map((_, g) => g);
+  const fillSet = FILL_ALL === 'all' ? null : FILL_ALL === 'symbols' ? FILL_SYMBOLS : FILL;
+  const fill = shapeMode && fillSet ? glyphs.map((_, g) => g).filter(g => fillSet.includes(glyphs[g])) : glyphs.map((_, g) => g);
   if (fill.length < 2) fill.splice(0, fill.length, ...glyphs.map((_, g) => g));
   // Every glyph's tone on the target's 0–1 scale: its ink as a share of the densest fill character's. A ramp with characters
   // the table does not know keeps the given order, evenly spaced.
-  const fillTop = Math.max(...fill.map(g => (allKnown ? mean[indices[g]] : 0)), 1e-6);
+  // The tone scale is the classic fill ramp's (its densest is @), whichever characters fill flat cells.
+  const ramp = shapeMode ? glyphs.map((_, g) => g).filter(g => FILL.includes(glyphs[g])) : fill;
+  const fillTop = Math.max(...(ramp.length ? ramp : fill).map(g => (allKnown ? mean[indices[g]] : 0)), 1e-6) * (shapeMode ? INK_SCALE : 1);
   const toneOf = indices.map((index, g) => (allKnown ? mean[index] / fillTop : g / Math.max(1, glyphs.length - 1)));
+  // Cells with a stroke in them weigh tone on the unstretched scale (INK_SCALE fills flat areas fuller; on a stroke it would
+  // trade the stroke's shape for ink).
+  const strokeTone = toneOf.map(t => t * (shapeMode && STROKE_UNSCALED ? INK_SCALE : 1));
   const out: string[] = [];
   const colors = wantColor ? new Uint8Array(columns * rows * 3) : null;
   const cellTarget = new Float32Array(SUB), softTarget = new Float32Array(SUB);
   // Glyphs in order of tone, so each cell scans outward from the tone it wants and stops on a side once the tone term alone
   // costs more than the best match so far: the same answer as trying every glyph, in a fraction of the work.
-  const byTone = indices.map((_, g) => g).sort((a, b) => toneOf[a] - toneOf[b]);
-  const toneSorted = byTone.map(g => toneOf[g]);
+  const byTone = indices.map((_, g) => g).sort((a, b) => strokeTone[a] - strokeTone[b]);
+  const toneSorted = byTone.map(g => strokeTone[g]);
   const glyphIndex = new Map(glyphs.map((char, g) => [char, g]));
   const previous = options.previous && options.previous.columns === columns && options.previous.rows === rows ? options.previous.lines : null;
   const shapeScore = (g: number, limit: number) => {
@@ -328,7 +335,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
           // Take whichever side is nearer in tone next.
           const useLo = loOpen && (!hiOpen || want - toneSorted[lo] <= toneSorted[hi] - want);
           const g = byTone[useLo ? lo : hi];
-          const miss = toneOf[g] - want, toneCost = TONE_WEIGHT * miss * miss;
+          const miss = strokeTone[g] - want, toneCost = TONE_WEIGHT * miss * miss;
           if (toneCost >= bestScore) { if (useLo) loOpen = false; else hiOpen = false; continue; }
           const score = toneCost + shapeScore(g, bestScore - toneCost);
           if (score < bestScore) { bestScore = score; best = g; }
@@ -337,7 +344,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
         // With the previous frame given, a cell keeps its character while that is still nearly as good: still footage stays
         // still instead of trading between near-equal glyphs.
         if (keep !== undefined && keep !== best) {
-          const miss = toneOf[keep] - want, kept = TONE_WEIGHT * miss * miss + shapeScore(keep, Infinity);
+          const miss = strokeTone[keep] - want, kept = TONE_WEIGHT * miss * miss + shapeScore(keep, Infinity);
           if (kept <= bestScore + KEEP_MARGIN) best = keep;
         }
       } else if (ordered) {
@@ -351,7 +358,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
         }
         if (below < 0) best = above; else if (above < 0 || above === below) best = below;
         else best = (want - toneOf[below]) / (toneOf[above] - toneOf[below]) > (BAYER[(r & 3) * 4 + (c & 3)] + 0.5) / 16 ? above : below;
-        if (keep !== undefined && keep !== best && (keep === below || keep === above)) best = keep;
+        if (keep !== undefined && keep !== best && fill.includes(keep) && Math.abs(toneOf[keep] - want) <= KEEP_TONE) best = keep;
       } else {
         let bestDelta = Infinity;
         for (const g of fill) { const d = Math.abs(toneOf[g] - want); if (d < bestDelta) { bestDelta = d; best = g; } }
@@ -360,7 +367,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
       line += glyphs[best];
       if (diffuse) {
         // The tone this cell could not show goes to the cells still to come, spread evenly over their sub-cells.
-        const error = want - toneOf[best];
+        const error = want - (structured ? strokeTone : toneOf)[best];
         const spread = (dc: number, dr: number, w: number) => {
           const cc = c + dc, rr = r + dr;
           if (cc < 0 || cc >= columns || rr >= rows) return;

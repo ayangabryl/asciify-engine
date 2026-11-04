@@ -25,12 +25,13 @@ const results = await page.evaluate(async ({ urls, tunes }) => {
     window.tune = tune;
     const scores = [];
     const renderer = tune.renderer ?? (tune.mode === 'tone' ? 'asciify-engine headless, tone' : 'asciify-engine headless, shape');
-    for (const p of pictures) { const rows = bench.gridRows(p, 100); const s = await bench.score(await bench.drawText(bench.TEXT_RENDERERS[renderer](p, 100, rows)), p); scores.push((s.close + s.far) / 2); }
-    const photos = scores.slice(0, urls.length);
-    out.push({ tune, photo: +(photos.reduce((a, b) => a + b) / photos.length).toFixed(4), lines: +scores.at(-2).toFixed(4), text: +scores.at(-1).toFixed(4) });
+    const near = [], far = [];
+    for (const p of pictures) { const rows = bench.gridRows(p, 100); const s = await bench.score(await bench.drawText(bench.TEXT_RENDERERS[renderer](p, 100, rows)), p); scores.push((s.close + s.far) / 2); near.push(s.close); far.push(s.far); }
+    const photos = scores.slice(0, urls.length), mean = a => a.slice(0, urls.length).reduce((x, y) => x + y) / urls.length;
+    out.push({ tune, photo: +(photos.reduce((a, b) => a + b) / photos.length).toFixed(4), lines: +scores.at(-2).toFixed(4), text: +scores.at(-1).toFixed(4), pClose: +mean(near).toFixed(3), pFar: +mean(far).toFixed(3) });
   }
   return out;
 }, { urls: [...files.keys()], tunes });
 results.forEach(r => r.all = +((r.photo * 2 + r.lines + r.text) / 4).toFixed(4));
-results.sort((a, b) => b.all - a.all).forEach(r => console.log(r.all.toFixed(4), 'photo', r.photo.toFixed(4), 'lines', r.lines.toFixed(4), 'text', r.text.toFixed(4), JSON.stringify(r.tune)));
+results.sort((a, b) => b.all - a.all).forEach(r => console.log(r.all.toFixed(4), 'photo', r.photo.toFixed(4), `(close ${r.pClose} far ${r.pFar})`, 'lines', r.lines.toFixed(4), 'text', r.text.toFixed(4), JSON.stringify(r.tune)));
 await browser.close(); server.close();

@@ -14,6 +14,7 @@ const ENTRIES = {
   'postprocessing ASCIIEffect (with three.js)': `import { WebGLRenderer } from 'three'; import { EffectComposer, EffectPass, RenderPass, ASCIIEffect } from 'postprocessing'; globalThis.x = [WebGLRenderer, EffectComposer, EffectPass, RenderPass, ASCIIEffect];`,
   '@sister.software/asciify': `import { Asciify } from '@sister.software/asciify'; globalThis.x = Asciify;`,
   'aalib.js': `import aalib from 'aalib.js'; globalThis.x = aalib;`,
+  'ascii.rest (drawing)': `import { drawing } from 'ascii.rest/kit'; globalThis.x = drawing;`,
 };
 const rows = [];
 for (const [name, contents] of Object.entries(ENTRIES)) {
@@ -28,6 +29,7 @@ const px = { width: 64, height: 32, data: new Uint8ClampedArray(64 * 32 * 4).map
 const tries = {
   'asciify-engine/headless': async () => (await import(`${dist}/headless.js`)).gridToText((await import(`${dist}/headless.js`)).toAsciiGrid(px, { columns: 16 })),
   'aalib.js': async () => { const aa = (await import('aalib.js/lib/aa.js')).default; const { HTMLRenderer } = await import('aalib.js/lib/renderers/HTMLRenderer.js'); const AAImage = (await import('aalib.js/lib/core/AAImage.js')).default; const img = aa.default ? aa.default({ width: 16, height: 8 })(AAImage.default.fromImageData(px)) : aa({ width: 16, height: 8 })(AAImage.fromImageData(px)); new (HTMLRenderer)({}).processImage(img); return 'ok'; },
+  'ascii.rest': async () => { const { drawing } = await import('ascii.rest/kit'); return drawing(px.data, px.width, px.height, { width: 20 }).art.join('\n'); },
   '@sister.software/asciify': async () => { const { Asciify } = await import('@sister.software/asciify'); new Asciify(); return 'ok'; },
   'three.js AsciiEffect': async () => { const { AsciiEffect } = await import('three/examples/jsm/effects/AsciiEffect.js'); new AsciiEffect({ setSize() {}, domElement: {} }); return 'ok'; },
 };

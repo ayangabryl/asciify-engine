@@ -24,11 +24,23 @@
      "far": 0.8709,
      "farCode": 0.5115
     },
+    "ascii.rest (logo)": {
+     "close": 0.3189,
+     "closeCode": 0.2416,
+     "far": 0.716,
+     "farCode": 0.6442
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3845,
+     "closeCode": 0.2504,
+     "far": 0.8239,
+     "farCode": 0.4461
+    },
     "asciify-engine core asciiText (4.32)": {
-     "close": 0.3562,
-     "closeCode": 0.1888,
+     "close": 0.3564,
+     "closeCode": 0.1889,
      "far": 0.7573,
-     "farCode": 0.3203
+     "farCode": 0.3204
     },
     "asciify-engine headless, tone": {
      "close": 0.4142,
@@ -37,16 +49,16 @@
      "farCode": 0.5071
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.4867,
-     "closeCode": 0.3086,
-     "far": 0.8541,
-     "farCode": 0.5071
+     "close": 0.5606,
+     "closeCode": 0.3641,
+     "far": 0.8975,
+     "farCode": 0.5937
     },
     "asciify-engine headless, shape": {
-     "close": 0.4851,
-     "closeCode": 0.3031,
-     "far": 0.8544,
-     "farCode": 0.5018
+     "close": 0.5635,
+     "closeCode": 0.3658,
+     "far": 0.9005,
+     "farCode": 0.5973
     }
    },
    "pixels": {
@@ -67,6 +79,86 @@
      "closeCode": 0.2395,
      "far": 0.9025,
      "farCode": 0.502
+    }
+   }
+  },
+  {
+   "name": "alley-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3596,
+     "closeCode": 0.2159,
+     "far": 0.6554,
+     "farCode": 0.2783
+    },
+    "three.js AsciiEffect": {
+     "close": 0.4568,
+     "closeCode": 0.3395,
+     "far": 0.8201,
+     "farCode": 0.4261
+    },
+    "aalib.js": {
+     "close": 0.5415,
+     "closeCode": 0.5531,
+     "far": 0.8816,
+     "farCode": 0.7225
+    },
+    "ascii.rest (logo)": {
+     "close": 0.1678,
+     "closeCode": 0.1747,
+     "far": 0.4786,
+     "farCode": 0.5516
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4271,
+     "closeCode": 0.5238,
+     "far": 0.8091,
+     "farCode": 0.7276
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.3611,
+     "closeCode": 0.1917,
+     "far": 0.6227,
+     "farCode": 0.2398
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.5116,
+     "closeCode": 0.5148,
+     "far": 0.8715,
+     "farCode": 0.6877
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.6189,
+     "closeCode": 0.5823,
+     "far": 0.8667,
+     "farCode": 0.7138
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.628,
+     "closeCode": 0.5738,
+     "far": 0.8777,
+     "farCode": 0.703
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.0842,
+     "closeCode": 0.0762,
+     "far": 0.0992,
+     "farCode": 0.071
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.3068,
+     "closeCode": 0.4103,
+     "far": 0.5849,
+     "farCode": 0.6875
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3842,
+     "closeCode": 0.4549,
+     "far": 0.8387,
+     "farCode": 0.6808
     }
    }
   },
@@ -92,6 +184,18 @@
      "far": 0.8528,
      "farCode": 0.51
     },
+    "ascii.rest (logo)": {
+     "close": 0.3482,
+     "closeCode": 0.2472,
+     "far": 0.8078,
+     "farCode": 0.6847
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3423,
+     "closeCode": 0.2108,
+     "far": 0.8008,
+     "farCode": 0.4547
+    },
     "asciify-engine core asciiText (4.32)": {
      "close": 0.3004,
      "closeCode": 0.1661,
@@ -105,16 +209,16 @@
      "farCode": 0.5258
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.461,
-     "closeCode": 0.2802,
-     "far": 0.8371,
-     "farCode": 0.5158
+     "close": 0.4897,
+     "closeCode": 0.3045,
+     "far": 0.8684,
+     "farCode": 0.5753
     },
     "asciify-engine headless, shape": {
-     "close": 0.4643,
-     "closeCode": 0.2808,
-     "far": 0.837,
-     "farCode": 0.5141
+     "close": 0.4902,
+     "closeCode": 0.3061,
+     "far": 0.8709,
+     "farCode": 0.5795
     }
    },
    "pixels": {
@@ -139,138 +243,722 @@
    }
   },
   {
-   "name": "freckles-v1",
-   "rows": 39,
+   "name": "catfig-v1",
+   "rows": 52,
    "text": {
     "naive ramp (agent baseline)": {
-     "close": 0.3026,
-     "closeCode": 0.1942,
-     "far": 0.5091,
-     "farCode": 0.2344
+     "close": 0.7457,
+     "closeCode": 0.7055,
+     "far": 0.8617,
+     "farCode": 0.7413
     },
     "three.js AsciiEffect": {
-     "close": 0.343,
-     "closeCode": 0.2446,
-     "far": 0.6399,
-     "farCode": 0.2953
+     "close": 0.7472,
+     "closeCode": 0.7066,
+     "far": 0.8572,
+     "farCode": 0.7396
     },
     "aalib.js": {
-     "close": 0.4801,
-     "closeCode": 0.5326,
-     "far": 0.789,
-     "farCode": 0.6534
+     "close": 0.8034,
+     "closeCode": 0.7423,
+     "far": 0.9146,
+     "farCode": 0.7887
+    },
+    "ascii.rest (logo)": {
+     "close": 0.5037,
+     "closeCode": 0.3881,
+     "far": 0.8294,
+     "farCode": 0.6582
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4386,
+     "closeCode": 0.3412,
+     "far": 0.7814,
+     "farCode": 0.5192
     },
     "asciify-engine core asciiText (4.32)": {
-     "close": 0.2984,
-     "closeCode": 0.1817,
-     "far": 0.4795,
-     "farCode": 0.2105
+     "close": 0.7412,
+     "closeCode": 0.6993,
+     "far": 0.8511,
+     "farCode": 0.7251
     },
     "asciify-engine headless, tone": {
-     "close": 0.44,
-     "closeCode": 0.5011,
-     "far": 0.833,
-     "farCode": 0.6664
+     "close": 0.7849,
+     "closeCode": 0.7366,
+     "far": 0.9187,
+     "farCode": 0.8155
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.4697,
-     "closeCode": 0.5951,
-     "far": 0.7684,
-     "farCode": 0.7639
+     "close": 0.8241,
+     "closeCode": 0.7566,
+     "far": 0.9304,
+     "farCode": 0.8388
     },
     "asciify-engine headless, shape": {
-     "close": 0.495,
-     "closeCode": 0.551,
-     "far": 0.822,
-     "farCode": 0.7064
+     "close": 0.8175,
+     "closeCode": 0.756,
+     "far": 0.9292,
+     "farCode": 0.8495
     }
    },
    "pixels": {
     "postprocessing ASCIIEffect": {
-     "close": 0.1178,
-     "closeCode": 0.1107,
-     "far": 0.1103,
-     "farCode": 0.1023
+     "close": 0.7266,
+     "closeCode": 0.6949,
+     "far": 0.6876,
+     "farCode": 0.6646
     },
     "@sister.software/asciify (block mosaic)": {
-     "close": 0.2043,
-     "closeCode": 0.2918,
-     "far": 0.3909,
-     "farCode": 0.5105
+     "close": 0.8319,
+     "closeCode": 0.8139,
+     "far": 0.9279,
+     "farCode": 0.9413
     },
     "asciify-engine glyph field (GPU)": {
-     "close": 0.3157,
-     "closeCode": 0.3426,
-     "far": 0.6732,
-     "farCode": 0.5236
+     "close": 0.7483,
+     "closeCode": 0.718,
+     "far": 0.9627,
+     "farCode": 0.8554
     }
    }
   },
   {
-   "name": "locomotive-v1",
+   "name": "dancer-v1",
    "rows": 39,
    "text": {
     "naive ramp (agent baseline)": {
-     "close": 0.3374,
-     "closeCode": 0.186,
-     "far": 0.7437,
-     "farCode": 0.3501
+     "close": 0.616,
+     "closeCode": 0.5542,
+     "far": 0.7314,
+     "farCode": 0.564
     },
     "three.js AsciiEffect": {
-     "close": 0.3718,
-     "closeCode": 0.2236,
-     "far": 0.7491,
-     "farCode": 0.379
+     "close": 0.6251,
+     "closeCode": 0.5791,
+     "far": 0.7601,
+     "farCode": 0.5968
     },
     "aalib.js": {
-     "close": 0.4564,
-     "closeCode": 0.3006,
-     "far": 0.8341,
-     "farCode": 0.4912
+     "close": 0.6883,
+     "closeCode": 0.6752,
+     "far": 0.8532,
+     "farCode": 0.7201
+    },
+    "ascii.rest (logo)": {
+     "close": 0.5304,
+     "closeCode": 0.5443,
+     "far": 0.6255,
+     "farCode": 0.6827
+    },
+    "ascii.rest (shade)": {
+     "close": 0.5403,
+     "closeCode": 0.5455,
+     "far": 0.6561,
+     "farCode": 0.5986
     },
     "asciify-engine core asciiText (4.32)": {
-     "close": 0.3389,
-     "closeCode": 0.1665,
-     "far": 0.7143,
-     "farCode": 0.3037
+     "close": 0.6115,
+     "closeCode": 0.5477,
+     "far": 0.7157,
+     "farCode": 0.5541
     },
     "asciify-engine headless, tone": {
-     "close": 0.3984,
-     "closeCode": 0.2662,
-     "far": 0.7981,
-     "farCode": 0.478
+     "close": 0.6462,
+     "closeCode": 0.6883,
+     "far": 0.8456,
+     "farCode": 0.7662
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5001,
-     "closeCode": 0.3134,
-     "far": 0.8109,
-     "farCode": 0.4779
+     "close": 0.5913,
+     "closeCode": 0.7241,
+     "far": 0.692,
+     "farCode": 0.8319
     },
     "asciify-engine headless, shape": {
-     "close": 0.5005,
-     "closeCode": 0.3084,
-     "far": 0.8128,
-     "farCode": 0.4718
+     "close": 0.6035,
+     "closeCode": 0.7298,
+     "far": 0.7239,
+     "farCode": 0.8296
     }
    },
    "pixels": {
     "postprocessing ASCIIEffect": {
-     "close": 0.1852,
-     "closeCode": 0.1072,
-     "far": 0.2494,
-     "farCode": 0.1401
+     "close": 0.5281,
+     "closeCode": 0.5161,
+     "far": 0.5026,
+     "farCode": 0.4936
     },
     "@sister.software/asciify (block mosaic)": {
-     "close": 0.4892,
-     "closeCode": 0.5298,
-     "far": 0.7914,
-     "farCode": 0.8574
+     "close": 0.2887,
+     "closeCode": 0.3443,
+     "far": 0.3831,
+     "farCode": 0.461
     },
     "asciify-engine glyph field (GPU)": {
-     "close": 0.3373,
-     "closeCode": 0.2364,
-     "far": 0.8768,
-     "farCode": 0.5152
+     "close": 0.6383,
+     "closeCode": 0.6303,
+     "far": 0.8534,
+     "farCode": 0.7154
+    }
+   }
+  },
+  {
+   "name": "fern-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.7001,
+     "closeCode": 0.6313,
+     "far": 0.8056,
+     "farCode": 0.6507
+    },
+    "three.js AsciiEffect": {
+     "close": 0.706,
+     "closeCode": 0.641,
+     "far": 0.8022,
+     "farCode": 0.6594
+    },
+    "aalib.js": {
+     "close": 0.7565,
+     "closeCode": 0.6852,
+     "far": 0.8787,
+     "farCode": 0.7284
+    },
+    "ascii.rest (logo)": {
+     "close": 0.6305,
+     "closeCode": 0.5893,
+     "far": 0.8412,
+     "farCode": 0.768
+    },
+    "ascii.rest (shade)": {
+     "close": 0.6502,
+     "closeCode": 0.5668,
+     "far": 0.8445,
+     "farCode": 0.6477
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.7036,
+     "closeCode": 0.6225,
+     "far": 0.7858,
+     "farCode": 0.6311
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.7117,
+     "closeCode": 0.6986,
+     "far": 0.8671,
+     "farCode": 0.7712
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.7197,
+     "closeCode": 0.7113,
+     "far": 0.8116,
+     "farCode": 0.7809
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.7275,
+     "closeCode": 0.7147,
+     "far": 0.8258,
+     "farCode": 0.7801
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.6234,
+     "closeCode": 0.5952,
+     "far": 0.6152,
+     "farCode": 0.577
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5536,
+     "closeCode": 0.596,
+     "far": 0.6546,
+     "farCode": 0.7064
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.7216,
+     "closeCode": 0.6741,
+     "far": 0.9069,
+     "farCode": 0.7404
+    }
+   }
+  },
+  {
+   "name": "heron-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3272,
+     "closeCode": 0.1751,
+     "far": 0.7489,
+     "farCode": 0.4787
+    },
+    "three.js AsciiEffect": {
+     "close": 0.2991,
+     "closeCode": 0.1654,
+     "far": 0.7624,
+     "farCode": 0.4868
+    },
+    "aalib.js": {
+     "close": 0.3835,
+     "closeCode": 0.218,
+     "far": 0.8474,
+     "farCode": 0.567
+    },
+    "ascii.rest (logo)": {
+     "close": 0.4223,
+     "closeCode": 0.2411,
+     "far": 0.8477,
+     "farCode": 0.5963
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3433,
+     "closeCode": 0.1883,
+     "far": 0.7385,
+     "farCode": 0.4567
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.2594,
+     "closeCode": 0.1502,
+     "far": 0.7249,
+     "farCode": 0.4285
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.3389,
+     "closeCode": 0.1829,
+     "far": 0.8048,
+     "farCode": 0.5301
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.477,
+     "closeCode": 0.257,
+     "far": 0.8581,
+     "farCode": 0.6299
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.4832,
+     "closeCode": 0.2598,
+     "far": 0.8601,
+     "farCode": 0.6372
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.4368,
+     "closeCode": 0.2795,
+     "far": 0.4586,
+     "farCode": 0.3107
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.7702,
+     "closeCode": 0.6349,
+     "far": 0.9419,
+     "farCode": 0.8827
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.2061,
+     "closeCode": 0.1095,
+     "far": 0.8637,
+     "farCode": 0.6052
+    }
+   }
+  },
+  {
+   "name": "island-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.346,
+     "closeCode": 0.2001,
+     "far": 0.7474,
+     "farCode": 0.343
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3774,
+     "closeCode": 0.2227,
+     "far": 0.7542,
+     "farCode": 0.3607
+    },
+    "aalib.js": {
+     "close": 0.4167,
+     "closeCode": 0.2692,
+     "far": 0.8298,
+     "farCode": 0.4434
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3268,
+     "closeCode": 0.2626,
+     "far": 0.7709,
+     "farCode": 0.7242
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3716,
+     "closeCode": 0.2055,
+     "far": 0.776,
+     "farCode": 0.3591
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.3461,
+     "closeCode": 0.1837,
+     "far": 0.7159,
+     "farCode": 0.2927
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.3711,
+     "closeCode": 0.2177,
+     "far": 0.7857,
+     "farCode": 0.4067
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5208,
+     "closeCode": 0.2886,
+     "far": 0.8311,
+     "farCode": 0.442
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5099,
+     "closeCode": 0.2835,
+     "far": 0.8248,
+     "farCode": 0.4389
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.1581,
+     "closeCode": 0.0909,
+     "far": 0.2064,
+     "farCode": 0.1174
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5176,
+     "closeCode": 0.5485,
+     "far": 0.8774,
+     "farCode": 0.9084
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.2995,
+     "closeCode": 0.1802,
+     "far": 0.7881,
+     "farCode": 0.3777
+    }
+   }
+  },
+  {
+   "name": "lavender-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3638,
+     "closeCode": 0.2165,
+     "far": 0.7889,
+     "farCode": 0.3508
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3672,
+     "closeCode": 0.2349,
+     "far": 0.8188,
+     "farCode": 0.3878
+    },
+    "aalib.js": {
+     "close": 0.4731,
+     "closeCode": 0.3456,
+     "far": 0.9089,
+     "farCode": 0.5477
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3422,
+     "closeCode": 0.2938,
+     "far": 0.7753,
+     "farCode": 0.7993
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4111,
+     "closeCode": 0.268,
+     "far": 0.8764,
+     "farCode": 0.4692
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.3851,
+     "closeCode": 0.2091,
+     "far": 0.7864,
+     "farCode": 0.3249
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.4314,
+     "closeCode": 0.311,
+     "far": 0.9188,
+     "farCode": 0.5894
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.577,
+     "closeCode": 0.3884,
+     "far": 0.9374,
+     "farCode": 0.6033
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5748,
+     "closeCode": 0.385,
+     "far": 0.9381,
+     "farCode": 0.601
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.0841,
+     "closeCode": 0.0523,
+     "far": 0.0994,
+     "farCode": 0.0617
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.4708,
+     "closeCode": 0.5276,
+     "far": 0.8068,
+     "farCode": 0.8975
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3251,
+     "closeCode": 0.2623,
+     "far": 0.9149,
+     "farCode": 0.5609
+    }
+   }
+  },
+  {
+   "name": "macaw-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.6533,
+     "closeCode": 0.5771,
+     "far": 0.8233,
+     "farCode": 0.6138
+    },
+    "three.js AsciiEffect": {
+     "close": 0.6521,
+     "closeCode": 0.5901,
+     "far": 0.8319,
+     "farCode": 0.6347
+    },
+    "aalib.js": {
+     "close": 0.7093,
+     "closeCode": 0.6718,
+     "far": 0.9286,
+     "farCode": 0.7818
+    },
+    "ascii.rest (logo)": {
+     "close": 0.5786,
+     "closeCode": 0.5417,
+     "far": 0.8524,
+     "farCode": 0.8394
+    },
+    "ascii.rest (shade)": {
+     "close": 0.6061,
+     "closeCode": 0.5228,
+     "far": 0.8517,
+     "farCode": 0.6102
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.6543,
+     "closeCode": 0.5679,
+     "far": 0.8078,
+     "farCode": 0.5908
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.6604,
+     "closeCode": 0.6485,
+     "far": 0.9333,
+     "farCode": 0.8385
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.7558,
+     "closeCode": 0.7056,
+     "far": 0.9505,
+     "farCode": 0.8586
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.7523,
+     "closeCode": 0.7058,
+     "far": 0.9518,
+     "farCode": 0.866
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.4914,
+     "closeCode": 0.477,
+     "far": 0.4545,
+     "farCode": 0.4498
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.6836,
+     "closeCode": 0.716,
+     "far": 0.8579,
+     "farCode": 0.898
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.6423,
+     "closeCode": 0.6316,
+     "far": 0.9339,
+     "farCode": 0.8002
+    }
+   }
+  },
+  {
+   "name": "olive-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3272,
+     "closeCode": 0.1805,
+     "far": 0.7461,
+     "farCode": 0.3588
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3379,
+     "closeCode": 0.1933,
+     "far": 0.7484,
+     "farCode": 0.3686
+    },
+    "aalib.js": {
+     "close": 0.4347,
+     "closeCode": 0.2749,
+     "far": 0.8353,
+     "farCode": 0.4902
+    },
+    "ascii.rest (logo)": {
+     "close": 0.311,
+     "closeCode": 0.2367,
+     "far": 0.7257,
+     "farCode": 0.6499
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3732,
+     "closeCode": 0.1981,
+     "far": 0.7625,
+     "farCode": 0.3691
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.3332,
+     "closeCode": 0.1671,
+     "far": 0.7086,
+     "farCode": 0.3042
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.3462,
+     "closeCode": 0.2314,
+     "far": 0.7928,
+     "farCode": 0.4808
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5081,
+     "closeCode": 0.3016,
+     "far": 0.834,
+     "farCode": 0.4967
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5143,
+     "closeCode": 0.3044,
+     "far": 0.8376,
+     "farCode": 0.5009
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.1948,
+     "closeCode": 0.1167,
+     "far": 0.2458,
+     "farCode": 0.1476
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5655,
+     "closeCode": 0.5714,
+     "far": 0.8697,
+     "farCode": 0.9056
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3061,
+     "closeCode": 0.1834,
+     "far": 0.8508,
+     "farCode": 0.4475
+    }
+   }
+  },
+  {
+   "name": "perfume-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.2868,
+     "closeCode": 0.1672,
+     "far": 0.7477,
+     "farCode": 0.4404
+    },
+    "three.js AsciiEffect": {
+     "close": 0.2786,
+     "closeCode": 0.1655,
+     "far": 0.7241,
+     "farCode": 0.4057
+    },
+    "aalib.js": {
+     "close": 0.4311,
+     "closeCode": 0.2525,
+     "far": 0.8397,
+     "farCode": 0.5213
+    },
+    "ascii.rest (logo)": {
+     "close": 0.4036,
+     "closeCode": 0.2417,
+     "far": 0.8408,
+     "farCode": 0.6191
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3726,
+     "closeCode": 0.2012,
+     "far": 0.7954,
+     "farCode": 0.514
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.243,
+     "closeCode": 0.1469,
+     "far": 0.6702,
+     "farCode": 0.3206
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.366,
+     "closeCode": 0.2082,
+     "far": 0.8207,
+     "farCode": 0.541
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5112,
+     "closeCode": 0.2846,
+     "far": 0.8867,
+     "farCode": 0.6645
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5124,
+     "closeCode": 0.2865,
+     "far": 0.8875,
+     "farCode": 0.6703
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.3509,
+     "closeCode": 0.2242,
+     "far": 0.3803,
+     "farCode": 0.2484
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.6939,
+     "closeCode": 0.5834,
+     "far": 0.9183,
+     "farCode": 0.8605
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.2359,
+     "closeCode": 0.1341,
+     "far": 0.9195,
+     "farCode": 0.654
     }
    }
   },
@@ -296,6 +984,18 @@
      "far": 0.8702,
      "farCode": 0.4716
     },
+    "ascii.rest (logo)": {
+     "close": 0.3037,
+     "closeCode": 0.2733,
+     "far": 0.7403,
+     "farCode": 0.7863
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4045,
+     "closeCode": 0.2555,
+     "far": 0.8278,
+     "farCode": 0.4038
+    },
     "asciify-engine core asciiText (4.32)": {
      "close": 0.3822,
      "closeCode": 0.1997,
@@ -309,16 +1009,16 @@
      "farCode": 0.5588
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5519,
-     "closeCode": 0.3658,
-     "far": 0.8968,
-     "farCode": 0.5462
+     "close": 0.5897,
+     "closeCode": 0.4001,
+     "far": 0.9075,
+     "farCode": 0.5805
     },
     "asciify-engine headless, shape": {
-     "close": 0.552,
-     "closeCode": 0.3628,
-     "far": 0.8968,
-     "farCode": 0.5403
+     "close": 0.5938,
+     "closeCode": 0.3999,
+     "far": 0.909,
+     "farCode": 0.5786
     }
    },
    "pixels": {
@@ -343,138 +1043,642 @@
    }
   },
   {
-   "name": "singer-v1",
-   "rows": 52,
+   "name": "radio-v1",
+   "rows": 39,
    "text": {
     "naive ramp (agent baseline)": {
-     "close": 0.4936,
-     "closeCode": 0.3779,
-     "far": 0.7208,
-     "farCode": 0.4104
+     "close": 0.349,
+     "closeCode": 0.1996,
+     "far": 0.7147,
+     "farCode": 0.4085
     },
     "three.js AsciiEffect": {
-     "close": 0.5569,
-     "closeCode": 0.454,
-     "far": 0.8515,
-     "farCode": 0.5023
+     "close": 0.3612,
+     "closeCode": 0.2093,
+     "far": 0.717,
+     "farCode": 0.4229
     },
     "aalib.js": {
-     "close": 0.5651,
-     "closeCode": 0.6851,
-     "far": 0.8636,
-     "farCode": 0.8388
+     "close": 0.4116,
+     "closeCode": 0.2513,
+     "far": 0.7791,
+     "farCode": 0.4552
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3454,
+     "closeCode": 0.2117,
+     "far": 0.7627,
+     "farCode": 0.5822
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4106,
+     "closeCode": 0.2297,
+     "far": 0.7631,
+     "farCode": 0.4686
     },
     "asciify-engine core asciiText (4.32)": {
-     "close": 0.485,
-     "closeCode": 0.3576,
-     "far": 0.6909,
-     "farCode": 0.3818
+     "close": 0.31,
+     "closeCode": 0.1763,
+     "far": 0.7057,
+     "farCode": 0.3895
     },
     "asciify-engine headless, tone": {
-     "close": 0.4854,
-     "closeCode": 0.6538,
-     "far": 0.812,
-     "farCode": 0.8956
+     "close": 0.3183,
+     "closeCode": 0.2108,
+     "far": 0.7805,
+     "farCode": 0.5248
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5267,
-     "closeCode": 0.6969,
-     "far": 0.7942,
-     "farCode": 0.9007
+     "close": 0.494,
+     "closeCode": 0.3003,
+     "far": 0.8243,
+     "farCode": 0.593
     },
     "asciify-engine headless, shape": {
-     "close": 0.545,
-     "closeCode": 0.6944,
-     "far": 0.8203,
-     "farCode": 0.8963
+     "close": 0.495,
+     "closeCode": 0.3029,
+     "far": 0.827,
+     "farCode": 0.5985
     }
    },
    "pixels": {
     "postprocessing ASCIIEffect": {
-     "close": 0.2329,
-     "closeCode": 0.2363,
-     "far": 0.2109,
-     "farCode": 0.2186
+     "close": 0.3411,
+     "closeCode": 0.2096,
+     "far": 0.3874,
+     "farCode": 0.2528
     },
     "@sister.software/asciify (block mosaic)": {
-     "close": 0.2322,
-     "closeCode": 0.3384,
-     "far": 0.4394,
-     "farCode": 0.5524
+     "close": 0.6744,
+     "closeCode": 0.6086,
+     "far": 0.9049,
+     "farCode": 0.8699
     },
     "asciify-engine glyph field (GPU)": {
-     "close": 0.4608,
-     "closeCode": 0.5881,
-     "far": 0.8315,
-     "farCode": 0.8503
+     "close": 0.2754,
+     "closeCode": 0.162,
+     "far": 0.8911,
+     "farCode": 0.6301
     }
    }
   },
   {
-   "name": "tennis-v1",
+   "name": "rider-v1",
    "rows": 39,
    "text": {
     "naive ramp (agent baseline)": {
-     "close": 0.2981,
-     "closeCode": 0.1916,
-     "far": 0.7556,
-     "farCode": 0.3694
+     "close": 0.399,
+     "closeCode": 0.2433,
+     "far": 0.8367,
+     "farCode": 0.3807
     },
     "three.js AsciiEffect": {
-     "close": 0.3036,
-     "closeCode": 0.1993,
-     "far": 0.7642,
-     "farCode": 0.383
+     "close": 0.4013,
+     "closeCode": 0.2569,
+     "far": 0.8469,
+     "farCode": 0.4041
     },
     "aalib.js": {
-     "close": 0.4786,
-     "closeCode": 0.3387,
-     "far": 0.8903,
-     "farCode": 0.5454
+     "close": 0.4788,
+     "closeCode": 0.3551,
+     "far": 0.9309,
+     "farCode": 0.5466
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3846,
+     "closeCode": 0.323,
+     "far": 0.8083,
+     "farCode": 0.8269
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4053,
+     "closeCode": 0.2736,
+     "far": 0.8947,
+     "farCode": 0.4969
     },
     "asciify-engine core asciiText (4.32)": {
-     "close": 0.3032,
-     "closeCode": 0.1569,
-     "far": 0.6375,
-     "farCode": 0.2384
+     "close": 0.4022,
+     "closeCode": 0.2267,
+     "far": 0.809,
+     "farCode": 0.3344
     },
     "asciify-engine headless, tone": {
-     "close": 0.3862,
-     "closeCode": 0.2319,
-     "far": 0.8179,
-     "farCode": 0.3926
+     "close": 0.4214,
+     "closeCode": 0.2904,
+     "far": 0.9202,
+     "farCode": 0.5526
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.4297,
-     "closeCode": 0.2367,
-     "far": 0.7837,
-     "farCode": 0.361
+     "close": 0.5434,
+     "closeCode": 0.3748,
+     "far": 0.9465,
+     "farCode": 0.6216
     },
     "asciify-engine headless, shape": {
-     "close": 0.4291,
-     "closeCode": 0.236,
-     "far": 0.7824,
-     "farCode": 0.36
+     "close": 0.5411,
+     "closeCode": 0.3691,
+     "far": 0.9446,
+     "farCode": 0.618
     }
    },
    "pixels": {
     "postprocessing ASCIIEffect": {
-     "close": 0.1558,
-     "closeCode": 0.1023,
-     "far": 0.1786,
-     "farCode": 0.1151
+     "close": 0.0812,
+     "closeCode": 0.0509,
+     "far": 0.0911,
+     "farCode": 0.0566
     },
     "@sister.software/asciify (block mosaic)": {
-     "close": 0.6093,
-     "closeCode": 0.5897,
-     "far": 0.893,
-     "farCode": 0.9112
+     "close": 0.4682,
+     "closeCode": 0.5186,
+     "far": 0.8065,
+     "farCode": 0.8991
     },
     "asciify-engine glyph field (GPU)": {
-     "close": 0.2816,
-     "closeCode": 0.1688,
-     "far": 0.7164,
-     "farCode": 0.2915
+     "close": 0.3219,
+     "closeCode": 0.2594,
+     "far": 0.9306,
+     "farCode": 0.564
+    }
+   }
+  },
+  {
+   "name": "scooter-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3146,
+     "closeCode": 0.1913,
+     "far": 0.7485,
+     "farCode": 0.3607
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3393,
+     "closeCode": 0.216,
+     "far": 0.7649,
+     "farCode": 0.395
+    },
+    "aalib.js": {
+     "close": 0.4713,
+     "closeCode": 0.3264,
+     "far": 0.8729,
+     "farCode": 0.5548
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3168,
+     "closeCode": 0.2355,
+     "far": 0.7699,
+     "farCode": 0.6818
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3676,
+     "closeCode": 0.247,
+     "far": 0.7921,
+     "farCode": 0.4669
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.315,
+     "closeCode": 0.1816,
+     "far": 0.7409,
+     "farCode": 0.3399
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.4148,
+     "closeCode": 0.2868,
+     "far": 0.8427,
+     "farCode": 0.5723
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5116,
+     "closeCode": 0.3471,
+     "far": 0.8825,
+     "farCode": 0.6145
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5123,
+     "closeCode": 0.347,
+     "far": 0.8837,
+     "farCode": 0.6148
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.1657,
+     "closeCode": 0.093,
+     "far": 0.212,
+     "farCode": 0.1182
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5188,
+     "closeCode": 0.5043,
+     "far": 0.8664,
+     "farCode": 0.876
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3164,
+     "closeCode": 0.2294,
+     "far": 0.8814,
+     "farCode": 0.5287
+    }
+   }
+  },
+  {
+   "name": "skate-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3302,
+     "closeCode": 0.2138,
+     "far": 0.6937,
+     "farCode": 0.3214
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3846,
+     "closeCode": 0.2897,
+     "far": 0.7753,
+     "farCode": 0.4055
+    },
+    "aalib.js": {
+     "close": 0.4997,
+     "closeCode": 0.4519,
+     "far": 0.8735,
+     "farCode": 0.6201
+    },
+    "ascii.rest (logo)": {
+     "close": 0.2294,
+     "closeCode": 0.2047,
+     "far": 0.5845,
+     "farCode": 0.5956
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3994,
+     "closeCode": 0.4344,
+     "far": 0.8174,
+     "farCode": 0.6108
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.3299,
+     "closeCode": 0.1891,
+     "far": 0.6597,
+     "farCode": 0.281
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.4543,
+     "closeCode": 0.4195,
+     "far": 0.8663,
+     "farCode": 0.6391
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5577,
+     "closeCode": 0.5006,
+     "far": 0.8839,
+     "farCode": 0.6988
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5649,
+     "closeCode": 0.4951,
+     "far": 0.8897,
+     "farCode": 0.6905
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.0883,
+     "closeCode": 0.0592,
+     "far": 0.1127,
+     "farCode": 0.0717
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.3943,
+     "closeCode": 0.4517,
+     "far": 0.7051,
+     "farCode": 0.7595
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3572,
+     "closeCode": 0.3527,
+     "far": 0.8651,
+     "farCode": 0.5856
+    }
+   }
+  },
+  {
+   "name": "spheres-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.8498,
+     "closeCode": 0.8038,
+     "far": 0.8976,
+     "farCode": 0.7876
+    },
+    "three.js AsciiEffect": {
+     "close": 0.8453,
+     "closeCode": 0.814,
+     "far": 0.8959,
+     "farCode": 0.8065
+    },
+    "aalib.js": {
+     "close": 0.8715,
+     "closeCode": 0.8371,
+     "far": 0.9361,
+     "farCode": 0.8428
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3699,
+     "closeCode": 0.3383,
+     "far": 0.5526,
+     "farCode": 0.5372
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4001,
+     "closeCode": 0.3573,
+     "far": 0.6605,
+     "farCode": 0.4759
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.8446,
+     "closeCode": 0.7956,
+     "far": 0.8794,
+     "farCode": 0.7728
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.8639,
+     "closeCode": 0.8378,
+     "far": 0.9311,
+     "farCode": 0.8537
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.8934,
+     "closeCode": 0.8534,
+     "far": 0.9355,
+     "farCode": 0.8687
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.8889,
+     "closeCode": 0.8507,
+     "far": 0.9392,
+     "farCode": 0.8705
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.7772,
+     "closeCode": 0.7728,
+     "far": 0.715,
+     "farCode": 0.7264
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.8184,
+     "closeCode": 0.8512,
+     "far": 0.871,
+     "farCode": 0.9318
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.8313,
+     "closeCode": 0.8289,
+     "far": 0.9506,
+     "farCode": 0.8852
+    }
+   }
+  },
+  {
+   "name": "strip-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.2793,
+     "closeCode": 0.178,
+     "far": 0.4433,
+     "farCode": 0.1972
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3582,
+     "closeCode": 0.2731,
+     "far": 0.6419,
+     "farCode": 0.311
+    },
+    "aalib.js": {
+     "close": 0.4933,
+     "closeCode": 0.5616,
+     "far": 0.8315,
+     "farCode": 0.6595
+    },
+    "ascii.rest (logo)": {
+     "close": 0.242,
+     "closeCode": 0.2446,
+     "far": 0.4573,
+     "farCode": 0.4801
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3214,
+     "closeCode": 0.2194,
+     "far": 0.5566,
+     "farCode": 0.269
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.2726,
+     "closeCode": 0.1648,
+     "far": 0.4266,
+     "farCode": 0.1789
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.4315,
+     "closeCode": 0.551,
+     "far": 0.8066,
+     "farCode": 0.687
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.4467,
+     "closeCode": 0.6831,
+     "far": 0.6999,
+     "farCode": 0.838
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.4668,
+     "closeCode": 0.6626,
+     "far": 0.7321,
+     "farCode": 0.82
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.0871,
+     "closeCode": 0.0818,
+     "far": 0.0814,
+     "farCode": 0.0739
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.1861,
+     "closeCode": 0.3216,
+     "far": 0.3703,
+     "farCode": 0.5318
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3091,
+     "closeCode": 0.4565,
+     "far": 0.6843,
+     "farCode": 0.6542
+    }
+   }
+  },
+  {
+   "name": "tower-v1",
+   "rows": 69,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.3671,
+     "closeCode": 0.1937,
+     "far": 0.7604,
+     "farCode": 0.3536
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3751,
+     "closeCode": 0.2138,
+     "far": 0.755,
+     "farCode": 0.3661
+    },
+    "aalib.js": {
+     "close": 0.4726,
+     "closeCode": 0.3002,
+     "far": 0.8665,
+     "farCode": 0.5204
+    },
+    "ascii.rest (logo)": {
+     "close": 0.3117,
+     "closeCode": 0.2316,
+     "far": 0.7099,
+     "farCode": 0.6343
+    },
+    "ascii.rest (shade)": {
+     "close": 0.4035,
+     "closeCode": 0.2422,
+     "far": 0.8165,
+     "farCode": 0.4569
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.363,
+     "closeCode": 0.1749,
+     "far": 0.7317,
+     "farCode": 0.3104
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.4088,
+     "closeCode": 0.2635,
+     "far": 0.8301,
+     "farCode": 0.5053
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5747,
+     "closeCode": 0.3526,
+     "far": 0.8778,
+     "farCode": 0.5824
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5748,
+     "closeCode": 0.3503,
+     "far": 0.8816,
+     "farCode": 0.5823
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.1812,
+     "closeCode": 0.1088,
+     "far": 0.2186,
+     "farCode": 0.1317
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5811,
+     "closeCode": 0.5915,
+     "far": 0.8484,
+     "farCode": 0.8953
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3122,
+     "closeCode": 0.2031,
+     "far": 0.8754,
+     "farCode": 0.5044
+    }
+   }
+  },
+  {
+   "name": "village-v1",
+   "rows": 39,
+   "text": {
+    "naive ramp (agent baseline)": {
+     "close": 0.2705,
+     "closeCode": 0.1601,
+     "far": 0.7308,
+     "farCode": 0.3572
+    },
+    "three.js AsciiEffect": {
+     "close": 0.3058,
+     "closeCode": 0.1812,
+     "far": 0.7412,
+     "farCode": 0.3738
+    },
+    "aalib.js": {
+     "close": 0.4323,
+     "closeCode": 0.257,
+     "far": 0.8259,
+     "farCode": 0.4655
+    },
+    "ascii.rest (logo)": {
+     "close": 0.2789,
+     "closeCode": 0.2063,
+     "far": 0.7855,
+     "farCode": 0.6742
+    },
+    "ascii.rest (shade)": {
+     "close": 0.3634,
+     "closeCode": 0.2118,
+     "far": 0.7984,
+     "farCode": 0.4252
+    },
+    "asciify-engine core asciiText (4.32)": {
+     "close": 0.2813,
+     "closeCode": 0.1492,
+     "far": 0.6893,
+     "farCode": 0.2995
+    },
+    "asciify-engine headless, tone": {
+     "close": 0.3175,
+     "closeCode": 0.2177,
+     "far": 0.7926,
+     "farCode": 0.4833
+    },
+    "asciify-engine headless, shape (video settings)": {
+     "close": 0.5043,
+     "closeCode": 0.2935,
+     "far": 0.8316,
+     "farCode": 0.4936
+    },
+    "asciify-engine headless, shape": {
+     "close": 0.5054,
+     "closeCode": 0.2941,
+     "far": 0.8323,
+     "farCode": 0.4934
+    }
+   },
+   "pixels": {
+    "postprocessing ASCIIEffect": {
+     "close": 0.1824,
+     "closeCode": 0.0915,
+     "far": 0.255,
+     "farCode": 0.1285
+    },
+    "@sister.software/asciify (block mosaic)": {
+     "close": 0.5317,
+     "closeCode": 0.5302,
+     "far": 0.8872,
+     "farCode": 0.897
+    },
+    "asciify-engine glyph field (GPU)": {
+     "close": 0.3178,
+     "closeCode": 0.1824,
+     "far": 0.8304,
+     "farCode": 0.4038
     }
    }
   },
@@ -500,6 +1704,18 @@
      "far": 0.7982,
      "farCode": 0.7696
     },
+    "ascii.rest (logo)": {
+     "close": 0.7456,
+     "closeCode": 0.717,
+     "far": 0.7784,
+     "farCode": 0.77
+    },
+    "ascii.rest (shade)": {
+     "close": 0.6857,
+     "closeCode": 0.6858,
+     "far": 0.8471,
+     "farCode": 0.8149
+    },
     "asciify-engine core asciiText (4.32)": {
      "close": 0.7469,
      "closeCode": 0.738,
@@ -513,16 +1729,16 @@
      "farCode": 0.821
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.8466,
-     "closeCode": 0.8126,
-     "far": 0.8251,
-     "farCode": 0.7985
+     "close": 0.8576,
+     "closeCode": 0.8233,
+     "far": 0.8308,
+     "farCode": 0.8148
     },
     "asciify-engine headless, shape": {
-     "close": 0.8515,
-     "closeCode": 0.8158,
-     "far": 0.8358,
-     "farCode": 0.8062
+     "close": 0.842,
+     "closeCode": 0.8174,
+     "far": 0.8481,
+     "farCode": 0.8298
     }
    },
    "pixels": {
@@ -568,6 +1784,18 @@
      "far": 0.8683,
      "farCode": 0.8454
     },
+    "ascii.rest (logo)": {
+     "close": 0.8053,
+     "closeCode": 0.7467,
+     "far": 0.8291,
+     "farCode": 0.7469
+    },
+    "ascii.rest (shade)": {
+     "close": 0.7865,
+     "closeCode": 0.7553,
+     "far": 0.8459,
+     "farCode": 0.796
+    },
     "asciify-engine core asciiText (4.32)": {
      "close": 0.8497,
      "closeCode": 0.8383,
@@ -583,14 +1811,14 @@
     "asciify-engine headless, shape (video settings)": {
      "close": 0.9057,
      "closeCode": 0.8749,
-     "far": 0.8654,
-     "farCode": 0.8498
+     "far": 0.8655,
+     "farCode": 0.8499
     },
     "asciify-engine headless, shape": {
-     "close": 0.9051,
-     "closeCode": 0.8746,
-     "far": 0.8657,
-     "farCode": 0.8502
+     "close": 0.9008,
+     "closeCode": 0.8743,
+     "far": 0.8705,
+     "farCode": 0.8545
     }
    },
    "pixels": {
@@ -618,31 +1846,40 @@
  "extras": {
   "naive ramp (agent baseline)": {
    "churn": 4.71,
-   "ms": 23.9
+   "ms": 27
   },
   "three.js AsciiEffect": {
    "churn": 7.77,
-   "ms": 252.7
+   "ms": 251.2
   },
   "aalib.js": {
    "churn": 33.92,
-   "ms": 284.1
+   "ms": 272.3
+  },
+  "ascii.rest (logo)": {
+   "churn": 0,
+   "ms": 126.2
+  },
+  "ascii.rest (shade)": {
+   "churn": 7.06,
+   "ms": 109.8
   },
   "asciify-engine core asciiText (4.32)": {
    "churn": 4.99,
-   "ms": 21.6
+   "ms": 20.4
   },
   "asciify-engine headless, tone": {
    "churn": 23.27,
-   "ms": 53.1
+   "ms": 16.6
   },
   "asciify-engine headless, shape (video settings)": {
-   "churn": 8.62,
-   "ms": 24
+   "churn": 10.37,
+   "ms": 24.5
   },
   "asciify-engine headless, shape": {
-   "churn": 31.24,
-   "ms": 24.2
+   "churn": 26.2,
+   "ms": 25.6
   }
- }
+ },
+ "note": "20 validation photos from the asciify.org looks library (not used in tuning), the motion-still fixture, and the generated line and type images."
 }

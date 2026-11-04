@@ -43,8 +43,11 @@ for (const set of sets) {
     for (const [name, render] of Object.entries(bench.TEXT_RENDERERS)) {
       if (only && !name.includes(only)) continue;
       try {
+        window.lastCrop = null;
         const lines = render(picture, columns, rows), drawn = await bench.drawText(lines);
-        out.text[name] = { ...(await bench.score(drawn, picture)), sample: lines.slice(Math.floor(rows / 2) - 2, Math.floor(rows / 2) + 2) };
+        // A renderer that trims the picture to its subject is scored against that part of it.
+        const target = window.lastCrop ? bench.cropped(picture, window.lastCrop) : picture;
+        out.text[name] = { ...(await bench.score(drawn, target)), sample: lines.slice(Math.floor(rows / 2) - 2, Math.floor(rows / 2) + 2) };
         if (window.dump) out.text[name].png = drawn.toDataURL('image/png');
       } catch (e) { out.text[name] = { error: String(e && e.message || e).slice(0, 200) }; }
     }
