@@ -1,0 +1,16 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Asciify Engine",
+  "description": "ASCII components, backgrounds and media for the web: loaders, toasts, transitions, animated hero backgrounds, and image, video and GIF to ASCII. GPU-rendered, themeable, framework-agnostic.",
+  "folders": ["skills/asciify-engine", "examples"],
+  "excludeFolders": ["src", "tests", "scripts", "docs/benchmarks", "licenses"],
+  "excludeFiles": ["CHANGELOG.md", "RELEASE.md", "THIRD_PARTY.md"],
+  "rules": [
+    "Install the published package: npm install asciify-engine.",
+    "For interface components and backgrounds, start with asciify-engine/kit: one call per component, e.g. fieldBackground(el, { preset: 'hero', clear }) or buttonLoading(el).",
+    "Use asciify-engine (or /core) for image, video, GIF and text conversion, /hover for pointer effects, /studio for art styles and export, and /field only for a look the kit has no option for.",
+    "Ink fields from the page's theme through the --ascii-ink and --ascii-ink-strong CSS tokens; never add a brand colour.",
+    "Call destroy() (or the returned stop function) on unmount. In React, create the handle in an effect and return its destroy.",
+    "Honour prefers-reduced-motion with a still, and provide a poster for when WebGL2 is unavailable (isGlyphFieldSupported())."
+  ]
+}

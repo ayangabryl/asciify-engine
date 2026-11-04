@@ -68,11 +68,11 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 
 ## Features
 
-- **Kit** (`/kit`): 31 interface components and the curated asciify.org backgrounds, one call each.
+- **Kit** (`/kit`): interface components and the curated asciify.org backgrounds, one call each.
 - **Media** (`asciify-engine`, `/core`): images, GIFs, video, webcam and text to ASCII on a canvas, with scroll-scrubbed video, chroma key and source crop.
 - **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset.
-- **Hover and motion** (`/hover`): 19 pointer effects and 10 still-image motions for media on your page.
-- **Studio** (`/studio`): 24 render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
+- **Hover and motion** (`/hover`): pointer effects and still-image motions for media on your page.
+- **Studio** (`/studio`): render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
 - **Agent skill**: the house design, every component's prompt and snippet, and the full API, for Claude Code, Cursor, Codex and other agents.
 - **Built for host pages**: no work at import, safe under SSR, tree-shaken per component, TypeScript types, ESM and CommonJS.
 

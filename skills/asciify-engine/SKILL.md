@@ -49,7 +49,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 
 ## The kit in one paragraph
 
-Each kit function mounts an `aria-hidden` field over or inside your element, follows its size and border radius, inks it from your theme in light and dark, pauses off screen, honours reduced motion, falls back without WebGL2 to an inert handle that leaves your HTML working, and cleans up on `destroy()`. components.md has 37 components as short snippets with the prompt a person gives, in categories Components, AI, Text, Transitions, Media, Pages and Backgrounds. In React, create the handle in an effect and return its `destroy`.
+Each kit function mounts an `aria-hidden` field over or inside your element, follows its size and border radius, inks it from your theme in light and dark, pauses off screen, honours reduced motion, falls back without WebGL2 to an inert handle that leaves your HTML working, and cleans up on `destroy()`. components.md has every component as a short snippet with the prompt a person gives, in categories Components, AI, Text, Transitions, Media, Pages and Backgrounds. In React, create the handle in an effect and return its `destroy`.
 
 ```ts
 import { beam } from 'asciify-engine/kit';
@@ -193,7 +193,7 @@ For a finished artwork in a ready look (wallpaper, poster, cover, print), start 
 
 ## GPU glyph fields
 
-The kit is built on `mountGlyphField` from `asciify-engine/field`. Use it directly only for a look the kit has no option for, and read [references/glyph-field.md](references/glyph-field.md) and the raw-field helper at the end of [components.md](references/components.md#advanced-raw-field). It draws glyph ramps (including words and braille) from images, video or generated motion on WebGL2 with a fluid wake. It does not replace `/studio` for the 24 render styles, dither, print styles, effects or export. Check `isGlyphFieldSupported()`, provide a poster and a fallback, honour reduced motion, and call `destroy()` on unmount. To build your own component with the kit's plumbing instead, use `mountSurface` ([kit.md](references/kit.md#your-own-components)).
+The kit is built on `mountGlyphField` from `asciify-engine/field`. Use it directly only for a look the kit has no option for, and read [references/glyph-field.md](references/glyph-field.md) and the raw-field helper at the end of [components.md](references/components.md#advanced-raw-field). It draws glyph ramps (including words and braille) from images, video or generated motion on WebGL2 with a fluid wake. It does not replace `/studio` for the render styles, dither, print styles, effects or export. Check `isGlyphFieldSupported()`, provide a poster and a fallback, honour reduced motion, and call `destroy()` on unmount. To build your own component with the kit's plumbing instead, use `mountSurface` ([kit.md](references/kit.md#your-own-components)).
 
 ## Current catalogs
 
