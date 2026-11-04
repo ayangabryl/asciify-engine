@@ -12,3 +12,6 @@ dist/
 .claude/
 .windsurf/
 .seenry/
+
+# Visual test output on failure
+tests/visual/baselines/*.actual.png

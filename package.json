@@ -27,6 +27,16 @@
         "default": "./dist/core.cjs"
       }
     },
+    "./headless": {
+      "import": {
+        "types": "./dist/headless.d.ts",
+        "default": "./dist/headless.js"
+      },
+      "require": {
+        "types": "./dist/headless.d.cts",
+        "default": "./dist/headless.cjs"
+      }
+    },
     "./hover": {
       "import": {
         "types": "./dist/hover.d.ts",
@@ -99,7 +109,11 @@
     "test:parity": "node tests/studio-parity-browser.mjs",
     "bench:looks": "node tests/hover-cost-browser.mjs",
     "bench:dither": "node scripts/benchmark-dither.mjs",
-    "bench:hover": "node scripts/benchmark-hover-fields.mjs"
+    "bench:hover": "node scripts/benchmark-hover-fields.mjs",
+    "test:visual": "node tests/visual-browser.mjs",
+    "test:effects": "node tests/field-effects-browser.mjs",
+    "test:headless": "node tests/headless-node.mjs",
+    "build:glyphs": "node scripts/build-glyph-table.mjs"
   },
   "keywords": [
     "ascii",
@@ -132,12 +146,13 @@
     "url": "git+https://github.com/ayangabryl/asciify-engine.git"
   },
   "dependencies": {
-    "gifuct-js": "^2.1.2",
-    "mediabunny": "^1.56.0",
+    "figlet": "^1.11.0",
     "gifenc": "^1.0.3",
-    "figlet": "^1.11.0"
+    "gifuct-js": "^2.1.2",
+    "mediabunny": "^1.56.0"
   },
   "devDependencies": {
+    "playwright": "1.63.0",
     "terser": "^5.46.0",
     "tsup": "^8.4.0",
     "typescript": "~5.8.3",
