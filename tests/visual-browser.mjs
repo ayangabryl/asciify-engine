@@ -21,6 +21,8 @@ const baselines = path.join(root, 'tests/visual/baselines');
 // A pixel differs when any channel is off by more than CHANNEL; a case fails when more than SHARE % of its pixels differ.
 const CHANNEL = 24, SHARE = 0.5;
 
+// The page's own text is not painted (its colour is unchanged, so the kit reads it as before): HTML text is drawn by the
+// browser with the machine's text settings, and these baselines are of what the engine draws.
 // Fonts are loaded from files in tests/visual/fonts under every family the kit and fields ask for, so baselines do not depend
 // on the fonts a machine has installed (Chromium rasterises them itself, so the same files draw the same pixels everywhere).
 const FACES = [
@@ -33,7 +35,8 @@ const PAGE = `<!doctype html><meta charset="utf-8"><style>${faceCss}
 @media (prefers-color-scheme:dark){:root{--ascii-ink:#a8a29e;--ascii-ink-strong:#f5f5f4}}
 body{margin:0;font:16px "DejaVu Sans",sans-serif;color:#222;background:#fafaf8}@media (prefers-color-scheme:dark){body{color:#e8e6e1;background:#141413}}
 #stage{position:relative;padding:16px;width:480px}#stage>*{position:relative;margin:0}
-button{font:inherit;padding:12px 24px;border-radius:10px;border:1px solid currentColor;background:transparent;color:inherit}</style><div id="stage"></div>`;
+button{font:inherit;padding:12px 24px;border-radius:10px;border:1px solid currentColor;background:transparent;color:inherit}
+#stage,#stage *{-webkit-text-fill-color:transparent}</style><div id="stage"></div>`;
 const img = '/media/still.jpg';
 // [markup, mount (k = kit, f = field, el = the element), pointer path in stage px or null, frames]
 const CASES = {
