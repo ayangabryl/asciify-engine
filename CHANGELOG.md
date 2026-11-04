@@ -5,6 +5,10 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
+## 4.32.9
+
+- Package description, keywords and README rewritten to describe the engine as it is today, for npm and for agents (context7). No code changes.
+
 ## 4.32.8
 
 - README: the sponsors section shows a live picture from `https://cdn.asciify.org/sponsors.svg` (dark: `sponsors-dark.svg`), so the npm page shows current sponsors without a new release. No code changes.
