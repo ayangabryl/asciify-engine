@@ -21,9 +21,14 @@ const baselines = path.join(root, 'tests/visual/baselines');
 // A pixel differs when any channel is off by more than CHANNEL; a case fails when more than SHARE % of its pixels differ.
 const CHANNEL = 24, SHARE = 0.5;
 
-// The kit's fonts are pinned to fonts every Linux runner has, so baselines do not depend on what else a machine installed.
-const PAGE = `<!doctype html><meta charset="utf-8"><style>@font-face{font-family:"Geist";src:local("Liberation Sans")}
-@font-face{font-family:"Geist Mono";src:local("DejaVu Sans Mono")}@font-face{font-family:"Arial";src:local("Liberation Sans")}
+// Fonts are loaded from files in tests/visual/fonts under every family the kit and fields ask for, so baselines do not depend
+// on the fonts a machine has installed (Chromium rasterises them itself, so the same files draw the same pixels everywhere).
+const FACES = [
+  ['DejaVu Sans', 'DejaVuSans'], ['Geist Mono', 'DejaVuSansMono'], ['SF Mono', 'DejaVuSansMono'], ['Menlo', 'DejaVuSansMono'],
+  ['Consolas', 'DejaVuSansMono'], ['DejaVu Sans Mono', 'DejaVuSansMono'], ['Geist', 'LiberationSans'], ['Arial', 'LiberationSans'],
+];
+const faceCss = FACES.map(([family, file]) => [400, 700].map(weight => `@font-face{font-family:"${family}";font-weight:${weight === 400 ? '100 549' : '550 900'};src:url("/fonts/${file}${weight === 400 ? (file === 'LiberationSans' ? '-Regular' : '') : '-Bold'}.ttf")}`).join('')).join('\n');
+const PAGE = `<!doctype html><meta charset="utf-8"><style>${faceCss}
 :root{color-scheme:light dark;--ascii-ink:#57534e;--ascii-ink-strong:#1c1917}
 @media (prefers-color-scheme:dark){:root{--ascii-ink:#a8a29e;--ascii-ink-strong:#f5f5f4}}
 body{margin:0;font:16px "DejaVu Sans",sans-serif;color:#222;background:#fafaf8}@media (prefers-color-scheme:dark){body{color:#e8e6e1;background:#141413}}
@@ -54,6 +59,7 @@ const CASES = {
 const server = http.createServer(async (req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
   try {
+    if (url.startsWith('/fonts/')) { res.setHeader('Content-Type', 'font/ttf'); res.end(await fs.readFile(path.join(root, 'tests/visual', url))); return; }
     if (url === '/media/still.jpg') { res.setHeader('Content-Type', 'image/jpeg'); res.end(await fs.readFile(path.join(root, 'tests/fixtures/motion-still.jpg'))); return; }
     if (url.endsWith('.js')) { res.setHeader('Content-Type', 'text/javascript'); res.end(await fs.readFile(path.join(process.env.ASCIIFY_DIST ?? path.join(root, 'dist'), url))); return; }
   } catch { res.statusCode = 404; res.end(); return; }
@@ -96,12 +102,14 @@ try {
       await page.clock.install({ time: 0 });
       await page.goto(origin);
       await page.clock.pauseAt(1000);
-      await page.evaluate(async ([markup, channel]) => {
+      await page.evaluate(async ([markup, channel, faces]) => {
         window.CHANNEL = channel;
         [window.k, window.f] = await Promise.all([import('/kit.js'), import('/field.js')]);
+        // Every face, both weights, before anything draws.
+        await Promise.all([...new Set(faces)].flatMap(family => ['400', '700'].map(weight => document.fonts.load(`${weight} 16px "${family}"`))));
         await document.fonts.ready;
         document.getElementById('stage').innerHTML = markup;
-      }, [markup, CHANNEL]);
+      }, [markup, CHANNEL, FACES.map(([family]) => family)]);
       await page.evaluate(body => { const el = document.getElementById('stage').firstElementChild; window.handle = new Function('k', 'f', 'el', `return ${body}`)(k, f, el); }, body);
       // Sources decode in real time; the clock only moves by frames.
       for (let i = 0; i < 8; i++) { await page.clock.runFor(17); await page.waitForTimeout(60); }
