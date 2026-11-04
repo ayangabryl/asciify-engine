@@ -55,7 +55,10 @@ const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // GLSL reserves these words, and the generated struct must not reuse them as member names.
 const RESERVED = new Set(['in', 'out', 'inout', 'uniform', 'float', 'int', 'bool', 'vec2', 'vec3', 'vec4', 'if', 'else', 'for', 'while', 'return', 'struct', 'const', 'discard', 'break', 'continue', 'true', 'false', 'void', 'main', 'mat2', 'mat3', 'mat4', 'highp', 'mediump', 'lowp', 'precision', 'sampler2D', 'layout', 'switch', 'case', 'default', 'do']);
 
-/** Defines a custom field effect. Pass it to `mountGlyphField(canvas, { effects: [effect] })` or `field.update({ effects })`. */
+/**
+ * Defines a custom field effect. Pass it to `mountGlyphField(canvas, { effects: [effect] })` or `field.update({ effects })`.
+ * @experimental Its GLSL inputs and outputs may gain members in a minor release; see STABILITY.md.
+ */
 export function defineFieldEffect<P extends FieldEffectParams = FieldEffectParams>(spec: FieldEffectSpec<P>): FieldEffect<P> {
   const name = String(spec.name ?? '').trim();
   if (!/^[\w-]+$/.test(name)) throw new Error(`A field effect needs a name of letters, digits and dashes (got "${spec.name}").`);

@@ -151,7 +151,11 @@ export function glyphInk(char: string): number | undefined {
 const finite = (value: unknown, fallback: number, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
-/** Converts pixels to a grid of characters. Pure and synchronous; a 1920×1080 picture at 160 columns takes a few milliseconds. */
+/**
+ * Converts pixels to a grid of characters. Pure, synchronous and deterministic; a 1920×1080 picture at 160 columns takes about
+ * 25 ms on one core.
+ * @experimental The characters chosen for a given input may improve in a minor release; see STABILITY.md.
+ */
 export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {}): AsciiGrid {
   const { width, height, data } = pixels;
   const channels = pixels.channels ?? 4;

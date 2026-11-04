@@ -40,6 +40,7 @@ type PaintingCanvas = HTMLCanvasElement & { requestPaint?(): void; onpaint: ((ev
  * canvas then shows the element, still interactive, and is the source); the element is drawn on every paint the browser
  * reports. Anywhere else, or where the API is missing, it paints a likeness of the element on a canvas of its own, again
  * when the element's size, content or attributes change.
+ * @experimental Follows the HTML-in-Canvas API, which is still changing in browsers; see STABILITY.md.
  */
 export function elementSource(element: HTMLElement, options: ElementSourceOptions = {}): ElementSource {
   const scale = Math.max(0.25, Math.min(4, options.scale ?? 1));
