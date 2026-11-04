@@ -76,7 +76,7 @@ const SUB = GLYPH_COLS * GLYPH_ROWS;
 // counts by how much ink glyphs can put there, the structure below which a cell takes a fill character, the extra cost of ink
 // where the picture is dark, the softening between neighbouring sub-cells, the weight of tone against shape, and the cost of
 // matching a glyph a third of a cell off centre.
-let DIM_WEIGHT = 2, STRUCTURE = 0.05, EXTRA_INK = 1, SOFTEN = 0.5, TONE_WEIGHT = 256, SHIFT_COST = 0.15;
+let DIM_WEIGHT = 2, STRUCTURE = 0.15, EXTRA_INK = 1, SOFTEN = 0.5, TONE_WEIGHT = 256, SHIFT_COST = 0.15;
 // How much worse a kept character (see `previous`) may be than the best one, in shape cells and in fill cells.
 let KEEP_MARGIN = 0.6, KEEP_TONE = 0.04, FILL_ALL: 'all' | 'symbols' | 'classic' = 'symbols', INK_SCALE = 1.45, STROKE_UNSCALED = true;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];

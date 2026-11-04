@@ -49,16 +49,16 @@
      "farCode": 0.5071
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5606,
-     "closeCode": 0.3641,
-     "far": 0.8975,
-     "farCode": 0.5937
+     "close": 0.5681,
+     "closeCode": 0.3932,
+     "far": 0.9054,
+     "farCode": 0.6466
     },
     "asciify-engine headless, shape": {
-     "close": 0.5635,
-     "closeCode": 0.3658,
-     "far": 0.9005,
-     "farCode": 0.5973
+     "close": 0.566,
+     "closeCode": 0.3941,
+     "far": 0.9033,
+     "farCode": 0.6506
     }
    },
    "pixels": {
@@ -129,16 +129,16 @@
      "farCode": 0.6877
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.6189,
-     "closeCode": 0.5823,
-     "far": 0.8667,
-     "farCode": 0.7138
+     "close": 0.6048,
+     "closeCode": 0.5951,
+     "far": 0.8644,
+     "farCode": 0.7437
     },
     "asciify-engine headless, shape": {
-     "close": 0.628,
-     "closeCode": 0.5738,
-     "far": 0.8777,
-     "farCode": 0.703
+     "close": 0.6181,
+     "closeCode": 0.5936,
+     "far": 0.8761,
+     "farCode": 0.74
     }
    },
    "pixels": {
@@ -209,16 +209,16 @@
      "farCode": 0.5258
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.4897,
-     "closeCode": 0.3045,
-     "far": 0.8684,
-     "farCode": 0.5753
+     "close": 0.5058,
+     "closeCode": 0.328,
+     "far": 0.8839,
+     "farCode": 0.6194
     },
     "asciify-engine headless, shape": {
-     "close": 0.4902,
-     "closeCode": 0.3061,
-     "far": 0.8709,
-     "farCode": 0.5795
+     "close": 0.4988,
+     "closeCode": 0.3232,
+     "far": 0.8877,
+     "farCode": 0.6296
     }
    },
    "pixels": {
@@ -289,16 +289,16 @@
      "farCode": 0.8155
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.8241,
-     "closeCode": 0.7566,
-     "far": 0.9304,
-     "farCode": 0.8388
+     "close": 0.8285,
+     "closeCode": 0.7632,
+     "far": 0.9373,
+     "farCode": 0.8592
     },
     "asciify-engine headless, shape": {
-     "close": 0.8175,
-     "closeCode": 0.756,
-     "far": 0.9292,
-     "farCode": 0.8495
+     "close": 0.8185,
+     "closeCode": 0.7607,
+     "far": 0.9338,
+     "farCode": 0.864
     }
    },
    "pixels": {
@@ -369,16 +369,16 @@
      "farCode": 0.7662
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5913,
-     "closeCode": 0.7241,
-     "far": 0.692,
-     "farCode": 0.8319
+     "close": 0.5948,
+     "closeCode": 0.7324,
+     "far": 0.6952,
+     "farCode": 0.8456
     },
     "asciify-engine headless, shape": {
-     "close": 0.6035,
-     "closeCode": 0.7298,
-     "far": 0.7239,
-     "farCode": 0.8296
+     "close": 0.5998,
+     "closeCode": 0.7389,
+     "far": 0.7196,
+     "farCode": 0.8473
     }
    },
    "pixels": {
@@ -449,16 +449,16 @@
      "farCode": 0.7712
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.7197,
-     "closeCode": 0.7113,
-     "far": 0.8116,
-     "farCode": 0.7809
+     "close": 0.72,
+     "closeCode": 0.7191,
+     "far": 0.8171,
+     "farCode": 0.7996
     },
     "asciify-engine headless, shape": {
-     "close": 0.7275,
-     "closeCode": 0.7147,
-     "far": 0.8258,
-     "farCode": 0.7801
+     "close": 0.7273,
+     "closeCode": 0.7274,
+     "far": 0.8349,
+     "farCode": 0.8068
     }
    },
    "pixels": {
@@ -529,16 +529,16 @@
      "farCode": 0.5301
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.477,
-     "closeCode": 0.257,
-     "far": 0.8581,
-     "farCode": 0.6299
+     "close": 0.4789,
+     "closeCode": 0.2581,
+     "far": 0.8605,
+     "farCode": 0.6372
     },
     "asciify-engine headless, shape": {
-     "close": 0.4832,
-     "closeCode": 0.2598,
-     "far": 0.8601,
-     "farCode": 0.6372
+     "close": 0.4854,
+     "closeCode": 0.2614,
+     "far": 0.8618,
+     "farCode": 0.6428
     }
    },
    "pixels": {
@@ -609,16 +609,16 @@
      "farCode": 0.4067
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5208,
-     "closeCode": 0.2886,
-     "far": 0.8311,
-     "farCode": 0.442
+     "close": 0.529,
+     "closeCode": 0.3024,
+     "far": 0.8429,
+     "farCode": 0.4656
     },
     "asciify-engine headless, shape": {
-     "close": 0.5099,
-     "closeCode": 0.2835,
-     "far": 0.8248,
-     "farCode": 0.4389
+     "close": 0.5223,
+     "closeCode": 0.3011,
+     "far": 0.8443,
+     "farCode": 0.4695
     }
    },
    "pixels": {
@@ -689,16 +689,16 @@
      "farCode": 0.5894
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.577,
-     "closeCode": 0.3884,
-     "far": 0.9374,
-     "farCode": 0.6033
+     "close": 0.5971,
+     "closeCode": 0.4116,
+     "far": 0.9402,
+     "farCode": 0.6339
     },
     "asciify-engine headless, shape": {
-     "close": 0.5748,
-     "closeCode": 0.385,
-     "far": 0.9381,
-     "farCode": 0.601
+     "close": 0.5903,
+     "closeCode": 0.4046,
+     "far": 0.9385,
+     "farCode": 0.6318
     }
    },
    "pixels": {
@@ -769,16 +769,16 @@
      "farCode": 0.8385
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.7558,
-     "closeCode": 0.7056,
-     "far": 0.9505,
-     "farCode": 0.8586
+     "close": 0.7679,
+     "closeCode": 0.7231,
+     "far": 0.9555,
+     "farCode": 0.8897
     },
     "asciify-engine headless, shape": {
-     "close": 0.7523,
-     "closeCode": 0.7058,
-     "far": 0.9518,
-     "farCode": 0.866
+     "close": 0.7586,
+     "closeCode": 0.7193,
+     "far": 0.9549,
+     "farCode": 0.8947
     }
    },
    "pixels": {
@@ -849,16 +849,16 @@
      "farCode": 0.4808
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5081,
-     "closeCode": 0.3016,
-     "far": 0.834,
-     "farCode": 0.4967
+     "close": 0.529,
+     "closeCode": 0.3259,
+     "far": 0.8484,
+     "farCode": 0.5314
     },
     "asciify-engine headless, shape": {
-     "close": 0.5143,
-     "closeCode": 0.3044,
-     "far": 0.8376,
-     "farCode": 0.5009
+     "close": 0.5252,
+     "closeCode": 0.3236,
+     "far": 0.8493,
+     "farCode": 0.5365
     }
    },
    "pixels": {
@@ -929,16 +929,16 @@
      "farCode": 0.541
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5112,
-     "closeCode": 0.2846,
-     "far": 0.8867,
-     "farCode": 0.6645
+     "close": 0.5147,
+     "closeCode": 0.2894,
+     "far": 0.8888,
+     "farCode": 0.673
     },
     "asciify-engine headless, shape": {
-     "close": 0.5124,
-     "closeCode": 0.2865,
-     "far": 0.8875,
-     "farCode": 0.6703
+     "close": 0.514,
+     "closeCode": 0.2901,
+     "far": 0.8884,
+     "farCode": 0.676
     }
    },
    "pixels": {
@@ -1009,16 +1009,16 @@
      "farCode": 0.5588
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5897,
-     "closeCode": 0.4001,
-     "far": 0.9075,
-     "farCode": 0.5805
+     "close": 0.6035,
+     "closeCode": 0.4331,
+     "far": 0.9138,
+     "farCode": 0.6241
     },
     "asciify-engine headless, shape": {
-     "close": 0.5938,
-     "closeCode": 0.3999,
-     "far": 0.909,
-     "farCode": 0.5786
+     "close": 0.5983,
+     "closeCode": 0.4297,
+     "far": 0.9124,
+     "farCode": 0.6235
     }
    },
    "pixels": {
@@ -1089,16 +1089,16 @@
      "farCode": 0.5248
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.494,
-     "closeCode": 0.3003,
-     "far": 0.8243,
-     "farCode": 0.593
+     "close": 0.5,
+     "closeCode": 0.3091,
+     "far": 0.8269,
+     "farCode": 0.6047
     },
     "asciify-engine headless, shape": {
-     "close": 0.495,
-     "closeCode": 0.3029,
-     "far": 0.827,
-     "farCode": 0.5985
+     "close": 0.4945,
+     "closeCode": 0.3079,
+     "far": 0.8252,
+     "farCode": 0.6064
     }
    },
    "pixels": {
@@ -1169,16 +1169,16 @@
      "farCode": 0.5526
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5434,
-     "closeCode": 0.3748,
-     "far": 0.9465,
-     "farCode": 0.6216
+     "close": 0.5647,
+     "closeCode": 0.4037,
+     "far": 0.9569,
+     "farCode": 0.6713
     },
     "asciify-engine headless, shape": {
-     "close": 0.5411,
-     "closeCode": 0.3691,
-     "far": 0.9446,
-     "farCode": 0.618
+     "close": 0.5613,
+     "closeCode": 0.4006,
+     "far": 0.9539,
+     "farCode": 0.6714
     }
    },
    "pixels": {
@@ -1249,16 +1249,16 @@
      "farCode": 0.5723
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5116,
-     "closeCode": 0.3471,
-     "far": 0.8825,
-     "farCode": 0.6145
+     "close": 0.5238,
+     "closeCode": 0.3625,
+     "far": 0.8988,
+     "farCode": 0.6613
     },
     "asciify-engine headless, shape": {
-     "close": 0.5123,
-     "closeCode": 0.347,
-     "far": 0.8837,
-     "farCode": 0.6148
+     "close": 0.5189,
+     "closeCode": 0.361,
+     "far": 0.9028,
+     "farCode": 0.6745
     }
    },
    "pixels": {
@@ -1329,16 +1329,16 @@
      "farCode": 0.6391
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5577,
-     "closeCode": 0.5006,
-     "far": 0.8839,
-     "farCode": 0.6988
+     "close": 0.556,
+     "closeCode": 0.5201,
+     "far": 0.8948,
+     "farCode": 0.7423
     },
     "asciify-engine headless, shape": {
-     "close": 0.5649,
-     "closeCode": 0.4951,
-     "far": 0.8897,
-     "farCode": 0.6905
+     "close": 0.5591,
+     "closeCode": 0.5212,
+     "far": 0.8969,
+     "farCode": 0.7448
     }
    },
    "pixels": {
@@ -1409,16 +1409,16 @@
      "farCode": 0.8537
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.8934,
-     "closeCode": 0.8534,
-     "far": 0.9355,
-     "farCode": 0.8687
+     "close": 0.8923,
+     "closeCode": 0.8594,
+     "far": 0.9302,
+     "farCode": 0.8772
     },
     "asciify-engine headless, shape": {
-     "close": 0.8889,
-     "closeCode": 0.8507,
-     "far": 0.9392,
-     "farCode": 0.8705
+     "close": 0.8849,
+     "closeCode": 0.8561,
+     "far": 0.9303,
+     "farCode": 0.8809
     }
    },
    "pixels": {
@@ -1489,16 +1489,16 @@
      "farCode": 0.687
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.4467,
-     "closeCode": 0.6831,
-     "far": 0.6999,
-     "farCode": 0.838
+     "close": 0.4395,
+     "closeCode": 0.6901,
+     "far": 0.7016,
+     "farCode": 0.8552
     },
     "asciify-engine headless, shape": {
-     "close": 0.4668,
-     "closeCode": 0.6626,
-     "far": 0.7321,
-     "farCode": 0.82
+     "close": 0.4422,
+     "closeCode": 0.69,
+     "far": 0.7073,
+     "farCode": 0.8544
     }
    },
    "pixels": {
@@ -1569,16 +1569,16 @@
      "farCode": 0.5053
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5747,
-     "closeCode": 0.3526,
-     "far": 0.8778,
-     "farCode": 0.5824
+     "close": 0.5777,
+     "closeCode": 0.3724,
+     "far": 0.8827,
+     "farCode": 0.6145
     },
     "asciify-engine headless, shape": {
-     "close": 0.5748,
-     "closeCode": 0.3503,
-     "far": 0.8816,
-     "farCode": 0.5823
+     "close": 0.577,
+     "closeCode": 0.3721,
+     "far": 0.8856,
+     "farCode": 0.6182
     }
    },
    "pixels": {
@@ -1649,16 +1649,16 @@
      "farCode": 0.4833
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.5043,
-     "closeCode": 0.2935,
-     "far": 0.8316,
-     "farCode": 0.4936
+     "close": 0.528,
+     "closeCode": 0.3224,
+     "far": 0.8528,
+     "farCode": 0.5486
     },
     "asciify-engine headless, shape": {
-     "close": 0.5054,
-     "closeCode": 0.2941,
-     "far": 0.8323,
-     "farCode": 0.4934
+     "close": 0.5278,
+     "closeCode": 0.3234,
+     "far": 0.8568,
+     "farCode": 0.5586
     }
    },
    "pixels": {
@@ -1729,16 +1729,16 @@
      "farCode": 0.821
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.8576,
-     "closeCode": 0.8233,
-     "far": 0.8308,
-     "farCode": 0.8148
+     "close": 0.8588,
+     "closeCode": 0.8236,
+     "far": 0.832,
+     "farCode": 0.8157
     },
     "asciify-engine headless, shape": {
-     "close": 0.842,
-     "closeCode": 0.8174,
-     "far": 0.8481,
-     "farCode": 0.8298
+     "close": 0.84,
+     "closeCode": 0.8191,
+     "far": 0.8488,
+     "farCode": 0.8332
     }
    },
    "pixels": {
@@ -1809,16 +1809,16 @@
      "farCode": 0.8609
     },
     "asciify-engine headless, shape (video settings)": {
-     "close": 0.9057,
-     "closeCode": 0.8749,
-     "far": 0.8655,
-     "farCode": 0.8499
+     "close": 0.9051,
+     "closeCode": 0.875,
+     "far": 0.8662,
+     "farCode": 0.8507
     },
     "asciify-engine headless, shape": {
-     "close": 0.9008,
-     "closeCode": 0.8743,
-     "far": 0.8705,
-     "farCode": 0.8545
+     "close": 0.9003,
+     "closeCode": 0.8746,
+     "far": 0.8716,
+     "farCode": 0.8557
     }
    },
    "pixels": {
@@ -1846,39 +1846,39 @@
  "extras": {
   "naive ramp (agent baseline)": {
    "churn": 4.71,
-   "ms": 27
+   "ms": 27.7
   },
   "three.js AsciiEffect": {
    "churn": 7.77,
-   "ms": 251.2
+   "ms": 244.9
   },
   "aalib.js": {
    "churn": 33.92,
-   "ms": 272.3
+   "ms": 106.5
   },
   "ascii.rest (logo)": {
    "churn": 0,
-   "ms": 126.2
+   "ms": 143.6
   },
   "ascii.rest (shade)": {
    "churn": 7.06,
-   "ms": 109.8
+   "ms": 125.5
   },
   "asciify-engine core asciiText (4.32)": {
    "churn": 4.99,
-   "ms": 20.4
+   "ms": 31.2
   },
   "asciify-engine headless, tone": {
    "churn": 23.27,
-   "ms": 16.6
+   "ms": 16.3
   },
   "asciify-engine headless, shape (video settings)": {
-   "churn": 10.37,
-   "ms": 24.5
+   "churn": 8.18,
+   "ms": 18
   },
   "asciify-engine headless, shape": {
-   "churn": 26.2,
-   "ms": 25.6
+   "churn": 24.89,
+   "ms": 17.9
   }
  },
  "note": "20 validation photos from the asciify.org looks library (not used in tuning), the motion-still fixture, and the generated line and type images."

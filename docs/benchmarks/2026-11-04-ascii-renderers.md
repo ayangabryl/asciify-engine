@@ -8,17 +8,17 @@ November 4, 2026. asciify-engine 4.33.0, three 0.187.0, postprocessing 6.39.6, a
 
 | | asciify-engine/headless | aalib.js | ascii.rest (shade) | three.js AsciiEffect | naive ramp (agent baseline) |
 | --- | --- | --- | --- | --- | --- |
-| Photos, 20 unseen (SSIM close / far) | **0.588 / 0.868** | 0.534 / **0.868** | 0.418 / 0.781 | 0.446 / 0.779 | 0.427 / 0.750 |
-| Line art | **0.842 / 0.848** | 0.799 / 0.798 | 0.686 / 0.847 | 0.718 / 0.601 | 0.737 / 0.674 |
-| Type | **0.901 / 0.871** | 0.876 / 0.868 | 0.786 / 0.846 | 0.874 / 0.836 | 0.841 / 0.810 |
-| 1920×1080 frame to 160 columns | 26 ms | 272 ms | 110 ms | 251 ms | 27 ms |
-| Flicker on a slow pan (cells per frame) | 26 % stills, **10 %** video settings | 34 % | 7 % | 7.8 % | 4.7 % |
+| Photos, 20 unseen (SSIM close / far) | **0.591 / 0.873** | 0.534 / 0.868 | 0.418 / 0.781 | 0.446 / 0.779 | 0.427 / 0.750 |
+| Line art | **0.840 / 0.849** | 0.799 / 0.798 | 0.686 / 0.847 | 0.718 / 0.601 | 0.737 / 0.674 |
+| Type | **0.900 / 0.872** | 0.876 / 0.868 | 0.786 / 0.846 | 0.874 / 0.836 | 0.841 / 0.810 |
+| 1920×1080 frame to 160 columns | 18 ms | 106 ms | 126 ms | 245 ms | 28 ms |
+| Flicker on a slow pan (cells per frame) | 25 % stills, **8 %** video settings | 34 % | 7 % | 7.8 % | 4.7 % |
 | Pixels to text in Node, no DOM | **yes** | no | yes | no | (if written to) |
 | Minified + gzipped | 4.7 kB | 8.6 kB | 9.1 kB | 130.8 kB (with three) | — |
 
-On photographs it is clearly ahead up close and level at a distance, and better than aalib on both measures on 15 of the 20
-photos; on line art and type it is ahead of every renderer tested; and it does it ten times faster than aalib, with under a
-third of its flicker in video settings, in a 4.7 kB entry that also runs on a server. ascii.rest's `logo` style (drawn for
+On photographs, line art and type it is ahead of every renderer tested, close up and at a distance, and better than aalib on
+both measures on 15 of the 20 photos; it does it about six times faster than aalib, with a quarter of its flicker in video
+settings, in a 4.7 kB entry that also runs on a server. ascii.rest's `logo` style (drawn for
 logos on a plain ground) scores 0.367 / 0.728 on photos, 0.746 / 0.778 on line art and 0.805 / 0.829 on type.
 
 **About "Cloudflare's ASCII":** there is no ASCII renderer from Cloudflare. ascii.rest, a library of ASCII pieces that
@@ -78,9 +78,9 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 
 ## Where it is not ahead
 
-- **Photos at a distance:** level with aalib (0.868 each), not ahead; on 5 of the 20 photos aalib is better on at least one measure.
+- **Photos at a distance:** ahead of aalib on average by a small margin (0.873 against 0.868); on 5 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
-  frames (26 %); use `dither: 'ordered'` and `previous` for video and animation (10 %), still above a plain ramp (4.7 %).
+  frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (8 %), still above a plain ramp (4.7 %).
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
 - GPU frame times were not measured: the runs use SwiftShader, which says nothing about a real GPU.
