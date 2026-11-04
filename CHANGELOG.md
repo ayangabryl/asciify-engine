@@ -5,7 +5,7 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 
 
-## 4.33.0 (unreleased)
+## 4.33.0
 
 ### Added
 
