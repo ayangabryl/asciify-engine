@@ -175,12 +175,49 @@ describe('shared field context', () => {
     const small = mountMany(1, { drift: 0 });
     const big = fakeCanvas('view');
     Object.assign(big, { clientWidth: 3000, clientHeight: 1600 });
-    const field = mountGlyphField(big as unknown as HTMLCanvasElement, { scene: 'none', hover: 'none', drift: 0 });
+    const field = mountGlyphField(big as unknown as HTMLCanvasElement, { scene: 'none', hover: 'none', drift: 0, context: 'shared' });
     field.redraw();
     expect(sharedCanvas!.width).toBeGreaterThanOrEqual(3000);
     field.destroy();
     expect(sharedCanvas!.width).toBeLessThan(1024);
     small.forEach(f => f.field.destroy());
+  });
+
+  it('draws a hero-sized field with a context of its own, straight to its canvas, two at most; smaller fields share', () => {
+    let own = 0;
+    const hero = () => {
+      const canvas = fakeCanvas('view');
+      let gl: unknown = null, two: unknown = null;
+      return Object.assign(canvas, {
+        clientWidth: 1600, clientHeight: 900,
+        getContext(type: string) {
+          if (type === 'webgl2') { if (two) return null; if (!gl) { own++; gl = fakeGl(); } return gl; }
+          if (gl) return null;
+          return (two ??= fake2d(canvas));
+        },
+      });
+    };
+    const mount = (canvas: FakeCanvas, options = {}) => mountGlyphField(canvas as unknown as HTMLCanvasElement, { scene: 'none', hover: 'none', drift: 0, ...options });
+    const small = mountMany(2, { hover: 'none' });
+    const canvases = [hero(), hero(), hero()];
+    const heroes = canvases.map(canvas => mount(canvas));
+    expect(own).toBe(2);
+    expect(canvases.map(canvas => fieldGl.isSharedFieldCanvas(canvas))).toEqual([false, false, true]);
+    expect(small.every(({ canvas }) => fieldGl.isSharedFieldCanvas(canvas))).toBe(true);
+    // A field drawing with its own context copies nothing: no blit for it.
+    const blits = counts.blits;
+    heroes[0].redraw();
+    expect(counts.blits).toBe(blits);
+    // One gives its context back: the next hero gets one; asked for, a hero shares.
+    heroes[0].destroy();
+    const next = hero(), shared = hero();
+    mount(next).destroy();
+    expect(own).toBe(3);
+    mount(shared, { context: 'shared' }).destroy();
+    expect(fieldGl.isSharedFieldCanvas(shared)).toBe(true);
+    expect(own).toBe(3);
+    heroes.slice(1).forEach(field => field.destroy());
+    small.forEach(({ field }) => field.destroy());
   });
 
   it('falls back to a context of its own for a canvas that already holds one', () => {

@@ -17,23 +17,26 @@ void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-
 /* ---------------- One frame loop ---------------- */
 
 type Task = (now: number) => void;
-const tasks = new Set<Task>();
+// Two sets taking turns: a frame runs one while new requests go into the other, with no copy made each frame.
+let tasks = new Set<Task>(), running = new Set<Task>();
 let raf = 0, frameStart = 0, rafWith: unknown = null;
 const gaps: number[] = [];
-let lastTick = 0;
+let lastTick = 0, gapCount = 0;
 // Ambient motion's budget: while the shared frames take much of the frame interval on the main thread (a slow or busy
 // machine), ambient motion draws every second or third time it would; interaction keeps the full rate.
 let ambientLoad = 1, tickCost = 0, loadAt = 0;
 function tick(now: number) {
   raf = 0;
-  if (lastTick && now > lastTick) { gaps.push(now - lastTick); if (gaps.length > 120) gaps.shift(); }
+  if (lastTick && now > lastTick) { gaps.push(now - lastTick); gapCount++; if (gaps.length > 120) gaps.shift(); }
   lastTick = now;
   frameStart = performance.now();
-  const due = [...tasks];
-  tasks.clear();
+  const due = tasks;
+  tasks = running;
+  running = due;
   for (const task of due) {
     try { task(now); } catch (error) { if (typeof console !== 'undefined') console.error(error); }
   }
+  due.clear();
   host?.endFrame(now);
   const cost = performance.now() - frameStart;
   tickCost = tickCost * 0.9 + cost * 0.1;
@@ -63,10 +66,14 @@ export function cancelFieldFrame(task: Task) {
  * The frame budget: the display's interval from the loop's own recent frames (the 20th percentile, so dropped frames don't
  * count), and never more than a 60 Hz frame, so a machine that drops every frame still sees itself as behind.
  */
+let interval = 1000 / 60, intervalAt = -Infinity;
 export function frameInterval() {
   if (gaps.length < 20) return 1000 / 60;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  return Math.min(1000 / 60, Math.max(1000 / 360, sorted[Math.floor(sorted.length * 0.2)]));
+  // Worked out again every 15 frames: the display's rate does not change from one frame to the next.
+  if (gapCount - intervalAt < 15) return interval;
+  intervalAt = gapCount;
+  const sorted = gaps.slice().sort((a, b) => a - b);
+  return (interval = Math.min(1000 / 60, Math.max(1000 / 360, sorted[Math.floor(sorted.length * 0.2)])));
 }
 
 /* ---------------- One set of page listeners ---------------- */
@@ -233,29 +240,108 @@ export const SPARE_ATLASES = 32;
 /** Render scale steps: weak GPUs draw fewer pixels per cell before any field gives up frames. */
 const SCALES = [1, 0.85, 0.7, 0.58, 0.5];
 
-export class FieldContext {
-  gl!: WebGL2RenderingContext;
-  canvas!: GlCanvas;
-  lost = false;
+/**
+ * A context's render scale: GPU time per frame where the browser reports it (a timer query), else the loop's frame gaps,
+ * steps the scale down when frames fall behind and back up when they have room. The page's shared context has one; a field
+ * drawing with a context of its own has its own.
+ */
+export class FrameScale {
   /** Index into SCALES; 0 is full resolution. */
   level = 0;
-  private programs = new Map<string, SharedProgram>();
-  private atlases = new Map<string, SharedAtlas>();
-  private vertex: WebGLShader | null = null;
-  private vao: WebGLVertexArrayObject | null = null;
-  private clients = new Set<FieldClient>();
-  private parallel: { COMPLETION_STATUS_KHR: number } | null = null;
-  private timer: TimerExt | null = null;
+  /** At the lowest render scale and still over budget: ambient motion slows down too. */
+  overloaded = false;
+  private timer: TimerExt | null;
   private queries: { query: WebGLQuery; frame: number }[] = [];
   private open: WebGLQuery | null = null;
   private drew = false;
   private gpuMs: number[] = [];
   private cpuMs: number[] = [];
   private changedAt = 0;
+  private checkedAt = -Infinity;
+  constructor(private gl: WebGL2RenderingContext, private onChange: () => void) {
+    this.timer = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null;
+  }
+  /** A frame starts drawing: times it on the GPU where the browser can. Once a frame, however many draws. */
+  begin() {
+    if (this.drew) return;
+    this.drew = true;
+    if (this.timer && !this.open && this.queries.length < 4) {
+      const query = this.gl.createQuery();
+      if (query) { this.gl.beginQuery(this.timer.TIME_ELAPSED_EXT, query); this.open = query; }
+    }
+  }
+  /** After a frame: its main-thread cost, the GPU times that have come in, and the scale. */
+  end(now: number, cpu: number) {
+    const gl = this.gl, timer = this.timer;
+    if (this.drew) {
+      this.cpuMs.push(cpu);
+      if (this.cpuMs.length > 60) this.cpuMs.shift();
+      if (timer && this.open) { gl.endQuery(timer.TIME_ELAPSED_EXT); this.queries.push({ query: this.open, frame: now }); this.open = null; }
+    }
+    this.drew = false;
+    // Results are asked for only while a query waits, and the disjoint flag only when one has come in.
+    if (timer && this.queries.length && gl.getQueryParameter(this.queries[0].query, gl.QUERY_RESULT_AVAILABLE)) {
+      const disjoint = gl.getParameter(timer.GPU_DISJOINT_EXT);
+      while (this.queries.length && gl.getQueryParameter(this.queries[0].query, gl.QUERY_RESULT_AVAILABLE)) {
+        const { query } = this.queries.shift()!;
+        if (!disjoint) { this.gpuMs.push(gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6); if (this.gpuMs.length > 60) this.gpuMs.shift(); }
+        gl.deleteQuery(query);
+      }
+    }
+    this.adapt(now);
+  }
+  /** A frame the context could not draw (lost). */
+  skip() { this.drew = false; }
+  /** Forgets timings and queries (the context was lost or replaced). */
+  reset() { this.queries = []; this.open = null; this.gpuMs = []; this.cpuMs = []; }
+  private adapt(now: number) {
+    // A few times a second is often enough to see frames falling behind, and keeps the sorting out of most frames.
+    if (now - this.checkedAt < 250) return;
+    this.checkedAt = now;
+    // GPU time where measured; otherwise the loop's frame gaps, which grow when the GPU (or anything) falls behind.
+    const interval = frameInterval();
+    // Five samples settle it when the GPU is far behind; ten otherwise.
+    const behind = this.gpuMs.length >= 5 && Math.min(...this.gpuMs.slice(-5)) > interval * 1.5;
+    const samples = this.gpuMs.length >= 10 || behind ? this.gpuMs : null;
+    let load: number;
+    if (samples) load = samples.slice().sort((a, b) => a - b)[Math.floor(samples.length * 0.75)] / interval;
+    else {
+      if (gaps.length < 30 || this.cpuMs.length < 10) return;
+      // Frames falling behind while the fields' own main-thread work is light: the GPU is the likelier cause.
+      const recent = gaps.slice(-30).sort((a, b) => a - b), cpu = this.cpuMs.slice().sort((a, b) => a - b)[this.cpuMs.length >> 1];
+      load = recent[Math.floor(recent.length * 0.75)] / interval > 1.6 && cpu < interval * 0.5 ? 1 : 0.5;
+    }
+    this.overloaded = load > 0.8 && this.atMinimum;
+    if (now - this.changedAt < (load > 0.8 ? 800 : 4000)) return;
+    let next = this.level;
+    // Twice over budget goes straight to the lowest scale: one step at a time would take seconds of dropped frames.
+    if (load > 2) next = SCALES.length - 1;
+    else if (load > 0.8 && next < SCALES.length - 1) next++;
+    else if (load < 0.3 && next > 0) next--;
+    if (next === this.level) return;
+    this.level = next;
+    this.changedAt = now;
+    this.gpuMs = []; this.cpuMs = [];
+    this.onChange();
+  }
+  get scale() { return SCALES[this.level]; }
+  get atMinimum() { return this.level === SCALES.length - 1; }
+}
+
+export class FieldContext {
+  gl!: WebGL2RenderingContext;
+  canvas!: GlCanvas;
+  lost = false;
+  /** The render scale every field drawing through this context shares. */
+  frames!: FrameScale;
+  private programs = new Map<string, SharedProgram>();
+  private atlases = new Map<string, SharedAtlas>();
+  private vertex: WebGLShader | null = null;
+  private vao: WebGLVertexArrayObject | null = null;
+  private clients = new Set<FieldClient>();
+  private parallel: { COMPLETION_STATUS_KHR: number } | null = null;
   private lostTimer = 0;
   renderer = '';
-  /** At the lowest render scale and still over budget: ambient motion slows down too. */
-  overloaded = false;
 
   constructor() { this.create(); }
 
@@ -273,7 +359,10 @@ export class FieldContext {
     this.lost = false;
     canvas.width = canvas.height = 1;
     this.parallel = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
-    this.timer = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null;
+    // A replacement context keeps the scale the page had settled on.
+    const level = this.frames?.level ?? 0;
+    this.frames = new FrameScale(gl, () => { for (const client of [...this.clients]) client.rescale(); });
+    this.frames.level = level;
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     this.renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
     (canvas as EventTarget).addEventListener?.('webglcontextlost', this.onLost);
@@ -302,7 +391,7 @@ export class FieldContext {
   private restored() { for (const client of [...this.clients]) client.restored(); }
   private reset() {
     this.programs.clear(); this.atlases.clear(); this.vertex = null; this.vao = null;
-    this.queries = []; this.open = null; this.gpuMs = []; this.cpuMs = [];
+    this.frames.reset();
   }
 
   private idleTimer = 0;
@@ -312,7 +401,7 @@ export class FieldContext {
     if (this.clients.size) { this.fit(); return; }
     // Nothing left to draw: give the drawing buffer back at once, and the context itself once the page has gone a while
     // without a field (a route without any), so nothing stays on the GPU. A field mounting meanwhile keeps it.
-    if (!this.lost) { this.canvas.width = this.canvas.height = 1; this.level = 0; }
+    if (!this.lost) { this.canvas.width = this.canvas.height = 1; this.frames.level = 0; }
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => { if (!this.clients.size) this.dispose(); }, IDLE_MS) as unknown as number;
   }
@@ -437,13 +526,7 @@ export class FieldContext {
       canvas.width = Math.max(canvas.width, step(width));
       canvas.height = Math.max(canvas.height, step(height));
     }
-    if (!this.drew) {
-      this.drew = true;
-      if (this.timer && !this.open && this.queries.length < 4) {
-        const query = this.gl.createQuery();
-        if (query) { this.gl.beginQuery(this.timer.TIME_ELAPSED_EXT, query); this.open = query; }
-      }
-    }
+    this.frames.begin();
   }
   /** Copies the frame just drawn (the bottom-left `width` x `height` of the shared buffer) to a field's canvas. */
   present(target: CanvasRenderingContext2D, width: number, height: number) {
@@ -454,53 +537,13 @@ export class FieldContext {
 
   /** After each shared frame: collects GPU time where the browser reports it, else main-thread draw time, and sets the scale. */
   endFrame(now: number) {
-    if (this.lost) { this.drew = false; return; }
-    const gl = this.gl, timer = this.timer;
-    if (this.drew) {
-      this.cpuMs.push(performance.now() - frameStart);
-      if (this.cpuMs.length > 60) this.cpuMs.shift();
-      if (timer && this.open) { gl.endQuery(timer.TIME_ELAPSED_EXT); this.queries.push({ query: this.open, frame: now }); this.open = null; }
-    }
-    this.drew = false;
-    if (timer) {
-      const disjoint = gl.getParameter(timer.GPU_DISJOINT_EXT);
-      while (this.queries.length && gl.getQueryParameter(this.queries[0].query, gl.QUERY_RESULT_AVAILABLE)) {
-        const { query } = this.queries.shift()!;
-        if (!disjoint) { this.gpuMs.push(gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6); if (this.gpuMs.length > 60) this.gpuMs.shift(); }
-        gl.deleteQuery(query);
-      }
-    }
-    this.adapt(now);
+    if (this.lost) { this.frames.skip(); return; }
+    this.frames.end(now, performance.now() - frameStart);
   }
-  private adapt(now: number) {
-    // GPU time where measured; otherwise the loop's frame gaps, which grow when the GPU (or anything) falls behind.
-    const interval = frameInterval();
-    // Five samples settle it when the GPU is far behind; ten otherwise.
-    const behind = this.gpuMs.length >= 5 && Math.min(...this.gpuMs.slice(-5)) > interval * 1.5;
-    const samples = this.gpuMs.length >= 10 || behind ? this.gpuMs : null;
-    let load: number;
-    if (samples) load = [...samples].sort((a, b) => a - b)[Math.floor(samples.length * 0.75)] / interval;
-    else {
-      if (gaps.length < 30 || this.cpuMs.length < 10) return;
-      // Frames falling behind while the fields' own main-thread work is light: the GPU is the likelier cause.
-      const recent = gaps.slice(-30).sort((a, b) => a - b), cpu = [...this.cpuMs].sort((a, b) => a - b)[this.cpuMs.length >> 1];
-      load = recent[Math.floor(recent.length * 0.75)] / interval > 1.6 && cpu < interval * 0.5 ? 1 : 0.5;
-    }
-    this.overloaded = load > 0.8 && this.atMinimum;
-    if (now - this.changedAt < (load > 0.8 ? 800 : 4000)) return;
-    let next = this.level;
-    // Twice over budget goes straight to the lowest scale: one step at a time would take seconds of dropped frames.
-    if (load > 2) next = SCALES.length - 1;
-    else if (load > 0.8 && next < SCALES.length - 1) next++;
-    else if (load < 0.3 && next > 0) next--;
-    if (next === this.level) return;
-    this.level = next;
-    this.changedAt = now;
-    this.gpuMs = []; this.cpuMs = [];
-    for (const client of [...this.clients]) client.rescale();
-  }
-  get scale() { return SCALES[this.level]; }
-  get atMinimum() { return this.level === SCALES.length - 1; }
+  get level() { return this.frames.level; }
+  get overloaded() { return this.frames.overloaded; }
+  get scale() { return this.frames.scale; }
+  get atMinimum() { return this.frames.atMinimum; }
 }
 
 export interface FieldClient {

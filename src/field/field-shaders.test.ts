@@ -36,8 +36,8 @@ describe('glyph field programs', () => {
     const branches = new Set([...FIELD_COMPOSITE.matchAll(/uMark==(\d+)/g)].map(([, n]) => Number(n)));
     for (let i = 0; i < FIELD_MARKS.length; i++) expect(branches.has(i)).toBe(true);
     expect(Math.max(...branches)).toBe(FIELD_MARKS.length - 1);
-    expect(draw).toContain('gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark))');
-    expect(draw).toContain('gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark))');
+    expect(draw).toContain('u1i(gl, p.uMark, FIELD_MARKS.indexOf(settings.mark))');
+    expect(draw).toContain('u1i(gl, u.uMark, FIELD_MARKS.indexOf(settings.mark))');
     // No mark samples anything but its own cell, so styles cost no extra passes or textures.
     expect(FIELD_COMPOSITE.match(/texelFetch\(uCells/g)).toHaveLength(1);
   });
@@ -58,7 +58,7 @@ describe('glyph field programs', () => {
       // 'none' draws nothing; every other scene has a branch.
       if (scene !== 'none') expect(cell).toContain(`uScene==${sceneId(scene)}){`);
     }
-    expect(field).toContain('gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene))');
+    expect(field).toContain('u1i(gl, u.uScene, source ? 0 : sceneId(settings.scene))');
   });
   it('writes ink and what lies under it from the cell pass, which the pixel pass reads per cell', () => {
     for (const packed of [false, true]) {

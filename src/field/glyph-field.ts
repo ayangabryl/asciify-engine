@@ -2,10 +2,12 @@ import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, scene
 import { MAX_FIELD_EFFECTS, effectUniforms, type FieldEffect } from './field-effects';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { createMipReader } from './field-readback';
+import { createFieldMeasure, forgetFieldMeasure, type FieldMeasure } from './field-measure';
 import {
   ambientFactor, cancelFieldFrame, fieldContext, markShared, observeSize, observeView, requestFieldFrame, watchFonts, watchMotionPreference, watchPointer, watchVisibility,
   type FieldClient, type PointerClient, type SharedAtlas,
 } from './field-gl';
+import { FrameScale } from './field-gl';
 import { WIDE_FONT, isWideGlyph } from '../studio/characters';
 import { InkTrail } from '../surface/ink-trail';
 import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
@@ -42,6 +44,13 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
    * the source renders to show that exact frame (a WebGL canvas without `preserveDrawingBuffer` is only readable then).
    */
   live?: boolean;
+  /**
+   * The WebGL context the field draws with. `'shared'`: the page's one context, which every field on the page shares (each
+   * frame is copied to this canvas). `'own'`: a context of this canvas's own, drawn to directly. `'auto'` (default): its own
+   * for a field of about 720p or more in device pixels when the page has fewer than two such fields, so a hero or full-page
+   * background draws with no copy; the shared one for everything else, so a page of many fields holds one context.
+   */
+  context?: 'auto' | 'shared' | 'own';
 }
 
 export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect'; pointer?: number }
@@ -127,7 +136,38 @@ export function glyphFieldTier(): 'gpu' | 'software' | 'none' {
   }
 }
 
+/* ---------------- Uniforms sent only when they change ---------------- */
+// The values each uniform location was last given. A location belongs to one program, so this stays right however many fields
+// draw with that program (a field whose value differs sends it), and a rebuilt program brings new locations.
+type Loc = WebGLUniformLocation | null | undefined;
+const sent = new WeakMap<WebGLUniformLocation, Float64Array>();
+function changed(loc: WebGLUniformLocation, values: ArrayLike<number>) {
+  let last = sent.get(loc);
+  if (!last || last.length !== values.length) { sent.set(loc, last = new Float64Array(values.length).fill(NaN)); }
+  let differs = false;
+  for (let i = 0; i < values.length; i++) if (last[i] !== values[i]) { differs = true; last[i] = values[i]; }
+  return differs;
+}
+const scratch = [new Float64Array(1), new Float64Array(2), new Float64Array(3), new Float64Array(4)];
+const pack = (a: number, b?: number, c?: number, d?: number) => {
+  const n = d !== undefined ? 4 : c !== undefined ? 3 : b !== undefined ? 2 : 1, out = scratch[n - 1];
+  out[0] = a; if (n > 1) out[1] = b!; if (n > 2) out[2] = c!; if (n > 3) out[3] = d!;
+  return out;
+};
+const u1f = (gl: WebGL2RenderingContext, loc: Loc, x: number) => { if (loc && changed(loc, pack(x))) gl.uniform1f(loc, x); };
+const u1i = (gl: WebGL2RenderingContext, loc: Loc, x: number) => { if (loc && changed(loc, pack(x))) gl.uniform1i(loc, x); };
+const u2f = (gl: WebGL2RenderingContext, loc: Loc, a: number, b: number) => { if (loc && changed(loc, pack(a, b))) gl.uniform2f(loc, a, b); };
+const u3f = (gl: WebGL2RenderingContext, loc: Loc, a: number, b: number, c: number) => { if (loc && changed(loc, pack(a, b, c))) gl.uniform3f(loc, a, b, c); };
+const u4f = (gl: WebGL2RenderingContext, loc: Loc, a: number, b: number, c: number, d: number) => { if (loc && changed(loc, pack(a, b, c, d))) gl.uniform4f(loc, a, b, c, d); };
+const u2fv = (gl: WebGL2RenderingContext, loc: Loc, v: Float32List) => { if (loc && changed(loc, v)) gl.uniform2fv(loc, v); };
+const u3fv = (gl: WebGL2RenderingContext, loc: Loc, v: Float32List) => { if (loc && changed(loc, v)) gl.uniform3fv(loc, v); };
+const u4fv = (gl: WebGL2RenderingContext, loc: Loc, v: Float32List) => { if (loc && changed(loc, v)) gl.uniform4fv(loc, v); };
+
 type CellLayout = ReturnType<typeof fieldCellLayout>;
+/** Fields drawing with a context of their own; 'auto' gives one to at most OWN_CONTEXTS of them at a time. */
+let ownContexts = 0;
+const OWN_CONTEXTS = 2, OWN_PIXELS = 1280 * 720;
+const OWN_ATTRIBUTES: WebGLContextAttributes = { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: 'high-performance' };
 const atlasFont = (settings: GlyphFieldSettings, layout: CellLayout) => `${settings.fontWeight} ${Math.max(1, layout.height * settings.glyphScale)}px ${settings.font}`;
 const atlasKeyOf = (settings: GlyphFieldSettings, layout: CellLayout) => `${fieldGlyphs(settings.charset).join('')}\u0000${atlasFont(settings, layout)}\u0000${layout.width}x${layout.height}x${layout.columns}`;
 /** A field's pixel ratio for a canvas of this CSS size: the display's, capped by the field and the backing-pixel limit, then the page's render scale. */
@@ -268,15 +308,31 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let clearRects: FieldClearRects | null = isRects(options.clear) ? options.clear : null;
   let settings = normalizeFieldSettings(splitClear(options).rest);
   const onError = options.onError;
-  // The page's shared context draws the frame and a 2D blit shows it here. A canvas from another document, or one that already
-  // holds a WebGL context, draws with a context of its own as before.
+  // Through the page's shared context the frame is drawn there and a 2D blit shows it here; with a context of its own the
+  // field draws straight to this canvas. A hero-sized field gets its own (see `context`), as does a canvas from another
+  // document or one that already holds a WebGL context; if a context of its own cannot be had, the shared one draws.
   const ownerDocument = (canvas as { ownerDocument?: Document }).ownerDocument;
-  const host = !ownerDocument || typeof document === 'undefined' || ownerDocument === document ? fieldContext() : null;
+  const sameDocument = !ownerDocument || typeof document === 'undefined' || ownerDocument === document;
+  const choice = options.context ?? 'auto';
+  const devicePixels = () => {
+    const w = canvas.clientWidth || 0, h = canvas.clientHeight || 0, ratio = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio);
+    return w * h * ratio * ratio;
+  };
+  const wantsOwn = !sameDocument || choice === 'own' || (choice === 'auto' && ownContexts < OWN_CONTEXTS && devicePixels() >= OWN_PIXELS);
+  const ownGl = wantsOwn ? canvas.getContext('webgl2', OWN_ATTRIBUTES) as WebGL2RenderingContext | null : null;
+  const host = !ownGl && sameDocument ? fieldContext() : null;
   const view = host ? canvas.getContext('2d', { alpha: true }) : null;
   const shared = !!(host && view);
-  const maybeGl = shared ? host!.gl : canvas.getContext('webgl2', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: 'high-performance' });
+  const maybeGl = shared ? host!.gl : ownGl ?? canvas.getContext('webgl2', OWN_ATTRIBUTES) as WebGL2RenderingContext | null;
   if (!maybeGl) throw new Error('WebGL2 is not available for the glyph field.');
   let gl: WebGL2RenderingContext = maybeGl;
+  if (!shared) ownContexts++;
+  // A context this field asked for (its exact attributes) is given back when it goes; one the page made before is left alone.
+  const attributes = !shared ? gl.getContextAttributes() : null;
+  const madeHere = !!attributes && (Object.keys(OWN_ATTRIBUTES) as (keyof WebGLContextAttributes)[]).every(key => attributes[key] === OWN_ATTRIBUTES[key]);
+  // A field with a context of its own steps its render scale down under load as the shared context does for its fields.
+  const ownFrames = shared ? null : new FrameScale(gl, () => { if (measure()) wake(); });
+  const frames = () => (shared ? host!.frames : ownFrames!);
   if (shared) markShared(canvas, true);
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', options.label ?? 'ASCII artwork');
@@ -697,6 +753,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
 
   const measureLevels = () => {
     levels = [0, 1];
+    levelsOnGpu = false;
     if (!source || settings.levels === 'none') return;
     try {
       const probe = document.createElement('canvas');
@@ -715,6 +772,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   let scopePixels = new Uint8Array(0), scopeContext: CanvasRenderingContext2D | null = null;
   const measureScope = () => {
     scopeOn = false;
+    scopeOnGpu = false;
     if (!source || settings.scope === 'all') return;
     const sw = sourceWidth || 1, sh = sourceHeight || 1;
     const w = Math.max(8, Math.round(sw >= sh ? 96 : 96 * sw / sh)), h = Math.max(8, Math.round(sh >= sw ? 96 : 96 * sh / sw));
@@ -729,6 +787,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
   const applyScope = (rgba: ArrayLike<number>, w: number, h: number) => {
     scopeOn = false;
+    scopeOnGpu = false;
     if (!source || settings.scope === 'all') return;
     scopeGuide = buildHoverGuide(rgba, w, h, null, scopeGuide);
     if (scopeGuide.key === 'none') return;
@@ -745,6 +804,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // never waits on the GPU. Levels and scope share one read; each takes it only when it asked for it.
   let shapesTexture: WebGLTexture | null = null, shapesFor = '', shapesFont = 0;
   let mipsStale = false, reader: ReturnType<typeof createMipReader> | null = null, readFor = { levels: false, scope: false }, uploads = 0, readAtUpload = -Infinity;
+  // Where float targets allow, a moving source's levels and scope are measured on the GPU and stay there: nothing is read
+  // back, and the shader samples them. Otherwise a mip is read back as above.
+  let gpuMeasure: FieldMeasure | null | undefined, levelsOnGpu = false, scopeOnGpu = false;
   const takeRead = () => {
     const got = reader?.poll();
     if (!got) return;
@@ -758,15 +820,18 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     // A video or live canvas changes every frame; reading its pixels back on the CPU would stall the GPU, so after a first
     // measure its levels and hover scope are read from the GPU without waiting, a few times a second.
     const moving = source instanceof HTMLVideoElement || live;
-    if (moving) takeRead();
+    if (moving && gpuMeasure === undefined) gpuMeasure = createFieldMeasure(gl);
+    const onGpu = moving && !!gpuMeasure;
+    if (moving && !onGpu) takeRead();
     // Reads are a few times a second and at least 8 frames apart, so a slow device does not read every frame; the scope only
     // shapes the hover, so a field without one never reads it.
     uploads++;
     const spaced = uploads - readAtUpload >= 8;
     const levelsDue = !moving || levelsAt === -Infinity ? 'now' : now - levelsAt > 1500 && spaced && settings.levels !== 'none' ? 'later' : null;
     const scopeDue = !moving || scopeAt === -Infinity ? 'now' : now - scopeAt > 160 && spaced && settings.scope !== 'all' && settings.hover !== 'none' ? 'later' : null;
-    if (levelsDue === 'now') { measureLevels(); levelsAt = now; }
-    if (scopeDue === 'now') { measureScope(); scopeAt = now; }
+    // On the GPU even the first measure waits for this frame's upload; on the CPU it reads the source now.
+    if (!onGpu && levelsDue === 'now') { measureLevels(); levelsAt = now; }
+    if (!onGpu && scopeDue === 'now') { measureScope(); scopeAt = now; }
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -779,6 +844,19 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const tw = s.videoWidth || s.naturalWidth || s.width, th = s.videoHeight || s.naturalHeight || s.height;
       // With its mip chain, a third more.
       sourceBytes = tw * th * 4 * 4 / 3;
+      if (onGpu) {
+        const wantLevels = !!levelsDue && settings.levels !== 'none', wantScope = !!scopeDue && settings.scope !== 'all' && settings.hover !== 'none';
+        if (wantLevels || wantScope) {
+          if (mipsStale) { gl.generateMipmap(gl.TEXTURE_2D); mipsStale = false; }
+          if (wantLevels) { gpuMeasure!.measureLevels(sourceTexture, tw, th); levelsOnGpu = true; }
+          if (wantScope) { gpuMeasure!.measureScope(sourceTexture, tw, th); scopeOnGpu = true; scopeOn = true; }
+          readAtUpload = uploads;
+          dirty = true;
+        }
+        if (levelsDue) levelsAt = now;
+        if (scopeDue) scopeAt = now;
+        return;
+      }
       const wantLevels = levelsDue === 'later', wantScope = scopeDue === 'later';
       if ((wantLevels || wantScope) && !reader?.pending) {
         reader ??= createMipReader(gl);
@@ -822,7 +900,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const rect = canvas.clientWidth || canvas.clientHeight ? { width: canvas.clientWidth, height: canvas.clientHeight } : canvas.getBoundingClientRect();
     // A zero-size canvas (a collapsed panel, an element not laid out yet) draws nothing until it has a size.
     empty = !rect.width || !rect.height;
-    const ratio = fieldPixelRatio(settings, rect.width, rect.height, shared ? host!.scale : 1);
+    const ratio = fieldPixelRatio(settings, rect.width, rect.height, frames().scale);
     const nextWidth = Math.max(1, Math.round(rect.width * ratio)), nextHeight = Math.max(1, Math.round(rect.height * ratio));
     if (nextWidth === width && nextHeight === height && ratio === pixelRatio) return false;
     const aspectChanged = !width || Math.abs(nextWidth / nextHeight - width / height) > 0.01;
@@ -871,17 +949,17 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.useProgram(fluidProgram!.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, fluidTextures[read]);
-    gl.uniform1i(at.uPrevious, 0);
-    gl.uniform2f(at.uSize, simWidth, simHeight);
-    gl.uniform1f(at.uAspect, aspect);
-    gl.uniform1f(at.uDt, dt);
-    gl.uniform1f(at.uDecay, fluid.dissipation);
-    gl.uniform1f(at.uEnergyDecay, fluid.dissipation * 1.1);
-    gl.uniform1f(at.uRadius, fluid.radius);
-    gl.uniform1f(at.uSplat, splat ? 1 : 0);
-    gl.uniform2f(at.uFrom, splat?.from[0] ?? 0, splat?.from[1] ?? 0);
-    gl.uniform2f(at.uTo, splat?.to[0] ?? 0, splat?.to[1] ?? 0);
-    gl.uniform2f(at.uForce, forceX, forceY);
+    u1i(gl, at.uPrevious, 0);
+    u2f(gl, at.uSize, simWidth, simHeight);
+    u1f(gl, at.uAspect, aspect);
+    u1f(gl, at.uDt, dt);
+    u1f(gl, at.uDecay, fluid.dissipation);
+    u1f(gl, at.uEnergyDecay, fluid.dissipation * 1.1);
+    u1f(gl, at.uRadius, fluid.radius);
+    u1f(gl, at.uSplat, splat ? 1 : 0);
+    u2f(gl, at.uFrom, splat?.from[0] ?? 0, splat?.from[1] ?? 0);
+    u2f(gl, at.uTo, splat?.to[0] ?? 0, splat?.to[1] ?? 0);
+    u2f(gl, at.uForce, forceX, forceY);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     read = 1 - read;
   };
@@ -908,7 +986,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
 
   const draw = () => {
     derive();
-    if (shared) host!.begin(width, height);
+    if (shared) host!.begin(width, height); else ownFrames!.begin();
     const fluid = settings.fluid;
     const texelsPerCell = source && textureHeight ? (layout.height / height) * textureHeight * map.scale[1] : 1;
     const lod = settings.sample === 'point' ? 0 : Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5);
@@ -923,32 +1001,35 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.buffer);
     gl.viewport(0, 0, target.columns, target.rows);
     gl.useProgram(cellProgram!.program);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); gl.uniform1i(u.uSource, 0);
-    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); gl.uniform1i(u.uFluid, 2);
-    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); gl.uniform1i(u.uTrailMap, 3);
-    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, scopeTexture ?? sourceTexture); gl.uniform1i(u.uScope, 6);
-    gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tapTexture ?? sourceTexture); gl.uniform1i(u.uTapMap, 7);
-    gl.uniform1f(u.uTapOn, tapOn && source && photographic ? 1 : 0);
-    gl.uniform1f(u.uScopeMode, scopeOn && settings.scope !== 'all' ? (settings.scope === 'subject' ? 1 : 2) : 0);
-    gl.uniform1f(u.uFluidMode, stableOn ? 1 : 0);
-    gl.uniform1i(u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : hover === 'loupe' ? 4 : hover === 'reveal' ? 5 : 0);
-    gl.uniform1f(u.uTrailAmount, settings.trail.strength);
-    gl.uniform3f(u.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, lanternLike(hover) ? lantern.strength : 0);
-    gl.uniform3fv(u.uTrail, trailUniform);
-    gl.uniform1f(u.uLightRadius, settings.lantern.radius);
-    gl.uniform1f(u.uLightGain, settings.lantern.strength);
-    gl.uniform1f(u.uClock, performance.now() / 1000);
-    gl.uniform1f(u.uFlicker, motion ? 1 : 0);
-    gl.uniform2f(u.uFluidTexel, 1 / Math.max(1, simWidth), 1 / Math.max(1, simHeight));
-    gl.uniform2f(u.uResolution, width, height);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); u1i(gl, u.uSource, 0);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (stableOn ? stable?.velocity : fluidTextures[read]) ?? sourceTexture); u1i(gl, u.uFluid, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, trailTexture ?? sourceTexture); u1i(gl, u.uTrailMap, 3);
+    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, (scopeOnGpu ? gpuMeasure?.scope : scopeTexture) ?? sourceTexture); u1i(gl, u.uScope, 6);
+    const levelMap = levelsOnGpu && source && settings.levels === 'auto' ? gpuMeasure?.levels ?? null : null;
+    gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D, levelMap ?? sourceTexture); u1i(gl, u.uLevelMap, 11);
+    u1f(gl, u.uLevelsFromMap, levelMap ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, tapTexture ?? sourceTexture); u1i(gl, u.uTapMap, 7);
+    u1f(gl, u.uTapOn, tapOn && source && photographic ? 1 : 0);
+    u1f(gl, u.uScopeMode, scopeOn && settings.scope !== 'all' ? (settings.scope === 'subject' ? 1 : 2) : 0);
+    u1f(gl, u.uFluidMode, stableOn ? 1 : 0);
+    u1i(gl, u.uHoverMode, hover === 'fluid' ? 1 : hover === 'lantern' ? 2 : hover === 'trail' && trailUploaded ? 3 : hover === 'loupe' ? 4 : hover === 'reveal' ? 5 : 0);
+    u1f(gl, u.uTrailAmount, settings.trail.strength);
+    u3f(gl, u.uLight, lantern.at?.[0] ?? -1, lantern.at?.[1] ?? -1, lanternLike(hover) ? lantern.strength : 0);
+    u3fv(gl, u.uTrail, trailUniform);
+    u1f(gl, u.uLightRadius, settings.lantern.radius);
+    u1f(gl, u.uLightGain, settings.lantern.strength);
+    u1f(gl, u.uClock, performance.now() / 1000);
+    u1f(gl, u.uFlicker, motion ? 1 : 0);
+    u2f(gl, u.uFluidTexel, 1 / Math.max(1, simWidth), 1 / Math.max(1, simHeight));
+    u2f(gl, u.uResolution, width, height);
     const [pitchX, pitchY] = pitch();
-    gl.uniform2f(u.uCell, pitchX, pitchY);
-    gl.uniform1f(u.uCount, glyphCount);
-    gl.uniform1f(u.uBlend, settings.blend === 'on' || (glyphCount <= 9 && (settings.blend === 'coarse' || (settings.blend === 'auto' && photographic))) ? 1 : 0);
-    gl.uniform4f(u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
-    gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
-    gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
-    gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0);
+    u2f(gl, u.uCell, pitchX, pitchY);
+    u1f(gl, u.uCount, glyphCount);
+    u1f(gl, u.uBlend, settings.blend === 'on' || (glyphCount <= 9 && (settings.blend === 'coarse' || (settings.blend === 'auto' && photographic))) ? 1 : 0);
+    u4f(gl, u.uSourceMap, map.scale[0], map.scale[1], map.offset[0], map.offset[1]);
+    u1i(gl, u.uScene, source ? 0 : sceneId(settings.scene));
+    u1i(gl, u.uMark, FIELD_MARKS.indexOf(settings.mark));
+    u1f(gl, u.uOrder, settings.glyphOrder === 'text' ? 1 : settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0);
     // Shape sampling needs a picture, glyphs read along the ramp, and cells big enough for their parts to differ.
     const shapeOn = settings.sample === 'shape' && !!source && settings.mark === 'glyph' && settings.glyphOrder !== 'text' && settings.glyphOrder !== 'scatter' && layout.height >= 8;
     if (shapeOn) {
@@ -964,28 +1045,28 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
       }
     }
-    gl.activeTexture(gl.TEXTURE9); gl.bindTexture(gl.TEXTURE_2D, (shapeOn && shapesTexture) || sourceTexture); gl.uniform1i(u.uShapes, 9);
-    gl.uniform1f(u.uShapeOn, shapeOn ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE9); gl.bindTexture(gl.TEXTURE_2D, (shapeOn && shapesTexture) || sourceTexture); u1i(gl, u.uShapes, 9);
+    u1f(gl, u.uShapeOn, shapeOn ? 1 : 0);
     // A part is a fifth of the cell's height, so it reads a level about log2(5) finer than the cell.
-    gl.uniform1f(u.uShapeLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell / 5)) - 0.5));
-    gl.uniform1f(u.uShapeTone, SHAPE_TONE);
-    gl.uniform1f(u.uShapeWindow, SHAPE_WINDOW);
-    gl.uniform1f(u.uShapeGate, SHAPE_GATE);
+    u1f(gl, u.uShapeLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell / 5)) - 0.5));
+    u1f(gl, u.uShapeTone, SHAPE_TONE);
+    u1f(gl, u.uShapeWindow, SHAPE_WINDOW);
+    u1f(gl, u.uShapeGate, SHAPE_GATE);
     const words = settings.glyphOrder === 'text' && settings.textRepeat === 'row' ? fieldWords(settings.charset) : [];
     wordData.fill(0); wordData.set(words);
-    gl.uniform2fv(u.uWords, wordData);
-    gl.uniform1f(u.uWordCount, words.length / 2);
-    gl.uniform1f(u.uScale, settings.scale);
+    u2fv(gl, u.uWords, wordData);
+    u1f(gl, u.uWordCount, words.length / 2);
+    u1f(gl, u.uScale, settings.scale);
     const zone = settings.clear;
-    gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
-    gl.uniform1f(u.uClearFeather, zone ? zone.feather : 0.1);
-    gl.uniform1f(u.uClearShape, zone && zone.shape === 'rect' ? 1 : 0);
-    gl.uniform1f(u.uClearPointer, zone ? zone.pointer ?? 0 : 0);
-    gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D, clearTexture ?? sourceTexture); gl.uniform1i(u.uClearMap, 8);
+    u4f(gl, u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
+    u1f(gl, u.uClearFeather, zone ? zone.feather : 0.1);
+    u1f(gl, u.uClearShape, zone && zone.shape === 'rect' ? 1 : 0);
+    u1f(gl, u.uClearPointer, zone ? zone.pointer ?? 0 : 0);
+    gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D, clearTexture ?? sourceTexture); u1i(gl, u.uClearMap, 8);
     const mapOn = clearOn && !!clearRects && !!clearTexture;
-    gl.uniform1f(u.uClearMapOn, mapOn ? Math.min(1, Math.max(0, clearRects!.strength ?? 0.85)) : 0);
-    gl.uniform1f(u.uClearBend, mapOn ? Math.min(1, Math.max(0, clearRects!.bend ?? 0.5)) * 0.035 : 0);
-    gl.uniform2f(u.uClearTexel, 1 / Math.max(1, clearCols), 1 / Math.max(1, clearRows));
+    u1f(gl, u.uClearMapOn, mapOn ? Math.min(1, Math.max(0, clearRects!.strength ?? 0.85)) : 0);
+    u1f(gl, u.uClearBend, mapOn ? Math.min(1, Math.max(0, clearRects!.bend ?? 0.5)) * 0.035 : 0);
+    u2f(gl, u.uClearTexel, 1 / Math.max(1, clearCols), 1 / Math.max(1, clearRows));
     const nowMs = performance.now();
     pulseUniform.fill(0);
     for (let i = 0; i < pulses.length; i++) {
@@ -993,29 +1074,29 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       pulseUniform[offset] = pulse.x; pulseUniform[offset + 1] = pulse.y;
       pulseUniform[offset + 2] = (nowMs - pulse.born) / 1000; pulseUniform[offset + 3] = pulse.strength;
     }
-    gl.uniform4fv(u.uPulse, pulseUniform);
-    gl.uniform3fv(u.uInk, inkColor);
-    gl.uniform3fv(u.uRamp, rampData);
-    gl.uniform1f(u.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
-    gl.uniform3fv(u.uHighlight, highlightColor);
-    gl.uniform1f(u.uHighlightAuto, settings.highlight === 'auto' ? 1 : 0);
-    gl.uniform4fv(u.uBackground, backgroundColor);
-    gl.uniform1f(u.uBrightness, settings.brightness);
-    gl.uniform1f(u.uContrast, settings.contrast);
-    gl.uniform1f(u.uGamma, settings.gamma);
-    gl.uniform1f(u.uInvert, settings.invert ? 1 : 0);
-    gl.uniform1f(u.uVignette, settings.vignette);
-    gl.uniform1f(u.uSourceColor, settings.color === 'source' ? 1 : 0);
-    gl.uniform1f(u.uRefraction, fluid ? fluid.refraction * (motion ? 1 : 0.25) : 0);
-    gl.uniform1f(u.uGlow, fluid ? fluid.glow : 0);
-    gl.uniform1f(u.uTime, time);
-    gl.uniform1f(u.uDrift, motion ? settings.drift : 0);
-    gl.uniform1f(u.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
-    gl.uniform1f(u.uLod, lod);
-    gl.uniform1f(u.uSaturation, settings.saturation);
-    gl.uniform1f(u.uShade, settings.shade);
-    gl.uniform1f(u.uBackdrop, source ? settings.backdrop : 0);
-    gl.uniform2f(u.uLevels, source && settings.levels === 'auto' ? levels[0] : 0, source && settings.levels === 'auto' ? levels[1] : 1);
+    u4fv(gl, u.uPulse, pulseUniform);
+    u3fv(gl, u.uInk, inkColor);
+    u3fv(gl, u.uRamp, rampData);
+    u1f(gl, u.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
+    u3fv(gl, u.uHighlight, highlightColor);
+    u1f(gl, u.uHighlightAuto, settings.highlight === 'auto' ? 1 : 0);
+    u4fv(gl, u.uBackground, backgroundColor);
+    u1f(gl, u.uBrightness, settings.brightness);
+    u1f(gl, u.uContrast, settings.contrast);
+    u1f(gl, u.uGamma, settings.gamma);
+    u1f(gl, u.uInvert, settings.invert ? 1 : 0);
+    u1f(gl, u.uVignette, settings.vignette);
+    u1f(gl, u.uSourceColor, settings.color === 'source' ? 1 : 0);
+    u1f(gl, u.uRefraction, fluid ? fluid.refraction * (motion ? 1 : 0.25) : 0);
+    u1f(gl, u.uGlow, fluid ? fluid.glow : 0);
+    u1f(gl, u.uTime, time);
+    u1f(gl, u.uDrift, motion ? settings.drift : 0);
+    u1f(gl, u.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
+    u1f(gl, u.uLod, lod);
+    u1f(gl, u.uSaturation, settings.saturation);
+    u1f(gl, u.uShade, settings.shade);
+    u1f(gl, u.uBackdrop, source ? settings.backdrop : 0);
+    u2f(gl, u.uLevels, source && settings.levels === 'auto' ? levels[0] : 0, source && settings.levels === 'auto' ? levels[1] : 1);
     if (effects.length) setEffectUniforms(cellProgram!.locations!);
     gl.bindVertexArray(vertexArray);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -1024,26 +1105,26 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     gl.useProgram(pixelProgram!.program);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlasTexture); gl.uniform1i(p.uAtlas, 1);
-    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, target.ink); gl.uniform1i(p.uCells, 4);
-    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, target.under); gl.uniform1i(p.uUnder, 5);
-    gl.uniform2f(p.uResolution, width, height);
-    gl.uniform2f(p.uCell, layout.width, layout.height);
-    gl.uniform2f(p.uPitch, pitchX, pitchY);
-    gl.uniform1f(p.uColumns, layout.columns);
-    gl.uniform1f(p.uDotScale, settings.dotScale);
-    gl.uniform2f(p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
-    gl.uniform1i(p.uMark, FIELD_MARKS.indexOf(settings.mark));
-    gl.uniform4f(p.uLine, settings.linePitch, settings.lineWeight, settings.sparkle, 0);
-    gl.uniform4f(p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
-    gl.uniform1f(p.uSourceColor, settings.color === 'source' ? 1 : 0);
-    gl.uniform3fv(p.uRamp, rampData);
-    gl.uniform1f(p.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
-    gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlasTexture); u1i(gl, p.uAtlas, 1);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, target.ink); u1i(gl, p.uCells, 4);
+    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, target.under); u1i(gl, p.uUnder, 5);
+    u2f(gl, p.uResolution, width, height);
+    u2f(gl, p.uCell, layout.width, layout.height);
+    u2f(gl, p.uPitch, pitchX, pitchY);
+    u1f(gl, p.uColumns, layout.columns);
+    u1f(gl, p.uDotScale, settings.dotScale);
+    u2f(gl, p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
+    u1i(gl, p.uMark, FIELD_MARKS.indexOf(settings.mark));
+    u4f(gl, p.uLine, settings.linePitch, settings.lineWeight, settings.sparkle, 0);
+    u4f(gl, p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
+    u1f(gl, p.uSourceColor, settings.color === 'source' ? 1 : 0);
+    u3fv(gl, p.uRamp, rampData);
+    u1f(gl, p.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
+    u4f(gl, p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);
     const post = settings.post;
-    gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, target.glow ?? sourceTexture); gl.uniform1i(p.uGlow, 10);
-    gl.uniform4f(p.uPost, target.glow ? post.bloom : 0, post.bloomRadius, post.scanlines, post.grain);
-    gl.uniform4f(p.uPost2, post.chroma, post.curvature, time, 2);
+    gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, target.glow ?? sourceTexture); u1i(gl, p.uGlow, 10);
+    u4f(gl, p.uPost, target.glow ? post.bloom : 0, post.bloomRadius, post.scanlines, post.grain);
+    u4f(gl, p.uPost2, post.chroma, post.curvature, time, 2);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (shared) host!.present(view!, width, height);
   };
@@ -1075,14 +1156,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     return moving;
   }
   function setEffectUniforms(at: Record<string, WebGLUniformLocation | null>) {
-    gl.uniform4fv(at.uFx, effectUniforms(effects, fx.data));
-    gl.uniform4f(at.uFxPointer, fx.at[0], fx.at[1], fx.presence, reduced() ? 0 : 1);
-    gl.uniform1f(at.uFxTime, time);
+    u4fv(gl, at.uFx, effectUniforms(effects, fx.data));
+    u4f(gl, at.uFxPointer, fx.at[0], fx.at[1], fx.presence, reduced() ? 0 : 1);
+    u1f(gl, at.uFxTime, time);
   }
   setEffects(effects);
   const frame = (now: number) => {
     raf = false;
     if (!drawable()) return;
+    const frameBegan = performance.now();
     const elapsed = (now - last) / 1000;
     const dt = Math.min(1 / 30, Math.max(1 / 480, elapsed));
     last = now;
@@ -1091,8 +1173,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     try {
       // Through the shared context, the page's render scale gives way first; a field stops its ambient motion only past that.
       // At the lowest scale and still over budget, ambient motion stops at once rather than after another second of slow frames.
-      if (shared && host!.overloaded && degraded < 2 && slowFrames > 10) degraded = 2;
-      if (slowFrames > 45 && degraded < 2 && (!shared || host!.atMinimum)) {
+      if (frames().overloaded && degraded < 2 && slowFrames > 10) degraded = 2;
+      if (slowFrames > 45 && degraded < 2 && frames().atMinimum) {
         slowFrames = 0;
         degraded++;
         if (degraded === 1 && pixelRatio > 1) { settings = { ...settings, maxPixelRatio: 1 }; measure(); }
@@ -1131,6 +1213,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         if (readyPending && (!sourceToken || source)) { readyPending = false; resolveReady(); }
       }
       if (moving || simulating || pending || !compiled || (live && source && !paused)) { raf = true; requestFieldFrame(frame); }
+      if (ownFrames && !lost) ownFrames.end(now, performance.now() - frameBegan);
     } catch (error) {
       failed = true;
       report(error);
@@ -1211,9 +1294,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const onRestored = () => {
     lost = false;
     if (shared) gl = host!.gl;
+    ownFrames?.reset();
     shaders.length = 0; vertexShader = null; atlasEntry = null;
     cellProgram = pixelProgram = fluidProgram = null; cells = null;
     fluidTextures = []; fluidBuffers = []; stable = null; stableOn = false; trailTexture = null; inkTrail = null; trailUploaded = false; scopeTexture = null; scopeOn = false; tapTexture = null; tap = null; tapOn = false;
+    forgetFieldMeasure(gl); gpuMeasure = undefined; levelsOnGpu = scopeOnGpu = false;
     clearTexture = null; clearOn = false; clearCols = clearRows = 0; clearStale = true;
     try { init(); dirty = true; wake(); } catch (error) { report(error); }
   };
@@ -1453,6 +1538,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      if (!shared) ownContexts--;
       if (raf) cancelFieldFrame(frame);
       raf = false;
       unwatch.forEach(stop => stop());
@@ -1472,6 +1558,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         if (trailTexture) gl.deleteTexture(trailTexture);
         if (scopeTexture) gl.deleteTexture(scopeTexture);
         reader?.dispose();
+        gpuMeasure?.dispose();
         if (shapesTexture) gl.deleteTexture(shapesTexture);
         if (clearTexture) gl.deleteTexture(clearTexture);
         if (shared) {
@@ -1483,6 +1570,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
           stable?.dispose();
           shaders.forEach(shader => gl.deleteShader(shader));
           if (vertexArray) gl.deleteVertexArray(vertexArray);
+          if (madeHere) (gl.getExtension('WEBGL_lose_context') as { loseContext(): void } | null)?.loseContext();
         }
       }
       atlasEntry = null;

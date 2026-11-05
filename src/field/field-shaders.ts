@@ -84,6 +84,9 @@ uniform float uLightRadius, uLightGain, uClock, uFlicker, uTrailAmount;
 uniform sampler2D uTrailMap, uScope;
 uniform float uScopeMode;
 uniform vec2 uLevels;
+// A moving source's levels, measured on the GPU (field-measure.ts), when uLevelsFromMap is set.
+uniform sampler2D uLevelMap;
+uniform float uLevelsFromMap;
 // Shape sampling: each cell read in 3 by 5 parts and matched to the glyphs' own ink in those parts (see GlyphFieldOptions.sample).
 uniform float uShapeOn, uShapeLod, uShapeTone, uShapeWindow, uShapeGate;
 uniform sampler2D uShapes;
@@ -288,7 +291,8 @@ vec3 generated(vec2 uv,float aspect){
 }
 // The source's brightness to the field's tone: levels, contrast and brightness, gamma, invert.
 float transfer(float tone){
-  tone=clamp((tone-uLevels.x)/max(uLevels.y-uLevels.x,.01),0.,1.);
+  vec2 levels=uLevelsFromMap>.5?texelFetch(uLevelMap,ivec2(0),0).rg:uLevels;
+  tone=clamp((tone-levels.x)/max(levels.y-levels.x,.01),0.,1.);
   tone=clamp((tone-.5)*uContrast+.5+uBrightness,0.,1.);
   tone=pow(tone,1./uGamma);
   return uInvert>.5?1.-tone:tone;
@@ -297,7 +301,10 @@ float transfer(float tone){
 float hoverScope(vec2 uv){
   if(uScopeMode<.5||uScene!=0)return 1.;
   vec2 s=uv*uSourceMap.xy+uSourceMap.zw;
-  float c=(s.x<0.||s.y<0.||s.x>1.||s.y>1.)?0.:texture(uScope,s).a;
+  vec4 scope=texture(uScope,clamp(s,0.,1.));
+  // Red set: a source with no subject to key (measured on the GPU), where every scope acts everywhere.
+  if(scope.r>.5)return 1.;
+  float c=(s.x<0.||s.y<0.||s.x>1.||s.y>1.)?0.:scope.a;
   return uScopeMode<1.5?c:1.-c;
 }
 void main(){

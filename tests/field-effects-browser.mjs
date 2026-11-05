@@ -133,8 +133,8 @@ try {
     await page.close();
   }
   {
-    // A playing source is measured from the GPU without waiting on it: after the first measure no small CPU readback at all,
-    // the reads arrive through a pixel buffer, and the levels they give match a still measured on the CPU.
+    // A playing source is measured on the GPU and nothing comes back to the CPU: no small CPU readback, no buffer read, and
+    // the levels it gives match a still measured on the CPU.
     const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
     await page.goto(origin);
     const result = await page.evaluate(async () => {
@@ -163,8 +163,39 @@ try {
       return { small: afterSmall, reads: afterReads, live, still };
     });
     check('a live source with levels and scope is not read back on the CPU after its first measure', result.small === 0, `${result.small} small CPU readbacks`);
-    check('its levels and scope are read from the GPU', result.reads >= 2, `${result.reads} buffer reads`);
+    check('its levels and scope are measured on the GPU, with nothing read back', result.reads === 0, `${result.reads} buffer reads`);
     check('levels read from the GPU match levels measured on the CPU', Math.abs(result.live - result.still) < 1.5, `${result.live.toFixed(2)} live, ${result.still.toFixed(2)} still`);
+    await page.close();
+  }
+  {
+    // The hover scope of a live source, keyed on the GPU: a grey square on a black ground. Scoped to the subject, the lantern
+    // lights the field over the square and leaves the ground alone; unscoped, it lights both.
+    const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    await page.goto(origin);
+    const result = await page.evaluate(async () => {
+      const f = await import('/field.js');
+      const make = () => { const c = document.createElement('canvas'); c.width = 400; c.height = 300; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 400, 300); g.fillStyle = '#666'; g.fillRect(150, 100, 100, 100); return c; };
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const frames = n => new Promise(resolve => { let i = 0; const step = () => (++i >= n ? resolve() : requestAnimationFrame(step)); requestAnimationFrame(step); });
+      // Mean red over a 60 px box of the field canvas.
+      const at = (x, y) => { const c = document.getElementById('c'), p = document.createElement('canvas'); p.width = 400; p.height = 300; const g = p.getContext('2d'); g.drawImage(c, 0, 0); const d = g.getImageData(x - 30, y - 30, 60, 60).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i]; return s / (d.length / 4); };
+      const lit = async (scope, x, y) => {
+        const field = f.mountGlyphField(document.getElementById('c'), { source: make(), live: true, hover: 'lantern', scope, ink: '#ffffff', levels: 'none', drift: 0 });
+        await field.ready;
+        await frames(4); await wait(300);
+        field.redraw();
+        const before = at(x, y);
+        field.pointer(x, y);
+        await frames(12); await wait(300);
+        field.redraw();
+        const after = at(x, y);
+        field.destroy();
+        return after - before;
+      };
+      return { subjectOnSquare: await lit('subject', 200, 150), allOnSquare: await lit('all', 200, 150), subjectOnGround: await lit('subject', 50, 50), allOnGround: await lit('all', 50, 50) };
+    });
+    check('a subject-scoped hover on a live source answers over the subject', Math.abs(result.subjectOnSquare) > Math.abs(result.allOnSquare) * 0.5 && Math.abs(result.subjectOnSquare) > 2, `${result.subjectOnSquare.toFixed(2)} scoped, ${result.allOnSquare.toFixed(2)} unscoped`);
+    check('and stays quiet over the ground, keyed on the GPU', Math.abs(result.subjectOnGround) < Math.abs(result.allOnGround) * 0.25, `${result.subjectOnGround.toFixed(2)} scoped, ${result.allOnGround.toFixed(2)} unscoped`);
     await page.close();
   }
 } finally {

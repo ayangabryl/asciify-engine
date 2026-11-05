@@ -61,7 +61,7 @@ const LIVE_TEXT = {
   'asciify GPU field, shape + bloom + fluid hover': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape', hover: 'fluid', post: { bloom: 0.8 }, maxPixelRatio: 2, drift: 0 });
     let k = 0;
-    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
 };
 
@@ -71,28 +71,29 @@ export const RENDERERS = {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0 });
     let k = 0;
     // The field draws a live source itself, once per animation frame; the harness only moves the pointer.
-    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
   'asciify-engine field (fluid hover, subject scope)': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', scope: 'subject', maxPixelRatio: 2, drift: 0 });
     let k = 0;
-    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
   'asciify-engine field (shape sampling, fluid hover)': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape', hover: 'fluid', maxPixelRatio: 2, drift: 0 });
     let k = 0;
-    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
   'asciify-engine field (no hover)': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0 });
-    return { ready: field.ready, frame() {}, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() {}, destroy() { field.destroy(); } };
   },
   'asciify-engine field (fluid hover, own context)': (host, src, cell) => {
     host.getContext('webgl2', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true });
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0 });
     let k = 0;
-    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+    return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
+  'idle (source repainted, nothing drawn)': () => ({ ready: Promise.resolve(), frame() {}, destroy() {} }),
   '2025.unseen.co ASCII pass (rebuilt)': (host, src, cell) => {
     const w = host.width, h = host.height, gl = host.getContext('webgl2', { preserveDrawingBuffer: true });
     const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024;
@@ -114,7 +115,7 @@ export const RENDERERS = {
     const mk = (unit, wrap) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap); return t; };
     const srcTex = mk(0, gl.CLAMP_TO_EDGE); mk(1, gl.REPEAT); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
     const u = n => gl.getUniformLocation(prog, n);
-    gl.uniform1i(u('tDiffuse'), 0); gl.uniform1i(u('uCharacters'), 1); gl.uniform1f(u('uCharactersCount'), chars.length); gl.uniform1f(u('uCellSize'), cell); gl.uniform2f(u('uResolutionNoDpr'), w / 2, h / 2);
+    gl.uniform1i(u('tDiffuse'), 0); gl.uniform1i(u('uCharacters'), 1); gl.uniform1f(u('uCharactersCount'), chars.length); gl.uniform1f(u('uCellSize'), cell); gl.uniform2f(u('uResolutionNoDpr'), w, h);
     return { ready: Promise.resolve(), frame() { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.canvas); gl.viewport(0, 0, w, h); gl.drawArrays(gl.TRIANGLES, 0, 3); }, destroy() { gl.getExtension('WEBGL_lose_context')?.loseContext(); } };
   },
   'webgl-ascii-hero (vendored)': (host, src, cell) => {
@@ -156,4 +157,46 @@ export async function measure(name, { width, height, cell, frames = 12 }) {
   return { name, width, height, cell, mainMs: median([...main]), mainMaxMs: +Math.max(...main).toFixed(1), totalMs: +(median(total) - median(idle)).toFixed(1) };
 }
 
-Object.assign(window, { perf: { measure, RENDERERS: Object.keys(RENDERERS) } });
+/**
+ * Runs a renderer in a steady state for screen.mjs: a driver at the display's rate repaints the source (marked 'bench', so its
+ * cost can be taken off) and calls frame(); the renderer draws as it would on a page. Warms up, then marks 'steady-start' and
+ * 'steady-end' around `seconds` of frames and returns how many frames ran in between.
+ */
+export async function steady(name, { width, height, cell, warm = 1500, seconds = 4 }) {
+  // Full size at a device pixel ratio of 1: every renderer draws width x height pixels.
+  const host = document.createElement('canvas');
+  host.width = width; host.height = height; host.style.cssText = `position:fixed;left:0;top:0;width:${width}px;height:${height}px`;
+  document.body.appendChild(host);
+  const src = liveSource(width, height);
+  const r = RENDERERS[name](host, src, cell);
+  await r.ready;
+  let frames = 0, running = true;
+  // The driver stands in for the page's video: it repaints the source and schedules itself, all taken off as 'bench'. A
+  // renderer that draws itself (a field, from its own frame loop) gets frame() for its pointer here; any other is called
+  // from a loop of its own, as a page would run it, so every renderer pays for one animation frame a frame.
+  const selfDrawn = !!r.drawsItself;
+  const driver = () => {
+    if (!running) return;
+    performance.mark('bench-paint');
+    src.paint();
+    frames++;
+    nativeRaf(driver);
+    performance.measure('bench', 'bench-paint');
+    if (selfDrawn) r.frame();
+  };
+  nativeRaf(driver);
+  if (!selfDrawn) { const page = () => { if (!running) return; r.frame(); nativeRaf(page); }; nativeRaf(page); }
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  await wait(warm);
+  performance.mark('steady-start');
+  const first = frames;
+  await wait(seconds * 1000);
+  performance.mark('steady-end');
+  const count = frames - first;
+  running = false;
+  await wait(50);
+  r.destroy(); host.remove();
+  return count;
+}
+
+Object.assign(window, { perf: { measure, steady, RENDERERS: Object.keys(RENDERERS) } });
