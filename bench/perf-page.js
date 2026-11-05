@@ -94,6 +94,12 @@ export const RENDERERS = {
     return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
   'idle (source repainted, nothing drawn)': () => ({ ready: Promise.resolve(), frame() {}, destroy() {} }),
+  // A photo that does not move: drawn once, then nothing until something changes.
+  'asciify-engine field, still image': (host, src, cell) => {
+    const still = document.createElement('canvas'); still.width = src.canvas.width; still.height = src.canvas.height; still.getContext('2d').drawImage(src.canvas, 0, 0);
+    const field = mountGlyphField(host, { source: still, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0 });
+    return { drawsItself: true, ready: field.ready, frame() {}, destroy() { field.destroy(); } };
+  },
   'asciify-engine field in a worker (no hover)': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0, worker: true });
     return { drawsItself: true, ready: field.ready, frame() {}, destroy() { field.destroy(); } };

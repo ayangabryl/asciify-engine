@@ -5,6 +5,7 @@
 // run taking every renderer in turn.
 // node bench/screen.mjs [--only regex] [--size 1920x1080] [--cell 12] [--seconds 4] [--runs 5] [--out file.json]
 import fs from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -25,6 +26,21 @@ const server = http.createServer((req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--js-flags=--expose-gc'] });
+// Every process Chrome runs for this benchmark (browser, renderers, GPU, workers' hosts): the descendants of this one.
+const chromeProcesses = () => {
+  const parent = new Map();
+  for (const name of readdirSync('/proc')) {
+    if (!/^\d+$/.test(name)) continue;
+    try { const stat = readFileSync(`/proc/${name}/stat`, 'utf8'); parent.set(Number(name), Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])); } catch { /* gone */ }
+  }
+  return [...parent.keys()].filter(pid => { let p = pid; for (let i = 0; i < 32 && p > 1; i++) { p = parent.get(p); if (p === process.pid) return true; } return false; });
+};
+/** Proportional set size of those processes, MB: memory each really holds, shared pages divided among their users. */
+const memoryMb = () => chromeProcesses().reduce((sum, pid) => { try { return sum + Number(/Pss:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/smaps_rollup`, 'utf8'))?.[1] ?? 0) / 1024; } catch { return sum; } }, 0);
+/** CPU time those processes have used, seconds (user and system). */
+const cpuSeconds = () => chromeProcesses().reduce((sum, pid) => { try { const f = readFileSync(`/proc/${pid}/stat`, 'utf8'); const r = f.slice(f.lastIndexOf(')') + 2).split(' '); return sum + (Number(r[11]) + Number(r[12])) / 100; } catch { return sum; } }, 0);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 const results = {};
 const names = await (async () => {
   const page = await browser.newPage();
@@ -49,8 +65,15 @@ for (let run = 0; run < runs; run++) {
     cdp.on('Tracing.dataCollected', collect);
     const complete = new Promise(r => cdp.once('Tracing.tracingComplete', r));
     await cdp.send('Tracing.start', { categories: 'toplevel,blink.user_timing,v8,devtools.timeline', transferMode: 'ReportEvents' });
-    let frames = 0;
+    let frames = 0, memory = 0, cpuStart = 0, cpuEnd = 0;
+    // Memory halfway through the measured window; CPU over it (the run warms up for 1.5 s first).
+    const sampling = (async () => {
+      await sleep(1700); cpuStart = cpuSeconds();
+      await sleep(seconds * 500); memory = memoryMb();
+      await sleep(seconds * 500 - 400); cpuEnd = cpuSeconds();
+    })();
     try { frames = await page.evaluate(o => window.perf.steady(o.name, o), { name, width, height, cell, seconds }); } catch (e) { console.error(name, e.message); }
+    await sampling;
     await cdp.send('Tracing.end');
     await complete;
     cdp.off('Tracing.dataCollected', collect);
@@ -96,8 +119,9 @@ for (let run = 0; run < runs; run++) {
       console.log(`  ${name}: ` + Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${(v / 1000 / frames).toFixed(3)}`).join(', '));
     }
     const cpuMs = cpuTasks.length ? Math.max(0, cpu - bench) / 1000 / frames : NaN;
-    (results[name] ??= []).push({ ms: +ms.toFixed(3), cpuMs: +cpuMs.toFixed(3), frames, fps: +(frames / seconds).toFixed(1) });
-    line.push(`${name.replace('asciify-engine ', '')} ${ms.toFixed(3)} ms, cpu ${cpuMs.toFixed(3)} (${frames} frames)`);
+    const browserCpu = (cpuEnd - cpuStart) / (seconds - 0.4);
+    (results[name] ??= []).push({ ms: +ms.toFixed(3), cpuMs: +cpuMs.toFixed(3), frames, fps: +(frames / seconds).toFixed(1), memoryMb: +memory.toFixed(1), browserCpu: +browserCpu.toFixed(3) });
+    line.push(`${name.replace('asciify-engine ', '')} ${ms.toFixed(3)} ms, cpu ${cpuMs.toFixed(3)}, ${memory.toFixed(0)} MB, ${(browserCpu * 100).toFixed(0)} % CPU (${frames} frames)`);
     await page.close();
   }
   console.log(`run ${run + 1}: ${line.join(' | ')}`);
@@ -105,7 +129,8 @@ for (let run = 0; run < runs; run++) {
 console.log(`\nmain thread per frame on screen, ${width}x${height}, ${cell} px cells (Chrome trace, ${seconds} s a run, ${runs} runs), ms:`);
 for (const [name, list] of Object.entries(results)) {
   const t = list.map(r => r.ms).sort((a, b) => a - b), c = list.map(r => r.cpuMs).sort((a, b) => a - b);
-  console.log(`  ${name.padEnd(56)} min ${t[0].toFixed(3)}  median ${t[Math.floor(t.length / 2)].toFixed(3)}  max ${t[t.length - 1].toFixed(3)}   cpu: min ${c[0].toFixed(3)}  median ${c[Math.floor(c.length / 2)].toFixed(3)}  max ${c[c.length - 1].toFixed(3)}`);
+  const med = key => { const v = list.map(r => r[key]).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
+  console.log(`  ${name.padEnd(56)} min ${t[0].toFixed(3)}  median ${t[Math.floor(t.length / 2)].toFixed(3)}  max ${t[t.length - 1].toFixed(3)}   cpu: min ${c[0].toFixed(3)}  median ${c[Math.floor(c.length / 2)].toFixed(3)}  max ${c[c.length - 1].toFixed(3)}   memory ${med('memoryMb').toFixed(0)} MB, browser CPU ${(med('browserCpu') * 100).toFixed(0)} %`);
 }
 const out = arg('--out', null);
 if (out) await fs.writeFile(out, JSON.stringify({ width, height, cell, seconds, runs, results }, null, 1));

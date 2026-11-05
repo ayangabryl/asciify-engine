@@ -1,0 +1,191 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "cell": 12,
+ "seconds": 5,
+ "runs": 3,
+ "results": {
+  "ASCII Magic (rebuilt): convert + draw": [
+   {
+    "ms": 203.664,
+    "cpuMs": 17.738,
+    "frames": 25,
+    "fps": 5,
+    "memoryMb": 363.9,
+    "browserCpu": 3.27
+   },
+   {
+    "ms": 231.107,
+    "cpuMs": 17.487,
+    "frames": 23,
+    "fps": 4.6,
+    "memoryMb": 394.3,
+    "browserCpu": 3.3
+   },
+   {
+    "ms": 219.136,
+    "cpuMs": 17.563,
+    "frames": 24,
+    "fps": 4.8,
+    "memoryMb": 378.7,
+    "browserCpu": 3.235
+   }
+  ],
+  "asciify-engine field (no hover)": [
+   {
+    "ms": 1.104,
+    "cpuMs": 0.761,
+    "frames": 47,
+    "fps": 9.4,
+    "memoryMb": 400.4,
+    "browserCpu": 3.387
+   },
+   {
+    "ms": 1.213,
+    "cpuMs": 0.765,
+    "frames": 48,
+    "fps": 9.6,
+    "memoryMb": 411.2,
+    "browserCpu": 3.504
+   },
+   {
+    "ms": 1.095,
+    "cpuMs": 0.671,
+    "frames": 47,
+    "fps": 9.4,
+    "memoryMb": 395.5,
+    "browserCpu": 3.483
+   }
+  ],
+  "idle (source repainted, nothing drawn)": [
+   {
+    "ms": 0.409,
+    "cpuMs": 0.378,
+    "frames": 301,
+    "fps": 60.2,
+    "memoryMb": 349.4,
+    "browserCpu": 1.941
+   },
+   {
+    "ms": 0.375,
+    "cpuMs": 0.316,
+    "frames": 300,
+    "fps": 60,
+    "memoryMb": 344.8,
+    "browserCpu": 1.937
+   },
+   {
+    "ms": 0.337,
+    "cpuMs": 0.32,
+    "frames": 301,
+    "fps": 60.2,
+    "memoryMb": 335.5,
+    "browserCpu": 1.965
+   }
+  ],
+  "asciify-engine field, still image": [
+   {
+    "ms": 0.363,
+    "cpuMs": 0.343,
+    "frames": 302,
+    "fps": 60.4,
+    "memoryMb": 398.9,
+    "browserCpu": 2.039
+   },
+   {
+    "ms": 0.418,
+    "cpuMs": 0.316,
+    "frames": 300,
+    "fps": 60,
+    "memoryMb": 379.7,
+    "browserCpu": 2.057
+   },
+   {
+    "ms": 0.344,
+    "cpuMs": 0.329,
+    "frames": 300,
+    "fps": 60,
+    "memoryMb": 382,
+    "browserCpu": 1.946
+   }
+  ],
+  "asciify-engine field in a worker (no hover)": [
+   {
+    "ms": 1.016,
+    "cpuMs": 0.508,
+    "frames": 50,
+    "fps": 10,
+    "memoryMb": 427,
+    "browserCpu": 3.43
+   },
+   {
+    "ms": 1.125,
+    "cpuMs": 0.467,
+    "frames": 50,
+    "fps": 10,
+    "memoryMb": 400.3,
+    "browserCpu": 3.467
+   },
+   {
+    "ms": 1.324,
+    "cpuMs": 0.55,
+    "frames": 50,
+    "fps": 10,
+    "memoryMb": 331.2,
+    "browserCpu": 3.537
+   }
+  ],
+  "2025.unseen.co ASCII pass (rebuilt)": [
+   {
+    "ms": 0.96,
+    "cpuMs": 0.58,
+    "frames": 58,
+    "fps": 11.6,
+    "memoryMb": 485.7,
+    "browserCpu": 3.654
+   },
+   {
+    "ms": 1.043,
+    "cpuMs": 0.568,
+    "frames": 60,
+    "fps": 12,
+    "memoryMb": 478.8,
+    "browserCpu": 3.617
+   },
+   {
+    "ms": 0.751,
+    "cpuMs": 0.569,
+    "frames": 60,
+    "fps": 12,
+    "memoryMb": 402.8,
+    "browserCpu": 3.739
+   }
+  ],
+  "webgl-ascii-hero (vendored)": [
+   {
+    "ms": 1.795,
+    "cpuMs": 0.95,
+    "frames": 41,
+    "fps": 8.2,
+    "memoryMb": 438.7,
+    "browserCpu": 3.704
+   },
+   {
+    "ms": 1.728,
+    "cpuMs": 0.96,
+    "frames": 40,
+    "fps": 8,
+    "memoryMb": 423.2,
+    "browserCpu": 3.661
+   },
+   {
+    "ms": 1.763,
+    "cpuMs": 0.968,
+    "frames": 40,
+    "fps": 8,
+    "memoryMb": 362.4,
+    "browserCpu": 3.72
+   }
+  ]
+ }
+}
