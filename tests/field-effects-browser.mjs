@@ -150,7 +150,8 @@ try {
       await field.ready;
       small = 0;
       const wait = ms => new Promise(r => setTimeout(r, ms));
-      await wait(1900);
+      // Reads come a few times a second; a slow software GPU draws few frames, so wait for two rather than a fixed time.
+      for (let t = 0; t < 100 && reads < 2; t++) await wait(100);
       const sum = canvas => { const p = document.createElement('canvas'); p.width = 400; p.height = 300; const g = p.getContext('2d'); g.drawImage(canvas, 0, 0); const d = original.call(g, 0, 0, 400, 300).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i]; return s / (d.length / 4); };
       const live = sum(host), afterSmall = small, afterReads = reads;
       field.destroy();
