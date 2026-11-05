@@ -11,7 +11,7 @@ import * as aaImageModule from 'aalib.js/lib/core/AAImage.js';
 const AAImage = aaImageModule.default?.default ?? aaImageModule.default;
 const aaFactory = aaModule.default?.default ?? aaModule.default ?? aaModule;
 const HTMLRenderer = htmlRendererModule.HTMLRenderer ?? htmlRendererModule.default?.HTMLRenderer;
-import { toAsciiGrid } from '../src/headless.ts';
+import { toAsciiGrid, imageToAsciiGrid } from '../src/headless.ts';
 import { drawing as asciiRestDrawing } from 'ascii.rest/kit';
 import { tuneHeadless } from '../src/headless/grid.ts';
 import { asciiText } from '../src/core.ts';
@@ -212,6 +212,11 @@ export const TEXT_RENDERERS = {
   'asciify-engine headless, tone': (picture, columns, rows) => { tuneHeadless(window.tune?.internal ?? {}); return toAsciiGrid(pixelsOf(picture), { columns, rows, mode: 'tone', charset: ' .:-=+*#%@', ...(window.tune?.options ?? {}) }).lines; },
   // For video: ordered dither, and each frame given the one before (in a sequence; a single picture has none).
   'asciify-engine headless, shape (video settings)': Object.assign((picture, columns, rows, previous) => { tuneHeadless(window.tune?.internal ?? {}); const grid = toAsciiGrid(pixelsOf(picture), { columns, rows, dither: 'ordered', previous }); window.lastGrid = grid; return grid.lines; }, { sequence: true }),
+  // The browser path: the frame drawn down on the GPU to two pixels per part of a cell, then matched.
+  'asciify-engine imageToAsciiGrid': (picture, columns, rows) => { tuneHeadless(window.tune?.internal ?? {}); return imageToAsciiGrid(picture, { columns, rows }).lines; },
+  'asciify-engine imageToAsciiGrid, tone (fast)': (picture, columns, rows) => imageToAsciiGrid(picture, { columns, rows, mode: 'tone', ...(window.tune?.options ?? {}) }).lines,
+  'asciify-engine imageToAsciiGrid, tone (fast, video)': Object.assign((picture, columns, rows, previous) => { const grid = imageToAsciiGrid(picture, { columns, rows, mode: 'tone', dither: 'ordered', previous }); window.lastGrid = grid; return grid.lines; }, { sequence: true }),
+  'asciify-engine imageToAsciiGrid (video settings)': Object.assign((picture, columns, rows, previous) => { tuneHeadless(window.tune?.internal ?? {}); const grid = imageToAsciiGrid(picture, { columns, rows, dither: 'ordered', previous }); window.lastGrid = grid; return grid.lines; }, { sequence: true }),
   'asciify-engine headless, shape': (picture, columns, rows) => { tuneHeadless(window.tune?.internal ?? {}); return toAsciiGrid(pixelsOf(picture), { columns, rows, ...(window.tune?.options ?? {}) }).lines; },
 };
 

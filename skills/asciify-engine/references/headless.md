@@ -19,7 +19,9 @@ gridToHtml(grid);                 // a <pre>; add aria-hidden or a label where y
 
 - **Node**: `const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });`
   then `toAsciiGrid({ data, width: info.width, height: info.height }, …)`.
-- **Browser or worker**: an `ImageData` works as is: `toAsciiGrid(ctx.getImageData(0, 0, w, h), …)`.
+- **Browser or worker**: `imageToAsciiGrid(source, options)` takes a video, image or canvas (a three.js one included) as it is.
+  It draws the frame down on the GPU first, so only a small picture comes back to the CPU: use it for live video. With
+  `mode: 'tone'` it reads one pixel a cell, a 1080p frame in about 2 ms. An `ImageData` also works with `toAsciiGrid`.
 - **Edge runtimes**: decode with a WebAssembly image decoder, or pass frames you already have as RGBA.
 
 ## Options
@@ -39,8 +41,8 @@ gridToHtml(grid);                 // a <pre>; add aria-hidden or a label where y
 
 ## Video and animation
 
-Pass `dither: 'ordered'` and the previous grid each frame. On a slow pan this changes about 8 % of cells per frame, against
-25 % with the still defaults, at the same fidelity:
+Pass `dither: 'ordered'` and the previous grid each frame. On a slow pan this changes about 4 % of cells per frame, against
+25 % with the still defaults, with the picture as faithful while it moves:
 
 ```ts
 let previous = null;
@@ -50,9 +52,12 @@ for (const frame of frames) {
 }
 ```
 
+For a playing video in the browser, `imageToAsciiGrid(video, { columns: 160, mode: 'tone', dither: 'ordered', previous })`
+draws each frame in about 2 ms; shape mode (the default) is the most faithful and takes about 25 ms.
+
 ## Quality and cost
 
-Shape matching was measured against other renderers (aalib.js, ascii.rest, three.js AsciiEffect, a naive ramp) on photos it
-was not tuned on, line art and type: ahead of everything tested on photos, line art and type, a 1080p frame in about 20 ms on one
-core, 4.7 kB gzipped. Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
+Shape matching was measured against other renderers (ASCII Magic, the Devault generator, aalib.js, ascii.rest, three.js
+AsciiEffect, a naive ramp) on photos it was not tuned on, line art and type: ahead of everything tested on photos, line art and
+type, a 1080p frame in about 25 ms on one core (tone mode through `imageToAsciiGrid`: about 2 ms), 4.7 kB gzipped. Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
 closely in that family. The output for a given input is deterministic and identical across runtimes.

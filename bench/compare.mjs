@@ -34,6 +34,8 @@ await page.goto(`http://127.0.0.1:${server.address().port}/`);
 await page.waitForFunction(() => window.bench);
 if (arg('--dump', null)) await page.evaluate(() => { window.dump = true; });
 if (arg('--tune', null)) await page.evaluate(tune => { window.tune = tune; }, JSON.parse(arg('--tune', '{}')));
+if (arg('--tune', null)) await page.evaluate(t => { window.tune = t; }, JSON.parse(arg('--tune', '{}')));
+if (arg('--q', null)) await page.evaluate(q => { globalThis.__q = q; }, arg('--q', 'high'));
 if (arg('--field', null)) await page.evaluate(o => { window.fieldOptions = o; }, JSON.parse(arg('--field', '{}')));
 if (arg('--pixels-only', null)) await page.evaluate(only => { for (const k of Object.keys(window.bench.PIXEL_RENDERERS)) if (!k.includes(only)) delete window.bench.PIXEL_RENDERERS[k]; for (const k of Object.keys(window.bench.TEXT_RENDERERS)) delete window.bench.TEXT_RENDERERS[k]; }, arg('--pixels-only', ''));
 
@@ -84,15 +86,20 @@ if (!only || arg('--extras', null)) {
       try {
         const rows = bench.gridRows(frames[0], 100);
         let previous = null;
-        const churn = bench.churn(frames.map(f => { const lines = render(f, 100, rows, previous); if (render.sequence) previous = window.lastGrid; return lines; }));
+        const sequence = frames.map(f => { const lines = render(f, 100, rows, previous); if (render.sequence) previous = window.lastGrid; return lines; });
+        const churn = bench.churn(sequence);
+        // Fidelity while panning: the last four frames of the pan scored against their own pictures, so a renderer that keeps
+        // characters from frame to frame is caught if they lag the picture.
+        let pan = 0;
+        for (const f of [20, 21, 22, 23]) pan += (await bench.score(await bench.drawText(sequence[f]), frames[f])).far / 4;
         const ms = bench.timeIt(() => render(big, 160, bench.gridRows(big, 160)));
-        out[name] = { churn, ms };
+        out[name] = { churn, ms, pan: +pan.toFixed(3) };
       } catch (e) { out[name] = { error: String(e && e.message || e).slice(0, 160) }; }
     }
     return out;
   }, { url: pictures[0].url });
   console.log('\nflicker on a slow pan (% of cells changing per frame) and 1920x1080 -> 160 columns (ms):');
-  for (const [name, r] of Object.entries(results.extras)) console.log(`  ${name.padEnd(40)} ${r.error ? r.error : `${String(r.churn).padStart(6)} %   ${String(r.ms).padStart(7)} ms`}`);
+  for (const [name, r] of Object.entries(results.extras)) console.log(`  ${name.padEnd(40)} ${r.error ? r.error : `${String(r.churn).padStart(6)} %   ${String(r.ms).padStart(7)} ms   pan far ${r.pan}`}`);
 }
 const outFile = arg('--out', null);
 if (outFile) await fs.writeFile(outFile, JSON.stringify(results, null, 1));

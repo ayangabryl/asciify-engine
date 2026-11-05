@@ -12,7 +12,7 @@ November 4, 2026. asciify-engine 4.33.0, three 0.187.0, postprocessing 6.39.6, a
 | Line art | **0.846 / 0.876** | 0.799 / 0.798 | 0.686 / 0.847 | 0.718 / 0.601 | 0.737 / 0.674 |
 | Type | **0.902 / 0.889** | 0.876 / 0.868 | 0.786 / 0.846 | 0.874 / 0.836 | 0.841 / 0.810 |
 | 1920×1080 frame to 160 columns | 29 ms | 427 ms | 167 ms | 336 ms | 27 ms |
-| Flicker on a slow pan (cells per frame) | 25 % stills, **8 %** video settings | 34 % | 7 % | 7.8 % | 4.7 % |
+| Flicker on a slow pan (cells per frame) | 25 % stills, **3.8 %** video settings | 34 % | 7 % | 7.8 % | 4.7 % |
 | Pixels to text in Node, no DOM | **yes** | no | yes | no | (if written to) |
 | Minified + gzipped | 4.7 kB | 8.6 kB | 9.1 kB | 130.8 kB (with three) | — |
 
@@ -71,14 +71,20 @@ grid and font as everyone else:
 
 | | Photos (close / far) | Line art | Type | Flicker | 1080p frame |
 | --- | --- | --- | --- | --- | --- |
-| **asciify-engine/headless** | **0.593 / 0.878** | **0.846 / 0.876** | **0.902 / 0.889** | 25 %, **8 %** video | 29 ms |
+| **asciify-engine/headless** | **0.593 / 0.878** | **0.846 / 0.876** | **0.902 / 0.889** | 25 %, **3.8 %** video | 25 ms |
+| asciify-engine `imageToAsciiGrid`, `mode: 'tone'` | 0.540 / 0.869 | 0.780 / 0.839 | 0.870 / 0.894 | 3.5 % video | **2.0 ms** |
 | Devault, Detailed | 0.426 / 0.785 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 180 ms |
-| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 161 ms |
-| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | **1.6 ms** |
+| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 167 ms |
+| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | 2.2 ms |
 
-asciify-engine is ahead of both on every picture at both distances. The closest call is line art seen from a distance, where
-Devault's edge characters do well (0.871 against 0.876). ASCII Magic is the fastest by far: it reads one pixel per cell from a
-picture drawn down to the grid, which is also why it scores lowest. On the GPU, the glyph field with `sample: 'shape'` scores
+asciify-engine is ahead of both on every picture at both distances, and with its video settings it flickers least (3.8 % of
+cells a frame on a slow pan, against 6.8 % and 9.4 %, while scoring 0.923 on the moving picture against 0.828 and 0.682). The
+closest call is line art seen from a distance, where Devault's edge characters do well (0.871 against 0.876).
+
+For speed, `imageToAsciiGrid` in tone mode reads one pixel a cell from a frame drawn down on the GPU, as ASCII Magic does: 2.0
+ms against its 2.2 ms, ahead of it on photos, on line art and on type at a distance. Up close on type it is just behind (0.870
+against 0.875), and Devault's edge characters keep line art at a distance (0.871 against 0.839): shape mode, at 25 ms, is the
+one ahead of both everywhere. On the GPU, the glyph field with `sample: 'shape'` scores
 0.618 / 0.922, 0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
 
 ## Studio heroes: 2025.unseen.co and an open-source WebGL hero
@@ -184,9 +190,9 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 
 - **Photos at a distance:** ahead of aalib on average by a small margin (0.878 against 0.868); on 4 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
-  frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (8 %), still above a plain ramp (4.7 %).
-- **Speed against ASCII Magic:** its one-pixel-per-cell reading converts a 1080p frame in 1.6 ms against 29 ms; asciify-engine
-  reads every pixel of every cell, which is where its fidelity comes from. A naive ramp is about as fast (27 ms).
+  frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (3.8 %, below a plain ramp's 4.7 %).
+- **One setting is not ahead of both on everything.** Shape mode is ahead on every picture but takes 25 ms a 1080p frame;
+  tone mode through `imageToAsciiGrid` is faster than ASCII Magic (2.0 ms against 2.2) but just behind it on type up close.
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
 - GPU frame times on real hardware were not measured: the runs use SwiftShader, which compares the work each renderer asks for

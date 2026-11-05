@@ -4,5 +4,7 @@
  */
 export { toAsciiGrid, glyphInk, ASCII_SYMBOLS } from './headless/grid';
 export type { AsciiPixels, AsciiGridOptions, AsciiGrid } from './headless/grid';
+export { imageToAsciiGrid } from './headless/image';
+export type { AsciiImageSource } from './headless/image';
 export { gridToText, gridToAnsi, gridToSvg, gridToHtml } from './headless/format';
 export type { AnsiOptions, MarkupOptions } from './headless/format';

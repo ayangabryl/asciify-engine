@@ -114,3 +114,19 @@ describe('video settings', () => {
     expect(toAsciiGrid(frame(0), { columns: 60, previous: a }).lines).toEqual(toAsciiGrid(frame(0), { columns: 60 }).lines);
   });
 });
+
+describe('fast paths', () => {
+  it('reads a frame drawn down to one pixel a cell as that pixel in every part of the cell', () => {
+    const small = picture(40, 12, (x, y) => ((x * 7 + y * 3) % 10) / 10);
+    const tone = toAsciiGrid(small, { columns: 40, rows: 12, mode: 'tone', levels: 'none' });
+    expect(tone.lines).toHaveLength(12);
+    expect(tone.lines.every(line => line.length === 40)).toBe(true);
+    // A flat picture at one pixel a cell gives one character throughout, as it does at full size.
+    const flat = toAsciiGrid(picture(40, 12, () => 0.6), { columns: 40, rows: 12, mode: 'tone', levels: 'none', dither: false });
+    expect(new Set(flat.lines.join('')).size).toBe(1);
+  });
+  it('says what to do instead when imageToAsciiGrid runs without a canvas', async () => {
+    const { imageToAsciiGrid } = await import('../headless');
+    expect(() => imageToAsciiGrid({ width: 10, height: 10 } as unknown as CanvasImageSource)).toThrow(/toAsciiGrid/);
+  });
+});
