@@ -78,7 +78,7 @@ const SUB = GLYPH_COLS * GLYPH_ROWS;
 // matching a glyph a third of a cell off centre.
 let DIM_WEIGHT = 2, STRUCTURE = 0.15, EXTRA_INK = 1, SOFTEN = 0.5, TONE_WEIGHT = 256, SHIFT_COST = 0.15;
 // How much worse a kept character (see `previous`) may be than the best one, in shape cells and in fill cells.
-let KEEP_MARGIN = 0.6, KEEP_TONE = 0.04, FILL_ALL: 'all' | 'symbols' | 'classic' = 'symbols', INK_SCALE = 1.45, STROKE_UNSCALED = true;
+let KEEP_MARGIN = 0.6, KEEP_TONE = 0.04, FILL_ALL: 'all' | 'symbols' | 'classic' = 'symbols', INK_SCALE = 1.45, STROKE_LIFT = 0.5;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 /**
  * Spreads each sub-cell a little into its neighbours across and down (weight `amount` shared between the two), so a stroke a
@@ -97,12 +97,12 @@ function soften(v: Float32Array, at: number, out: Float32Array, amount: number) 
 const FILL = ' .:-=+*#%@';
 const FILL_SYMBOLS = ` .,:;'\`"^-_~=+*<>!?|/\\()[]{}#%@&$`;
 /** @internal For tuning only. */
-const DEFAULTS = { dimWeight: DIM_WEIGHT, structure: STRUCTURE, extraInk: EXTRA_INK, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, fillAll: FILL_ALL, inkScale: INK_SCALE, strokeUnscaled: STROKE_UNSCALED, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE };
+const DEFAULTS = { dimWeight: DIM_WEIGHT, structure: STRUCTURE, extraInk: EXTRA_INK, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, fillAll: FILL_ALL, inkScale: INK_SCALE, strokeLift: STROKE_LIFT, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE };
 /** @internal For the benchmark's parameter search only; called with nothing, restores the defaults. */
 export const tuneHeadless = (t: Partial<typeof DEFAULTS> = {}) => {
   const v = { ...DEFAULTS, ...t };
   DIM_WEIGHT = v.dimWeight; STRUCTURE = v.structure; EXTRA_INK = v.extraInk; SOFTEN = v.soften; TONE_WEIGHT = v.toneWeight; SHIFT_COST = v.shiftCost;
-  KEEP_MARGIN = v.keepMargin; KEEP_TONE = v.keepTone; FILL_ALL = v.fillAll; INK_SCALE = v.inkScale; STROKE_UNSCALED = v.strokeUnscaled;
+  KEEP_MARGIN = v.keepMargin; KEEP_TONE = v.keepTone; FILL_ALL = v.fillAll; INK_SCALE = v.inkScale; STROKE_LIFT = v.strokeLift;
   table = null;
 };
 let table: { coverage: Float32Array; mean: Float32Array; shape: Float32Array; weight: Float32Array } | null = null;
@@ -281,7 +281,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   const toneOf = indices.map((index, g) => (allKnown ? mean[index] / fillTop : g / Math.max(1, glyphs.length - 1)));
   // Cells with a stroke in them weigh tone on the unstretched scale (INK_SCALE fills flat areas fuller; on a stroke it would
   // trade the stroke's shape for ink).
-  const strokeTone = toneOf.map(t => t * (shapeMode && STROKE_UNSCALED ? INK_SCALE : 1));
+  const strokeTone = toneOf.map(t => t * (shapeMode ? INK_SCALE ** STROKE_LIFT : 1));
   const out: string[] = [];
   const colors = wantColor ? new Uint8Array(columns * rows * 3) : null;
   const cellTarget = new Float32Array(SUB), softTarget = new Float32Array(SUB);

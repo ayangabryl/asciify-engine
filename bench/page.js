@@ -54,7 +54,103 @@ const pixelsOf = canvas => canvas.getContext('2d').getImageData(0, 0, canvas.wid
 const resized = (source, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(source, 0, 0, w, h); return c; };
 
 // ---------- text renderers: each returns rows of characters, bright = dense (light characters on a dark ground) ----------
+// ---------- ASCII generators people use: rebuilt from the code their sites ship (November 2026) ----------
+// Halving steps with high-quality smoothing down to the grid, as devault-ascii.pages.dev's analyzer samples a picture.
+const halved = (source, w, h) => {
+  let img = source, iw = source.width, ih = source.height;
+  while (iw > w * 2 && ih > h * 2) { const nw = Math.max(w, Math.ceil(iw / 2)), nh = Math.max(h, Math.ceil(ih / 2)); img = resized(img, nw, nh); iw = nw; ih = nh; }
+  return resized(img, w, h);
+};
+// Devault's edge finder (its edge worker): a structure tensor over the blurred RGB picture, coherent edges kept, thinned to
+// their ridge, then for each cell the strongest edge and its direction (0 '-', 1 '/', 2 '|', 3 '\').
+function devaultEdges(rgba, w, h, cols, rows, smooth) {
+  const n = w * h, strength = new Float32Array(cols * rows), dir = new Uint8Array(cols * rows);
+  const blurH = (src, dst) => { for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) { const a = x > 1 ? x - 2 : 0, b = x > 0 ? x - 1 : 0, c = x < w - 1 ? x + 1 : w - 1, d = x < w - 2 ? x + 2 : w - 1; dst[r + x] = (src[r + a] + 4 * src[r + b] + 6 * src[r + x] + 4 * src[r + c] + src[r + d]) / 16; } } };
+  const blurV = (src, dst) => { for (let y = 0; y < h; y++) { const a = (y > 1 ? y - 2 : 0) * w, b = (y > 0 ? y - 1 : 0) * w, r = y * w, c = (y < h - 1 ? y + 1 : h - 1) * w, d = (y < h - 2 ? y + 2 : h - 1) * w; for (let x = 0; x < w; x++) dst[r + x] = (src[a + x] + 4 * src[b + x] + 6 * src[r + x] + 4 * src[c + x] + src[d + x]) / 16; } };
+  const tmp = new Float32Array(n), blur = (a, times) => { for (let i = 0; i < times; i++) { blurH(a, tmp); blurV(tmp, a); } };
+  if (w < 5 || h < 5) return { strength, dir };
+  const ch = [0, 1, 2].map(k => { const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = rgba[i * 4 + k] / 255; return a; });
+  const passes = 1 + Math.round(Math.min(1, Math.max(0, smooth)) * 2);
+  ch.forEach(a => blur(a, passes));
+  const xx = new Float32Array(n), yy = new Float32Array(n), xy = new Float32Array(n);
+  for (const e of ch) for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    const gx = e[i - w + 1] + 2 * e[i + 1] + e[i + w + 1] - (e[i - w - 1] + 2 * e[i - 1] + e[i + w - 1]);
+    const gy = e[i + w - 1] + 2 * e[i + w] + e[i + w + 1] - (e[i - w - 1] + 2 * e[i - w] + e[i - w + 1]);
+    xx[i] += gx * gx; yy[i] += gy * gy; xy[i] += gx * gy;
+  }
+  blur(xx, 2); blur(yy, 2); blur(xy, 2);
+  const s = new Float32Array(n), cos2 = new Float32Array(n), sin2 = new Float32Array(n);
+  const step = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a + 1e-9))); return t * t * (3 - 2 * t); };
+  let top = 0;
+  for (let i = 0; i < n; i++) {
+    const a = xx[i], b = yy[i], c = xy[i], d = Math.sqrt((a - b) * (a - b) + 4 * c * c), l1 = (a + b + d) / 2, l2 = (a + b - d) / 2;
+    s[i] = Math.sqrt(Math.max(0, l1)) * step(0.15, 0.65, (l1 - l2) / (l1 + l2 + 1e-9));
+    if (s[i] > top) top = s[i];
+    if (d > 1e-9) { cos2[i] = (a - b) / d; sin2[i] = 2 * c / d; }
+  }
+  if (top < 1e-6) return { strength, dir };
+  const hist = new Uint32Array(512); for (let i = 0; i < n; i++) hist[Math.min(511, Math.floor(s[i] / top * 512))]++;
+  const pct = q => { let seen = 0; for (let b = 0; b < 512; b++) { seen += hist[b]; if (seen >= q * n) return (b + 1) / 512 * top; } return top; };
+  const hi = pct(0.992), lo = Math.max(pct(0.8), 0.15 * hi);
+  if (hi - lo < 1e-6) return { strength, dir };
+  for (let i = 0; i < n; i++) s[i] = Math.min(1, Math.max(0, (s[i] - lo) / (hi - lo)));
+  const ridge = new Float32Array(n);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x, v = s[i]; if (v <= 0) continue;
+    const c = Math.sqrt((1 + cos2[i]) / 2), sn = (sin2[i] >= 0 ? 1 : -1) * Math.sqrt((1 - cos2[i]) / 2);
+    let a, b;
+    if (Math.abs(sn) < 0.3827) { a = i - 1; b = i + 1; } else if (Math.abs(sn) > 0.9239) { a = i - w; b = i + w; } else if (sn * c > 0) { a = i - w - 1; b = i + w + 1; } else { a = i - w + 1; b = i + w - 1; }
+    if (v >= s[a] && v >= s[b]) ridge[i] = v;
+  }
+  const cw = w / cols, chh = h / rows;
+  for (let r = 0; r < rows; r++) { const y0 = Math.floor(r * chh), y1 = Math.min(h, Math.floor((r + 1) * chh));
+    for (let c = 0; c < cols; c++) { const x0 = Math.floor(c * cw), x1 = Math.min(w, Math.floor((c + 1) * cw)); let best = 0, dx = 0, dy = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * w + x, v = ridge[i]; if (v <= 0) continue; if (v > best) best = v; dx -= v * cos2[i]; dy -= v * sin2[i]; }
+      const k = r * cols + c; strength[k] = best;
+      if (best > 0) { const deg = 0.5 * Math.atan2(dy, dx) * 180 / Math.PI, m = Math.abs(deg); dir[k] = m < 22.5 ? 0 : m >= 67.5 ? 2 : deg > 0 ? 3 : 1; } } }
+  return { strength, dir };
+}
+// Devault's Classic (and Detailed) style with its defaults: auto levels at the 1st and 99th percentiles, a cutoff of 6 %, and
+// edges on at strength 55: a strong edge takes '-', '/', '|' or '\' and every edge lifts the cell.
+const devault = ramp => (picture, columns, rows) => {
+  const { data } = pixelsOf(halved(picture, columns, rows)), n = columns * rows, luma = new Float32Array(n), hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) { const l = (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255; luma[i] = l; hist[Math.min(255, l * 255 | 0)]++; }
+  const at = q => { let seen = 0; for (let v = 0; v < 256; v++) { seen += hist[v]; if (seen >= q * n) return v / 255; } return 1; };
+  let lo = at(0.01), hi = at(0.99); if (hi - lo < 0.08) { const m = (hi + lo) / 2; lo = Math.max(0, m - 0.04); hi = Math.min(1, m + 0.04); }
+  // Devault sizes its edge picture from the cell shape (width over height): up to three samples a cell across, as many more down.
+  const aspect = (rows * picture.width) / (columns * picture.height);
+  const o = 1 / aspect, k = Math.max(1, Math.min(3, Math.floor(Math.sqrt(5e5 / (columns * rows * o))))), ew = columns * k, eh = rows * Math.max(1, Math.round(k * o));
+  const edges = devaultEdges(pixelsOf(halved(picture, ew, eh)).data, ew, eh, columns, rows, 0.4);
+  const glyphs = ['-', '/', '|', '\\'], out = [];
+  for (let r = 0; r < rows; r++) { let line = '';
+    for (let c = 0; c < columns; c++) { const i = r * columns + c; let a = Math.min(1, Math.max(0, (luma[i] - lo) / Math.max(1e-4, hi - lo)));
+      const v = Math.min(1, edges.strength[i] * 1.1); let edge = -1;
+      if (v > 0.05) { if (v > 0.3) { edge = edges.dir[i]; a = Math.max(a, 0.55 + 0.45 * v); } else a = Math.max(a, v * 0.9); }
+      if (edge >= 0) { line += glyphs[edge]; continue; }
+      if (a < 0.06) { line += ' '; continue; }
+      line += ramp[Math.min(ramp.length - 1, Math.floor((1 - a) * ramp.length))];
+    }
+    out.push(line); }
+  return out;
+};
+
 export const TEXT_RENDERERS = {
+  // devault-ascii.pages.dev's generator, Classic style (its default) and Detailed, as it ships them, in one ink.
+  'Devault ASCII generator (Classic)': devault('@%#*+=-:. '),
+  'Devault ASCII generator (Detailed)': devault('$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,"^`\'. '),
+  // ascii-magic.com's Characters mode with its defaults: the picture drawn down to the grid, each cell's brightness set
+  // between the picture's darkest and lightest, cells under its dark threshold (30) left empty, then '@#S08Xx+=-;:. '.
+  'ASCII Magic (characters)': (picture, columns, rows) => {
+    const { data } = pixelsOf((() => { const c = document.createElement('canvas'); c.width = columns; c.height = rows; c.getContext('2d').drawImage(picture, 0, 0, columns, rows); return c; })());
+    const ramp = '@#S08Xx+=-;:. ', step = Math.max(1, Math.floor(Math.min(rows, columns) / 40)), luma = i => 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    let lo = 255, hi = 0; for (let r = 0; r < rows; r += step) for (let c = 0; c < columns; c += step) { const l = luma((r * columns + c) * 4); if (l < lo) lo = l; if (l > hi) hi = l; }
+    const span = hi - lo || 1, cut = 0.6 * (1 - 30 / 100), out = [];
+    for (let r = 0; r < rows; r++) { let line = '';
+      for (let c = 0; c < columns; c++) { const m = Math.max(0, Math.min(1, (luma((r * columns + c) * 4) - lo) / span)); line += m < cut ? ' ' : ramp[Math.min(ramp.length - 1, Math.floor((1 - m) * ramp.length))]; }
+      out.push(line); }
+    return out;
+  },
   // What a coding agent writes in a few minutes: average each cell, index a ramp.
   'naive ramp (agent baseline)': (picture, columns, rows) => {
     const small = resized(picture, columns, rows), { data } = pixelsOf(small), ramp = ' .:-=+*#%@', out = [];
