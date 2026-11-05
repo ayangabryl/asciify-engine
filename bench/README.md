@@ -11,6 +11,7 @@ node size.mjs                                                         # bundle s
 node three-live.mjs [--shot file.png]                                 # a three.js scene as a live field source
 node tune.mjs tunes.json [--images dir]                               # parameter search for the headless renderer
 node cf-hero.mjs <their-frame.png> [--out ours.png]                    # cloudflare.com's dot hero, rebuilt live and scored
+node perf.mjs [--sizes 1920x1080,3840x2160] [--cells 12,4,1]          # frame cost on a live source, hover running
 node cf-section.mjs <out.png>                                          # the same hero on a phone, from a screenshot
 ```
 

@@ -1,0 +1,115 @@
+// Frame cost of live ASCII renderers, bundled by perf.mjs. Each renderer draws a live source (a canvas repainted every frame,
+// standing in for a playing video) into a canvas of the given size; a frame is timed from the source's repaint to the result
+// being on the GPU and finished (read back one pixel, which waits for all queued work).
+import * as THREE from 'three';
+import { EffectComposer, RenderPass, EffectPass } from 'postprocessing';
+import { AsciiEffectImpl as HeroAscii, createGlyphTexture as heroGlyphs, TERMINAL_SYMBOLS as HERO_SYMBOLS } from './vendor/webgl-ascii-hero/ascii-effect.tsx';
+import { mountGlyphField, FIELD_PHOTO_CHARSET } from '../src/field.ts';
+
+/** A moving picture: gradients and shapes that change every frame, so every upload is new. */
+export function liveSource(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  let t = 0;
+  const paint = () => {
+    t += 1;
+    const grd = g.createLinearGradient(0, 0, w, h); grd.addColorStop(0, `hsl(${t % 360},60%,20%)`); grd.addColorStop(1, `hsl(${(t * 3) % 360},70%,70%)`);
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 12; i++) { g.fillStyle = `hsl(${(i * 30 + t) % 360},80%,${40 + i * 4}%)`; g.beginPath(); g.arc((w / 2) + Math.cos(t / 20 + i) * w * .35, (h / 2) + Math.sin(t / 17 + i * 2) * h * .35, h * .08, 0, 7); g.fill(); }
+  };
+  paint();
+  return { canvas: c, paint };
+}
+
+// Every animation-frame callback is timed, so the main-thread time of a frame includes the field's own frame loop.
+let rafMs = 0;
+const nativeRaf = window.requestAnimationFrame.bind(window);
+window.requestAnimationFrame = cb => nativeRaf(t => { const a = performance.now(); try { cb(t); } finally { rafMs += performance.now() - a; } });
+
+const sync = canvas => { const p = document.createElement('canvas'); p.width = p.height = 1; const g = p.getContext('2d', { willReadFrequently: true }); g.drawImage(canvas, 0, 0, 1, 1); return g.getImageData(0, 0, 1, 1).data[0]; };
+
+export const RENDERERS = {
+  'asciify-engine field (fluid hover, photo charset)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0 });
+    let k = 0;
+    // The field draws a live source itself, once per animation frame; the harness only moves the pointer.
+    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
+  'asciify-engine field (fluid hover, subject scope)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', scope: 'subject', maxPixelRatio: 2, drift: 0 });
+    let k = 0;
+    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
+  'asciify-engine field (shape sampling, fluid hover)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape', hover: 'fluid', maxPixelRatio: 2, drift: 0 });
+    let k = 0;
+    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
+  'asciify-engine field (no hover)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0 });
+    return { ready: field.ready, frame() {}, destroy() { field.destroy(); } };
+  },
+  '2025.unseen.co ASCII pass (rebuilt)': (host, src, cell) => {
+    const w = host.width, h = host.height, gl = host.getContext('webgl2', { preserveDrawingBuffer: true });
+    const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024;
+    const a = atlas.getContext('2d'), chars = ' .,-+=*UNSEEN2025';
+    a.font = '56px arial'; a.textAlign = 'center'; a.textBaseline = 'middle'; a.fillStyle = '#fff';
+    for (let i = 0; i < chars.length; i++) a.fillText(chars[i], (i % 16) * 64 + 32, Math.floor(i / 16) * 64 + 32);
+    const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); return x; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, `#version 300 es
+      out vec2 vUv; void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2. - 1., 0., 1.); }`));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `#version 300 es
+      precision highp float; in vec2 vUv; out vec4 o; uniform sampler2D tDiffuse, uCharacters; uniform float uCharactersCount, uCellSize; uniform vec2 uResolutionNoDpr;
+      const vec2 SIZE = vec2(16.);
+      void main(){ vec2 cell = uResolutionNoDpr / uCellSize; vec2 grid = 1.0 / cell; vec2 puv = grid * (0.5 + floor(vUv / grid));
+        float g = dot(texture(tDiffuse, puv).rgb, vec3(0.299, 0.587, 0.114)); float ci = floor((uCharactersCount - 1.0) * g);
+        vec2 cp = vec2(mod(ci, SIZE.x), floor(ci / SIZE.y)); vec2 off = vec2(cp.x, -cp.y) / SIZE;
+        vec2 cuv = mod(vUv * (cell / SIZE), 1.0 / SIZE) - vec2(0., 1.0 / SIZE) + off; o = vec4(vec3(texture(uCharacters, cuv).r), 1.); }`));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const mk = (unit, wrap) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap); return t; };
+    const srcTex = mk(0, gl.CLAMP_TO_EDGE); mk(1, gl.REPEAT); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+    const u = n => gl.getUniformLocation(prog, n);
+    gl.uniform1i(u('tDiffuse'), 0); gl.uniform1i(u('uCharacters'), 1); gl.uniform1f(u('uCharactersCount'), chars.length); gl.uniform1f(u('uCellSize'), cell); gl.uniform2f(u('uResolutionNoDpr'), w / 2, h / 2);
+    return { ready: Promise.resolve(), frame() { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.canvas); gl.viewport(0, 0, w, h); gl.drawArrays(gl.TRIANGLES, 0, 3); }, destroy() { gl.getExtension('WEBGL_lose_context')?.loseContext(); } };
+  },
+  'webgl-ascii-hero (vendored)': (host, src, cell) => {
+    const renderer = new THREE.WebGLRenderer({ canvas: host, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1); renderer.setSize(host.width, host.height, false);
+    const texture = new THREE.CanvasTexture(src.canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter;
+    const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: texture })));
+    const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+    const atlas = heroGlyphs(HERO_SYMBOLS);
+    composer.addPass(new EffectPass(camera, new HeroAscii({ cellSize: cell * 2, color: true, invert: false, tintColor: new THREE.Vector3(1, 1, 1), resolution: new THREE.Vector2(host.width, host.height), glyphAtlas: atlas, glyphTiles: HERO_SYMBOLS.length })));
+    return { ready: Promise.resolve(), frame() { texture.needsUpdate = true; composer.render(1 / 60); }, destroy() { composer.dispose(); renderer.dispose(); } };
+  },
+};
+
+/** Times `frames` frames of a renderer: main-thread ms (the JS it runs per frame) and total ms (until the GPU has finished). */
+export async function measure(name, { width, height, cell, frames = 12 }) {
+  const host = document.createElement('canvas');
+  host.width = width; host.height = height; host.style.cssText = `position:fixed;left:0;top:0;width:${width / 2}px;height:${height / 2}px`;
+  document.body.appendChild(host);
+  const src = liveSource(width, height);
+  const r = RENDERERS[name](host, src, cell);
+  await r.ready;
+  // One animation frame each: the source repaints, every renderer draws once in that frame (the field from its own frame loop,
+  // the others from frame()), then the result is read back, which waits for the GPU. An idle frame is timed the same way and
+  // taken off, so what is left is the renderer's cost. Main-thread time is everything on the main thread in that frame.
+  const tick = async draw => { const t0 = performance.now(); src.paint(); rafMs = 0;
+    await new Promise(res => nativeRaf(() => { const a = performance.now(); draw(); rafMs += performance.now() - a; setTimeout(res, 0); }));
+    const main = rafMs; sync(host); return { total: performance.now() - t0, main }; };
+  for (let i = 0; i < 4; i++) await tick(() => r.frame());
+  const main = [], total = [], idle = [];
+  for (let i = 0; i < frames; i++) {
+    const f = await tick(() => r.frame()); main.push(f.main); total.push(f.total);
+  }
+  r.destroy();
+  for (let i = 0; i < 6; i++) idle.push((await tick(() => {})).total);
+  host.remove();
+  const median = a => +a.sort((x, y) => x - y)[Math.floor(a.length / 2)].toFixed(2);
+  return { name, width, height, cell, mainMs: median([...main]), mainMaxMs: +Math.max(...main).toFixed(1), totalMs: +(median(total) - median(idle)).toFixed(1) };
+}
+
+Object.assign(window, { perf: { measure, RENDERERS: Object.keys(RENDERERS) } });

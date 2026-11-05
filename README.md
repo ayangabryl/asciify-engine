@@ -79,7 +79,7 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 
 ## How it compares
 
-Measured against aalib.js, ascii.rest (the Cloudflare-sponsored ASCII library), three.js `AsciiEffect`, the postprocessing `ASCIIEffect`, @sister.software/asciify and a naive ramp, on the same pictures and grid, with photos the engine was not tuned on: ahead of every renderer tested on photographs, line art and type, close up and at a distance (better than aalib on both measures on 15 of 20 photos), and about six times faster than aalib. Method, numbers and the weak spots are in the [benchmark report](docs/benchmarks/2026-11-04-ascii-renderers.md).
+Measured against aalib.js, ascii.rest (the Cloudflare-sponsored ASCII library), three.js `AsciiEffect`, the postprocessing `ASCIIEffect`, @sister.software/asciify and a naive ramp, on the same pictures and grid, with photos the engine was not tuned on: ahead of every renderer tested on photographs, line art and type, close up and at a distance (better than aalib on both measures on 15 of 20 photos), and about six times faster than aalib. On the GPU, a glyph field with `FIELD_PHOTO_CHARSET` and `sample: 'shape'` is ahead of the studio WebGL heroes measured (2025.unseen.co's ASCII pass and webgl-ascii-hero) on photos, line art and type, close up and at a distance, and a playing source never makes it wait on the GPU. Method, numbers and the weak spots are in the [benchmark report](docs/benchmarks/2026-11-04-ascii-renderers.md).
 
 ## Stability
 

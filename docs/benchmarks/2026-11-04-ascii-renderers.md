@@ -72,17 +72,26 @@ Each is scored as shipped and "neutral" (white characters on dark, the same grid
 
 | | Photos (close / far) | Line art | Type |
 | --- | --- | --- | --- |
-| asciify-engine field, `FIELD_PHOTO_CHARSET`, `glyphScale: 1` | **0.579 / 0.917** | **0.783 / 0.889** | 0.875 / **0.954** |
-| asciify-engine field, defaults (tuned for interfaces) | 0.410 / 0.874 | 0.736 / 0.847 | 0.840 / 0.876 |
-| 2025.unseen.co ASCII pass, neutral | 0.535 / 0.811 | 0.759 / 0.674 | 0.870 / 0.814 |
-| 2025.unseen.co ASCII pass, as shipped (grey `#575757` characters) | 0.315 / 0.351 | 0.662 / 0.448 | 0.790 / 0.662 |
-| webgl-ascii-hero, neutral | 0.483 / 0.647 | 0.772 / 0.688 | **0.885** / 0.842 |
-| webgl-ascii-hero, as shipped (inverted, purple) | 0.499 / 0.664 | 0.727 / 0.586 | 0.800 / 0.688 |
+| asciify-engine field, `FIELD_PHOTO_CHARSET`, `glyphScale: 1`, `sample: 'shape'` | **0.618 / 0.922** | **0.852 / 0.917** | **0.915 / 0.961** |
+| asciify-engine field, `FIELD_PHOTO_CHARSET`, `glyphScale: 1` | 0.581 / 0.918 | 0.783 / 0.889 | 0.875 / 0.954 |
+| asciify-engine field, defaults (tuned for interfaces) | 0.407 / 0.875 | 0.736 / 0.847 | 0.840 / 0.876 |
+| 2025.unseen.co ASCII pass, neutral | 0.533 / 0.812 | 0.759 / 0.674 | 0.870 / 0.814 |
+| 2025.unseen.co ASCII pass, as shipped (grey `#575757` characters) | 0.311 / 0.348 | 0.662 / 0.448 | 0.790 / 0.662 |
+| webgl-ascii-hero, neutral | 0.479 / 0.645 | 0.772 / 0.688 | 0.885 / 0.842 |
+| webgl-ascii-hero, as shipped (inverted, purple) | 0.499 / 0.666 | 0.727 / 0.586 | 0.800 / 0.688 |
 
-Both studio shaders choose a character by brightness alone from one sampled pixel, so they alias and do not follow edges; the
-field averages each cell and, with the measured 24-step charset, holds more of the picture at both distances. The one place it
-is behind is type up close against webgl-ascii-hero (0.875 against 0.885). Smoothness is the same kind for all three: one
-WebGL pass per frame on the GPU (frame times on a real GPU were not measured here).
+Both studio shaders choose a character by brightness alone from one sampled pixel, so they alias and do not follow edges. The
+field averages each cell and, with the measured 24-step charset, holds more of the picture at both distances; with
+`sample: 'shape'` it also reads each cell in 3 by 5 parts on the GPU and, among the characters within three steps of the cell's
+tone, takes the one whose ink lies where the picture's light does (cells with no edge in them keep their tone's character).
+That is what puts it ahead on type up close, where plain tone sampling (0.875) was behind webgl-ascii-hero (0.885). Its three
+constants were tuned on the 20 training photos, line art and type; the photo scores above are on the 20 held-out photos.
+
+### Frame cost
+
+`node bench/perf.mjs` draws a live source (a canvas repainted every frame, standing in for a playing video) at 1920×1080 and
+3840×2160 device pixels with 12, 4 and 1 px cells, the pointer moving every frame, and times each frame from the repaint to the
+result being finished on the GPU, less an idle frame. See the section below for the numbers.
 
 ## cloudflare.com's dot hero
 
@@ -108,9 +117,10 @@ These draw pixels rather than text, each in its own font, so they are scored on 
 
 | | close | far |
 | --- | --- | --- |
-| asciify-engine glyph field (`/field`, GPU) | 0.410 | **0.874** |
-| postprocessing ASCIIEffect (defaults) | 0.292 | 0.308 |
-| @sister.software/asciify (block mosaic) | 0.546 | 0.789 |
+| asciify-engine glyph field (`/field`, GPU, defaults) | 0.407 | 0.875 |
+| asciify-engine glyph field, `FIELD_PHOTO_CHARSET`, `sample: 'shape'` | **0.618** | **0.922** |
+| postprocessing ASCIIEffect (defaults) | 0.285 | 0.301 |
+| @sister.software/asciify (block mosaic) | 0.547 | 0.792 |
 
 postprocessing tints each glyph by the scene's colour by default, which is why it reads dark here. @sister.software/asciify
 fills each cell with a block and cuts the glyph out of it, a mosaic rather than text, so it is listed apart.
@@ -128,4 +138,5 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
   frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (8 %), still above a plain ramp (4.7 %).
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
-- GPU frame times were not measured: the runs use SwiftShader, which says nothing about a real GPU.
+- GPU frame times on real hardware were not measured: the runs use SwiftShader, which compares the work each renderer asks for
+  but says nothing about a real GPU's speed.

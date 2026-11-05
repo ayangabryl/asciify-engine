@@ -234,6 +234,15 @@ export const PIXEL_RENDERERS = {
     field.destroy(); host.remove();
     return out;
   },
+  'asciify-engine glyph field (GPU, photo charset, shape)': async (picture, w, h, columns) => {
+    const host = document.createElement('canvas'); host.style.cssText = `display:block;width:${w}px;height:${h}px;position:fixed;left:0;top:0`;
+    document.body.appendChild(host);
+    const field = mountGlyphField(host, { source: picture, hover: 'none', cellSize: (w / columns) * CELL_ASPECT, cellAspect: 1 / CELL_ASPECT, maxPixelRatio: 1, ink: '#ffffff', drift: 0, scene: 'none', font: 'DejaVu Sans Mono', charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape' });
+    await field.ready; field.redraw();
+    const out = resized(host, w, h);
+    field.destroy(); host.remove();
+    return out;
+  },
   'asciify-engine glyph field (GPU)': async (picture, w, h, columns) => {
     const host = document.createElement('canvas'); host.style.cssText = `display:block;width:${w}px;height:${h}px;position:fixed;left:0;top:0`;
     document.body.appendChild(host);

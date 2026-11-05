@@ -45,6 +45,7 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 | `ramp` | `[]` | A gradient map in ink colour mode: two to six `#rrggbb` stops the tone runs through, faintest first, in place of the one `ink`. The `tick` mark draws its wash in the ramp and its ticks a step up it (`ditherGradient`). |
 | `cellSize`, `cellAspect` | `12`, `1` | Cell height in CSS px; width ÷ height. Monospaced ramps look best near `0.6`. Cells are whole device pixels, and glyphs are sampled texel for texel. |
 | `cellFit` | `'pixel'` | `'pixel'` snaps each cell to whole device pixels, so a fractional `cellSize` rounds and rows drift from a renderer that does not. `'fill'` fits a whole number of cells of at least `cellSize` × `cellAspect` and stretches them to fill the canvas exactly, as the core renderer lays out a frame; each glyph stays texel for texel, centred in its cell. |
+| `sample` | `'area'` | How each cell reads its source. `'area'` averages the cell, so an edge ramps through the charset. `'point'` reads the cell's centre, so drawn shapes land as whole cells. `'shape'` (4.33) reads the cell in 3 by 5 parts and picks, among the characters near its tone, the one whose ink lies where the picture's light does: strokes and edges follow the picture. Best for type, logos, line art and photos with `FIELD_PHOTO_CHARSET`; glyph mark and tone order only, cells 8 device px and up (smaller cells sample as `'area'`). |
 | `font`, `fontWeight`, `glyphScale` | monospace, `500`, `0.8` | Any loaded CSS font. The atlas is redrawn when the font finishes loading. |
 | `color` | `'ink'` | `'ink'` uses `ink`; `'source'` takes each cell's hue from the media. |
 | `ink`, `highlight` | `#f3ba32`, `'auto'` | Hex colors. The wake lifts characters toward `highlight`; `'auto'` brightens each character's own color so the wake keeps the artwork's hue. |
@@ -71,13 +72,20 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 
 ## Photos, video and 3D: FIELD_PHOTO_CHARSET (4.33)
 
-For a photo, video or live 3D source, `charset: FIELD_PHOTO_CHARSET, glyphScale: 1` keeps the most of the picture: 24 steps of
-printable ASCII ordered by measured ink. Keep the default charset for calm interface fields.
+For a photo, video or live 3D source, `charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape'` keeps the most of the
+picture: 24 steps of printable ASCII ordered by measured ink, each cell matched to the glyph whose strokes fit it. It is the
+most faithful GPU setting measured (ahead of the studio WebGL heroes on photos, line art and type; `docs/benchmarks/`). Keep the
+default charset and `sample` for calm interface fields.
 
 ```ts
 import { mountGlyphField, FIELD_PHOTO_CHARSET } from 'asciify-engine/field';
-mountGlyphField(canvas, { source: '/hero.mp4', charset: FIELD_PHOTO_CHARSET, glyphScale: 1 });
+mountGlyphField(canvas, { source: '/hero.mp4', charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape' });
 ```
+
+Frame cost: one source upload, one pass over the cells and one over the pixels, then a copy to the canvas. A playing video is
+uploaded only when it has a new frame, and its levels and hover scope are read back from the GPU without waiting, so a field
+adds well under a millisecond of main-thread work a frame. On a slow GPU the page's render scale steps down before any frame
+is dropped. `node bench/perf.mjs` in the repo measures it at 1080p and 4K.
 
 ## Custom effects (4.33, experimental)
 
@@ -116,7 +124,8 @@ gsap.to(swell.params, { strength: 0, duration: 0.6 }); // params are live: setti
 
 A canvas that is redrawn every frame (a three.js or React Three Fiber scene, a game, a chart) is a live source: pass
 `live: true` and call `field.redraw()` right after the source renders. The field uploads it each frame at the display's rate
-and measures its levels a few times a second, so it is never read back on the CPU per frame.
+and measures its levels and hover scope from the GPU a few times a second without waiting on it, so it is never read back on
+the CPU per frame.
 
 ```ts
 const renderer = new THREE.WebGLRenderer();
