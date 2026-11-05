@@ -89,6 +89,11 @@ const SUB = GLYPH_COLS * GLYPH_ROWS;
 let DIM_WEIGHT = 2, STRUCTURE = 0.15, EXTRA_INK = 1, SOFTEN = 0.5, TONE_WEIGHT = 256, SHIFT_COST = 0.15;
 // How much worse a kept character (see `previous`) may be than the best one, in shape cells and in fill cells.
 let KEEP_MARGIN = 1.6, KEEP_TONE = 0.1, FILL_ALL: 'all' | 'symbols' | 'classic' = 'symbols', INK_SCALE = 1.45, STROKE_LIFT = 0.5;
+// Tone mode reads each cell's tone a little steeper (contrast) and pushed away from its eight neighbours' (an unsharp mask a
+// cell wide), so edges and strokes stay crisp where a glyph cannot follow them by shape. Tuned like the weights above.
+const TONE_CONTRAST = 1.15, TONE_EDGE = 0.75;
+// The sharper edges change more cells between frames, so with `previous` a tone cell keeps its character over a wider margin.
+const TONE_KEEP = 1.5;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 /**
  * Spreads each sub-cell a little into its neighbours across and down (weight `amount` shared between the two), so a stroke a
@@ -322,6 +327,7 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
   const toneSorted = Float64Array.from(byTone, g => strokeTone[g]);
   const glyphIndex = new Map(glyphs.map((char, g) => [char, g]));
   const picked = new Int32Array(columns);
+  const keepTone = shapeMode ? KEEP_TONE : KEEP_TONE * TONE_KEEP;
   // The branch-free score (see shiftedTable) whenever ink over and ink missing cost the same, as tuned.
   const fastShape = shapeMode && EXTRA_INK === 1, fast = fastShape ? shiftedTable(glyphTable()) : null;
   const fastInk = fast ? fast.ink : new Float32Array(0), fastSquare = fast ? fast.square : new Float32Array(0);
@@ -386,7 +392,7 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
         const lo = down >= 0 ? sortedFill[down] : -1;
         if (lo < 0) best = hi; else if (hi < 0 || hi === lo) best = lo;
         else best = (want - toneOf[lo]) / (toneOf[hi] - toneOf[lo]) > (BAYER[(r & 3) * 4 + (c & 3)] + 0.5) / 16 ? hi : lo;
-        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= KEEP_TONE) best = keep;
+        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= keepTone) best = keep;
       } else {
         // The nearest fill tone either side; on a tie, the one that comes first in fill order, as a scan would choose.
         const up = firstAtLeast(want), down = up - 1;
@@ -397,7 +403,7 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
           const g = sortedFill[i], d = Math.abs(sortedTone[i] - want);
           if (d < bestDelta || (d === bestDelta && fillOrder[g] < fillOrder[best])) { bestDelta = d; best = g; }
         }
-        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= bestDelta + KEEP_TONE) best = keep;
+        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= bestDelta + keepTone) best = keep;
       }
       picked[c] = best;
       if (diffuse) spreadError(target, columns, rows, c, r, want - (structured ? strokeTone : toneOf)[best], stride);
@@ -411,6 +417,33 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
     out.push(line);
   }
   return { out, colors };
+}
+
+/** Each cell's mean over its `stride` parts. */
+function cellMeans(target: Float32Array, stride: number): Float32Array {
+  const out = new Float32Array(target.length / stride);
+  for (let i = 0; i < out.length; i++) { let sum = 0; for (let k = 0; k < stride; k++) sum += target[i * stride + k]; out[i] = sum / stride; }
+  return out;
+}
+
+/** Each cell pushed away from the mean of its eight neighbours by `amount` (edges replicated), kept in 0–1. */
+function edgeSharpened(cells: Float32Array, columns: number, rows: number, amount: number): Float32Array {
+  if (!amount) return cells;
+  const out = new Float32Array(cells.length);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < columns; c++) {
+    let sum = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      const y = r + dy < 0 ? 0 : r + dy >= rows ? rows - 1 : r + dy;
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const x = c + dx < 0 ? 0 : c + dx >= columns ? columns - 1 : c + dx;
+        sum += cells[y * columns + x];
+      }
+    }
+    const t = cells[r * columns + c], v = t + amount * (t - sum / 8);
+    out[r * columns + c] = v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+  return out;
 }
 
 /** The 2nd and 98th percentile tones (on a 256-step histogram), or the full range for a nearly flat picture. @internal */
@@ -454,7 +487,7 @@ export function prepareMatch(options: AsciiGridOptions, mode: 'shape' | 'tone') 
 }
 
 /** The matching constants as tuned, for the GPU matcher. @internal */
-export const matchConstants = () => ({ structure: STRUCTURE, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE, extraInk: EXTRA_INK });
+export const matchConstants = () => ({ toneContrast: TONE_CONTRAST, toneEdge: TONE_EDGE, toneKeep: TONE_KEEP, structure: STRUCTURE, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE, extraInk: EXTRA_INK });
 /** The glyph tables, for the GPU matcher. @internal */
 export const glyphTables = () => { const t = glyphTable(); return { weight: t.weight, shifted: shiftedTable(t) }; };
 
@@ -496,16 +529,23 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   // Tone mode with a pixel a cell (imageToAsciiGrid draws the frame down to that) works a cell at a time: every part of a cell
   // would hold the same value, so levels, targets and dithering come out the same with one value a cell, for a fifteenth of
   // the work.
-  const cellLevel = mode === 'tone' && width === columns && height === rows, stride = cellLevel ? 1 : SUB;
+  // The same for a few whole pixels a cell (imageToAsciiGrid draws tone mode down to 2 by 2): each cell averages its block.
+  const kx = width / columns, ky = height / rows;
+  const blocks = Number.isInteger(kx) && Number.isInteger(ky) && kx <= 4 && ky <= 4 && (mode === 'tone' || (kx === 1 && ky === 1));
+  const cellLevel = mode === 'tone' && blocks, stride = cellLevel ? 1 : SUB;
   const tones = new Float32Array(columns * rows * stride), cellRgb = wantColor ? new Float32Array(columns * rows * 3) : null;
   const rgb = new Float32Array(3);
-  if (width === columns && height === rows) {
-    // One pixel a cell (a frame the browser drew down to the grid): each of the cell's parts is that pixel.
-    for (let r = 0, i = 0; r < rows; r++) for (let c = 0; c < columns; c++, i += channels) {
-      pixel(i, rgb);
-      const v = toPerceptual(clamp01(0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2])), base = (r * columns + c) * stride;
+  if (blocks) {
+    // A frame the browser drew down to the grid, at one pixel a cell or a small whole block: each cell is its block's light,
+    // in every part of it.
+    const n = kx * ky;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < columns; c++) {
+      let red = 0, green = 0, blue = 0;
+      for (let y = 0; y < ky; y++) for (let x = 0; x < kx; x++) { pixel(((r * ky + y) * width + c * kx + x) * channels, rgb); red += rgb[0]; green += rgb[1]; blue += rgb[2]; }
+      red /= n; green /= n; blue /= n;
+      const v = toPerceptual(clamp01(0.2126 * red + 0.7152 * green + 0.0722 * blue)), base = (r * columns + c) * stride;
       for (let k = 0; k < stride; k++) tones[base + k] = v;
-      if (cellRgb) { const at = (r * columns + c) * 3; cellRgb[at] = rgb[0]; cellRgb[at + 1] = rgb[1]; cellRgb[at + 2] = rgb[2]; }
+      if (cellRgb) { const at = (r * columns + c) * 3; cellRgb[at] = red; cellRgb[at + 1] = green; cellRgb[at + 2] = blue; }
     }
   } else if (sw >= 1 && sh >= 1) {
     const counts = new Float32Array(tones.length), cellCounts = cellRgb ? new Float32Array(columns * rows) : null;
@@ -553,11 +593,14 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   const target = new Float32Array(tones.length), sharpen = poweredTable(sharpness);
   // Matched as seen: a share of the densest fill character's light, on the perceptual scale. (Matching in linear light scored
   // worse and looked too sparse: small glyphs on a screen are read, not averaged.)
-  fillTargets(tones, target, lo, hi, contrast, brightness, gamma, light);
+  // Tone mode only ever reads a cell's average, so it works a cell at a time, with edges sharpened.
+  const toneCells = !shapeMode;
+  fillTargets(tones, target, lo, hi, toneCells ? contrast * TONE_CONTRAST : contrast, brightness, gamma, light);
+  const cells = toneCells ? edgeSharpened(stride === 1 ? target : cellMeans(target, stride), columns, rows, TONE_EDGE) : target;
   const { out, colors } = matchCells({
-    columns, rows, target, glyphs, indices, shape, weight, toneOf, strokeTone, fill, shapeMode, sharpness, sharpen, diffuse, ordered,
+    columns, rows, target: cells, glyphs, indices, shape, weight, toneOf, strokeTone, fill, shapeMode, sharpness, sharpen, diffuse, ordered,
     previous: options.previous && options.previous.columns === columns && options.previous.rows === rows ? options.previous.lines : null,
-    cellRgb: wantColor ? cellRgb : null, stride,
+    cellRgb: wantColor ? cellRgb : null, stride: toneCells ? 1 : stride,
   });
   return { columns, rows, lines: out, colors, background: light ? 'light' : 'dark' };
 }

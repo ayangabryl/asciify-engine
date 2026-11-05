@@ -4,6 +4,9 @@ import { imageToAsciiGrid, sizeOf, type AsciiImageSource } from './image';
 
 /** Error-diffusion offsets tried per cell: the carried error is looked up among these, 1/40 apart (±0.25). */
 const OFFSETS = 21, OFFSET_STEP = 1 / 80;
+// Passes that settle Floyd–Steinberg on the GPU: 4 scored best on the benchmark (8 and 16 a little lower, the CPU walk lower
+// still), as each cell's error comes mostly from its nearest neighbours.
+const SETTLE_PASSES = 4;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 const VERTEX = `#version 300 es
@@ -94,11 +97,20 @@ precision highp int;
 precision highp sampler2D;
 uniform sampler2D uParts, uGlyphs, uOrder, uPrevious, uLevels;
 uniform int uCount, uFillCount, uRows, uOffsets, uShape, uOrdered, uHasPrevious, uLight, uShifts, uCellLevel, uGpuLevels;
-uniform float uLo, uSpan, uContrast, uBrightness, uInvGamma, uStep, uSharpness, uSoften, uStructure, uToneWeight, uShiftCost, uKeepMargin, uKeepTone;
+uniform float uEdge, uLo, uSpan, uContrast, uBrightness, uInvGamma, uStep, uSharpness, uSoften, uStructure, uToneWeight, uShiftCost, uKeepMargin, uKeepTone;
 uniform float uWeight[15];
 uniform float uBayer[16];
-out vec4 o;
+uniform int uIterate;
+uniform sampler2D uErr;
+layout(location=0) out vec4 o;
+layout(location=1) out vec4 oErr;
 float tone(ivec2 at){ vec4 p=texelFetch(uParts,at,0); return (floor(p.r*255.+.5)*256.+floor(p.g*255.+.5))/65535.; }
+float shaped(float raw,float lo,float span){
+  float t=clamp((raw-lo)*span,0.,1.);
+  t=clamp((t-.5)*uContrast+.5+uBrightness,0.,1.);
+  if(uInvGamma!=1.)t=pow(t,uInvGamma);
+  return uLight==1?1.-t:t;
+}
 float g(int glyph,int k){ return texelFetch(uGlyphs,ivec2(k,glyph),0).r; }
 float score(int glyph,float soft[15],float softSquare){
   float best=1e30;
@@ -186,14 +198,35 @@ void main(){
   float lo=uLo,span=uSpan;
   if(uGpuLevels==1){ vec2 l=texelFetch(uLevels,ivec2(0),0).rg; lo=l.x; span=1./max(l.y-l.x,1e-3); }
   float base[15];
-  for(int y=0;y<5;y++)for(int x=0;x<3;x++){
-    float t=clamp((tone(uCellLevel==1?ivec2(c,r):ivec2(c*3+x,r*5+y))-lo)*span,0.,1.);
-    t=clamp((t-.5)*uContrast+.5+uBrightness,0.,1.);
-    if(uInvGamma!=1.)t=pow(t,uInvGamma);
-    if(uLight==1)t=1.-t;
-    base[y*3+x]=t;
-  }
+  if(uCellLevel==1){
+    float t=shaped(tone(ivec2(c,r)),lo,span);
+    if(uEdge>0.){
+      ivec2 last=textureSize(uParts,0)-1;
+      float nb=0.;
+      for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){ if(dx==0&&dy==0)continue; nb+=shaped(tone(clamp(ivec2(c+dx,r+dy),ivec2(0),last)),lo,span); }
+      t=clamp(t+uEdge*(t-nb/8.),0.,1.);
+    }
+    for(int i=0;i<15;i++)base[i]=t;
+  } else for(int y=0;y<5;y++)for(int x=0;x<3;x++) base[y*3+x]=shaped(tone(ivec2(c*3+x,r*5+y)),lo,span);
   int keep=uHasPrevious==1?int(floor(texelFetch(uPrevious,ivec2(c,r),0).r*255.+.5))-1:-1;
+  if(uIterate==1){
+    // Floyd–Steinberg settled in passes: the error this cell receives from its left and upper neighbours as the last pass
+    // left them; what it leaves goes out for the next pass. Cells a few steps from the top-left corner are exact after as
+    // many passes, and the rest follow the same rule with errors that have nearly settled.
+    float e=0.;
+    int w=textureSize(uErr,0).x;
+    if(c>0)e+=texelFetch(uErr,ivec2(c-1,r),0).r*(7./16.);
+    if(r>0){
+      if(c+1<w)e+=texelFetch(uErr,ivec2(c+1,r-1),0).r*(3./16.);
+      e+=texelFetch(uErr,ivec2(c,r-1),0).r*(5./16.);
+      if(c>0)e+=texelFetch(uErr,ivec2(c-1,r-1),0).r*(1./16.);
+    }
+    bool structured; float want;
+    int best=pick(base,e,c,r,keep,structured,want);
+    o=vec4(float(best+(structured?128:0))/255.,0.,0.,1.);
+    oErr=vec4(want-(structured?g(best,48):g(best,49)),0.,0.,1.);
+    return;
+  }
   vec4 bytes=vec4(0.);
   int centre=(uOffsets-1)/2;
   for(int b=0;b<4;b++){
@@ -300,7 +333,7 @@ export function createAsciiGpu(): AsciiGpu | null {
   const parts = compile(PARTS), colors = compile(COLORS), match = compile(MATCH);
   if (!parts || !colors || !match) return null;
   // Levels on the GPU need float targets that blend; without them the parts come back and the CPU reads the levels off them.
-  const floatLevels = !!gl.getExtension('EXT_color_buffer_float') && !!gl.getExtension('EXT_float_blend');
+  const floatColor = !!gl.getExtension('EXT_color_buffer_float'), floatLevels = floatColor && !!gl.getExtension('EXT_float_blend');
   const hist = floatLevels ? compile(HIST, HIST_VERTEX) : null, levels = floatLevels ? compile(LEVELS) : null;
   const vao = gl.createVertexArray();
   const texture = (filter: number) => {
@@ -326,6 +359,28 @@ export function createAsciiGpu(): AsciiGpu | null {
     return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
   };
   const gpuLevels = !!hist && !!levels && floatTarget(histTarget, 256, gl.R32F) && floatTarget(levelsTarget, 1, gl.RGBA32F);
+  // Diffusion settled on the GPU: two framebuffers, each writing the characters and the errors they leave (float), reading
+  // the other's errors. Twice the grid's height, so the colours fit below.
+  const settle = { width: 0, height: 0, glyphs: gl.createTexture()!, errors: [gl.createTexture()!, gl.createTexture()!], buffers: [gl.createFramebuffer()!, gl.createFramebuffer()!], ok: floatColor };
+  const settleSize = (width: number, height: number) => {
+    if (settle.width === width && settle.height === height) return settle.ok;
+    settle.width = width; settle.height = height;
+    const alloc = (t: WebGLTexture, format: number, type: number, base: number) => {
+      gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, t);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, base, type, null);
+    };
+    alloc(settle.glyphs, gl.RGBA8, gl.UNSIGNED_BYTE, gl.RGBA);
+    settle.errors.forEach(t => alloc(t, gl.R32F, gl.FLOAT, gl.RED));
+    settle.buffers.forEach((b, k) => {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, b);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, settle.glyphs, 0);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, settle.errors[k], 0);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+      settle.ok = settle.ok && gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    });
+    return settle.ok;
+  };
   const size = (t: ReturnType<typeof target>, width: number, height: number) => {
     if (t.width === width && t.height === height) return;
     t.width = width; t.height = height;
@@ -342,9 +397,9 @@ export function createAsciiGpu(): AsciiGpu | null {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   // Reads a target back without waiting on the GPU: copied into a pixel buffer, fetched once a fence says it is done.
-  const pending: WebGLBuffer[] = [];
   // Main-thread time of the frame being converted: everything but the waits for the GPU.
-  let busy = 0, mark = 0, gpuMs = 0;
+  let busy = 0, mark = 0, gpuMs = 0, lastGpuMs = 0;
+  const pending: WebGLBuffer[] = [];
   const issue = (t: ReturnType<typeof target>) => {
     const buffer = pending.pop() ?? gl.createBuffer()!, bytes = t.width * t.height * 4;
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.buffer);
@@ -357,19 +412,21 @@ export function createAsciiGpu(): AsciiGpu | null {
     return { buffer, bytes, sync };
   };
   const collect = async ({ buffer, bytes, sync }: ReturnType<typeof issue>): Promise<Uint8Array> => {
-    // Each check is a round trip to the GPU process, so the first waits most of what the last frame took (frames of a video
-    // cost about the same; at most 50 ms), then checks follow 1, 2, 4, 8 and at most 16 ms apart.
+    // Each check is a round trip to the GPU process, so the first waits most of what the GPU took for the last two frames
+    // (frames of a video cost about the same; the shorter of the two, so one slow frame does not hold up the next), then
+    // checks follow 1, 2, 4, 8 and at most 16 ms apart.
     const issued = performance.now();
-    for (let wait = Math.min(50, Math.floor(gpuMs * 0.8)); ; wait = Math.min(16, wait ? wait * 2 : 1)) {
+    for (let wait = Math.floor(Math.min(gpuMs, lastGpuMs) * 0.8); ; wait = Math.min(16, wait ? wait * 2 : 1)) {
       busy += performance.now() - mark;
       await new Promise(resolve => setTimeout(resolve, wait));
       mark = performance.now();
       if (destroyed) { gl.deleteSync(sync); throw new Error('The ASCII GPU converter was destroyed.'); }
       const state = gl.clientWaitSync(sync, 0, 0);
-      if (state === gl.ALREADY_SIGNALED || state === gl.CONDITION_SATISFIED) { gpuMs = performance.now() - issued; break; }
+      if (state === gl.ALREADY_SIGNALED || state === gl.CONDITION_SATISFIED) { lastGpuMs = gpuMs; gpuMs = performance.now() - issued; break; }
       if (state === gl.WAIT_FAILED || gl.isContextLost()) { gl.deleteSync(sync); pending.push(buffer); throw new Error('The GPU did not finish the ASCII grid (context lost).'); }
     }
     gl.deleteSync(sync);
+    // Copied into a pixel buffer on the GPU's side as part of the frame; fetching it now does not wait on the GPU.
     const out = new Uint8Array(bytes);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
     gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, out);
@@ -492,8 +549,9 @@ export function createAsciiGpu(): AsciiGpu | null {
 
     // 3. Match every cell, at every carried error when diffusing.
     // The cells' colours, when asked, go in rows of their own below the matches, so one readback brings back everything.
-    const texels = Math.ceil((offsets + 3) / 4);
-    size(matchTarget, columns, rows * (texels + (p.wantColor ? 1 : 0)));
+    const passes = SETTLE_PASSES, settled = p.diffuse && passes > 0 && settleSize(columns, rows * 2);
+    const texels = settled ? 1 : Math.ceil((offsets + 3) / 4);
+    if (!settled) size(matchTarget, columns, rows * (texels + (p.wantColor ? 1 : 0)));
     gl.useProgram(match.program);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, partsTarget.texture); gl.uniform1i(match.at('uParts'), 1);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, glyphTex); gl.uniform1i(match.at('uGlyphs'), 2);
@@ -513,7 +571,8 @@ export function createAsciiGpu(): AsciiGpu | null {
     gl.uniform1i(match.at('uShifts'), constants.shiftCost ? 1 : 0);
     gl.uniform1f(match.at('uLo'), lo);
     gl.uniform1f(match.at('uSpan'), 1 / Math.max(hi - lo, 1e-3));
-    gl.uniform1f(match.at('uContrast'), p.contrast);
+    gl.uniform1f(match.at('uContrast'), cellLevel ? p.contrast * constants.toneContrast : p.contrast);
+    gl.uniform1f(match.at('uEdge'), cellLevel ? constants.toneEdge : 0);
     gl.uniform1f(match.at('uBrightness'), p.brightness);
     gl.uniform1f(match.at('uInvGamma'), 1 / p.gamma);
     gl.uniform1f(match.at('uStep'), OFFSET_STEP);
@@ -523,12 +582,31 @@ export function createAsciiGpu(): AsciiGpu | null {
     gl.uniform1f(match.at('uToneWeight'), constants.toneWeight);
     gl.uniform1f(match.at('uShiftCost'), constants.shiftCost);
     gl.uniform1f(match.at('uKeepMargin'), constants.keepMargin);
-    gl.uniform1f(match.at('uKeepTone'), constants.keepTone);
+    gl.uniform1f(match.at('uKeepTone'), cellLevel ? constants.keepTone * constants.toneKeep : constants.keepTone);
     gl.uniform1fv(match.at('uWeight'), weight);
     gl.uniform1fv(match.at('uBayer'), BAYER);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, matchTarget.buffer);
-    gl.viewport(0, 0, columns, rows * texels);
-    gl.useProgram(match.program); gl.bindVertexArray(vao); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.uniform1i(match.at('uErr'), 5);
+    gl.uniform1i(match.at('uIterate'), settled ? 1 : 0);
+    gl.bindVertexArray(vao);
+    let out: ReturnType<typeof target> = matchTarget;
+    if (settled) {
+      // Pass 0 reads errors of zero; each pass after reads the one before.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, settle.buffers[1]);
+      gl.clearBufferfv(gl.COLOR, 1, [0, 0, 0, 0]);
+      for (let pass = 0; pass < passes; pass++) {
+        const k = pass & 1;
+        gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, settle.errors[1 - k]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, settle.buffers[k]);
+        gl.viewport(0, 0, columns, rows);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      out = { texture: settle.glyphs, buffer: settle.buffers[(passes - 1) & 1], width: columns, height: rows * (p.wantColor ? 2 : 1) };
+    } else {
+      gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, matchTarget.buffer);
+      gl.viewport(0, 0, columns, rows * texels);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     if (p.wantColor) {
       gl.viewport(0, rows * texels, columns, rows);
       gl.useProgram(colors.program);
@@ -537,14 +615,17 @@ export function createAsciiGpu(): AsciiGpu | null {
       gl.uniform2f(colors.at('uSourceSize'), width, height);
       gl.uniform2f(colors.at('uOrigin'), 0, rows * texels);
       gl.uniform1f(colors.at('uGround'), ground);
+      // Only the characters' texture takes colours: the settling framebuffer's error target is left out of this draw.
+      if (settled) gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (settled) gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }
-    const picked = await read(matchTarget);
+    const picked = await read(out);
     if (destroyed) throw new Error('The ASCII GPU converter was destroyed.');
 
     // 4. Walk the cells once: without diffusion each takes its character; with it, the error carried so far picks among the
     // characters matched at nearby errors, and what it leaves is passed on as Floyd–Steinberg does.
-    const lines = p.diffuse ? walkDiffused(picked, columns, rows, codes, m.toneOf, m.strokeTone) : walkPlain(picked, columns, rows, codes);
+    const lines = p.diffuse && !settled ? walkDiffused(picked, columns, rows, codes, m.toneOf, m.strokeTone) : walkPlain(picked, columns, rows, codes);
     let rgb: Uint8Array | null = null;
     if (p.wantColor) {
       rgb = new Uint8Array(columns * rows * 3);

@@ -139,7 +139,7 @@ let gpuConverter;
 function gpuText(extra, sequence = false) {
   return Object.assign(async (picture, columns, rows, previous) => {
     gpuConverter ??= createAsciiGpu();
-    const grid = await gpuConverter.convert(picture, { columns, rows, ...extra, ...(sequence ? { previous } : {}) });
+    const grid = await gpuConverter.convert(picture, { columns, rows, ...extra, ...(window.tune?.gpu ?? {}), ...(sequence ? { previous } : {}) });
     window.lastGrid = grid; window.lastGpuStats = gpuConverter.stats;
     return grid.lines;
   }, { sequence, gpu: true });

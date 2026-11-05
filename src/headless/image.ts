@@ -28,11 +28,12 @@ export function imageToAsciiGrid(source: AsciiImageSource, options: AsciiGridOpt
   const cellAspect = typeof options.cellAspect === 'number' && options.cellAspect > 0 ? options.cellAspect : GLYPH_CELL_ASPECT;
   const columns = Math.max(1, Math.round(options.columns ?? 80));
   const rows = Math.max(1, Math.round(options.rows ?? Math.max(1, Math.round(columns * (height / width) / cellAspect))));
-  // Tone mode looks only at each cell's average, so the frame is drawn down to one pixel a cell; shape mode reads each cell's
-  // parts, at `detail` pixels a part. Never enlarged: a source smaller than that is read as it is.
+  // Tone mode looks only at each cell's average, so the frame is drawn down to a few pixels a cell; shape mode reads each
+  // cell's parts, at `detail` pixels a part. Never enlarged: a source smaller than that is read as it is.
   const tone = options.mode === 'tone', detail = options.detail === 1 ? 1 : 2;
-  const w = tone ? Math.min(width, columns) : Math.min(width, columns * GLYPH_COLS * detail);
-  const h = tone ? Math.min(height, rows) : Math.min(height, rows * GLYPH_ROWS * detail);
+  // Tone mode draws two pixels a cell each way, averaged exactly: one pixel a cell lets the browser's filter alias thin lines.
+  const w = tone ? (width >= columns * 2 && height >= rows * 2 ? columns * 2 : Math.min(width, columns)) : Math.min(width, columns * GLYPH_COLS * detail);
+  const h = tone ? (w === columns * 2 ? rows * 2 : Math.min(height, rows)) : Math.min(height, rows * GLYPH_ROWS * detail);
   if (!pen || pen.canvas.width < w || pen.canvas.height < h) {
     // A page canvas where there is a page (drawn down on the GPU with the frame); an OffscreenCanvas in a worker.
     const canvas = typeof document !== 'undefined' ? Object.assign(document.createElement('canvas'), { width: w, height: h }) : typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(w, h) : null;
