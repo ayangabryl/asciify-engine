@@ -87,6 +87,27 @@ against 0.875), and Devault's edge characters keep line art at a distance (0.871
 one ahead of both everywhere. On the GPU, the glyph field with `sample: 'shape'` scores
 0.618 / 0.922, 0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
 
+### On screen, live: the frame a page actually draws
+
+Both generators draw their characters on the page, so the cost that drops frames is converting and drawing, on the main
+thread, every frame. `node bench/perf.mjs --sizes 1920x1080 --cells 6,3.5 --only "rebuilt|imageToAsciiGrid|GPU field"` draws
+a live 1080p source (repainted every frame) with each, at about 160 and 275 columns, and times the main thread per frame
+(median; Chromium with SwiftShader). The generators are given the benefit of the doubt: ASCII Magic's characters are stamped from
+a glyph atlas rather than drawn with `fillText`, and Devault's WebGL draw is not counted at all. Raw numbers:
+[2026-11-05-live-frame.json](2026-11-05-live-frame.json).
+
+| Main thread per frame, 1080p | 12 px cells | 7 px cells |
+| --- | --- | --- |
+| **asciify-engine GPU field** (shape sampling, bloom, fluid hover) | **4.2 ms** | **4.5 ms** |
+| ASCII Magic (convert + draw) | 125 ms | 299 ms |
+| Devault Classic (convert only) | 364 ms | 272 ms |
+| asciify-engine `imageToAsciiGrid` + atlas draw, tone | 206 ms | 463 ms |
+
+The GPU field does its sampling, shape matching, hover and bloom on the GPU, so its main-thread cost stays flat however small
+the cells; drawing characters one by one on a 2D canvas grows with every cell. On the same 20 photos the field with
+`sample: 'shape'` scores 0.618 / 0.922 (line art 0.852 / 0.917, type 0.915 / 0.961), ahead of both generators on every
+measure. GPU time under SwiftShader is not a real GPU's and is not compared.
+
 ## Studio heroes: 2025.unseen.co and an open-source WebGL hero
 
 Big design sites draw their ASCII heroes with a WebGL shader. Two are measured here against asciify-engine's GPU field, on the
@@ -191,8 +212,9 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 - **Photos at a distance:** ahead of aalib on average by a small margin (0.878 against 0.868); on 4 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
   frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (3.8 %, below a plain ramp's 4.7 %).
-- **One setting is not ahead of both on everything.** Shape mode is ahead on every picture but takes 25 ms a 1080p frame;
-  tone mode through `imageToAsciiGrid` is faster than ASCII Magic (2.0 ms against 2.2) but just behind it on type up close.
+- **Text out, not on screen:** converting a frame to a string, ASCII Magic's one-pixel-a-cell reading (2.2 ms) is faster than
+  shape mode (about 14 ms); tone mode through `imageToAsciiGrid` is faster than it (2.0 ms) but just behind it on type up close.
+  On screen, where both generators are used, the GPU field is ahead on speed and on every quality measure.
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
 - GPU frame times on real hardware were not measured: the runs use SwiftShader, which compares the work each renderer asks for

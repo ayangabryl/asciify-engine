@@ -19,7 +19,7 @@ try {
     const page = await browser.newPage({ viewport: { width: w / 2, height: h / 2 }, deviceScaleFactor: 2 });
     page.on('pageerror', e => console.error('page error:', e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`); await page.waitForFunction(() => window.perf); await page.evaluate(p => { globalThis.__prof = p; }, prof);
-    const names = (await page.evaluate(() => window.perf.RENDERERS)).filter(n => !only || n.includes(only));
+    const names = (await page.evaluate(() => window.perf.RENDERERS)).filter(n => !only || new RegExp(only).test(n));
     for (const name of names) {
       const r = await page.evaluate(([name, o]) => window.perf.measure(name, o), [name, { width: w, height: h, cell, frames }]).catch(e => ({ name, error: e.message }));
       results.push(r);

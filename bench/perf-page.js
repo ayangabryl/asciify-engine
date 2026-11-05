@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass } from 'postprocessing';
 import { AsciiEffectImpl as HeroAscii, createGlyphTexture as heroGlyphs, TERMINAL_SYMBOLS as HERO_SYMBOLS } from './vendor/webgl-ascii-hero/ascii-effect.tsx';
 import { mountGlyphField, FIELD_PHOTO_CHARSET } from '../src/field.ts';
+import { toAsciiGrid, imageToAsciiGrid } from '../src/headless.ts';
+import { TEXT_RENDERERS } from './page.js';
 
 /** A moving picture: gradients and shapes that change every frame, so every upload is new. */
 export function liveSource(w, h) {
@@ -28,7 +30,43 @@ window.requestAnimationFrame = cb => nativeRaf(t => { const a = performance.now(
 
 const sync = canvas => { const p = document.createElement('canvas'); p.width = p.height = 1; const g = p.getContext('2d', { willReadFrequently: true }); g.drawImage(canvas, 0, 0, 1, 1); return g.getImageData(0, 0, 1, 1).data[0]; };
 
+
+/** One glyph atlas for the text renderers: every character drawn once, then stamped with drawImage (faster than fillText). */
+function atlasFor(chars, cellW, cellH) {
+  const list = [...new Set(chars)], c = document.createElement('canvas'); c.width = cellW * list.length; c.height = cellH;
+  const g = c.getContext('2d'); g.fillStyle = '#e8e8e8'; g.font = `${Math.round(cellH * 0.9)}px monospace`; g.textBaseline = 'middle'; g.textAlign = 'center';
+  list.forEach((ch, i) => g.fillText(ch, i * cellW + cellW / 2, cellH / 2));
+  return { canvas: c, at: new Map(list.map((ch, i) => [ch, i * cellW])) };
+}
+/** A text renderer drawn on screen each frame: convert the frame, then stamp each non-blank character from the atlas. */
+const textOnScreen = convert => (host, src, cell) => {
+  const pen = host.getContext('2d'), cellH = Math.round(cell * 2), cellW = Math.max(2, Math.round(cellH * 0.6));
+  const columns = Math.floor(host.width / cellW), rows = Math.floor(host.height / cellH);
+  const atlas = atlasFor(' .,:;*!/<[j7Jy23A#0DRNB@%#*+=-:. $&8BWMoahkbdpqwmZO0QLCJUYXzcvunxrjft\\|()1{}[]?-_+~<>i!lI;:,"^`\'@#S08Xx', cellW, cellH);
+  let previous = null;
+  return { ready: Promise.resolve(), frame() {
+    const lines = convert(src.canvas, columns, rows, previous, g => { previous = g; });
+    pen.fillStyle = '#000'; pen.fillRect(0, 0, host.width, host.height);
+    for (let r = 0; r < lines.length; r++) { const line = lines[r]; for (let c = 0; c < line.length; c++) { const ch = line[c]; if (ch === ' ') continue; const x = atlas.at.get(ch); if (x !== undefined) pen.drawImage(atlas.canvas, x, 0, cellW, cellH, c * cellW, r * cellH, cellW, cellH); } }
+  }, destroy() {} };
+};
+const LIVE_TEXT = {
+  'ASCII Magic (rebuilt): convert + draw': textOnScreen((frame, columns, rows) => TEXT_RENDERERS['ASCII Magic (characters)'](frame, columns, rows)),
+  'Devault Classic (rebuilt): convert only, draw not counted': (host, src, cell) => {
+    const cellH = Math.round(cell * 2), cellW = Math.max(2, Math.round(cellH * 0.6)), columns = Math.floor(host.width / cellW), rows = Math.floor(host.height / cellH);
+    return { ready: Promise.resolve(), frame() { TEXT_RENDERERS['Devault ASCII generator (Classic)'](src.canvas, columns, rows); }, destroy() {} };
+  },
+  'asciify imageToAsciiGrid shape (video): convert + draw': textOnScreen((frame, columns, rows, previous, keep) => { const g = imageToAsciiGrid(frame, { columns, rows, dither: 'ordered', previous }); keep(g); return g.lines; }),
+  'asciify imageToAsciiGrid tone (video): convert + draw': textOnScreen((frame, columns, rows, previous, keep) => { const g = imageToAsciiGrid(frame, { columns, rows, mode: 'tone', dither: 'ordered', previous }); keep(g); return g.lines; }),
+  'asciify GPU field, shape + bloom + fluid hover': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, sample: 'shape', hover: 'fluid', post: { bloom: 0.8 }, maxPixelRatio: 2, drift: 0 });
+    let k = 0;
+    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
+};
+
 export const RENDERERS = {
+  ...LIVE_TEXT,
   'asciify-engine field (fluid hover, photo charset)': (host, src, cell) => {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0 });
     let k = 0;

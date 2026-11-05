@@ -1,0 +1,110 @@
+[
+ {
+  "name": "ASCII Magic (rebuilt): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 125.4,
+  "mainMaxMs": 182.6,
+  "totalMs": 584.4
+ },
+ {
+  "name": "Devault Classic (rebuilt): convert only, draw not counted",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 364.4,
+  "mainMaxMs": 527,
+  "totalMs": 348.7
+ },
+ {
+  "name": "asciify imageToAsciiGrid shape (video): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 269.1,
+  "mainMaxMs": 392.4,
+  "totalMs": 1063.2
+ },
+ {
+  "name": "asciify imageToAsciiGrid tone (video): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 206,
+  "mainMaxMs": 273,
+  "totalMs": 940.3
+ },
+ {
+  "name": "asciify GPU field, shape + bloom + fluid hover",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 4.2,
+  "mainMaxMs": 16,
+  "totalMs": 390.3
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 6,
+  "mainMs": 0.2,
+  "mainMaxMs": 0.7,
+  "totalMs": 182.7
+ },
+ {
+  "name": "ASCII Magic (rebuilt): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 299.4,
+  "mainMaxMs": 375.3,
+  "totalMs": 1731.2
+ },
+ {
+  "name": "Devault Classic (rebuilt): convert only, draw not counted",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 272,
+  "mainMaxMs": 450,
+  "totalMs": 256.4
+ },
+ {
+  "name": "asciify imageToAsciiGrid shape (video): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 566.6,
+  "mainMaxMs": 668.1,
+  "totalMs": 2946.3
+ },
+ {
+  "name": "asciify imageToAsciiGrid tone (video): convert + draw",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 462.8,
+  "mainMaxMs": 684.1,
+  "totalMs": 2540.9
+ },
+ {
+  "name": "asciify GPU field, shape + bloom + fluid hover",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 4.5,
+  "mainMaxMs": 10.1,
+  "totalMs": 419.2
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 3.5,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 136.1
+ }
+]

@@ -150,6 +150,27 @@ function glyphTable() {
   return (table = { coverage, mean, shape: soft, weight });
 }
 
+/**
+ * The glyph side of the shape score, laid out for a dot product: for every glyph and each of the three shifts, its weighted
+ * ink per part and the sum of its weighted ink squared. With the extra-ink cost at 1 the score is
+ * sum(w * (ink - t)^2) = sum(w * ink^2) - 2 * dot(w * ink, t) + sum(w * t^2), so a cell is three short dot products a glyph.
+ */
+let shifted: { from: object; ink: Float32Array; square: Float32Array } | null = null;
+function shiftedTable(t: NonNullable<typeof table>) {
+  if (shifted && shifted.from === t) return shifted;
+  const count = GLYPH_CHARS.length, ink = new Float32Array(count * 3 * SUB), square = new Float32Array(count * 3);
+  for (let g = 0; g < count; g++) for (let s = 0; s < 3; s++) {
+    const shift = s - 1, at = (g * 3 + s) * SUB;
+    let sq = 0;
+    for (let y = 0; y < GLYPH_ROWS; y++) for (let x = 0; x < GLYPH_COLS; x++) {
+      const from = x - shift, k = y * GLYPH_COLS + x, v = from < 0 || from >= GLYPH_COLS ? 0 : t.shape[g * SUB + y * GLYPH_COLS + from];
+      ink[at + k] = t.weight[k] * v; sq += t.weight[k] * v * v;
+    }
+    square[g * 3 + s] = sq;
+  }
+  return (shifted = { from: t, ink, square });
+}
+
 /** Printable ASCII without letters and digits: punctuation and symbols only, for a cleaner, more graphic look in 'shape' mode. */
 export const ASCII_SYMBOLS = ` .,:;'\`"^-_~=+*<>!?|/\\()[]{}#%@&$`;
 
@@ -269,6 +290,20 @@ function spreadError(target: Float32Array, columns: number, rows: number, c: num
   if (c + 1 < columns) { const at = (next + c + 1) * stride, e = error * (1 / 16); for (let k = 0; k < stride; k++) target[at + k] += e; }
 }
 
+/** The shape score from shiftedTable: three dot products, the best of the shifts. */
+function fastScoreOf(ink: Float32Array, square: Float32Array, soft: Float32Array, glyph: number, softSquare: number) {
+  let score = Infinity;
+  for (let s = 0; s < 3; s++) {
+    if (s !== 1 && !SHIFT_COST) continue;
+    const at = (glyph * 3 + s) * SUB;
+    let dot = 0;
+    for (let k = 0; k < SUB; k++) dot += ink[at + k] * soft[k];
+    const v = square[glyph * 3 + s] - 2 * dot + softSquare + (s !== 1 ? SHIFT_COST : 0);
+    if (v < score) score = v;
+  }
+  return score;
+}
+
 /**
  * Picks every cell's character. Flat cells take a fill character by tone (nearest, or ordered between the two around it);
  * cells with structure are matched by shape among the glyphs near their tone. A top-level function with no closures, so the
@@ -287,6 +322,9 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
   const toneSorted = Float64Array.from(byTone, g => strokeTone[g]);
   const glyphIndex = new Map(glyphs.map((char, g) => [char, g]));
   const picked = new Int32Array(columns);
+  // The branch-free score (see shiftedTable) whenever ink over and ink missing cost the same, as tuned.
+  const fastShape = shapeMode && EXTRA_INK === 1, fast = fastShape ? shiftedTable(glyphTable()) : null;
+  const fastInk = fast ? fast.ink : new Float32Array(0), fastSquare = fast ? fast.square : new Float32Array(0);
   // The fill characters sorted by tone (ties in fill order), so a flat cell finds its neighbours by binary search: the same
   // characters a scan of the whole fill ramp would pick, in a few steps instead of one per character.
   const fillOrder = new Int32Array(glyphs.length).fill(-1);
@@ -315,6 +353,8 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
         let peak = 1e-6;
         for (let k = 0; k < SUB; k++) if (softTarget[k] > peak) peak = softTarget[k];
         for (let k = 0; k < SUB; k++) softTarget[k] /= peak;
+        let softSquare = 0;
+        if (fastShape) for (let k = 0; k < SUB; k++) softSquare += weight[k] * softTarget[k] * softTarget[k];
         let hi = 0;
         while (hi < toneSorted.length && toneSorted[hi] < want) hi++;
         let lo = hi - 1, loOpen = lo >= 0, hiOpen = hi < byTone.length;
@@ -324,14 +364,14 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
           const g = byTone[useLo ? lo : hi];
           const miss = strokeTone[g] - want, toneCost = TONE_WEIGHT * miss * miss;
           if (toneCost >= bestScore) { if (useLo) loOpen = false; else hiOpen = false; continue; }
-          const score = toneCost + shapeScoreAt(indices[g] * SUB, softTarget, shape, weight, bestScore - toneCost);
+          const score = toneCost + (fastShape ? fastScoreOf(fastInk, fastSquare, softTarget, indices[g], softSquare) : shapeScoreAt(indices[g] * SUB, softTarget, shape, weight, bestScore - toneCost));
           if (score < bestScore) { bestScore = score; best = g; }
           if (useLo) loOpen = --lo >= 0; else hiOpen = ++hi < byTone.length;
         }
         // With the previous frame given, a cell keeps its character while that is still nearly as good: still footage stays
         // still instead of trading between near-equal glyphs.
         if (keep !== undefined && keep !== best) {
-          const miss = strokeTone[keep] - want, kept = TONE_WEIGHT * miss * miss + shapeScoreAt(indices[keep] * SUB, softTarget, shape, weight, Infinity);
+          const miss = strokeTone[keep] - want, kept = TONE_WEIGHT * miss * miss + (fastShape ? fastScoreOf(fastInk, fastSquare, softTarget, indices[keep], softSquare) : shapeScoreAt(indices[keep] * SUB, softTarget, shape, weight, Infinity));
           if (kept <= bestScore + KEEP_MARGIN) best = keep;
         }
       } else if (ordered) {
@@ -351,7 +391,8 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
         // The nearest fill tone either side; on a tie, the one that comes first in fill order, as a scan would choose.
         const up = firstAtLeast(want), down = up - 1;
         let bestDelta = Infinity;
-        for (const i of [down >= 0 ? runStart(down) : -1, up <= last ? up : -1]) {
+        for (let side = 0; side < 2; side++) {
+          const i = side === 0 ? (down >= 0 ? runStart(down) : -1) : (up <= last ? up : -1);
           if (i < 0) continue;
           const g = sortedFill[i], d = Math.abs(sortedTone[i] - want);
           if (d < bestDelta || (d === bestDelta && fillOrder[g] < fillOrder[best])) { bestDelta = d; best = g; }
