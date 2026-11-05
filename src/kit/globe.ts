@@ -112,24 +112,34 @@ const greys: string[] = Array.from({ length: 256 }, (_, i) => `rgb(${i},${i},${i
 const grey = (v: number) => greys[Math.round(clamp(v) * 255)];
 
 /**
- * One frame of the sphere style into `pen`, `w` x `h` source pixels, `px` source pixels a CSS pixel: hairline graticule and rim,
- * the far side's land as small faint squares, then the near side's as squares that shrink and fade toward the rim. Exported for tests.
+ * One frame of the sphere style into `pen`, `w` x `h` source pixels, `px` source pixels a CSS pixel. The globe is lit from the
+ * upper left: a faint body darkening toward the limb with a thin atmosphere round it, hairline latitude and longitude lines, the
+ * far side's land as fine faint dots, then the near side's land as round dots shaded by the light, with a soft terminator, and
+ * shrinking toward the rim. Dots are batched by tone, so a frame is a handful of fills. Exported for tests.
  */
 export function globeSphereFrame(pen: CanvasRenderingContext2D, w: number, h: number, px: number, centre: number, tilt: number, size: number, dots: Float32Array, graticule: number, backside: number, spacing: number) {
   const R = (Math.min(w, h) / 2) * size, cx = w / 2, cy = h / 2;
   const ct = Math.cos(tilt * RAD), st = Math.sin(tilt * RAD), c0 = centre * RAD;
-  const line = Math.max(1, px * 0.9);
+  // The light, in view coordinates: up, left and toward the viewer.
+  const lx = -0.48, ly = 0.52, lz = 0.71;
   // View coordinates of a latitude and longitude: x right, y up, z toward the viewer.
   const view = (lat: number, lon: number, out: number[]) => {
     const cl = Math.cos(lat), wx = cl * Math.sin(lon - c0), wy = Math.sin(lat), wz = cl * Math.cos(lon - c0);
     out[0] = wx; out[1] = wy * ct - wz * st; out[2] = wy * st + wz * ct;
   };
   const v = [0, 0, 0];
-  pen.lineWidth = line;
+  // The body, a faint even disc that sets the ocean apart from the ground; then the atmosphere, a thin glow just outside the rim.
+  pen.fillStyle = grey(0.03);
+  pen.beginPath(); pen.arc(cx, cy, R, 0, Math.PI * 2); pen.fill();
+  const air = pen.createRadialGradient(cx, cy, R * 0.97, cx, cy, R * 1.09);
+  air.addColorStop(0, 'rgba(255,255,255,0.16)'); air.addColorStop(0.35, 'rgba(255,255,255,0.07)'); air.addColorStop(1, 'rgba(255,255,255,0)');
+  pen.fillStyle = air;
+  pen.beginPath(); pen.arc(cx, cy, R * 1.09, 0, Math.PI * 2); pen.arc(cx, cy, R * 0.97, 0, Math.PI * 2, true); pen.fill();
   if (graticule > 0) {
     const g = graticule * RAD, seg = 3 * RAD;
     const trace = (front: boolean, tone: number) => {
       pen.strokeStyle = grey(tone);
+      pen.lineWidth = Math.max(0.6, px * 0.6);
       pen.beginPath();
       const run = (pts: (t: number) => void, from: number, to: number) => {
         let on = false;
@@ -142,30 +152,96 @@ export function globeSphereFrame(pen: CanvasRenderingContext2D, w: number, h: nu
       for (let lon = -Math.PI; lon < Math.PI - 1e-6; lon += g) run(t => view(t, lon, v), -Math.PI / 2, Math.PI / 2);
       pen.stroke();
     };
-    trace(false, 0.05);
-    trace(true, 0.13);
+    trace(false, 0.03);
+    trace(true, 0.085);
   }
-  pen.strokeStyle = grey(0.12);
-  pen.beginPath(); pen.arc(cx, cy, R, 0, Math.PI * 2); pen.stroke();
-  const dot = Math.max(px, spacing * px * 0.46);
+  const dot = Math.max(px * 0.6, spacing * px * 0.36);
+  // Tone buckets: every dot of a bucket goes into one path, filled once.
+  const LEVELS = 24, buckets: number[][] = Array.from({ length: LEVELS }, () => []);
+  const add = (x: number, y: number, r: number, tone: number) => {
+    buckets[Math.min(LEVELS - 1, Math.max(0, Math.round(tone * (LEVELS - 1))))].push(x, y, r);
+  };
   if (backside > 0) {
-    pen.fillStyle = grey(0.9 * backside);
     for (let i = 0; i < dots.length; i += 2) {
       view(dots[i], dots[i + 1], v);
       if (v[2] >= 0) continue;
-      const s = Math.max(1, Math.round(Math.max(px * 0.8, dot * 0.4)));
-      pen.fillRect(Math.round(cx + v[0] * R - s / 2), Math.round(cy - v[1] * R - s / 2), s, s);
+      add(cx + v[0] * R, cy - v[1] * R, Math.max(px * 0.45, dot * 0.32), 0.55 * backside * (0.4 + 0.6 * -v[2]));
     }
   }
   for (let i = 0; i < dots.length; i += 2) {
     view(dots[i], dots[i + 1], v);
     const z = v[2];
     if (z < 0) continue;
-    // Squarely facing, a full square in full ink; toward the rim smaller and paler, so the limb melts into a haze of fine dots.
-    // Whole source pixels, so each square lands solid rather than as a soft-edged outline.
-    const s = Math.max(1, Math.round(Math.max(px * 0.7, dot * (0.35 + 0.65 * z))));
-    pen.fillStyle = grey(0.18 + 0.82 * z ** 1.8);
-    pen.fillRect(Math.round(cx + v[0] * R - s / 2), Math.round(cy - v[1] * R - s / 2), s, s);
+    const lambert = v[0] * lx + v[1] * ly + z * lz;
+    // A soft terminator: the night side keeps a little light, so its land still reads; the rim melts into a haze of fine dots.
+    const day = 0.22 + 0.78 * Math.min(1, Math.max(0, (lambert + 0.25) / 1.05)) ** 1.2;
+    add(cx + v[0] * R, cy - v[1] * R, dot * (0.45 + 0.55 * Math.sqrt(z)), day * (0.35 + 0.65 * z ** 0.6));
+  }
+  for (let k = 0; k < LEVELS; k++) {
+    const b = buckets[k];
+    if (!b.length) continue;
+    pen.fillStyle = grey(k / (LEVELS - 1));
+    pen.beginPath();
+    for (let i = 0; i < b.length; i += 3) { pen.moveTo(b[i] + b[i + 2], b[i + 1]); pen.arc(b[i], b[i + 1], b[i + 2], 0, Math.PI * 2); }
+    pen.fill();
+  }
+}
+
+/**
+ * The places and the routes between them: each place a bright dot in a soft halo with a ring spreading from it, and each place
+ * joined to the next by a great-circle arc lifted off the surface, a short bright pulse travelling along it. Exported for tests.
+ */
+export function globeRoutes(pen: CanvasRenderingContext2D, points: readonly GlobePoint[], centre: number, tilt: number, w: number, h: number, size: number, now: number, still: boolean) {
+  const R = (Math.min(w, h) / 2) * size, cx = w / 2, cy = h / 2;
+  const ct = Math.cos(tilt * RAD), st = Math.sin(tilt * RAD), c0 = centre * RAD;
+  const unit = (p: GlobePoint) => { const la = p.lat * RAD, lo = p.lon * RAD - c0; return [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)]; };
+  const toView = (q: number[]) => [q[0], q[1] * ct - q[2] * st, q[1] * st + q[2] * ct];
+  // Routes first, under the places.
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = unit(points[i]), b = unit(points[i + 1]);
+    const angle = Math.acos(Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])));
+    if (angle < 1e-3) continue;
+    const steps = 48, lift = 0.08 + 0.22 * angle / Math.PI, pts: [number, number, boolean][] = [];
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps, s0 = Math.sin((1 - t) * angle) / Math.sin(angle), s1 = Math.sin(t * angle) / Math.sin(angle);
+      const r = 1 + lift * Math.sin(Math.PI * t);
+      const q = toView([(a[0] * s0 + b[0] * s1) * r, (a[1] * s0 + b[1] * s1) * r, (a[2] * s0 + b[2] * s1) * r]);
+      // Seen past the rim, or in front of the globe: drawn. Behind the globe: hidden.
+      const visible = q[2] >= 0 || q[0] * q[0] + q[1] * q[1] > 1;
+      pts.push([cx + q[0] * R, cy - q[1] * R, visible]);
+    }
+    pen.lineWidth = Math.max(1, R * 0.006);
+    pen.strokeStyle = 'rgba(255,255,255,0.32)';
+    pen.beginPath();
+    let on = false;
+    for (const [x, y, visible] of pts) { if (visible) { if (on) pen.lineTo(x, y); else pen.moveTo(x, y); on = true; } else on = false; }
+    pen.stroke();
+    if (still) continue;
+    // The pulse: a bright stretch about a sixth of the route, travelling from one place to the next.
+    const head = ((now / 2600 + i * 0.37) % 1) * (steps + 10) - 5;
+    pen.lineWidth = Math.max(1.5, R * 0.012);
+    for (let k = 1; k <= steps; k++) {
+      const d = head - k;
+      if (d < 0 || d > 8 || !pts[k][2] || !pts[k - 1][2]) continue;
+      pen.strokeStyle = `rgba(255,255,255,${(1 - d / 8) * 0.95})`;
+      pen.beginPath(); pen.moveTo(pts[k - 1][0], pts[k - 1][1]); pen.lineTo(pts[k][0], pts[k][1]); pen.stroke();
+    }
+  }
+  for (const [i, point] of points.entries()) {
+    const at = globeProject(point, centre, tilt, w, h, size);
+    if (!at.front) continue;
+    const r = Math.max(1.5, R * 0.022), depth = 0.5 + 0.5 * at.depth;
+    const halo = pen.createRadialGradient(at.x, at.y, 0, at.x, at.y, r * 4.5);
+    halo.addColorStop(0, `rgba(255,255,255,${0.5 * depth})`); halo.addColorStop(1, 'rgba(255,255,255,0)');
+    pen.fillStyle = halo;
+    pen.beginPath(); pen.arc(at.x, at.y, r * 4.5, 0, Math.PI * 2); pen.fill();
+    pen.fillStyle = '#fff';
+    pen.beginPath(); pen.arc(at.x, at.y, r, 0, Math.PI * 2); pen.fill();
+    if (still) continue;
+    const age = ((now + i * 537) % 2200) / 2200;
+    pen.strokeStyle = `rgba(255,255,255,${(1 - age) ** 1.5 * 0.85 * depth})`;
+    pen.lineWidth = Math.max(1, R * 0.008);
+    pen.beginPath(); pen.arc(at.x, at.y, r + R * age * 0.13, 0, Math.PI * 2); pen.stroke();
   }
 }
 
@@ -238,22 +314,7 @@ export function globe(element: HTMLElement, options: GlobeOptions = {}): GlobeHa
         pen.putImageData(image, 0, 0);
       }
       const points = o().points ?? [];
-      const R = (Math.min(width, height) / 2) * o().size;
-      for (const [i, point] of points.entries()) {
-        const at = globeProject(point, centre, tilt, width, height, o().size);
-        if (!at.front) continue;
-        pen.fillStyle = '#fff';
-        pen.beginPath();
-        pen.arc(at.x, at.y, Math.max(1.5, R * 0.03), 0, Math.PI * 2);
-        pen.fill();
-        if (still) continue;
-        const age = ((now + i * 537) % 1800) / 1800;
-        pen.strokeStyle = `rgba(255,255,255,${(1 - age) * 0.9 * at.depth})`;
-        pen.lineWidth = Math.max(1, R * 0.012);
-        pen.beginPath();
-        pen.arc(at.x, at.y, R * (0.03 + age * 0.12), 0, Math.PI * 2);
-        pen.stroke();
-      }
+      globeRoutes(pen, points, centre, tilt, width, height, o().size, now, still);
       return !still && (o().speed !== 0 || points.length > 0 || dragging || velocity !== 0 || !!turn);
     },
   });

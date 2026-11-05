@@ -21,7 +21,8 @@ Notable changes to `asciify-engine`, newest first. Releases are published to [np
 
 ### Looks changed
 
-- None. Every visual baseline (19 kit components, presets and field marks, light and dark) is pixel-identical to 4.32.9; `sample: 'shape'` and `post` have baselines of their own. A playing video's levels are measured from its mip chain rather than a 64 px canvas copy, which can move them by a step or two.
+- `globe` (sphere style): lit from the upper left with a soft terminator, round dots batched by tone, a faint body and a thin atmosphere, quieter latitude lines, and `points` joined in order by great-circle arcs lifted off the surface with a pulse travelling along each; places glow in a soft halo. Same options.
+- Otherwise none. Every visual baseline (19 kit components, presets and field marks, light and dark) is pixel-identical to 4.32.9; `sample: 'shape'` and `post` have baselines of their own. A playing video's levels are measured from its mip chain rather than a 64 px canvas copy, which can move them by a step or two.
 
 ## 4.32.9
 
