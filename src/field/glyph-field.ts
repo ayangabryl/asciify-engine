@@ -822,6 +822,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (readFor.scope) applyScope(got.data, got.width, got.height);
     if (readFor.levels || readFor.scope) dirty = true;
   };
+  let uploadedTexture: WebGLTexture | null = null, uploadedWidth = 0, uploadedHeight = 0;
   const uploadSource = () => {
     if (!source) return;
     const now = performance.now();
@@ -844,12 +845,18 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     try {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+      const s = source as { videoWidth?: number; videoHeight?: number; naturalWidth?: number; naturalHeight?: number; width: number; height: number };
+      const tw = s.videoWidth || s.naturalWidth || s.width, th = s.videoHeight || s.naturalHeight || s.height;
+      // A frame the size of the last one is copied into the texture's storage as it is; a new size specifies it afresh. (Specifying
+      // it every frame made the browser allocate it again each time, and drop its mip chain: at 1080p half the upload's cost.)
+      if (uploadedTexture === sourceTexture && uploadedWidth === tw && uploadedHeight === th && tw && th) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+      else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+        uploadedTexture = sourceTexture; uploadedWidth = tw; uploadedHeight = th;
+      }
       // A still builds its smaller levels now; a moving source when a draw or a read next needs them, which a field whose cells
       // are about a texel each never does.
       if (moving) mipsStale = true; else { gl.generateMipmap(gl.TEXTURE_2D); mipsStale = false; }
-      const s = source as { videoWidth?: number; videoHeight?: number; naturalWidth?: number; naturalHeight?: number; width: number; height: number };
-      const tw = s.videoWidth || s.naturalWidth || s.width, th = s.videoHeight || s.naturalHeight || s.height;
       // With its mip chain, a third more.
       sourceBytes = tw * th * 4 * 4 / 3;
       if (onGpu) {
