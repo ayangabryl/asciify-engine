@@ -8,16 +8,16 @@ November 4, 2026. asciify-engine 4.33.0, three 0.187.0, postprocessing 6.39.6, a
 
 | | asciify-engine/headless | aalib.js | ascii.rest (shade) | three.js AsciiEffect | naive ramp (agent baseline) |
 | --- | --- | --- | --- | --- | --- |
-| Photos, 20 unseen (SSIM close / far) | **0.591 / 0.873** | 0.534 / 0.868 | 0.418 / 0.781 | 0.446 / 0.779 | 0.427 / 0.750 |
-| Line art | **0.840 / 0.849** | 0.799 / 0.798 | 0.686 / 0.847 | 0.718 / 0.601 | 0.737 / 0.674 |
-| Type | **0.900 / 0.872** | 0.876 / 0.868 | 0.786 / 0.846 | 0.874 / 0.836 | 0.841 / 0.810 |
-| 1920×1080 frame to 160 columns | 18 ms | 106 ms | 126 ms | 245 ms | 28 ms |
+| Photos, 20 unseen (SSIM close / far) | **0.593 / 0.878** | 0.534 / 0.868 | 0.418 / 0.781 | 0.446 / 0.779 | 0.427 / 0.750 |
+| Line art | **0.846 / 0.876** | 0.799 / 0.798 | 0.686 / 0.847 | 0.718 / 0.601 | 0.737 / 0.674 |
+| Type | **0.902 / 0.889** | 0.876 / 0.868 | 0.786 / 0.846 | 0.874 / 0.836 | 0.841 / 0.810 |
+| 1920×1080 frame to 160 columns | 29 ms | 427 ms | 167 ms | 336 ms | 27 ms |
 | Flicker on a slow pan (cells per frame) | 25 % stills, **8 %** video settings | 34 % | 7 % | 7.8 % | 4.7 % |
 | Pixels to text in Node, no DOM | **yes** | no | yes | no | (if written to) |
 | Minified + gzipped | 4.7 kB | 8.6 kB | 9.1 kB | 130.8 kB (with three) | — |
 
 On photographs, line art and type it is ahead of every renderer tested, close up and at a distance, and better than aalib on
-both measures on 15 of the 20 photos; it does it about six times faster than aalib, with a quarter of its flicker in video
+both measures on 16 of the 20 photos; it does it several times faster than aalib, with a quarter of its flicker in video
 settings, in a 4.7 kB entry that also runs on a server. ascii.rest's `logo` style (drawn for
 logos on a plain ground) scores 0.367 / 0.728 on photos, 0.746 / 0.778 on line art and 0.805 / 0.829 on type.
 
@@ -56,6 +56,30 @@ settings" are `dither: 'ordered'` with each frame given the previous one (`previ
 
 Not measured: TheZoraiz/ascii-image-converter, a popular Go command-line converter, could not be run in the environment the
 benchmark was made in (an unvetted downloaded binary).
+
+## ASCII generators: ascii-magic.com and devault-ascii.pages.dev
+
+The two most used free image-to-ASCII generators on the web are apps rather than libraries. Their ASCII styles were rebuilt
+in `bench/page.js` from the code their sites ship (November 2026), with their default settings, and drawn in one ink on the same
+grid and font as everyone else:
+
+- **ASCII Magic** (ascii-magic.com), Characters mode: the picture drawn down to the grid, each cell's brightness set between the
+  picture's darkest and lightest, cells under its dark threshold (30) left empty, then `@#S08Xx+=-;:. ` by brightness. As shipped
+  it also lays a blurred copy of the photo under the characters, which is left out here: it would score the photo, not the ASCII.
+- **Devault** (devault-ascii.pages.dev), Classic (its default, `@%#*+=-:. `) and Detailed (a 70-character ramp): auto levels, a 6 %
+  cutoff, and its edge pass on: a structure-tensor edge finder that puts `-`, `/`, `|` or `\` on strong edges and lifts the rest.
+
+| | Photos (close / far) | Line art | Type | Flicker | 1080p frame |
+| --- | --- | --- | --- | --- | --- |
+| **asciify-engine/headless** | **0.593 / 0.878** | **0.846 / 0.876** | **0.902 / 0.889** | 25 %, **8 %** video | 29 ms |
+| Devault, Detailed | 0.426 / 0.785 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 180 ms |
+| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 161 ms |
+| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | **1.6 ms** |
+
+asciify-engine is ahead of both on every picture at both distances. The closest call is line art seen from a distance, where
+Devault's edge characters do well (0.871 against 0.876). ASCII Magic is the fastest by far: it reads one pixel per cell from a
+picture drawn down to the grid, which is also why it scores lowest. On the GPU, the glyph field with `sample: 'shape'` scores
+0.618 / 0.922, 0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
 
 ## Studio heroes: 2025.unseen.co and an open-source WebGL hero
 
@@ -158,9 +182,11 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 
 ## Where it is not ahead
 
-- **Photos at a distance:** ahead of aalib on average by a small margin (0.873 against 0.868); on 5 of the 20 photos aalib is better on at least one measure.
+- **Photos at a distance:** ahead of aalib on average by a small margin (0.878 against 0.868); on 4 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
   frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (8 %), still above a plain ramp (4.7 %).
+- **Speed against ASCII Magic:** its one-pixel-per-cell reading converts a 1080p frame in 1.6 ms against 29 ms; asciify-engine
+  reads every pixel of every cell, which is where its fidelity comes from. A naive ramp is about as fast (27 ms).
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
 - GPU frame times on real hardware were not measured: the runs use SwiftShader, which compares the work each renderer asks for
