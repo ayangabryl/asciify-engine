@@ -22,6 +22,10 @@ const page = await browser.newPage();
 const errors = []; page.on('pageerror', e => errors.push(e.message));
 await page.goto(`http://127.0.0.1:${server.address().port}/`);
 const result = await page.evaluate(async () => {
+  // Count the workers started, to tell the worker path from the fallback on this thread.
+  let workers = 0;
+  const NativeWorker = window.Worker;
+  window.Worker = class extends NativeWorker { constructor(...args) { super(...args); workers++; } };
   const h = await import('/headless.js');
   const img = new Image(); img.src = '/still.jpg'; await img.decode();
   const frame = document.createElement('canvas'); frame.width = img.naturalWidth; frame.height = img.naturalHeight;
@@ -58,6 +62,22 @@ const result = await page.evaluate(async () => {
   const many = await gpu.convert(frame, { columns: 40, mode: 'tone', charset: wide });
   const shared = await h.imageToAsciiGridGPU(frame, { columns: 50 });
   const stats = gpu.stats;
+  // The worker and this thread run the same code on the same GPU: the same characters, every mode.
+  const here = h.createAsciiGpu({ worker: false });
+  let sameEverywhere = true;
+  for (const o of [{ columns: 90 }, { columns: 90, dither: 'ordered' }, { columns: 90, mode: 'tone' }, { columns: 90, color: true, background: 'light' }]) {
+    const a = await gpu.convert(frame, o), b = await here.convert(frame, o);
+    if (a.lines.join('\n') !== b.lines.join('\n') || (a.colors && a.colors.some((v, i) => v !== b.colors[i]))) sameEverywhere = false;
+  }
+  here.destroy();
+  const workersUsed = workers;
+  // A page whose content policy blocks Blob workers: the converter falls back to this thread and still answers.
+  window.Worker = class { constructor() { throw new DOMException('blocked', 'SecurityError'); } };
+  const blocked = h.createAsciiGpu();
+  const blockedGrid = await blocked.convert(frame, { columns: 90, dither: 'ordered' });
+  const blockedSame = agree(blockedGrid, await gpu.convert(frame, { columns: 90, dither: 'ordered' }));
+  blocked.destroy();
+  window.Worker = NativeWorker;
   // In a worker, on an OffscreenCanvas: the frame goes over as an ImageBitmap and the main thread does nothing else.
   const worker = new Worker(URL.createObjectURL(new Blob([`
     self.onmessage = async ({ data }) => {
@@ -81,7 +101,7 @@ const result = await page.evaluate(async () => {
     kept: agree(first, again), sized: sized.columns === 37 && sized.rows === 11 && sized.lines.length === 11 && sized.lines.every(l => l.length === 37),
     many: many.columns === 40 && many.lines.every(l => [...l].every(ch => wide.includes(ch))), shared: shared.columns === 50 && shared.lines.length === shared.rows,
     stats: stats.mainThreadMs > 0 && stats.totalMs >= stats.mainThreadMs, rejected,
-    videoFrame: fromVideo ? agree(fromVideo, onPage) : null,
+    videoFrame: fromVideo ? agree(fromVideo, onPage) : null, sameEverywhere, workersUsed, blockedSame,
     worker: inWorker ? { ok: inWorker.columns === 64 && inWorker.lines.length === inWorker.rows, agree: agree(inWorker, onPage) } : null,
   };
 });
@@ -102,6 +122,9 @@ if (result.supported) {
   check('imageToAsciiGridGPU uses the shared converter', result.shared);
   check('stats report the last frame', result.stats);
   check('convert after destroy rejects', result.rejected);
+  check('converts in a worker by default', result.workersUsed >= 1, result.workersUsed);
+  check('the worker and this thread give the same grid in every mode', result.sameEverywhere);
+  check('falls back to this thread when workers are blocked', result.blockedSame === 1, result.blockedSame);
   check('takes a VideoFrame', result.videoFrame === null || result.videoFrame > 0.98, result.videoFrame);
   check('works in a worker on an OffscreenCanvas, the same as on the page', result.worker?.ok && result.worker.agree > 0.98, result.worker && `${(result.worker.agree * 100).toFixed(1)}%`);
 }

@@ -77,9 +77,10 @@ video.requestVideoFrameCallback(function frame() {
 ```
 
 - One converter per page is plenty; `imageToAsciiGridGPU(source, options)` uses a shared one and falls back to the CPU itself.
-- Main thread per 1080p frame at 160 columns: about 1.1 to 1.4 ms in every mode, diffusion included (it is settled on the GPU
-  in four passes), while matching each cell by shape. In a module worker (on an OffscreenCanvas, given an `ImageBitmap` or
-  `VideoFrame`), the page's share drops to making and posting the bitmap, 0.2 to 1 ms.
+- It works in a worker of its own by default (started from a Blob URL; no worker file or bundler setup), so the page only
+  hands each frame over: about 0.5 ms of main thread a 1080p frame at 160 columns, in every mode, diffusion included.
+  `createAsciiGpu({ worker: false })` keeps it on the page (about 1.1 to 2.2 ms). Where a content policy blocks Blob
+  workers it falls back to the page by itself.
 - At least the CPU path's quality on the benchmark (photos 0.596 / 0.884 against 0.592 / 0.879); 93 to 96 % of characters
   identical without diffusion.
 - Falls back to `imageToAsciiGrid` without WebGL2, past the GPU's texture size, with more than 127 characters in `charset`, or
@@ -91,6 +92,6 @@ On screen, rather than as text, a glyph field (`/field`) draws the characters on
 
 Shape matching was measured against other renderers (ASCII Magic, the Devault generator, aalib.js, ascii.rest, three.js
 AsciiEffect, a naive ramp) on photos it was not tuned on, line art and type: ahead of everything tested on photos, line art and
-type, a 1080p frame in about 25 ms on one core, or about 1.3 ms of main thread through `createAsciiGpu`, 4.7 kB gzipped
+type, a 1080p frame in about 25 ms on one core, or about 0.5 ms of main thread through `createAsciiGpu`, 4.7 kB gzipped
 (the GPU converter, tree-shaken when unused, adds about 7 kB). Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
 closely in that family. The output for a given input is deterministic and identical across runtimes.

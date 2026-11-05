@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { workerSource } from './worker-source.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -17,7 +18,7 @@ const only = arg('--only', null);
 
 // The vendored hero keeps its effect class and glyph atlas private; the build exposes them without editing the file.
 const exposeHero = { name: 'expose-hero', setup(b) { b.onLoad({ filter: /webgl-ascii-hero[\\/]ascii-effect\.tsx$/ }, async args => ({ contents: `${await fs.readFile(args.path, 'utf8')}\nexport { AsciiEffectImpl, createGlyphTexture, TERMINAL_SYMBOLS }\n`, loader: 'tsx' })); } };
-const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero], logLevel: 'error' });
+const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero, workerSource], logLevel: 'error' });
 const pictures = [{ name: 'motion-still (photo)', url: '/img/motion-still.jpg', file: path.join(here, '../tests/fixtures/motion-still.jpg') }];
 if (imageDir) for (const file of (await fs.readdir(imageDir)).filter(f => /\.(jpe?g|png|webp)$/i.test(f)).sort()) pictures.push({ name: file.replace(/\.\w+$/, ''), url: `/img/${file}`, file: path.join(imageDir, file) });
 const files = new Map(pictures.map(p => [p.url, p.file]));

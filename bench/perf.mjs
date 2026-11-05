@@ -9,7 +9,7 @@ const sizes = arg('--sizes', '3840x2160').split(',').map(s => s.split('x').map(N
 const prof = JSON.parse(arg('--prof', '{}'));
 const cells = arg('--cells', '12,4,1').split(',').map(Number), frames = Number(arg('--frames', 12)), only = arg('--only', null);
 const exposeHero = { name: 'expose-hero', setup(b) { b.onLoad({ filter: /webgl-ascii-hero[\\/]ascii-effect\.tsx$/ }, async args => ({ contents: `${await fs.readFile(args.path, 'utf8')}\nexport { AsciiEffectImpl, createGlyphTexture, TERMINAL_SYMBOLS }\n`, loader: 'tsx' })); } };
-const bundle = await build({ entryPoints: [path.join(here, 'perf-page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero], logLevel: 'error' });
+const bundle = await build({ entryPoints: [path.join(here, 'perf-page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero, workerSource], logLevel: 'error' });
 const server = http.createServer((req, res) => { if (req.url === '/perf.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(bundle.outputFiles[0].contents); return; } res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><body style="margin:0;background:#000"><script type="module" src="/perf.js"></script>'); });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

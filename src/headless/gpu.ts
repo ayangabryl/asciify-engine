@@ -313,8 +313,11 @@ export interface AsciiGpu {
 
 type Program = { program: WebGLProgram; at: (name: string) => WebGLUniformLocation | null };
 
-/** A WebGL2 converter, or null where WebGL2 (or rendering to a texture) is missing: use `imageToAsciiGrid` there. */
-export function createAsciiGpu(): AsciiGpu | null {
+/**
+ * A WebGL2 converter on this thread, or null where WebGL2 (or rendering to a texture) is missing. `createAsciiGpu` in
+ * gpu-main.ts runs this in a worker where it can. @internal
+ */
+export function createAsciiGpuHere(): AsciiGpu | null {
   if (typeof document === 'undefined' && typeof OffscreenCanvas !== 'function') return null;
   const canvas: HTMLCanvasElement | OffscreenCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(1, 1);
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: false }) as WebGL2RenderingContext | null;
@@ -650,15 +653,3 @@ export function createAsciiGpu(): AsciiGpu | null {
     },
   };
 }
-
-let shared: AsciiGpu | null | undefined;
-/**
- * `imageToAsciiGrid` on the GPU, for live video and large grids in a page or worker: the page's shared converter, made on
- * first use. Falls back to `imageToAsciiGrid` on the CPU where WebGL2 is missing.
- */
-export async function imageToAsciiGridGPU(source: AsciiImageSource, options: AsciiGridOptions = {}): Promise<AsciiGrid> {
-  if (shared === undefined) shared = createAsciiGpu();
-  return shared ? shared.convert(source, options) : imageToAsciiGrid(source, options);
-}
-
-

@@ -28,13 +28,15 @@ const workerSource = {
   },
 };
 
-// The ESM studio fetches its worker script as a chunk of its own (dist/studio-worker.js) on the first mount; the CJS
+// The ESM studio fetches its worker script as a chunk of its own (dist/studio-worker.js) on the first mount, and the GPU
+// text converter its own (dist/headless-gpu-worker.js) when it first starts; the CJS
 // build, for Node and SSR where no worker runs, keeps it inline.
 const workerChunk = {
   name: 'studio-worker-chunk',
   setup(build: { initialOptions: { outExtension?: Record<string, string> }; onResolve(options: { filter: RegExp }, callback: () => { path: string; external: boolean } | undefined): void }) {
     if (build.initialOptions.outExtension?.['.js'] === '.cjs') return;
     build.onResolve({ filter: /^\.\/worker-source$/ }, () => ({ path: './studio-worker.js', external: true }));
+    build.onResolve({ filter: /^\.\/gpu-worker-source$/ }, () => ({ path: './headless-gpu-worker.js', external: true }));
   },
 };
 
@@ -66,6 +68,7 @@ export default defineConfig([
     async onSuccess() {
       await Promise.all([
         build({ ...shared, config: false, entry: { 'studio-worker': 'src/studio/worker-source.ts' }, format: ['esm'], sourcemap: false }),
+        build({ ...shared, config: false, entry: { 'headless-gpu-worker': 'src/headless/gpu-worker-source.ts' }, format: ['esm'], sourcemap: false }),
         build({ ...shared, config: false, entry: ['src/kit.ts'], format: ['cjs'], esbuildPlugins: [workerSource, sharedField(ext => `./field.${ext}`)] }),
         build({ ...kitEsm, config: false }),
       ]);
