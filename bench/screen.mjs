@@ -26,16 +26,23 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--js-flags=--expose-gc'] });
 const results = {};
-for (let run = 0; run < runs; run++) {
-  // A fresh page each run, so one renderer's leftovers (contexts, caches) do not land in another's.
-  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-  page.on('pageerror', e => console.error('page error:', e.message));
+const names = await (async () => {
+  const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.waitForFunction(() => window.perf);
-  const names = (await page.evaluate(() => window.perf.RENDERERS)).filter(n => only.test(n));
-  const cdp = await page.context().newCDPSession(page);
+  const all = await page.evaluate(() => window.perf.RENDERERS);
+  await page.close();
+  return all.filter(n => only.test(n));
+})();
+for (let run = 0; run < runs; run++) {
   const line = [];
   for (const name of names) {
+    // A fresh page for every renderer, so one's teardown (a context given back, an idle timer) never lands in another's time.
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+    page.on('pageerror', e => console.error('page error:', e.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.waitForFunction(() => window.perf);
+    const cdp = await page.context().newCDPSession(page);
     await page.evaluate(() => globalThis.gc?.());
     const events = [];
     const collect = e => events.push(...e.value);
@@ -49,7 +56,7 @@ for (let run = 0; run < runs; run++) {
     cdp.off('Tracing.dataCollected', collect);
     const mark = n => events.find(e => e.name === n && e.cat?.includes('blink.user_timing'));
     const start = mark('steady-start'), end = mark('steady-end');
-    if (!start || !end || !frames) { line.push(`${name}: no frames`); continue; }
+    if (!start || !end || !frames) { line.push(`${name}: no frames`); await page.close(); continue; }
     const { pid, tid } = start, s = start.ts, e = end.ts;
     const tasks = events.filter(t => t.pid === pid && t.tid === tid && t.ph === 'X' && /RunTask$/.test(t.name));
     const busy = tasks.reduce((sum, t) => sum + Math.max(0, Math.min(e, t.ts + t.dur) - Math.max(s, t.ts)), 0);
@@ -71,13 +78,24 @@ for (let run = 0; run < runs; run++) {
         const top = kids.filter(k => !kids.some(o => o !== k && o.ts <= k.ts && o.ts + o.dur >= k.ts + k.dur && o.dur > k.dur));
         for (const k of top) { const key = k.name + (k.args?.data?.type ? `:${k.args.data.type}` : ''); by[key] = (by[key] ?? 0) + k.dur; }
       }
+      if (arg('--timers', null)) {
+        const fired = inside.filter(x => x.name === 'TimerFire').sort((a, b) => b.dur - a.dur).slice(0, 5);
+        for (const t of fired) {
+          const calls = inside.filter(k => k.ts >= t.ts && k.ts + k.dur <= t.ts + t.dur && (k.name === 'FunctionCall' || k.name === 'v8.callFunction'));
+          console.log(`    timer ${(t.dur / 1000).toFixed(1)} ms: ${calls.slice(0, 3).map(c => `${c.args?.data?.functionName || '?'} ${String(c.args?.data?.url || '').split('/').pop()}:${c.args?.data?.lineNumber}`).join(' | ')} ${JSON.stringify(t.args?.data ?? {}).slice(0, 120)}`);
+        }
+      }
+      const inWindow = tasks.filter(t => t.ts >= s && t.ts <= e);
+      const covered = inWindow.reduce((sum, t) => { const kids = inside.filter(k => k.ts >= t.ts && k.ts + k.dur <= t.ts + t.dur); const top = kids.filter(k => !kids.some(o => o !== k && o.ts <= k.ts && o.ts + o.dur >= k.ts + k.dur && o.dur > k.dur)); return sum + top.reduce((a, k) => a + k.dur, 0); }, 0);
+      const total = inWindow.reduce((a, t) => a + t.dur, 0);
+      console.log(`  ${name}: ${(inWindow.length / frames).toFixed(1)} tasks a frame, ${((total - covered) / 1000 / frames).toFixed(3)} ms a frame in tasks outside named work; tasks by length: ${[...inWindow].sort((a, b) => b.dur - a.dur).slice(0, 6).map(t => (t.dur / 1000).toFixed(2)).join(', ')}`);
       console.log(`  ${name}: ` + Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${(v / 1000 / frames).toFixed(3)}`).join(', '));
     }
     (results[name] ??= []).push({ ms: +ms.toFixed(3), frames, fps: +(frames / seconds).toFixed(1) });
     line.push(`${name.replace('asciify-engine ', '')} ${ms.toFixed(3)} ms (${frames} frames)`);
+    await page.close();
   }
   console.log(`run ${run + 1}: ${line.join(' | ')}`);
-  await page.close();
 }
 console.log(`\nmain thread per frame on screen, ${width}x${height}, ${cell} px cells (Chrome trace, ${seconds} s a run, ${runs} runs), ms:`);
 for (const [name, list] of Object.entries(results)) {

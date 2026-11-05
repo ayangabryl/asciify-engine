@@ -1,4 +1,4 @@
-import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
+import { FIELD_VERTEX, fieldCellShader, fieldCompositeShader, fieldFluidShader, sceneId } from './field-shaders';
 import { MAX_FIELD_EFFECTS, effectUniforms, type FieldEffect } from './field-effects';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
 import { createMipReader } from './field-readback';
@@ -7,14 +7,14 @@ import {
   ambientFactor, cancelFieldFrame, fieldContext, markShared, observeSize, observeView, requestFieldFrame, watchFonts, watchMotionPreference, watchPointer, watchVisibility,
   type FieldClient, type PointerClient, type SharedAtlas,
 } from './field-gl';
-import { FrameScale } from './field-gl';
+import { FrameScale, trackGlState } from './field-gl';
 import { WIDE_FONT, isWideGlyph } from '../studio/characters';
 import { InkTrail } from '../surface/ink-trail';
 import { buildHoverGuide, type HoverGuide } from '../surface/hover-guide';
 import { buildPhotoCues, type PhotoCues } from '../surface/photo-cues';
 import { SurfaceTap, photoMedium, shadePhotoTap } from '../surface/surface-tap';
 import {
-  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels,  fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor, fieldClearGrid, rasterClearMap,
+  FIELD_MARKS, activeFieldHover, fieldWords, fieldCellLayout, fieldCellPitch, fieldClearFromRects, fieldGlyphs, fieldLevels, glyphsOf,  fieldSourceRect, fieldSourceScale, normalizeFieldSettings, parseFieldColor, fieldClearGrid, rasterClearMap,
   type FieldRect, type GlyphFieldInput, type GlyphFieldSettings,
 } from './field-model';
 
@@ -169,7 +169,7 @@ let ownContexts = 0;
 const OWN_CONTEXTS = 2, OWN_PIXELS = 1280 * 720;
 const OWN_ATTRIBUTES: WebGLContextAttributes = { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: 'high-performance' };
 const atlasFont = (settings: GlyphFieldSettings, layout: CellLayout) => `${settings.fontWeight} ${Math.max(1, layout.height * settings.glyphScale)}px ${settings.font}`;
-const atlasKeyOf = (settings: GlyphFieldSettings, layout: CellLayout) => `${fieldGlyphs(settings.charset).join('')}\u0000${atlasFont(settings, layout)}\u0000${layout.width}x${layout.height}x${layout.columns}`;
+const atlasKeyOf = (settings: GlyphFieldSettings, layout: CellLayout) => `${glyphsOf(settings.charset).join('')}\u0000${atlasFont(settings, layout)}\u0000${layout.width}x${layout.height}x${layout.columns}`;
 /** A field's pixel ratio for a canvas of this CSS size: the display's, capped by the field and the backing-pixel limit, then the page's render scale. */
 function fieldPixelRatio(settings: GlyphFieldSettings, width: number, height: number, scale: number) {
   const full = Math.min(globalThis.devicePixelRatio || 1, settings.maxPixelRatio, Math.sqrt(MAX_BACKING_PIXELS / Math.max(1, width * height)));
@@ -327,6 +327,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   if (!maybeGl) throw new Error('WebGL2 is not available for the glyph field.');
   let gl: WebGL2RenderingContext = maybeGl;
   if (!shared) ownContexts++;
+  // Binds that change nothing are skipped (the shared context does the same for its fields).
+  const forgetState = trackGlState(gl);
   // A context this field asked for (its exact attributes) is given back when it goes; one the page made before is left alone.
   const attributes = !shared ? gl.getContextAttributes() : null;
   const madeHere = !!attributes && (Object.keys(OWN_ATTRIBUTES) as (keyof WebGLContextAttributes)[]).every(key => attributes[key] === OWN_ATTRIBUTES[key]);
@@ -539,7 +541,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
   let activeUntil = 0;
   const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-  const reduced = () => settings.respectReducedMotion && !!reducedQuery?.matches;
+  // Read once and kept current by the preference listener below, not asked of the media query every frame.
+  let reducedMotion = !!reducedQuery?.matches;
+  const reduced = () => settings.respectReducedMotion && reducedMotion;
 
   let resolveReady!: () => void;
   const ready = new Promise<void>(resolve => { resolveReady = resolve; });
@@ -694,12 +698,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     read = 0;
   };
 
+  let pixelMark = -1, pixelPost = false;
+  const postOn = (s: GlyphFieldSettings) => s.post.bloom > 0 || s.post.scanlines > 0 || s.post.grain > 0 || s.post.chroma > 0 || s.post.curvature > 0;
   function buildPrograms() {
     if (cellProgram && !shared) gl.deleteProgram(cellProgram.program);
     if (pixelProgram && !shared) gl.deleteProgram(pixelProgram.program);
     releaseCells();
     cellProgram = link(fieldCellShader(packed, effects));
-    pixelProgram = link(FIELD_COMPOSITE);
+    pixelMark = FIELD_MARKS.indexOf(settings.mark); pixelPost = postOn(settings);
+    pixelProgram = link(fieldCompositeShader(pixelMark, pixelPost));
     // Without parallel compilation the check blocks either way, so a broken driver still throws from mount.
     if (shared ? !host!.canCompileInParallel : !parallel) programsReady(true);
   }
@@ -803,6 +810,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // A playing video or live canvas is measured from its own mip chain on the GPU, read back a frame or two later, so measuring
   // never waits on the GPU. Levels and scope share one read; each takes it only when it asked for it.
   let shapesTexture: WebGLTexture | null = null, shapesFor = '', shapesFont = 0;
+  let shapesKey = '', shapesKeyFor: GlyphFieldSettings | null = null, shapesKeyLayout: CellLayout | null = null, shapesKeyFont = -1;
   let mipsStale = false, reader: ReturnType<typeof createMipReader> | null = null, readFor = { levels: false, scope: false }, uploads = 0, readAtUpload = -Infinity;
   // Where float targets allow, a moving source's levels and scope are measured on the GPU and stay there: nothing is read
   // back, and the shader samples them. Otherwise a mip is read back as above.
@@ -1033,7 +1041,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     // Shape sampling needs a picture, glyphs read along the ramp, and cells big enough for their parts to differ.
     const shapeOn = settings.sample === 'shape' && !!source && settings.mark === 'glyph' && settings.glyphOrder !== 'text' && settings.glyphOrder !== 'scatter' && layout.height >= 8;
     if (shapeOn) {
-      const key = `${atlasKey()}|${shapesFont}`;
+      // The key is built again only when the settings, layout or font change, not every frame.
+      if (shapesKeyFor !== settings || shapesKeyLayout !== layout || shapesKeyFont !== shapesFont) { shapesKeyFor = settings; shapesKeyLayout = layout; shapesKeyFont = shapesFont; shapesKey = `${atlasKey()}|${shapesFont}`; }
+      const key = shapesKey;
       if (shapesFor !== key || !shapesTexture) {
         shapesFor = key;
         const shapes = measureGlyphShapes(settings);
@@ -1116,7 +1126,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     u2f(gl, p.uDir, Math.cos((settings.markAngle * Math.PI) / 180), Math.sin((settings.markAngle * Math.PI) / 180));
     u1i(gl, p.uMark, FIELD_MARKS.indexOf(settings.mark));
     u4f(gl, p.uLine, settings.linePitch, settings.lineWeight, settings.sparkle, 0);
-    u4f(gl, p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), fieldGlyphs(settings.charset).length);
+    u4f(gl, p.uInlay, settings.accents, settings.shuffle, Math.floor(time * 7), glyphsOf(settings.charset).length);
     u1f(gl, p.uSourceColor, settings.color === 'source' ? 1 : 0);
     u3fv(gl, p.uRamp, rampData);
     u1f(gl, p.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
@@ -1130,7 +1140,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   };
 
   // The first frame draws even off screen, so a field mounted ahead of the viewport is ready when it scrolls in.
-  const drawable = () => !destroyed && !lost && !failed && !empty && (visible || readyPending) && !(typeof document !== 'undefined' && document.hidden);
+  // The page's visibility as the visibility listener last saw it, not read from the document every frame.
+  let pageHidden = typeof document !== 'undefined' && document.hidden;
+  const drawable = () => !destroyed && !lost && !failed && !empty && (visible || readyPending) && !pageHidden;
   function setEffects(next: readonly FieldEffect[]) {
     unsubscribeEffects.forEach(stop => stop());
     effects = next.slice(0, MAX_FIELD_EFFECTS);
@@ -1284,16 +1296,16 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   unwatch.push(observeSize(canvas, onResize), () => unobserveClear());
   // Paused only well off screen: a field scrolling in is already drawing, and a paused one keeps its last frame on its canvas.
   unwatch.push(observeView(canvas, '25% 0px', entry => { visible = entry.isIntersecting; if (visible) { dirty = true; wake(); } }));
-  unwatch.push(watchVisibility(() => { if (!document.hidden) { dirty = true; wake(); } }));
-  unwatch.push(watchMotionPreference(() => { dirty = true; wake(); }));
+  unwatch.push(watchVisibility(() => { pageHidden = document.hidden; if (!pageHidden) { dirty = true; wake(); } }));
+  unwatch.push(watchMotionPreference(() => { reducedMotion = !!reducedQuery?.matches; dirty = true; wake(); }));
   unwatch.push(watchFonts(onFontsLoaded));
   syncScroll();
   unwatch.push(() => { clearRects = null; syncScroll(); });
 
-  const onLost = (event?: Event) => { event?.preventDefault(); lost = true; if (raf) cancelFieldFrame(frame); raf = false; };
+  const onLost = (event?: Event) => { event?.preventDefault(); lost = true; if (!shared) forgetState(); if (raf) cancelFieldFrame(frame); raf = false; };
   const onRestored = () => {
     lost = false;
-    if (shared) gl = host!.gl;
+    if (shared) gl = host!.gl; else forgetState();
     ownFrames?.reset();
     shaders.length = 0; vertexShader = null; atlasEntry = null;
     cellProgram = pixelProgram = fluidProgram = null; cells = null;
@@ -1486,6 +1498,12 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       if ('source' in next) void setSource(next.source ?? null);
       if ('live' in next) live = !!next.live;
       if ('effects' in next && !sameEffects(next.effects ?? [], effects)) { setEffects(next.effects ?? []); if (!lost) buildPrograms(); }
+      // The pixel pass is built for its mark: another mark builds (or, through the shared context, finds) that one's.
+      else if ((settings.mark !== before.mark || postOn(settings) !== pixelPost) && !lost) {
+        if (pixelProgram && !shared) gl.deleteProgram(pixelProgram.program);
+        pixelMark = FIELD_MARKS.indexOf(settings.mark); pixelPost = postOn(settings);
+        pixelProgram = link(fieldCompositeShader(pixelMark, pixelPost));
+      }
       dirty = true;
       wake();
     },

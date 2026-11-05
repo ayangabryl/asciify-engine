@@ -315,7 +315,22 @@ let segmenter: { segment(input: string): Iterable<{ segment: string }> } | null 
  */
 export const FIELD_PHOTO_CHARSET = ' _.,:;*!/<[j7Jy23A#0DRNB';
 
+/** A charset split into its characters (grapheme clusters, up to 256, without line breaks or tabs). A new array each call. */
 export function fieldGlyphs(charset: string): string[] {
+  return glyphsOf(charset).slice();
+}
+// The split, kept for the charsets a page uses: fields read it every frame.
+const glyphCache = new Map<string, readonly string[]>();
+/** fieldGlyphs without the copy, for reading only. @internal */
+export function glyphsOf(charset: string): readonly string[] {
+  const known = glyphCache.get(charset);
+  if (known) return known;
+  const glyphs = splitGlyphs(charset);
+  if (glyphCache.size >= 32) glyphCache.delete(glyphCache.keys().next().value!);
+  glyphCache.set(charset, glyphs);
+  return glyphs;
+}
+function splitGlyphs(charset: string): string[] {
   if (!SINGLE_CODE_POINTS.test(charset) && segmenter === undefined) {
     const Segmenter = (Intl as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => NonNullable<typeof segmenter> }).Segmenter;
     segmenter = Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;

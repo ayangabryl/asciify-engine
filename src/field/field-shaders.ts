@@ -773,3 +773,20 @@ void main(){
   }
   outColor=c;
 }`;
+const composites = new Map<string, string>();
+/**
+ * The pixel pass for one mark, with or without the finishing passes: `uMark` a constant, and the post settings zero constants
+ * when none is on, so the compiler drops every other mark's code and the unused passes from the per-pixel work (on a software
+ * GPU, all marks in took the frame 2.5 times as long, and the unused passes another 15 %). A field changing its mark, or
+ * turning its post passes on or off, builds that pass.
+ */
+export function fieldCompositeShader(mark: number, post = false): string {
+  const key = `${mark}${post ? 'p' : ''}`;
+  let source = composites.get(key);
+  if (!source) {
+    source = FIELD_COMPOSITE.replace('uniform int uMark;', `const int uMark=${mark};`);
+    if (!post) source = source.replace('uniform vec4 uPost, uPost2;', 'const vec4 uPost=vec4(0.), uPost2=vec4(0.,0.,0.,2.);');
+    composites.set(key, source);
+  }
+  return source;
+}

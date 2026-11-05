@@ -5,7 +5,7 @@
  * creation or teardown, no browser context limit, and fields stay ordinary canvases in the page's own stacking and clipping.
  */
 
-import { FIELD_COMPOSITE, fieldCellShader } from './field-shaders';
+import { fieldCellShader, fieldCompositeShader } from './field-shaders';
 
 type Locations = Record<string, WebGLUniformLocation | null>;
 export interface SharedProgram { program: WebGLProgram; locations: Locations | null; fragment: WebGLShader }
@@ -20,14 +20,23 @@ type Task = (now: number) => void;
 // Two sets taking turns: a frame runs one while new requests go into the other, with no copy made each frame.
 let tasks = new Set<Task>(), running = new Set<Task>();
 let raf = 0, frameStart = 0, rafWith: unknown = null;
-const gaps: number[] = [];
+// The last 120 frame gaps, in a ring: one store a frame, no array moved.
+const GAP_SLOTS = 120;
+const gapRing = new Float64Array(GAP_SLOTS);
+let gapLength = 0;
+/** The last `n` frame gaps (all of them by default), oldest first, as a new array. */
+const recentGaps = (n = gapLength) => {
+  const count = Math.min(n, gapLength), out = new Array<number>(count);
+  for (let i = 0; i < count; i++) out[i] = gapRing[(gapCount - count + i) % GAP_SLOTS];
+  return out;
+};
 let lastTick = 0, gapCount = 0;
 // Ambient motion's budget: while the shared frames take much of the frame interval on the main thread (a slow or busy
 // machine), ambient motion draws every second or third time it would; interaction keeps the full rate.
 let ambientLoad = 1, tickCost = 0, loadAt = 0;
 function tick(now: number) {
   raf = 0;
-  if (lastTick && now > lastTick) { gaps.push(now - lastTick); gapCount++; if (gaps.length > 120) gaps.shift(); }
+  if (lastTick && now > lastTick) { gapRing[gapCount % GAP_SLOTS] = now - lastTick; gapCount++; if (gapLength < GAP_SLOTS) gapLength++; }
   lastTick = now;
   frameStart = performance.now();
   const due = tasks;
@@ -68,11 +77,11 @@ export function cancelFieldFrame(task: Task) {
  */
 let interval = 1000 / 60, intervalAt = -Infinity;
 export function frameInterval() {
-  if (gaps.length < 20) return 1000 / 60;
+  if (gapLength < 20) return 1000 / 60;
   // Worked out again every 15 frames: the display's rate does not change from one frame to the next.
   if (gapCount - intervalAt < 15) return interval;
   intervalAt = gapCount;
-  const sorted = gaps.slice().sort((a, b) => a - b);
+  const sorted = recentGaps().sort((a, b) => a - b);
   return (interval = Math.min(1000 / 60, Math.max(1000 / 360, sorted[Math.floor(sorted.length * 0.2)])));
 }
 
@@ -219,6 +228,51 @@ export function observeView(element: Element, margin: string, fn: (entry: Inters
   };
 }
 
+/* ---------------- State changes only when they change ---------------- */
+
+const tracked = new WeakMap<WebGL2RenderingContext, () => void>();
+/**
+ * Makes `gl` skip binds that change nothing: the active texture unit, the 2D texture on each unit, the program, the
+ * framebuffer, the viewport and the pixel store flags. A field rebinds the same dozen textures every frame, and every bind and draw is validated by
+ * the browser; through this, only real changes reach it. All code drawing with `gl` goes through the same object, so the
+ * record stays true; a deleted texture, program or framebuffer is forgotten, and `forget` (after a lost context) starts over.
+ * Returns that `forget`. Wrapping a context twice wraps it once.
+ */
+export function trackGlState(gl: WebGL2RenderingContext): () => void {
+  const known = tracked.get(gl);
+  if (known) return known;
+  const raw = {
+    activeTexture: gl.activeTexture.bind(gl), bindTexture: gl.bindTexture.bind(gl), deleteTexture: gl.deleteTexture.bind(gl),
+    useProgram: gl.useProgram.bind(gl), deleteProgram: gl.deleteProgram.bind(gl), bindFramebuffer: gl.bindFramebuffer.bind(gl),
+    deleteFramebuffer: gl.deleteFramebuffer.bind(gl), viewport: gl.viewport.bind(gl), pixelStorei: gl.pixelStorei.bind(gl),
+  };
+  const TEXTURE0 = gl.TEXTURE0, TEXTURE_2D = gl.TEXTURE_2D, FRAMEBUFFER = gl.FRAMEBUFFER;
+  const units: (WebGLTexture | null | undefined)[] = [];
+  let active = -1, program: WebGLProgram | null | undefined, framebuffer: WebGLFramebuffer | null | undefined, view = '';
+  const store = new Map<number, number | boolean>();
+  const forget = () => { units.length = 0; active = -1; program = undefined; framebuffer = undefined; view = ''; store.clear(); };
+  const g = gl as unknown as Record<string, unknown>;
+  g.activeTexture = (unit: number) => { const i = unit - TEXTURE0; if (i === active) return; active = i; raw.activeTexture(unit); };
+  g.bindTexture = (target: number, texture: WebGLTexture | null) => {
+    if (target === TEXTURE_2D && active >= 0) { if (units[active] === texture) return; units[active] = texture; }
+    else if (target === TEXTURE_2D) units.length = 0;
+    raw.bindTexture(target, texture);
+  };
+  g.deleteTexture = (texture: WebGLTexture | null) => { for (let i = 0; i < units.length; i++) if (units[i] === texture) units[i] = undefined; raw.deleteTexture(texture); };
+  g.useProgram = (next: WebGLProgram | null) => { if (next === program) return; program = next; raw.useProgram(next); };
+  g.deleteProgram = (old: WebGLProgram | null) => { if (old === program) program = undefined; raw.deleteProgram(old); };
+  g.bindFramebuffer = (target: number, next: WebGLFramebuffer | null) => {
+    if (target === FRAMEBUFFER) { if (next === framebuffer) return; framebuffer = next; }
+    else framebuffer = undefined;
+    raw.bindFramebuffer(target, next);
+  };
+  g.deleteFramebuffer = (old: WebGLFramebuffer | null) => { if (old === framebuffer) framebuffer = undefined; raw.deleteFramebuffer(old); };
+  g.pixelStorei = (name: number, value: number | boolean) => { if (store.get(name) === value) return; store.set(name, value); raw.pixelStorei(name, value); };
+  g.viewport = (x: number, y: number, w: number, h: number) => { const key = `${x},${y},${w},${h}`; if (key === view) return; view = key; raw.viewport(x, y, w, h); };
+  tracked.set(gl, forget);
+  return forget;
+}
+
 /* ---------------- One context ---------------- */
 
 interface TimerExt { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -258,14 +312,15 @@ export class FrameScale {
   private cpuMs: number[] = [];
   private changedAt = 0;
   private checkedAt = -Infinity;
+  private frameNo = 0;
   constructor(private gl: WebGL2RenderingContext, private onChange: () => void) {
     this.timer = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null;
   }
-  /** A frame starts drawing: times it on the GPU where the browser can. Once a frame, however many draws. */
+  /** A frame starts drawing: times one frame in eight on the GPU where the browser can. Once a frame, however many draws. */
   begin() {
     if (this.drew) return;
     this.drew = true;
-    if (this.timer && !this.open && this.queries.length < 4) {
+    if (this.timer && !this.open && this.queries.length < 4 && (this.frameNo++ & 7) === 0) {
       const query = this.gl.createQuery();
       if (query) { this.gl.beginQuery(this.timer.TIME_ELAPSED_EXT, query); this.open = query; }
     }
@@ -306,9 +361,9 @@ export class FrameScale {
     let load: number;
     if (samples) load = samples.slice().sort((a, b) => a - b)[Math.floor(samples.length * 0.75)] / interval;
     else {
-      if (gaps.length < 30 || this.cpuMs.length < 10) return;
+      if (gapLength < 30 || this.cpuMs.length < 10) return;
       // Frames falling behind while the fields' own main-thread work is light: the GPU is the likelier cause.
-      const recent = gaps.slice(-30).sort((a, b) => a - b), cpu = this.cpuMs.slice().sort((a, b) => a - b)[this.cpuMs.length >> 1];
+      const recent = recentGaps(30).sort((a, b) => a - b), cpu = this.cpuMs.slice().sort((a, b) => a - b)[this.cpuMs.length >> 1];
       load = recent[Math.floor(recent.length * 0.75)] / interval > 1.6 && cpu < interval * 0.5 ? 1 : 0.5;
     }
     this.overloaded = load > 0.8 && this.atMinimum;
@@ -356,6 +411,7 @@ export class FieldContext {
     }
     if (!gl || !canvas) throw new Error('WebGL2 is not available for the glyph field.');
     this.canvas = canvas; this.gl = gl;
+    this.forgetState = trackGlState(gl);
     this.lost = false;
     canvas.width = canvas.height = 1;
     this.parallel = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
@@ -370,11 +426,14 @@ export class FieldContext {
     // The two programs every field draws with start linking now, in the browser's compiler, so the first field rarely waits.
     const packed = !gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float');
     this.program(fieldCellShader(packed));
-    this.program(FIELD_COMPOSITE);
+    // The glyph mark's pixel pass, the one most fields draw with.
+    this.program(fieldCompositeShader(0));
   }
+  private forgetState: () => void = () => {};
   private onLost = (event: Event) => {
     event.preventDefault();
     this.lost = true;
+    this.forgetState();
     this.reset();
     for (const client of [...this.clients]) client.lost();
     // A context the browser does not give back within a second is replaced with a new one.
@@ -387,7 +446,7 @@ export class FieldContext {
       this.restored();
     }, 1000) as unknown as number;
   };
-  private onRestored = () => { clearTimeout(this.lostTimer); this.lost = false; this.restored(); };
+  private onRestored = () => { clearTimeout(this.lostTimer); this.lost = false; this.forgetState(); this.restored(); };
   private restored() { for (const client of [...this.clients]) client.restored(); }
   private reset() {
     this.programs.clear(); this.atlases.clear(); this.vertex = null; this.vao = null;

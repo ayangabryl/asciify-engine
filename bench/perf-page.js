@@ -168,20 +168,25 @@ export async function steady(name, { width, height, cell, warm = 1500, seconds =
   host.width = width; host.height = height; host.style.cssText = `position:fixed;left:0;top:0;width:${width}px;height:${height}px`;
   document.body.appendChild(host);
   const src = liveSource(width, height);
+  // The native requestAnimationFrame for this mode (measure() wraps it to time callbacks), so no renderer pays for the wrapper.
+  const wrapped = window.requestAnimationFrame;
+  window.requestAnimationFrame = nativeRaf;
   const r = RENDERERS[name](host, src, cell);
   await r.ready;
   let frames = 0, running = true;
-  // The driver stands in for the page's video: it repaints the source and schedules itself, all taken off as 'bench'. A
+  // The driver stands in for the page's video: it repaints the source (taken off as 'bench') and schedules itself. A
   // renderer that draws itself (a field, from its own frame loop) gets frame() for its pointer here; any other is called
   // from a loop of its own, as a page would run it, so every renderer pays for one animation frame a frame.
   const selfDrawn = !!r.drawsItself;
+  // Only the repaint is taken off. Asking for the next frame is left in for every renderer alike: the first request in a
+  // frame schedules the next one with the browser and costs the most, whichever loop happens to make it.
   const driver = () => {
     if (!running) return;
     performance.mark('bench-paint');
     src.paint();
+    performance.measure('bench', 'bench-paint');
     frames++;
     nativeRaf(driver);
-    performance.measure('bench', 'bench-paint');
     if (selfDrawn) r.frame();
   };
   nativeRaf(driver);
@@ -196,6 +201,7 @@ export async function steady(name, { width, height, cell, warm = 1500, seconds =
   running = false;
   await wait(50);
   r.destroy(); host.remove();
+  window.requestAnimationFrame = wrapped;
   return count;
 }
 
