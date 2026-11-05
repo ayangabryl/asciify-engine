@@ -87,6 +87,12 @@ export const RENDERERS = {
     const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0 });
     return { ready: field.ready, frame() {}, destroy() { field.destroy(); } };
   },
+  'asciify-engine field (fluid hover, own context)': (host, src, cell) => {
+    host.getContext('webgl2', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true });
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0 });
+    let k = 0;
+    return { ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
   '2025.unseen.co ASCII pass (rebuilt)': (host, src, cell) => {
     const w = host.width, h = host.height, gl = host.getContext('webgl2', { preserveDrawingBuffer: true });
     const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024;

@@ -3,6 +3,7 @@
 // GPU takes; they compare the work each renderer asks for, on the same emulated GPU. Main-thread times are real.
 import fs from 'node:fs/promises'; import http from 'node:http'; import path from 'node:path';
 import { createRequire } from 'node:module'; import { fileURLToPath } from 'node:url'; import { build } from 'esbuild';
+import { workerSource } from './worker-source.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url)); const { chromium } = createRequire(import.meta.url)('playwright');
 const arg = (n, f) => { const i = process.argv.indexOf(n); return i < 0 ? f : process.argv[i + 1]; };
 const sizes = arg('--sizes', '3840x2160').split(',').map(s => s.split('x').map(Number));

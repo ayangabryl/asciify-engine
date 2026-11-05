@@ -14,7 +14,7 @@ export function mipLevelFor(width: number, height: number, maxSide: number) {
 
 export function createMipReader(gl: WebGL2RenderingContext) {
   let framebuffer: WebGLFramebuffer | null = null, buffer: WebGLBuffer | null = null, sync: WebGLSync | null = null;
-  let size = 0, width = 0, height = 0, broken = false;
+  let size = 0, width = 0, height = 0, broken = false, checked: WebGLTexture | null = null, checkedLevel = -1;
   return {
     /** Whether a read is waiting on the GPU. */
     get pending() { return !!sync; },
@@ -31,10 +31,14 @@ export function createMipReader(gl: WebGL2RenderingContext) {
         const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
         gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, mip.level);
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-          gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
-          broken = true;
-          return false;
+        // Whether the level can be read is checked once per texture and level: the check waits on the GPU process.
+        if (checked !== texture || checkedLevel !== mip.level) {
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
+            broken = true;
+            return false;
+          }
+          checked = texture; checkedLevel = mip.level;
         }
         const bytes = mip.width * mip.height * 4;
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);

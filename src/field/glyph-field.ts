@@ -744,7 +744,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   // A playing video or live canvas is measured from its own mip chain on the GPU, read back a frame or two later, so measuring
   // never waits on the GPU. Levels and scope share one read; each takes it only when it asked for it.
   let shapesTexture: WebGLTexture | null = null, shapesFor = '', shapesFont = 0;
-  let mipsStale = false, reader: ReturnType<typeof createMipReader> | null = null, readFor = { levels: false, scope: false };
+  let mipsStale = false, reader: ReturnType<typeof createMipReader> | null = null, readFor = { levels: false, scope: false }, uploads = 0, readAtUpload = -Infinity;
   const takeRead = () => {
     const got = reader?.poll();
     if (!got) return;
@@ -759,8 +759,12 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     // measure its levels and hover scope are read from the GPU without waiting, a few times a second.
     const moving = source instanceof HTMLVideoElement || live;
     if (moving) takeRead();
-    const levelsDue = !moving || levelsAt === -Infinity ? 'now' : now - levelsAt > 1500 && settings.levels !== 'none' ? 'later' : null;
-    const scopeDue = !moving || scopeAt === -Infinity ? 'now' : now - scopeAt > 160 && settings.scope !== 'all' ? 'later' : null;
+    // Reads are a few times a second and at least 8 frames apart, so a slow device does not read every frame; the scope only
+    // shapes the hover, so a field without one never reads it.
+    uploads++;
+    const spaced = uploads - readAtUpload >= 8;
+    const levelsDue = !moving || levelsAt === -Infinity ? 'now' : now - levelsAt > 1500 && spaced && settings.levels !== 'none' ? 'later' : null;
+    const scopeDue = !moving || scopeAt === -Infinity ? 'now' : now - scopeAt > 160 && spaced && settings.scope !== 'all' && settings.hover !== 'none' ? 'later' : null;
     if (levelsDue === 'now') { measureLevels(); levelsAt = now; }
     if (scopeDue === 'now') { measureScope(); scopeAt = now; }
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
@@ -781,6 +785,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         if (mipsStale) { gl.generateMipmap(gl.TEXTURE_2D); mipsStale = false; }
         if (reader.request(sourceTexture, tw, th, 128)) {
           readFor = { levels: wantLevels, scope: wantScope };
+          readAtUpload = uploads;
           if (wantLevels) levelsAt = now;
           if (wantScope) scopeAt = now;
         } else {
