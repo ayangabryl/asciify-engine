@@ -94,6 +94,15 @@ export const RENDERERS = {
     return { drawsItself: true, ready: field.ready, frame() { const r = host.getBoundingClientRect(); k++; field.pointer(r.width * (.5 + .4 * Math.cos(k / 6)), r.height * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
   },
   'idle (source repainted, nothing drawn)': () => ({ ready: Promise.resolve(), frame() {}, destroy() {} }),
+  'asciify-engine field in a worker (no hover)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'none', maxPixelRatio: 2, drift: 0, worker: true });
+    return { drawsItself: true, ready: field.ready, frame() {}, destroy() { field.destroy(); } };
+  },
+  'asciify-engine field in a worker (fluid hover)': (host, src, cell) => {
+    const field = mountGlyphField(host, { source: src.canvas, live: true, cellSize: cell, cellAspect: 0.6, charset: FIELD_PHOTO_CHARSET, glyphScale: 1, hover: 'fluid', maxPixelRatio: 2, drift: 0, worker: true });
+    let k = 0;
+    return { drawsItself: true, ready: field.ready, frame() { k++; field.pointer(host.clientWidth * (.5 + .4 * Math.cos(k / 6)), host.clientHeight * (.5 + .4 * Math.sin(k / 5))); }, destroy() { field.destroy(); } };
+  },
   '2025.unseen.co ASCII pass (rebuilt)': (host, src, cell) => {
     const w = host.width, h = host.height, gl = host.getContext('webgl2', { preserveDrawingBuffer: true });
     const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024;

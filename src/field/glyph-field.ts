@@ -51,6 +51,14 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
    * background draws with no copy; the shared one for everything else, so a page of many fields holds one context.
    */
   context?: 'auto' | 'shared' | 'own';
+  /**
+   * Draw in a worker: the canvas hands its drawing to the worker, which uploads the source's frames, matches the characters,
+   * runs the hover and draws, so the page's main thread only passes frames, the pointer and layout along (see
+   * field-offscreen.ts). For a hero or a playing video. `redraw()` then draws in the worker's next frame rather than in the
+   * caller's task. Custom effects, a clear zone that follows an element or reads rects from a function, and an interaction
+   * target other than the window keep the field on the page, as does a browser without OffscreenCanvas WebGL2.
+   */
+  worker?: boolean;
 }
 
 export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect'; pointer?: number }
@@ -176,8 +184,19 @@ function fieldPixelRatio(settings: GlyphFieldSettings, width: number, height: nu
   // A GPU that falls behind draws fewer pixels per cell first, down to one per CSS pixel, before any frame is given up.
   return scale < 1 && full > 1 ? Math.max(1, full * scale) : full;
 }
-/** Paints the glyph atlas: one cell per glyph, white on transparent. `final` is false while the font is still loading. */
-function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, shared: boolean) {
+/**
+ * Where a field gets its glyph atlas and glyph shapes. On a page it paints them itself; a field in a worker, which cannot see
+ * the page's web fonts, has its page paint them (field-worker.ts). @internal
+ */
+export const fieldGlyphPainter: {
+  atlas: (settings: GlyphFieldSettings, layout: CellLayout, shared: boolean) => { image: TexImageSource; final: boolean };
+  shapes: (settings: GlyphFieldSettings) => Uint8Array;
+} = { atlas: (settings, layout, shared) => paintGlyphAtlas(settings, layout, shared), shapes: settings => measureGlyphShapes(settings) };
+/** The key an atlas is known by: its glyphs, font and cell size. @internal */
+export const fieldAtlasKey = (settings: GlyphFieldSettings, layout: CellLayout) => atlasKeyOf(settings, layout);
+
+/** Paints the glyph atlas: one cell per glyph, white on transparent. `final` is false while the font is still loading. @internal */
+export function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, shared: boolean) {
   const glyphs = fieldGlyphs(settings.charset);
   const paint = document.createElement('canvas');
   paint.width = layout.atlasWidth; paint.height = layout.atlasHeight;
@@ -735,10 +754,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    (image as HTMLCanvasElement).width = (image as HTMLCanvasElement).height = 1;
+    // A canvas painted for it gives its memory back at once; a bitmap handed in stays its owner's.
+    if (typeof (image as { getContext?: unknown }).getContext === 'function') (image as HTMLCanvasElement).width = (image as HTMLCanvasElement).height = 1;
     dirty = true;
   };
-  function paintAtlas() { return paintGlyphAtlas(settings, layout, shared); }
+  function paintAtlas() { return fieldGlyphPainter.atlas(settings, layout, shared); }
   const fonts = typeof document === 'undefined' ? undefined : (document as Document & { fonts?: FontFaceSet }).fonts;
   const awaitFont = () => {
     if (!fonts?.load) return;
@@ -1053,7 +1073,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const key = shapesKey;
       if (shapesFor !== key || !shapesTexture) {
         shapesFor = key;
-        const shapes = measureGlyphShapes(settings);
+        const shapes = fieldGlyphPainter.shapes(settings);
         gl.activeTexture(gl.TEXTURE9);
         shapesTexture ??= texture(gl.NEAREST);
         gl.bindTexture(gl.TEXTURE_2D, shapesTexture);

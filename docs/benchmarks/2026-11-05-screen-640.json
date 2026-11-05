@@ -1,0 +1,233 @@
+{
+ "width": 640,
+ "height": 360,
+ "cell": 6,
+ "seconds": 4,
+ "runs": 5,
+ "results": {
+  "asciify-engine field (no hover)": [
+   {
+    "ms": 1.341,
+    "cpuMs": 0.9,
+    "frames": 136,
+    "fps": 34
+   },
+   {
+    "ms": 1.322,
+    "cpuMs": 0.883,
+    "frames": 137,
+    "fps": 34.3
+   },
+   {
+    "ms": 1.479,
+    "cpuMs": 0.897,
+    "frames": 137,
+    "fps": 34.3
+   },
+   {
+    "ms": 1.556,
+    "cpuMs": 0.963,
+    "frames": 132,
+    "fps": 33
+   },
+   {
+    "ms": 1.26,
+    "cpuMs": 0.9,
+    "frames": 140,
+    "fps": 35
+   }
+  ],
+  "asciify-engine field (fluid hover, own context)": [
+   {
+    "ms": 1.365,
+    "cpuMs": 0.827,
+    "frames": 131,
+    "fps": 32.8
+   },
+   {
+    "ms": 1.419,
+    "cpuMs": 0.855,
+    "frames": 132,
+    "fps": 33
+   },
+   {
+    "ms": 1.347,
+    "cpuMs": 0.838,
+    "frames": 130,
+    "fps": 32.5
+   },
+   {
+    "ms": 1.474,
+    "cpuMs": 0.871,
+    "frames": 129,
+    "fps": 32.3
+   },
+   {
+    "ms": 1.325,
+    "cpuMs": 0.838,
+    "frames": 133,
+    "fps": 33.3
+   }
+  ],
+  "idle (source repainted, nothing drawn)": [
+   {
+    "ms": 0.415,
+    "cpuMs": 0.378,
+    "frames": 240,
+    "fps": 60
+   },
+   {
+    "ms": 0.388,
+    "cpuMs": 0.369,
+    "frames": 240,
+    "fps": 60
+   },
+   {
+    "ms": 0.422,
+    "cpuMs": 0.404,
+    "frames": 239,
+    "fps": 59.8
+   },
+   {
+    "ms": 0.43,
+    "cpuMs": 0.395,
+    "frames": 240,
+    "fps": 60
+   },
+   {
+    "ms": 0.43,
+    "cpuMs": 0.405,
+    "frames": 240,
+    "fps": 60
+   }
+  ],
+  "asciify-engine field in a worker (no hover)": [
+   {
+    "ms": 0.667,
+    "cpuMs": 0.361,
+    "frames": 178,
+    "fps": 44.5
+   },
+   {
+    "ms": 0.686,
+    "cpuMs": 0.375,
+    "frames": 182,
+    "fps": 45.5
+   },
+   {
+    "ms": 0.74,
+    "cpuMs": 0.393,
+    "frames": 179,
+    "fps": 44.8
+   },
+   {
+    "ms": 0.89,
+    "cpuMs": 0.435,
+    "frames": 173,
+    "fps": 43.3
+   },
+   {
+    "ms": 0.851,
+    "cpuMs": 0.417,
+    "frames": 171,
+    "fps": 42.8
+   }
+  ],
+  "asciify-engine field in a worker (fluid hover)": [
+   {
+    "ms": 0.969,
+    "cpuMs": 0.408,
+    "frames": 133,
+    "fps": 33.3
+   },
+   {
+    "ms": 0.833,
+    "cpuMs": 0.429,
+    "frames": 130,
+    "fps": 32.5
+   },
+   {
+    "ms": 0.849,
+    "cpuMs": 0.432,
+    "frames": 136,
+    "fps": 34
+   },
+   {
+    "ms": 0.923,
+    "cpuMs": 0.422,
+    "frames": 137,
+    "fps": 34.3
+   },
+   {
+    "ms": 0.728,
+    "cpuMs": 0.372,
+    "frames": 135,
+    "fps": 33.8
+   }
+  ],
+  "2025.unseen.co ASCII pass (rebuilt)": [
+   {
+    "ms": 1.029,
+    "cpuMs": 0.493,
+    "frames": 240,
+    "fps": 60
+   },
+   {
+    "ms": 1.126,
+    "cpuMs": 0.616,
+    "frames": 234,
+    "fps": 58.5
+   },
+   {
+    "ms": 0.885,
+    "cpuMs": 0.522,
+    "frames": 240,
+    "fps": 60
+   },
+   {
+    "ms": 0.843,
+    "cpuMs": 0.561,
+    "frames": 227,
+    "fps": 56.8
+   },
+   {
+    "ms": 0.943,
+    "cpuMs": 0.566,
+    "frames": 237,
+    "fps": 59.3
+   }
+  ],
+  "webgl-ascii-hero (vendored)": [
+   {
+    "ms": 1.602,
+    "cpuMs": 1.01,
+    "frames": 128,
+    "fps": 32
+   },
+   {
+    "ms": 1.641,
+    "cpuMs": 1.044,
+    "frames": 126,
+    "fps": 31.5
+   },
+   {
+    "ms": 1.528,
+    "cpuMs": 0.951,
+    "frames": 127,
+    "fps": 31.8
+   },
+   {
+    "ms": 1.521,
+    "cpuMs": 1.025,
+    "frames": 129,
+    "fps": 32.3
+   },
+   {
+    "ms": 1.36,
+    "cpuMs": 0.932,
+    "frames": 126,
+    "fps": 31.5
+   }
+  ]
+ }
+}

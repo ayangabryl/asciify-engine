@@ -1,7 +1,9 @@
 /** GPU character fields with a fluid cursor wake.
  * Importing the engine root, /core or /studio never imports this module.
  */
-export { mountGlyphField, isGlyphFieldSupported, glyphFieldTier } from './field/glyph-field';
+export { isGlyphFieldSupported, glyphFieldTier } from './field/glyph-field';
+export { mountGlyphField } from './field/mount';
+export { fieldWorkerSupported } from './field/field-offscreen';
 export type { GlyphField, GlyphFieldOptions, FieldSource, FieldClearElement, FieldClearRects } from './field/glyph-field';
 export { defineFieldEffect, MAX_FIELD_EFFECTS, MAX_EFFECT_PARAMS } from './field/field-effects';
 export type { FieldEffect, FieldEffectSpec, FieldEffectParams } from './field/field-effects';

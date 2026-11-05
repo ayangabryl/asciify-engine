@@ -60,6 +60,10 @@ for (let run = 0; run < runs; run++) {
     const { pid, tid } = start, s = start.ts, e = end.ts;
     const tasks = events.filter(t => t.pid === pid && t.tid === tid && t.ph === 'X' && /RunTask$/.test(t.name));
     const busy = tasks.reduce((sum, t) => sum + Math.max(0, Math.min(e, t.ts + t.dur) - Math.max(s, t.ts)), 0);
+    // CPU time on the main thread (thread time), where the trace has it: time the thread actually ran, not time it waited for a
+    // core (on a machine whose GPU is software, the GPU's threads compete with it).
+    const cpuTasks = tasks.filter(t => t.ts >= s && t.ts + t.dur <= e && typeof t.tdur === 'number');
+    const cpu = cpuTasks.reduce((sum, t) => sum + t.tdur, 0);
     // The source's repainting: each 'bench' measure, begin to end, inside the window.
     const begins = new Map();
     let bench = 0;
@@ -91,16 +95,17 @@ for (let run = 0; run < runs; run++) {
       console.log(`  ${name}: ${(inWindow.length / frames).toFixed(1)} tasks a frame, ${((total - covered) / 1000 / frames).toFixed(3)} ms a frame in tasks outside named work; tasks by length: ${[...inWindow].sort((a, b) => b.dur - a.dur).slice(0, 6).map(t => (t.dur / 1000).toFixed(2)).join(', ')}`);
       console.log(`  ${name}: ` + Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${(v / 1000 / frames).toFixed(3)}`).join(', '));
     }
-    (results[name] ??= []).push({ ms: +ms.toFixed(3), frames, fps: +(frames / seconds).toFixed(1) });
-    line.push(`${name.replace('asciify-engine ', '')} ${ms.toFixed(3)} ms (${frames} frames)`);
+    const cpuMs = cpuTasks.length ? Math.max(0, cpu - bench) / 1000 / frames : NaN;
+    (results[name] ??= []).push({ ms: +ms.toFixed(3), cpuMs: +cpuMs.toFixed(3), frames, fps: +(frames / seconds).toFixed(1) });
+    line.push(`${name.replace('asciify-engine ', '')} ${ms.toFixed(3)} ms, cpu ${cpuMs.toFixed(3)} (${frames} frames)`);
     await page.close();
   }
   console.log(`run ${run + 1}: ${line.join(' | ')}`);
 }
 console.log(`\nmain thread per frame on screen, ${width}x${height}, ${cell} px cells (Chrome trace, ${seconds} s a run, ${runs} runs), ms:`);
 for (const [name, list] of Object.entries(results)) {
-  const t = list.map(r => r.ms).sort((a, b) => a - b);
-  console.log(`  ${name.padEnd(56)} min ${t[0].toFixed(3)}  median ${t[Math.floor(t.length / 2)].toFixed(3)}  max ${t[t.length - 1].toFixed(3)}`);
+  const t = list.map(r => r.ms).sort((a, b) => a - b), c = list.map(r => r.cpuMs).sort((a, b) => a - b);
+  console.log(`  ${name.padEnd(56)} min ${t[0].toFixed(3)}  median ${t[Math.floor(t.length / 2)].toFixed(3)}  max ${t[t.length - 1].toFixed(3)}   cpu: min ${c[0].toFixed(3)}  median ${c[Math.floor(c.length / 2)].toFixed(3)}  max ${c[c.length - 1].toFixed(3)}`);
 }
 const out = arg('--out', null);
 if (out) await fs.writeFile(out, JSON.stringify({ width, height, cell, seconds, runs, results }, null, 1));

@@ -117,7 +117,8 @@
     "test:headless": "node tests/headless-node.mjs",
     "build:glyphs": "node scripts/build-glyph-table.mjs",
     "test:element": "node tests/element-source-browser.mjs",
-    "test:gpu-text": "node tests/headless-gpu-browser.mjs"
+    "test:gpu-text": "node tests/headless-gpu-browser.mjs",
+    "test:field-worker": "node tests/field-worker-browser.mjs"
   },
   "keywords": [
     "ascii",

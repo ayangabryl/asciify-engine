@@ -75,6 +75,9 @@ jobs:
       - name: GPU text export (every mode against the CPU path)
         run: npm run test:gpu-text
 
+      - name: Fields drawn in a worker
+        run: npm run test:field-worker
+
       - name: Upload differences
         if: failure()
         uses: actions/upload-artifact@v4

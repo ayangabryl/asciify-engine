@@ -138,6 +138,27 @@ function loop() { renderer.render(scene, camera); field.redraw(); requestAnimati
 A WebGL canvas without `preserveDrawingBuffer` is only readable in the task that drew it, hence `redraw()` after `render()`.
 See `examples/three-live.ts` in the package. Honour reduced motion by not animating the scene.
 
+## Heroes and video off the main thread: `worker` and `context` (4.33)
+
+A full-bleed hero, a playing video or a live 3D canvas is where a page spends its frames. Two options decide where the field
+draws:
+
+```ts
+// The field draws in a worker of its own: the page only hands frames, the pointer and layout over.
+const field = mountGlyphField(heroCanvas, { source: video, worker: true, hover: 'fluid' });
+```
+
+- `worker: true`: the canvas hands its drawing to an OffscreenCanvas in a worker running the same engine. Uploading frames,
+  matching characters, the hover and every draw happen off the main thread; the page sends a video's frames as VideoFrames and
+  a live canvas's as bitmaps (one at a time, as fast as the worker draws them). Measured at 1080p, the page's main thread does
+  about as much as an empty page with the source playing. Use it for heroes and video. It falls back to the page, at mount,
+  for custom `effects`, a `clear` zone that follows an element or reads rects from a function, an `interactionTarget` other
+  than the window, and browsers without OffscreenCanvas WebGL2. `redraw()` then draws in the worker's next frame, not in the
+  caller's task; `fieldWorkerSupported()` says whether this browser can.
+- `context`: `'auto'` (default) draws a field of about 720p or more in device pixels with a WebGL context of its own,
+  straight to its canvas (at most two such fields a page); smaller fields share the page's one context, which copies each
+  frame to its canvas. `'own'` and `'shared'` force either.
+
 ## Halftone for interfaces (4.12)
 
 Product pages, docs, pricing and SaaS heroes want a background that is calm, works in light and dark themes, and never fights the copy. Use dots, the drift scene, a clear zone around the content, and `pulse()` for interface events:
