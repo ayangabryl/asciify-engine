@@ -57,6 +57,7 @@ const CASES = {
   ...Object.fromEntries(['glyph', 'dot', 'pixel', 'led'].map(mark => [`field ${mark}`,
     ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { source: '${img}', mark: '${mark}', hover: 'lantern' })`, [[100, 100], [300, 160]], 40]])),
   'field shape': ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { source: '${img}', sample: 'shape', charset: f.FIELD_PHOTO_CHARSET, cellSize: 12, glyphScale: 1, hover: 'fluid' })`, [[100, 100], [300, 160]], 40],
+  'field post': ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { source: '${img}', charset: f.FIELD_PHOTO_CHARSET, cellSize: 10, glyphScale: 1, color: 'source', hover: 'none', post: { bloom: 0.7, scanlines: 0.4, chroma: 0.5, curvature: 0.3 } })`, null, 40],
   'field scene': ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { scene: 'waves', hover: 'none' })`, null, 40],
 };
 

@@ -286,7 +286,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const parallel = shared ? null : gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
   let cellProgram: Program | null = null, pixelProgram: Program | null = null, fluidProgram: Program | null = null;
   let atlasTexture: WebGLTexture, sourceTexture: WebGLTexture, atlasEntry: SharedAtlas | null = null;
-  let cells: { ink: WebGLTexture; under: WebGLTexture; buffer: WebGLFramebuffer; columns: number; rows: number } | null = null;
+  let cells: { ink: WebGLTexture; under: WebGLTexture; glow: WebGLTexture | null; buffer: WebGLFramebuffer; columns: number; rows: number } | null = null;
   let fluidTextures: WebGLTexture[] = [], fluidBuffers: WebGLFramebuffer[] = [];
   // The incompressible solver curls and lingers like ink in water; the single-pass wake is its fallback.
   let stable: StableFluid | null = null, stableOn = false;
@@ -555,13 +555,15 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const releaseCells = () => {
     if (!cells) return;
     gl.deleteTexture(cells.ink); gl.deleteTexture(cells.under); gl.deleteFramebuffer(cells.buffer);
+    if (cells.glow) gl.deleteTexture(cells.glow);
     cells = null;
   };
   const pitch = () => fieldCellPitch(settings.cellFit, settings.cellSize, settings.cellAspect, pixelRatio, width, height, layout);
   const ensureCells = () => {
     const [pitchX, pitchY] = pitch();
     const columns = Math.ceil(width / pitchX - 1e-4), rows = Math.ceil(height / pitchY - 1e-4);
-    if (cells && cells.columns === columns && cells.rows === rows) return cells;
+    const glowing = settings.post.bloom > 0;
+    if (cells && cells.columns === columns && cells.rows === rows && !!cells.glow === glowing) return cells;
     releaseCells();
     // Half floats keep the dot tone smooth; 8 bits where float targets are missing.
     const target = () => { const handle = texture(gl.NEAREST); gl.texStorage2D(gl.TEXTURE_2D, 1, packed ? gl.RGBA8 : gl.RGBA16F, columns, rows); return handle; };
@@ -569,8 +571,16 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.bindFramebuffer(gl.FRAMEBUFFER, buffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ink, 0);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, under, 0);
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-    return (cells = { ink, under, buffer, columns, rows });
+    // Bloom: each cell's light, with its mip chain, so the pixel pass can blur it at any radius for a few reads.
+    let glow: WebGLTexture | null = null;
+    if (glowing) {
+      glow = texture(gl.LINEAR_MIPMAP_LINEAR);
+      gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(columns, rows))) + 1, gl.RGBA8, columns, rows);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, buffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, glow, 0);
+    }
+    gl.drawBuffers(glow ? [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2] : [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    return (cells = { ink, under, glow, buffer, columns, rows });
   };
 
   const wantsFluid = () => !!settings.fluid && activeFieldHover(settings) === 'fluid';
@@ -824,7 +834,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const playingVideo = source instanceof HTMLVideoElement && !source.paused && !source.ended;
     if (playingVideo) return true;
     if (reduced()) return false;
-    return (!source && settings.scene !== 'none') || settings.drift > 0 || effects.some(effect => effect.animate);
+    return (!source && settings.scene !== 'none') || settings.drift > 0 || settings.post.grain > 0 || effects.some(effect => effect.animate);
   };
 
   const stepFluid = (dt: number, now: number) => {
@@ -1002,6 +1012,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (effects.length) setEffectUniforms(cellProgram!.locations!);
     gl.bindVertexArray(vertexArray);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (target.glow) { gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, target.glow); gl.generateMipmap(gl.TEXTURE_2D); }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
@@ -1022,6 +1033,10 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform3fv(p.uRamp, rampData);
     gl.uniform1f(p.uRampCount, settings.color === 'source' ? 0 : settings.ramp.length);
     gl.uniform4f(p.uFade, inkColor[0], inkColor[1], inkColor[2], settings.mark === 'inlay' || (settings.glyphOrder !== 'tone' && settings.mark === 'glyph') ? 1 : 0);
+    const post = settings.post;
+    gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D, target.glow ?? sourceTexture); gl.uniform1i(p.uGlow, 10);
+    gl.uniform4f(p.uPost, target.glow ? post.bloom : 0, post.bloomRadius, post.scanlines, post.grain);
+    gl.uniform4f(p.uPost2, post.chroma, post.curvature, time, 2);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (shared) host!.present(view!, width, height);
   };
@@ -1200,7 +1215,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     size: () => [width, height],
     bytes: () => {
       const texel = packed ? 4 : 8;
-      return width * height * 4 + sourceBytes + (cells ? cells.columns * cells.rows * texel * 2 : 0)
+      return width * height * 4 + sourceBytes + (cells ? cells.columns * cells.rows * (texel * 2 + (cells.glow ? 16 / 3 : 0)) : 0)
         + simWidth * simHeight * texel * (stableOn ? 6 : fluidTextures.length) + (inkTrail ? inkTrail.width * inkTrail.height * 4 : 0);
     },
   };

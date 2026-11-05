@@ -101,6 +101,8 @@ uniform float uClearMapOn, uClearBend;
 uniform vec2 uClearTexel;
 layout(location=0) out vec4 outInk;
 layout(location=1) out vec4 outUnder;
+// The cell's light for bloom: its ink weighted by its tone, empty where the cell is blank. Only kept when bloom is on.
+layout(location=2) out vec4 outGlow;
 ${FLUID_CODEC(packed)}
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
@@ -472,6 +474,9 @@ void main(){
   // Glyphs keep their atlas index, exact in 8 bits; the other marks keep the tone, and empty where the charset is blank.
   outInk=vec4(ink,uMark==0||uMark==17?index/255.:uMark==1?(tone>.003?tone:0.):index>0.?max(tone,1./255.):0.);
   outUnder=vec4(under,underAlpha);
+  // Highlights carry most of the light, as a lens blooms: the tone squared, so mid tones glow a little and shadows not at all.
+  float lit=outInk.a>0.?tone*tone:0.;
+  outGlow=vec4(ink*lit,lit);
 }`;
 
 /**
@@ -513,6 +518,9 @@ uniform vec4 uInlay;
 // Line marks: pitch in cell heights, weight, the share of cells that sparkle.
 uniform vec4 uLine;
 uniform vec4 uFade;
+// Finishing passes: bloom amount and radius in cells, scanlines, grain; chromatic split, curvature, time, rows per scanline pair.
+uniform vec4 uPost, uPost2;
+uniform sampler2D uGlow;
 out vec4 outColor;
 const float BAYER[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 uniform vec3 uRamp[6];
@@ -546,9 +554,8 @@ void lay(inout vec3 rgb,inout float a,vec3 c,float k){
   rgb=next>0.?(rgb*a*(1.-k)+mix(c,rgb*c,a)*k)/next:c;
   a=next;
 }
-void main(){
+vec4 drawAt(vec2 frag){
   vec2 DIR=uDir;
-  vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
   // The pitch is the atlas cell, or a fractional one under cellFit 'fill', where each glyph sits centred in its stretched cell.
   vec2 cell=floor(frag/uPitch);
   vec4 ink=texelFetch(uCells,ivec2(cell),0),under=texelFetch(uUnder,ivec2(cell),0);
@@ -716,5 +723,43 @@ void main(){
       rgb=col;coverage=a;
     } else coverage=0.;
   }
-  outColor=vec4(rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
+  return vec4(rgb*coverage+under.rgb*(1.-coverage),coverage+under.a*(1.-coverage));
+}
+void main(){
+  vec2 frag=vec2(gl_FragCoord.x,uResolution.y-gl_FragCoord.y);
+  if(uPost2.y>0.){
+    // Curvature: the picture bows outward as on a tube, normalised so its corners stay near the frame; outside it is empty.
+    vec2 q=frag/uResolution-.5;
+    float k=uPost2.y*.5;
+    q=q*(1.+k*dot(q,q)*vec2(1.,1.))/(1.+k*.5);
+    frag=(q+.5)*uResolution;
+    if(frag.x<0.||frag.y<0.||frag.x>=uResolution.x||frag.y>=uResolution.y){outColor=vec4(0.);return;}
+  }
+  vec4 c=drawAt(frag);
+  if(uPost2.x>0.){
+    // Chromatic split: red and blue drawn a little apart, more toward the edges.
+    vec2 q=frag/uResolution-.5,d=q*dot(q,q)*uPost2.x*uResolution.y*.08+normalize(q+1e-5)*uPost2.x*1.5;
+    vec4 r=drawAt(clamp(frag+d,vec2(0.),uResolution-1.)),b=drawAt(clamp(frag-d,vec2(0.),uResolution-1.));
+    c=vec4(r.r,c.g,b.b,max(c.a,max(r.a,b.a)));
+  }
+  if(uPost.x>0.){
+    // Bloom: the cells' light, blurred through its mip chain at two radii, laid over in screen-like fashion.
+    vec2 uv=frag/uPitch/vec2(textureSize(uGlow,0));
+    float l=log2(max(uPost.y,.5));
+    vec3 g=textureLod(uGlow,uv,l).rgb*.55+textureLod(uGlow,uv,l+1.5).rgb*.45;
+    vec3 add=g*uPost.x;
+    c.rgb=c.rgb+add*(1.-c.rgb*.5);
+    c.a=max(c.a,min(1.,max(add.r,max(add.g,add.b))));
+  }
+  if(uPost.z>0.){
+    // Scanlines: two thin dark bands a text row, as on a tube.
+    float s=.5-.5*cos(frag.y*6.2831853*uPost2.w/uPitch.y);
+    c.rgb*=1.-uPost.z*.45*s;
+  }
+  if(uPost.w>0.){
+    // Film grain, new each frame, in the drawn light only so a transparent ground stays clear.
+    float n=hash(floor(frag)+fract(uPost2.z*7.13)*vec2(91.7,37.3))-.5;
+    c.rgb=clamp(c.rgb+n*uPost.w*.22*c.a,0.,1.);
+  }
+  outColor=c;
 }`;

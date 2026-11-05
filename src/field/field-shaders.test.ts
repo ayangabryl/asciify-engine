@@ -65,9 +65,12 @@ describe('glyph field programs', () => {
       const cell = fieldCellShader(packed);
       expect(cell).toContain('layout(location=0) out vec4 outInk;');
       expect(cell).toContain('layout(location=1) out vec4 outUnder;');
+      expect(cell).toContain('layout(location=2) out vec4 outGlow;');
       expect(cell).not.toContain('uAtlas');
     }
     expect(FIELD_COMPOSITE).toContain('texelFetch(uCells,ivec2(cell),0)');
-    expect(FIELD_COMPOSITE).not.toMatch(/fbm|textureLod/);
+    // The pixel pass never reads the source or runs scenes; its only filtered reads are bloom's, of the cells' own light.
+    expect(FIELD_COMPOSITE).not.toMatch(/fbm|uSource\b/);
+    expect(FIELD_COMPOSITE.match(/textureLod\((\w+)/g)?.every(call => call === 'textureLod(uGlow')).toBe(true);
   });
 });

@@ -60,6 +60,14 @@ export interface FieldLanternOptions {
   follow: number;
 }
 export const DEFAULT_FIELD_LANTERN: FieldLanternOptions = { radius: 0.13, strength: 0.5, trail: 0.45, follow: 12 };
+/**
+ * Finishing passes, all on the GPU and all off by default. `bloom` lights the ground around bright characters with their own
+ * colour (0–2), spread over about `bloomRadius` cells; `scanlines` darkens two thin bands a text row (0–1); `grain` is film
+ * grain that changes every frame (0–1); `chroma` splits red and blue toward the edges (0–1); `curvature` bows the picture as
+ * a CRT tube does (0–1).
+ */
+export interface FieldPostOptions { bloom: number; bloomRadius: number; scanlines: number; grain: number; chroma: number; curvature: number }
+export const DEFAULT_FIELD_POST: FieldPostOptions = { bloom: 0, bloomRadius: 2, scanlines: 0, grain: 0, chroma: 0, curvature: 0 };
 
 /** Matches the studio's Trail hover settings, so a look moves between renderers unchanged. */
 export interface FieldTrailOptions {
@@ -194,6 +202,8 @@ export interface GlyphFieldSettings {
   lantern: FieldLanternOptions;
   /** Settings for the trail hover. */
   trail: FieldTrailOptions;
+  /** Finishing passes: bloom, scanlines, grain, chromatic split and CRT curvature. All off by default. */
+  post: FieldPostOptions;
   /**
    * Where the pointer response acts: `all` (default) everywhere, `subject` only on the source's subject, `outside` only on
    * the ground around it. The subject is the source's alpha, or for an opaque source on a plain, even ground, its distance
@@ -268,13 +278,15 @@ export const DEFAULT_FIELD_SETTINGS: GlyphFieldSettings = {
   fluid: DEFAULT_FIELD_FLUID,
   lantern: DEFAULT_FIELD_LANTERN,
   trail: DEFAULT_FIELD_TRAIL,
+  post: DEFAULT_FIELD_POST,
   scope: 'all',
   tap: 'surface',
   maxPixelRatio: 2,
   respectReducedMotion: true,
 };
 
-export type GlyphFieldInput = Partial<Omit<GlyphFieldSettings, 'fluid' | 'focus' | 'lantern' | 'trail' | 'clear'>> & {
+export type GlyphFieldInput = Partial<Omit<GlyphFieldSettings, 'fluid' | 'focus' | 'lantern' | 'trail' | 'clear' | 'post'>> & {
+  post?: Partial<FieldPostOptions>;
   clear?: Partial<FieldClearZone> | false;
   trail?: Partial<FieldTrailOptions>;
   fluid?: Partial<FieldFluidOptions> | boolean;
@@ -411,6 +423,14 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     trail: {
       strength: clamp(input.trail?.strength, 0, 1, base.trail.strength),
       radius: clamp(input.trail?.radius, 0.1, 1, base.trail.radius),
+    },
+    post: {
+      bloom: clamp(input.post?.bloom, 0, 2, base.post.bloom),
+      bloomRadius: clamp(input.post?.bloomRadius, 0.5, 8, base.post.bloomRadius),
+      scanlines: clamp(input.post?.scanlines, 0, 1, base.post.scanlines),
+      grain: clamp(input.post?.grain, 0, 1, base.post.grain),
+      chroma: clamp(input.post?.chroma, 0, 1, base.post.chroma),
+      curvature: clamp(input.post?.curvature, 0, 1, base.post.curvature),
     },
     scope: input.scope === undefined ? base.scope : normalizeHoverScope(input.scope),
     tap: input.tap === 'ring' || input.tap === 'none' || input.tap === 'surface' ? input.tap : base.tap,
