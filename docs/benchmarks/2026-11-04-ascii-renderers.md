@@ -69,23 +69,33 @@ grid and font as everyone else:
 - **Devault** (devault-ascii.pages.dev), Classic (its default, `@%#*+=-:. `) and Detailed (a 70-character ramp): auto levels, a 6 %
   cutoff, and its edge pass on: a structure-tensor edge finder that puts `-`, `/`, `|` or `\` on strong edges and lifts the rest.
 
-| | Photos (close / far) | Line art | Type | Flicker | 1080p frame |
+| | Photos (close / far) | Line art | Type | Flicker | 1080p frame, main thread |
 | --- | --- | --- | --- | --- | --- |
-| **asciify-engine/headless** | **0.593 / 0.878** | **0.846 / 0.876** | **0.902 / 0.889** | 25 %, **3.8 %** video | 25 ms |
-| asciify-engine `imageToAsciiGrid`, `mode: 'tone'` | 0.540 / 0.869 | 0.780 / 0.839 | 0.870 / 0.894 | 3.5 % video | **2.0 ms** |
-| Devault, Detailed | 0.426 / 0.785 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 180 ms |
-| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 167 ms |
-| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | 2.2 ms |
+| **asciify-engine GPU text** (`createAsciiGpu`) | **0.592 / 0.879** | **0.845 / 0.885** | **0.893 / 0.890** | 26 %, **3.8 %** video | 2.3 ms; **1.5 ms** video; **0.3 ms** in a worker |
+| asciify-engine GPU text, `mode: 'tone'` | 0.542 / 0.872 | 0.770 / **0.943** | 0.864 / **0.931** | **3.5 %** video | 2.9 ms; **1.6 ms** video; **0.2 ms** in a worker |
+| asciify-engine/headless (CPU) | 0.593 / 0.878 | 0.846 / 0.876 | 0.902 / 0.889 | 25 %, 3.8 % video | 38 ms |
+| Devault, Detailed | 0.426 / 0.785 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 143 ms |
+| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 136 ms |
+| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | 2.0 ms |
+
+Every row is timed the same way: a 1920×1080 frame to 160 columns, a fresh frame for every run as with video (a frame already
+read back to the CPU is cheaper for a CPU converter to read again), median of 5. For the GPU converter the time is its share of
+the main thread: uploading the frame, reading back one small texture once a fence says it is ready, and one walk over the
+cells; the matching itself runs on the GPU. "In a worker" is `createAsciiGpu` in a module worker on an OffscreenCanvas, the page
+only making an `ImageBitmap` of each frame and posting it (0.2 to 1.0 ms across modes). Raw numbers:
+[2026-11-05-gpu-text.json](2026-11-05-gpu-text.json).
 
 asciify-engine is ahead of both on every picture at both distances, and with its video settings it flickers least (3.8 % of
-cells a frame on a slow pan, against 6.8 % and 9.4 %, while scoring 0.923 on the moving picture against 0.828 and 0.682). The
-closest call is line art seen from a distance, where Devault's edge characters do well (0.871 against 0.876).
+cells a frame on a slow pan, against 6.8 % and 9.4 %, while scoring 0.923 on the moving picture against 0.828 and 0.682). For
+speed, the GPU converter with video settings (ordered dither and the previous frame) takes less of the main thread than ASCII
+Magic's one-pixel-a-cell reading, 1.5 ms against 2.0 ms, while matching every cell by shape; with error diffusion (the
+default for stills) it is 2.3 ms, within this machine's run-to-run spread of ASCII Magic's 1.9 to 2.8 ms; in a worker it is
+0.2 to 1.0 ms in every mode. It agrees with the CPU path on 93 to 96 % of characters without diffusion (78 to 80 % with it,
+where one changed cell changes the error carried to all after it) and scores the same on the 20 photos.
 
-For speed, `imageToAsciiGrid` in tone mode reads one pixel a cell from a frame drawn down on the GPU, as ASCII Magic does: 2.0
-ms against its 2.2 ms, ahead of it on photos, on line art and on type at a distance. Up close on type it is just behind (0.870
-against 0.875), and Devault's edge characters keep line art at a distance (0.871 against 0.839): shape mode, at 25 ms, is the
-one ahead of both everywhere. On the GPU, the glyph field with `sample: 'shape'` scores
-0.618 / 0.922, 0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
+Up close on type, tone mode is just behind ASCII Magic (0.864 against 0.875); shape mode, the default and no slower on the GPU,
+is ahead (0.893, 0.916 with video settings). On the GPU, the glyph field with `sample: 'shape'` scores 0.618 / 0.922,
+0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
 
 ### On screen, live: the frame a page actually draws
 
@@ -212,9 +222,12 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 - **Photos at a distance:** ahead of aalib on average by a small margin (0.878 against 0.868); on 4 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
   frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (3.8 %, below a plain ramp's 4.7 %).
-- **Text out, not on screen:** converting a frame to a string, ASCII Magic's one-pixel-a-cell reading (2.2 ms) is faster than
-  shape mode (about 14 ms); tone mode through `imageToAsciiGrid` is faster than it (2.0 ms) but just behind it on type up close.
-  On screen, where both generators are used, the GPU field is ahead on speed and on every quality measure.
+- **Text out with error diffusion:** the GPU converter's main-thread share (2.3 ms, tone 2.9 ms) is level with ASCII Magic's
+  2.0 ms within run-to-run spread, not clearly under it; with video settings (1.5 ms) or in a worker (0.2 to 1.0 ms) it is.
+  Tone mode is just behind ASCII Magic on type up close (0.864 against 0.875); shape mode is ahead.
+- **`imageToAsciiGrid` on a frame held by the GPU:** it draws the frame down on a 2D canvas and reads it back, which waits for
+  the GPU (34 ms here under SwiftShader for a fresh 1080p frame in tone mode, about 2 ms for one already in memory). For video
+  use `createAsciiGpu`, which never waits.
 - **A thin horizontal or vertical line on a cell edge** can come out as `;:;:` or `)` where aalib draws dots or `!`.
 - The glyph table is measured from DejaVu Sans Mono; the art matches most closely in that family and its relatives.
 - GPU frame times on real hardware were not measured: the runs use SwiftShader, which compares the work each renderer asks for

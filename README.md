@@ -71,7 +71,7 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 - **Kit** (`/kit`): interface components and the curated asciify.org backgrounds, one call each.
 - **Media** (`asciify-engine`, `/core`): images, GIFs, video, webcam and text to ASCII on a canvas, with scroll-scrubbed video, chroma key and source crop.
 - **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset. Bring your own design with **custom effects** (a few lines of GLSL for your own hovers, reveals and motion, tweenable with GSAP or Motion), and draw **live 3D**: a three.js or React Three Fiber canvas becomes characters every frame.
-- **Headless** (`/headless`): pixels to text with no DOM, in Node, workers and edge runtimes, for OG images, emails, CLIs and READMEs. Shape-aware: edges become `/ \ | _ ( )`, not just denser dots. Text, ANSI colour, SVG and HTML output; 4.7 kB.
+- **Headless** (`/headless`): pixels to text with no DOM, in Node, workers and edge runtimes, for OG images, emails, CLIs and READMEs. Shape-aware: edges become `/ \ | _ ( )`, not just denser dots. Text, ANSI colour, SVG and HTML output. In the browser, `createAsciiGpu()` converts live video on the GPU in about 2 ms of main thread a 1080p frame (under 1 ms from a worker).
 - **Hover and motion** (`/hover`): pointer effects and still-image motions for media on your page.
 - **Studio** (`/studio`): render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
 - **Agent skill**: the house design, every component's prompt and snippet, and the full API, for Claude Code, Cursor, Codex and other agents.

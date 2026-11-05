@@ -11,7 +11,7 @@ import * as aaImageModule from 'aalib.js/lib/core/AAImage.js';
 const AAImage = aaImageModule.default?.default ?? aaImageModule.default;
 const aaFactory = aaModule.default?.default ?? aaModule.default ?? aaModule;
 const HTMLRenderer = htmlRendererModule.HTMLRenderer ?? htmlRendererModule.default?.HTMLRenderer;
-import { toAsciiGrid, imageToAsciiGrid } from '../src/headless.ts';
+import { toAsciiGrid, imageToAsciiGrid, createAsciiGpu } from '../src/headless.ts';
 import { drawing as asciiRestDrawing } from 'ascii.rest/kit';
 import { tuneHeadless } from '../src/headless/grid.ts';
 import { asciiText } from '../src/core.ts';
@@ -135,6 +135,15 @@ const devault = ramp => (picture, columns, rows) => {
   return out;
 };
 
+let gpuConverter;
+function gpuText(extra, sequence = false) {
+  return Object.assign(async (picture, columns, rows, previous) => {
+    gpuConverter ??= createAsciiGpu();
+    const grid = await gpuConverter.convert(picture, { columns, rows, ...extra, ...(sequence ? { previous } : {}) });
+    window.lastGrid = grid; window.lastGpuStats = gpuConverter.stats;
+    return grid.lines;
+  }, { sequence, gpu: true });
+}
 export const TEXT_RENDERERS = {
   // devault-ascii.pages.dev's generator, Classic style (its default) and Detailed, as it ships them, in one ink.
   'Devault ASCII generator (Classic)': devault('@%#*+=-:. '),
@@ -217,6 +226,12 @@ export const TEXT_RENDERERS = {
   'asciify-engine imageToAsciiGrid, tone (fast)': (picture, columns, rows) => imageToAsciiGrid(picture, { columns, rows, mode: 'tone', ...(window.tune?.options ?? {}) }).lines,
   'asciify-engine imageToAsciiGrid, tone (fast, video)': Object.assign((picture, columns, rows, previous) => { const grid = imageToAsciiGrid(picture, { columns, rows, mode: 'tone', dither: 'ordered', previous }); window.lastGrid = grid; return grid.lines; }, { sequence: true }),
   'asciify-engine imageToAsciiGrid (video settings)': Object.assign((picture, columns, rows, previous) => { tuneHeadless(window.tune?.internal ?? {}); const grid = imageToAsciiGrid(picture, { columns, rows, dither: 'ordered', previous }); window.lastGrid = grid; return grid.lines; }, { sequence: true }),
+  // The GPU converter: the same matching run on the GPU for every cell at once (and every carried error, for diffusion); the
+  // main thread uploads the frame, reads the result back and walks the cells once. Timed by its main-thread share.
+  'asciify-engine GPU text': gpuText({}),
+  'asciify-engine GPU text, tone': gpuText({ mode: 'tone' }),
+  'asciify-engine GPU text (video settings)': gpuText({ dither: 'ordered' }, true),
+  'asciify-engine GPU text, tone (video)': gpuText({ mode: 'tone', dither: 'ordered' }, true),
   'asciify-engine headless, shape': (picture, columns, rows) => { tuneHeadless(window.tune?.internal ?? {}); return toAsciiGrid(pixelsOf(picture), { columns, rows, ...(window.tune?.options ?? {}) }).lines; },
 };
 
@@ -425,6 +440,15 @@ export function timeIt(fn, runs = 7) {
   return +times.sort((a, b) => a - b)[Math.floor(runs / 2)].toFixed(2);
 }
 
+/** For the GPU converter: the median main-thread time and the median time in all, after a warm-up. */
+export async function timeGpu(fn, runs = 7) {
+  await fn();
+  const main = [], total = [];
+  for (let i = 0; i < runs; i++) { await fn(); main.push(window.lastGpuStats.mainThreadMs); total.push(window.lastGpuStats.totalMs); }
+  const mid = a => +a.sort((x, y) => x - y)[Math.floor(runs / 2)].toFixed(2);
+  return { ms: mid(main), totalMs: mid(total) };
+}
+
 export function cropped(picture, c) { const out = document.createElement('canvas'); out.width = c.w; out.height = c.h; out.getContext('2d').drawImage(picture, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h); return out; }
 
-Object.assign(window, { bench: { cropped, loadPicture, syntheticLines, syntheticText, gridRows, TEXT_RENDERERS, PIXEL_RENDERERS, drawText, score, panFrames, churn, timeIt, fontMetrics, CELL_ASPECT } });
+Object.assign(window, { bench: { cropped, loadPicture, syntheticLines, syntheticText, gridRows, TEXT_RENDERERS, PIXEL_RENDERERS, drawText, score, panFrames, churn, timeIt, timeGpu, fontMetrics, CELL_ASPECT } });

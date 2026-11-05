@@ -19,9 +19,10 @@ gridToHtml(grid);                 // a <pre>; add aria-hidden or a label where y
 
 - **Node**: `const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });`
   then `toAsciiGrid({ data, width: info.width, height: info.height }, …)`.
-- **Browser or worker**: `imageToAsciiGrid(source, options)` takes a video, image or canvas (a three.js one included) as it is.
-  It draws the frame down on the GPU first, so only a small picture comes back to the CPU: use it for live video. With
-  `mode: 'tone'` it reads one pixel a cell, a 1080p frame in about 2 ms. An `ImageData` also works with `toAsciiGrid`.
+- **Browser or worker, live video**: `createAsciiGpu()` converts a video, image, canvas (a three.js one included), `ImageBitmap`
+  or `VideoFrame` on the GPU, with every option below, and never makes the main thread wait for it (see below).
+- **Browser or worker, a still**: `imageToAsciiGrid(source, options)` draws the frame down on a 2D canvas and reads back only
+  that small picture, synchronously. An `ImageData` also works with `toAsciiGrid`.
 - **Edge runtimes**: decode with a WebAssembly image decoder, or pass frames you already have as RGBA.
 
 ## Options
@@ -52,12 +53,43 @@ for (const frame of frames) {
 }
 ```
 
-For a playing video in the browser, `imageToAsciiGrid(video, { columns: 160, mode: 'tone', dither: 'ordered', previous })`
-draws each frame in about 2 ms; shape mode (the default) is the most faithful and takes about 25 ms.
+## On the GPU: `createAsciiGpu`
+
+For a playing video, a 3D canvas or any large grid in the browser, convert on the GPU. The result is the same grid
+`toAsciiGrid` returns, from the same options, and resolves once the GPU is done (normally the next frame):
+
+```ts
+import { createAsciiGpu, imageToAsciiGrid, gridToText } from 'asciify-engine/headless';
+
+const gpu = createAsciiGpu();            // null without WebGL2: use imageToAsciiGrid then
+let previous = null, busy = false;
+video.requestVideoFrameCallback(function frame() {
+  if (!busy) {
+    busy = true;
+    gpu.convert(video, { columns: 160, dither: 'ordered', previous }).then(grid => {
+      previous = grid; busy = false;
+      pre.textContent = gridToText(grid);
+    });
+  }
+  video.requestVideoFrameCallback(frame);
+});
+// gpu.stats: the last frame's { mainThreadMs, totalMs }; gpu.destroy() when done.
+```
+
+- One converter per page is plenty; `imageToAsciiGridGPU(source, options)` uses a shared one and falls back to the CPU itself.
+- Main thread per 1080p frame at 160 columns: about 1.5 ms with `dither: 'ordered'`, 2.3 ms with diffusion (the default), in
+  every mode, while matching each cell by shape. In a module worker (on an OffscreenCanvas, given an `ImageBitmap` or
+  `VideoFrame`), the page's share drops to making and posting the bitmap, 0.2 to 1 ms.
+- Same quality as the CPU path on the benchmark's photos; 93 to 96 % of characters identical without diffusion.
+- Falls back to `imageToAsciiGrid` without WebGL2, past the GPU's texture size, with more than 127 characters in `charset`, or
+  after a lost context. Calls are queued one frame at a time.
+
+On screen, rather than as text, a glyph field (`/field`) draws the characters on the GPU too and is the faster choice.
 
 ## Quality and cost
 
 Shape matching was measured against other renderers (ASCII Magic, the Devault generator, aalib.js, ascii.rest, three.js
 AsciiEffect, a naive ramp) on photos it was not tuned on, line art and type: ahead of everything tested on photos, line art and
-type, a 1080p frame in about 25 ms on one core (tone mode through `imageToAsciiGrid`: about 2 ms), 4.7 kB gzipped. Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
+type, a 1080p frame in about 25 ms on one core, or 1.5 to 2.3 ms of main thread through `createAsciiGpu`, 4.7 kB gzipped
+(the GPU converter, tree-shaken when unused, adds about 7 kB). Glyph shapes and ink come from DejaVu Sans Mono (the Vera design behind Menlo); the art matches most
 closely in that family. The output for a given input is deterministic and identical across runtimes.

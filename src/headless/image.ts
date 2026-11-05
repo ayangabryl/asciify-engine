@@ -7,7 +7,8 @@ export type AsciiImageSource = CanvasImageSource;
 type Pen = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 let pen: Pen | null = null;
 
-const sizeOf = (source: AsciiImageSource): [number, number] => {
+/** A drawable source's size in pixels: a video's, an image's, a VideoFrame's, a canvas's or an SVG image's. @internal */
+export const sizeOf = (source: AsciiImageSource): [number, number] => {
   const s = source as { videoWidth?: number; videoHeight?: number; naturalWidth?: number; naturalHeight?: number; displayWidth?: number; displayHeight?: number; width?: number | { baseVal: { value: number } }; height?: number | { baseVal: { value: number } } };
   const num = (v: unknown) => (typeof v === 'number' ? v : (v as { baseVal?: { value: number } })?.baseVal?.value ?? 0);
   return [s.videoWidth || s.naturalWidth || s.displayWidth || num(s.width), s.videoHeight || s.naturalHeight || s.displayHeight || num(s.height)];

@@ -129,4 +129,8 @@ describe('fast paths', () => {
     const { imageToAsciiGrid } = await import('../headless');
     expect(() => imageToAsciiGrid({ width: 10, height: 10 } as unknown as CanvasImageSource)).toThrow(/toAsciiGrid/);
   });
+  it('has no GPU converter without a canvas, so callers fall back', async () => {
+    const { createAsciiGpu } = await import('../headless');
+    expect(createAsciiGpu()).toBeNull();
+  });
 });

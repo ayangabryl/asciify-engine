@@ -1,0 +1,187 @@
+{
+ "date": "2026-11-05",
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "columns": 100,
+ "method": "Quality: SSIM after a viewing-distance blur (close 0.5 cell, far 1.5 cells), as in 2026-11-04-ascii-renderers.md. Speed: 1920x1080 to 160 columns, a fresh frame for every run, median of 5; GPU converters report their main-thread share (Chromium with SwiftShader, so GPU time is the CPU emulating it).",
+ "quality": {
+  "asciify-engine GPU text": {
+   "photos (20 held-out)": {
+    "close": 0.592,
+    "far": 0.879
+   },
+   "synthetic lines": {
+    "close": 0.845,
+    "far": 0.885
+   },
+   "synthetic text": {
+    "close": 0.893,
+    "far": 0.89
+   }
+  },
+  "asciify-engine GPU text, tone": {
+   "photos (20 held-out)": {
+    "close": 0.542,
+    "far": 0.872
+   },
+   "synthetic lines": {
+    "close": 0.77,
+    "far": 0.943
+   },
+   "synthetic text": {
+    "close": 0.864,
+    "far": 0.931
+   }
+  },
+  "asciify-engine GPU text (video settings)": {
+   "photos (20 held-out)": {
+    "close": 0.595,
+    "far": 0.877
+   },
+   "synthetic lines": {
+    "close": 0.877,
+    "far": 0.878
+   },
+   "synthetic text": {
+    "close": 0.916,
+    "far": 0.888
+   }
+  },
+  "asciify-engine GPU text, tone (video)": {
+   "photos (20 held-out)": {
+    "close": 0.542,
+    "far": 0.869
+   },
+   "synthetic lines": {
+    "close": 0.77,
+    "far": 0.943
+   },
+   "synthetic text": {
+    "close": 0.864,
+    "far": 0.931
+   }
+  }
+ },
+ "speed": {
+  "Devault ASCII generator (Classic)": {
+   "churn": 6.81,
+   "ms": 136.2,
+   "pan": 0.828
+  },
+  "Devault ASCII generator (Detailed)": {
+   "churn": 35.61,
+   "ms": 143,
+   "pan": 0.845
+  },
+  "ASCII Magic (characters)": {
+   "churn": 9.37,
+   "ms": 2,
+   "pan": 0.682
+  },
+  "naive ramp (agent baseline)": {
+   "churn": 4.71,
+   "ms": 27.9,
+   "pan": 0.777
+  },
+  "three.js AsciiEffect": {
+   "churn": 7.77,
+   "ms": 363,
+   "pan": 0.78
+  },
+  "aalib.js": {
+   "churn": 33.92,
+   "ms": 145.6,
+   "pan": 0.889
+  },
+  "ascii.rest (logo)": {
+   "churn": 0,
+   "ms": 170.2,
+   "pan": 0.75
+  },
+  "ascii.rest (shade)": {
+   "churn": 7.06,
+   "ms": 176.2,
+   "pan": 0.855
+  },
+  "asciify-engine core asciiText (4.32)": {
+   "churn": 4.99,
+   "ms": 80.6,
+   "pan": 0.766
+  },
+  "asciify-engine headless, tone": {
+   "churn": 23.24,
+   "ms": 43,
+   "pan": 0.87
+  },
+  "asciify-engine headless, shape (video settings)": {
+   "churn": 3.83,
+   "ms": 42.2,
+   "pan": 0.923
+  },
+  "asciify-engine imageToAsciiGrid": {
+   "churn": 24.82,
+   "ms": 60.9,
+   "pan": 0.927
+  },
+  "asciify-engine imageToAsciiGrid, tone (fast)": {
+   "churn": 48.14,
+   "ms": 34.1,
+   "pan": 0.913
+  },
+  "asciify-engine imageToAsciiGrid, tone (fast, video)": {
+   "churn": 3.5,
+   "ms": 35.6,
+   "pan": 0.908
+  },
+  "asciify-engine imageToAsciiGrid (video settings)": {
+   "churn": 3.82,
+   "ms": 54.9,
+   "pan": 0.924
+  },
+  "asciify-engine GPU text": {
+   "churn": 26.03,
+   "ms": 2.3,
+   "totalMs": 462.3,
+   "pan": 0.926
+  },
+  "asciify-engine GPU text, tone": {
+   "churn": 49.73,
+   "ms": 2.9,
+   "totalMs": 420.4,
+   "pan": 0.914
+  },
+  "asciify-engine GPU text (video settings)": {
+   "churn": 3.83,
+   "ms": 1.5,
+   "totalMs": 380.6,
+   "pan": 0.923
+  },
+  "asciify-engine GPU text, tone (video)": {
+   "churn": 3.54,
+   "ms": 1.6,
+   "totalMs": 319,
+   "pan": 0.909
+  },
+  "asciify-engine headless, shape": {
+   "churn": 24.63,
+   "ms": 38.2,
+   "pan": 0.927
+  }
+ },
+ "worker": {
+  "note": "createAsciiGpu in a module worker on an OffscreenCanvas; the page makes an ImageBitmap of each fresh 1080p frame and posts it. Main thread per frame, median of 7.",
+  "mainThreadMs": {
+   "shape (diffuse)": 0.3,
+   "shape, ordered": 0.3,
+   "tone": 0.2,
+   "tone, ordered": 0.9,
+   "color": 1.0
+  },
+  "workerMs": {
+   "shape (diffuse)": 2.2,
+   "shape, ordered": 1.2,
+   "tone": 2.2,
+   "tone, ordered": 1.4,
+   "color": 2.5
+  }
+ }
+}

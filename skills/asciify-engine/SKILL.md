@@ -45,6 +45,7 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | A three.js / React Three Fiber scene, game or app canvas drawn live as characters | `mountGlyphField(canvas, { source: renderer.domElement, live: true })` ([glyph-field.md](references/glyph-field.md#live-sources-3d-scenes-and-app-canvases-433)) |
 | Their own UI (a card, a form, a view) drawn in characters, live, for a transition or a hover | `elementSource` from `/kit` as a `live` field source ([kit.md](references/kit.md#elementsource-433-experimental)) |
 | ASCII on a server, at the edge or in a terminal: OG images, emails, CLI banners, READMEs, bots | `toAsciiGrid` from `asciify-engine/headless` ([headless.md](references/headless.md)) |
+| A playing video or 3D canvas as text (a string per frame, not drawn on screen) | `createAsciiGpu()` from `asciify-engine/headless` ([headless.md](references/headless.md#on-the-gpu-createasciigpu)) |
 | Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
 | Several media and text layers in one artwork | Advanced: `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
@@ -228,7 +229,7 @@ From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risogr
 ### Headless, custom effects and live sources (4.33)
 
 `asciify-engine/headless` converts pixels to text with no DOM (Node, workers, edge), matching glyph shapes rather than tone
-alone. `/field` gains `defineFieldEffect` (the brand's own hovers and motion, in GLSL) and `live: true` sources (3D and app
+alone, and in the browser on the GPU (`createAsciiGpu`) for live video. `/field` gains `defineFieldEffect` (the brand's own hovers and motion, in GLSL) and `live: true` sources (3D and app
 canvases, every frame). Both new APIs are experimental for now; see STABILITY.md in the package.
 
 ### GPU glyph fields (4.11) and the kit (4.13)

@@ -413,6 +413,63 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
   return { out, colors };
 }
 
+/** The 2nd and 98th percentile tones (on a 256-step histogram), or the full range for a nearly flat picture. @internal */
+export function levelsOf(tones: Float32Array): [number, number] {
+  let lo = 0, hi = 1;
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < tones.length; i++) hist[(tones[i] * 255 + 0.5) | 0]++;
+  let acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= tones.length * 0.01) { lo = v / 255; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= tones.length * 0.01) { hi = v / 255; break; } }
+  if (hi - lo < 0.05) { lo = 0; hi = 1; }
+  return [lo, hi];
+}
+
+/** The glyphs a grid may use and their tones, as the CPU and GPU matchers both read them. @internal */
+export function prepareMatch(options: AsciiGridOptions, mode: 'shape' | 'tone') {
+  const { mean } = glyphTable();
+  const pool = (options.charset ?? GLYPH_CHARS).split('');
+  const known = pool.filter(char => GLYPH_CHARS.includes(char));
+  const glyphs = [...new Set(mode === 'shape' ? (known.length >= 2 ? known : GLYPH_CHARS.split('')) : pool)];
+  const indices = glyphs.map(char => GLYPH_CHARS.indexOf(char));
+  const allKnown = indices.every(i => i >= 0);
+  const sharpness = finite(options.sharpness, 1.6, 1, 4);
+  const shapeMode = mode === 'shape' && allKnown;
+  // Flat cells, with no structure inside, take a fill character by tone; only cells with an edge or a stroke are matched by
+  // shape. The fill ramp is the classic one, kept to the characters the charset allows.
+  const fillSet = FILL_ALL === 'all' ? null : FILL_ALL === 'symbols' ? FILL_SYMBOLS : FILL;
+  const fill = shapeMode && fillSet ? glyphs.map((_, g) => g).filter(g => fillSet.includes(glyphs[g])) : glyphs.map((_, g) => g);
+  if (fill.length < 2) fill.splice(0, fill.length, ...glyphs.map((_, g) => g));
+  // Every glyph's tone on the target's 0–1 scale: its ink as a share of the densest fill character's. A ramp with characters
+  // the table does not know keeps the given order, evenly spaced. The tone scale is the classic fill ramp's (its densest is
+  // @), whichever characters fill flat cells.
+  const ramp = shapeMode ? glyphs.map((_, g) => g).filter(g => FILL.includes(glyphs[g])) : fill;
+  const fillTop = Math.max(...(ramp.length ? ramp : fill).map(g => (allKnown ? mean[indices[g]] : 0)), 1e-6) * (shapeMode ? INK_SCALE : 1);
+  const toneOf = indices.map((index, g) => (allKnown ? mean[index] / fillTop : g / Math.max(1, glyphs.length - 1)));
+  // Cells with a stroke in them weigh tone on the unstretched scale (INK_SCALE fills flat areas fuller; on a stroke it would
+  // trade the stroke's shape for ink).
+  const strokeTone = toneOf.map(t => t * (shapeMode ? INK_SCALE ** STROKE_LIFT : 1));
+  return { glyphs, indices: Int32Array.from(indices), toneOf: Float64Array.from(toneOf), strokeTone: Float64Array.from(strokeTone), fill: Int32Array.from(fill), shapeMode, sharpness };
+}
+
+/** The matching constants as tuned, for the GPU matcher. @internal */
+export const matchConstants = () => ({ structure: STRUCTURE, soften: SOFTEN, toneWeight: TONE_WEIGHT, shiftCost: SHIFT_COST, keepMargin: KEEP_MARGIN, keepTone: KEEP_TONE, extraInk: EXTRA_INK });
+/** The glyph tables, for the GPU matcher. @internal */
+export const glyphTables = () => { const t = glyphTable(); return { weight: t.weight, shifted: shiftedTable(t) }; };
+
+/** The grid size and tone settings an options object asks for, read the same way by every matcher. @internal */
+export function gridParams(options: AsciiGridOptions, width: number, height: number) {
+  const cellAspect = finite(options.cellAspect, GLYPH_CELL_ASPECT, 0.25, 8);
+  const columns = Math.round(finite(options.columns, 80, 1, 2000));
+  const rows = Math.round(finite(options.rows, Math.max(1, Math.round(columns * (height / width) / cellAspect)), 1, 2000));
+  const light = options.background === 'light';
+  const mode: 'shape' | 'tone' = options.mode === 'tone' ? 'tone' : 'shape';
+  const contrast = finite(options.contrast, 1, 0, 3), brightness = finite(options.brightness, 0, -1, 1), gamma = finite(options.gamma, 1, 0.1, 5);
+  const dither = options.dither ?? 'diffuse', diffuse = dither === true || dither === 'diffuse', ordered = dither === 'ordered';
+  return { columns, rows, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor: !!options.color };
+}
+
 /**
  * Converts pixels to a grid of characters. Pure, synchronous and deterministic; a 1920×1080 picture at 160 columns takes about
  * 25 ms on one core.
@@ -422,14 +479,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   const { width, height, data } = pixels;
   const channels = pixels.channels ?? 4;
   if (!(width > 0 && height > 0) || data.length < width * height * channels) throw new Error('toAsciiGrid needs width × height × channels pixel values.');
-  const cellAspect = finite(options.cellAspect, GLYPH_CELL_ASPECT, 0.25, 8);
-  const columns = Math.round(finite(options.columns, 80, 1, 2000));
-  const rows = Math.round(finite(options.rows, Math.max(1, Math.round(columns * (height / width) / cellAspect)), 1, 2000));
-  const light = options.background === 'light';
-  const mode = options.mode === 'tone' ? 'tone' : 'shape';
-  const contrast = finite(options.contrast, 1, 0, 3), brightness = finite(options.brightness, 0, -1, 1), gamma = finite(options.gamma, 1, 0.1, 5);
-  const dither = options.dither ?? 'diffuse', diffuse = dither === true || dither === 'diffuse', ordered = dither === 'ordered';
-  const wantColor = !!options.color;
+  const { columns, rows, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor } = gridParams(options, width, height);
 
   // Each pixel as linear light, transparent pixels showing the ground the text sits on.
   const ground = light ? 1 : 0;
@@ -496,47 +546,16 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
       if (cellRgb) for (let k = 0; k < 3; k++) cellRgb[(r * columns + c) * 3 + k] = box(tables[k + 1], c * cw, r * ch, (c + 1) * cw, (r + 1) * ch);
     }
   }
-  let lo = 0, hi = 1;
-  if (options.levels !== 'none') {
-    const hist = new Uint32Array(256);
-    for (let i = 0; i < tones.length; i++) hist[(tones[i] * 255 + 0.5) | 0]++;
-    let acc = 0;
-    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= tones.length * 0.01) { lo = v / 255; break; } }
-    acc = 0;
-    for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= tones.length * 0.01) { hi = v / 255; break; } }
-    if (hi - lo < 0.05) { lo = 0; hi = 1; }
-  }
+  const [lo, hi] = options.levels === 'none' ? [0, 1] : levelsOf(tones);
   // What each sub-cell asks for, 0–1: light on dark wants ink where the picture is bright, dark on light where it is dark.
-  const { mean, shape, weight } = glyphTable();
-  const pool = (options.charset ?? GLYPH_CHARS).split('');
-  const known = pool.filter(char => GLYPH_CHARS.includes(char));
-  const glyphs = [...new Set(mode === 'shape' ? (known.length >= 2 ? known : GLYPH_CHARS.split('')) : pool)];
-  const indices = glyphs.map(char => GLYPH_CHARS.indexOf(char));
-  const allKnown = indices.every(i => i >= 0);
-  const sharpness = finite(options.sharpness, 1.6, 1, 4);
+  const { shape, weight } = glyphTable();
+  const { glyphs, indices, toneOf, strokeTone, fill, shapeMode, sharpness } = prepareMatch(options, mode);
   const target = new Float32Array(tones.length), sharpen = poweredTable(sharpness);
   // Matched as seen: a share of the densest fill character's light, on the perceptual scale. (Matching in linear light scored
   // worse and looked too sparse: small glyphs on a screen are read, not averaged.)
   fillTargets(tones, target, lo, hi, contrast, brightness, gamma, light);
-
-  const shapeMode = mode === 'shape' && allKnown;
-  // Flat cells, with no structure inside, take a fill character by tone; only cells with an edge or a stroke are matched by
-  // shape. The fill ramp is the classic one, kept to the characters the charset allows.
-  const fillSet = FILL_ALL === 'all' ? null : FILL_ALL === 'symbols' ? FILL_SYMBOLS : FILL;
-  const fill = shapeMode && fillSet ? glyphs.map((_, g) => g).filter(g => fillSet.includes(glyphs[g])) : glyphs.map((_, g) => g);
-  if (fill.length < 2) fill.splice(0, fill.length, ...glyphs.map((_, g) => g));
-  // Every glyph's tone on the target's 0–1 scale: its ink as a share of the densest fill character's. A ramp with characters
-  // the table does not know keeps the given order, evenly spaced.
-  // The tone scale is the classic fill ramp's (its densest is @), whichever characters fill flat cells.
-  const ramp = shapeMode ? glyphs.map((_, g) => g).filter(g => FILL.includes(glyphs[g])) : fill;
-  const fillTop = Math.max(...(ramp.length ? ramp : fill).map(g => (allKnown ? mean[indices[g]] : 0)), 1e-6) * (shapeMode ? INK_SCALE : 1);
-  const toneOf = indices.map((index, g) => (allKnown ? mean[index] / fillTop : g / Math.max(1, glyphs.length - 1)));
-  // Cells with a stroke in them weigh tone on the unstretched scale (INK_SCALE fills flat areas fuller; on a stroke it would
-  // trade the stroke's shape for ink).
-  const strokeTone = toneOf.map(t => t * (shapeMode ? INK_SCALE ** STROKE_LIFT : 1));
   const { out, colors } = matchCells({
-    columns, rows, target, glyphs, indices: Int32Array.from(indices), shape, weight, toneOf: Float64Array.from(toneOf),
-    strokeTone: Float64Array.from(strokeTone), fill: Int32Array.from(fill), shapeMode, sharpness, sharpen, diffuse, ordered,
+    columns, rows, target, glyphs, indices, shape, weight, toneOf, strokeTone, fill, shapeMode, sharpness, sharpen, diffuse, ordered,
     previous: options.previous && options.previous.columns === columns && options.previous.rows === rows ? options.previous.lines : null,
     cellRgb: wantColor ? cellRgb : null, stride,
   });

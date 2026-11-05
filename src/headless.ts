@@ -6,5 +6,7 @@ export { toAsciiGrid, glyphInk, ASCII_SYMBOLS } from './headless/grid';
 export type { AsciiPixels, AsciiGridOptions, AsciiGrid } from './headless/grid';
 export { imageToAsciiGrid } from './headless/image';
 export type { AsciiImageSource } from './headless/image';
+export { createAsciiGpu, imageToAsciiGridGPU } from './headless/gpu';
+export type { AsciiGpu } from './headless/gpu';
 export { gridToText, gridToAnsi, gridToSvg, gridToHtml } from './headless/format';
 export type { AnsiOptions, MarkupOptions } from './headless/format';

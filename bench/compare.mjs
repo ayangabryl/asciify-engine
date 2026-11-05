@@ -50,7 +50,7 @@ for (const set of sets) {
       if (only && !name.includes(only)) continue;
       try {
         window.lastCrop = null;
-        const lines = render(picture, columns, rows), drawn = await bench.drawText(lines);
+        const lines = await render(picture, columns, rows), drawn = await bench.drawText(lines);
         // A renderer that trims the picture to its subject is scored against that part of it.
         const target = window.lastCrop ? bench.cropped(picture, window.lastCrop) : picture;
         out.text[name] = { ...(await bench.score(drawn, target)), sample: lines.slice(Math.floor(rows / 2) - 2, Math.floor(rows / 2) + 2) };
@@ -80,26 +80,34 @@ for (const set of sets) {
 if (!only || arg('--extras', null)) {
   results.extras = await page.evaluate(async ({ url }) => {
     const { bench } = window;
-    const photo = await bench.loadPicture(url, 1280), big = await bench.loadPicture(url, 1920), out = {};
+    const photo = await bench.loadPicture(url, 1280), out = {};
     const frames = bench.panFrames(photo, 24, 100);
     for (const [name, render] of Object.entries(bench.TEXT_RENDERERS)) {
       try {
         const rows = bench.gridRows(frames[0], 100);
         let previous = null;
-        const sequence = frames.map(f => { const lines = render(f, 100, rows, previous); if (render.sequence) previous = window.lastGrid; return lines; });
+        const sequence = [];
+        for (const f of frames) { sequence.push(await render(f, 100, rows, previous)); if (render.sequence) previous = window.lastGrid; }
         const churn = bench.churn(sequence);
         // Fidelity while panning: the last four frames of the pan scored against their own pictures, so a renderer that keeps
         // characters from frame to frame is caught if they lag the picture.
         let pan = 0;
         for (const f of [20, 21, 22, 23]) pan += (await bench.score(await bench.drawText(sequence[f]), frames[f])).far / 4;
-        const ms = bench.timeIt(() => render(big, 160, bench.gridRows(big, 160)));
-        out[name] = { churn, ms, pan: +pan.toFixed(3) };
+        // A fresh frame for every run, as with video: a frame already read back to the CPU (by an earlier run or another
+        // renderer) is cheaper for a CPU converter to read again and dearer for a GPU one to upload.
+        const bigs = [];
+        for (let i = 0; i < 6; i++) bigs.push(await bench.loadPicture(url, 1920));
+        const rowsBig = bench.gridRows(bigs[0], 160);
+        let run = 0;
+        const timing = render.gpu ? await bench.timeGpu(() => render(bigs[run++ % 6], 160, rowsBig), 5) : { ms: bench.timeIt(() => render(bigs[run++ % 6], 160, rowsBig), 5) };
+        bigs.length = 0;
+        out[name] = { churn, ...timing, pan: +pan.toFixed(3) };
       } catch (e) { out[name] = { error: String(e && e.message || e).slice(0, 160) }; }
     }
     return out;
   }, { url: pictures[0].url });
-  console.log('\nflicker on a slow pan (% of cells changing per frame) and 1920x1080 -> 160 columns (ms):');
-  for (const [name, r] of Object.entries(results.extras)) console.log(`  ${name.padEnd(40)} ${r.error ? r.error : `${String(r.churn).padStart(6)} %   ${String(r.ms).padStart(7)} ms   pan far ${r.pan}`}`);
+  console.log('\nflicker on a slow pan (% of cells changing per frame) and 1920x1080 -> 160 columns, a fresh frame each run (ms, median of 5; GPU converters: main-thread share):');
+  for (const [name, r] of Object.entries(results.extras)) console.log(`  ${name.padEnd(40)} ${r.error ? r.error : `${String(r.churn).padStart(6)} %   ${String(r.ms).padStart(7)} ms   pan far ${r.pan}${r.totalMs ? `   (${r.totalMs} ms in all, GPU included)` : ''}`}`);
 }
 const outFile = arg('--out', null);
 if (outFile) await fs.writeFile(outFile, JSON.stringify(results, null, 1));
