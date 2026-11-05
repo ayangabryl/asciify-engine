@@ -119,9 +119,12 @@ export interface GlyphFieldSettings {
   shuffle: number;
   /**
    * `area` (default) averages the source over each cell, so a shape's edge ramps through the charset. `point` reads the source at
-   * the cell's centre, so drawn shapes land as whole cells with crisp edges, as tiled art does.
+   * the cell's centre, so drawn shapes land as whole cells with crisp edges, as tiled art does. `shape` reads each cell in 3 by 5
+   * parts and picks, among the characters near its tone, the one whose ink lies where the picture's light does, so strokes and
+   * edges follow the picture: best for type, line art and logos. It applies to glyphs read along the ramp, in cells at least 8
+   * device pixels tall; elsewhere it samples as `area` does.
    */
-  sample: 'area' | 'point';
+  sample: 'area' | 'point' | 'shape';
   /** For `engraving` and `crosshatch`: the distance between lines in cell heights. Default 0.5 (two lines a cell). */
   linePitch: number;
   /** For `engraving` and `crosshatch`: multiplies how thick a line grows with the tone. Default 1. */
@@ -366,7 +369,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     markAngle: clamp(input.markAngle, -360, 360, base.markAngle),
     accents: clamp(input.accents, 0, 0.3, base.accents),
     shuffle: clamp(input.shuffle, 0, 4, base.shuffle),
-    sample: input.sample === 'point' || input.sample === 'area' ? input.sample : base.sample,
+    sample: input.sample === 'point' || input.sample === 'area' || input.sample === 'shape' ? input.sample : base.sample,
     linePitch: clamp(input.linePitch, 0.2, 4, base.linePitch),
     lineWeight: clamp(input.lineWeight, 0.2, 3, base.lineWeight),
     sparkle: clamp(input.sparkle, 0, 0.05, base.sparkle),

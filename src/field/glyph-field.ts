@@ -1,6 +1,7 @@
 import { FIELD_COMPOSITE, FIELD_VERTEX, fieldCellShader, fieldFluidShader, sceneId } from './field-shaders';
 import { MAX_FIELD_EFFECTS, effectUniforms, type FieldEffect } from './field-effects';
 import { createStableFluid, type FieldProgram, type StableFluid } from './field-fluid';
+import { createMipReader } from './field-readback';
 import {
   ambientFactor, cancelFieldFrame, fieldContext, markShared, observeSize, observeView, requestFieldFrame, watchFonts, watchMotionPreference, watchPointer, watchVisibility,
   type FieldClient, type PointerClient, type SharedAtlas,
@@ -88,6 +89,9 @@ export interface GlyphField {
   readonly settings: GlyphFieldSettings;
 }
 
+// Shape sampling: how much the tone counts against the shape, how many ramp steps either side of the tone are tried, and the
+// spread of light across a cell's parts below which it keeps its tone's character. Tuned on photos, line art and type.
+const SHAPE_TONE = 20, SHAPE_WINDOW = 3, SHAPE_GATE = 0.15;
 const VIDEO = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
 type Program = FieldProgram & { fragment: WebGLShader };
 type Bitmapish = { width: number; height: number; close(): void };
@@ -182,6 +186,33 @@ function paintGlyphAtlas(settings: GlyphFieldSettings, layout: CellLayout, share
   try { final = fonts?.check ? fonts.check(font, glyphs.join('')) : true; } catch { /* an unparsable font: as it is */ }
   if (shared) queueMicrotask(() => { paint.width = paint.height = 1; });
   return { image: paint as TexImageSource, final };
+}
+/**
+ * Each glyph's ink in a 3 by 5 grid of parts of its cell (row by row from the top), and in the whole cell at index 15: 16 bytes a
+ * glyph, 255 for a part fully inked. Measured once per charset and font from the atlas painted large, for shape sampling.
+ */
+export function measureGlyphShapes(settings: GlyphFieldSettings): Uint8Array {
+  const glyphs = fieldGlyphs(settings.charset), out = new Uint8Array(glyphs.length * 16);
+  const layout = fieldCellLayout(60, settings.cellAspect, 1, glyphs.length);
+  try {
+    const { image } = paintGlyphAtlas(settings, layout, false);
+    const canvas = image as HTMLCanvasElement, stride = canvas.width;
+    const data = canvas.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, canvas.width, canvas.height).data;
+    canvas.width = canvas.height = 1;
+    glyphs.forEach((_, g) => {
+      const x0 = (g % layout.columns) * layout.width, y0 = Math.floor(g / layout.columns) * layout.height;
+      const parts = new Float64Array(15), area = new Float64Array(15);
+      let total = 0;
+      for (let y = 0; y < layout.height; y++) for (let x = 0; x < layout.width; x++) {
+        const a = data[((y0 + y) * stride + x0 + x) * 4 + 3] / 255;
+        const k = Math.min(4, Math.floor(y * 5 / layout.height)) * 3 + Math.min(2, Math.floor(x * 3 / layout.width));
+        parts[k] += a; area[k]++; total += a;
+      }
+      for (let k = 0; k < 15; k++) out[g * 16 + k] = Math.round(255 * parts[k] / Math.max(1, area[k]));
+      out[g * 16 + 15] = Math.round(255 * total / (layout.width * layout.height));
+    });
+  } catch { /* no 2D canvas: shape sampling falls back to the cell's tone */ }
+  return out;
 }
 const noAtlasUser = () => {};
 /**
@@ -640,6 +671,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     const font = fontString();
     void fonts.load(font, fieldGlyphs(settings.charset).join('')).then(() => {
       if (destroyed || lost || fontString() !== font) return;
+      shapesFont++;
       if (!shared) { buildAtlas(); wake(); return; }
       if (atlasEntry && !atlasEntry.final && atlasEntry.key === atlasKey()) host!.paintAtlas(atlasEntry, paintAtlas);
     }, () => {});
@@ -681,8 +713,13 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
       const probe = scopeContext.canvas;
       if (probe.width !== w || probe.height !== h) { probe.width = w; probe.height = h; } else scopeContext.clearRect(0, 0, w, h);
       scopeContext.drawImage(source as CanvasImageSource, 0, 0, w, h);
-      scopeGuide = buildHoverGuide(scopeContext.getImageData(0, 0, w, h).data, w, h, null, scopeGuide);
+      applyScope(scopeContext.getImageData(0, 0, w, h).data, w, h);
     } catch { return; }
+  };
+  const applyScope = (rgba: ArrayLike<number>, w: number, h: number) => {
+    scopeOn = false;
+    if (!source || settings.scope === 'all') return;
+    scopeGuide = buildHoverGuide(rgba, w, h, null, scopeGuide);
     if (scopeGuide.key === 'none') return;
     if (scopePixels.length !== w * h * 4) scopePixels = new Uint8Array(w * h * 4);
     for (let i = 0; i < w * h; i++) scopePixels[i * 4 + 3] = Math.round(scopeGuide.subject[i] * 255);
@@ -693,29 +730,62 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, scopePixels);
     scopeOn = true;
   };
+  // A playing video or live canvas is measured from its own mip chain on the GPU, read back a frame or two later, so measuring
+  // never waits on the GPU. Levels and scope share one read; each takes it only when it asked for it.
+  let shapesTexture: WebGLTexture | null = null, shapesFor = '', shapesFont = 0;
+  let mipsStale = false, reader: ReturnType<typeof createMipReader> | null = null, readFor = { levels: false, scope: false };
+  const takeRead = () => {
+    const got = reader?.poll();
+    if (!got) return;
+    if (readFor.levels && settings.levels !== 'none') levels = fieldLevels(got.data);
+    if (readFor.scope) applyScope(got.data, got.width, got.height);
+    if (readFor.levels || readFor.scope) dirty = true;
+  };
   const uploadSource = () => {
     if (!source) return;
     const now = performance.now();
-    // A video or live canvas changes every frame; reading its pixels back on the CPU each time would stall the GPU, so its
-    // levels and hover scope are measured a few times a second.
+    // A video or live canvas changes every frame; reading its pixels back on the CPU would stall the GPU, so after a first
+    // measure its levels and hover scope are read from the GPU without waiting, a few times a second.
     const moving = source instanceof HTMLVideoElement || live;
-    if (!moving || now - levelsAt > 1500) { measureLevels(); levelsAt = now; }
-    if (!moving || now - scopeAt > 160) { measureScope(); scopeAt = now; }
+    if (moving) takeRead();
+    const levelsDue = !moving || levelsAt === -Infinity ? 'now' : now - levelsAt > 1500 && settings.levels !== 'none' ? 'later' : null;
+    const scopeDue = !moving || scopeAt === -Infinity ? 'now' : now - scopeAt > 160 && settings.scope !== 'all' ? 'later' : null;
+    if (levelsDue === 'now') { measureLevels(); levelsAt = now; }
+    if (scopeDue === 'now') { measureScope(); scopeAt = now; }
     gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     try {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
-      gl.generateMipmap(gl.TEXTURE_2D);
+      // A still builds its smaller levels now; a moving source when a draw or a read next needs them, which a field whose cells
+      // are about a texel each never does.
+      if (moving) mipsStale = true; else { gl.generateMipmap(gl.TEXTURE_2D); mipsStale = false; }
       const s = source as { videoWidth?: number; videoHeight?: number; naturalWidth?: number; naturalHeight?: number; width: number; height: number };
+      const tw = s.videoWidth || s.naturalWidth || s.width, th = s.videoHeight || s.naturalHeight || s.height;
       // With its mip chain, a third more.
-      sourceBytes = (s.videoWidth || s.naturalWidth || s.width) * (s.videoHeight || s.naturalHeight || s.height) * 4 * 4 / 3;
+      sourceBytes = tw * th * 4 * 4 / 3;
+      const wantLevels = levelsDue === 'later', wantScope = scopeDue === 'later';
+      if ((wantLevels || wantScope) && !reader?.pending) {
+        reader ??= createMipReader(gl);
+        if (mipsStale) { gl.generateMipmap(gl.TEXTURE_2D); mipsStale = false; }
+        if (reader.request(sourceTexture, tw, th, 128)) {
+          readFor = { levels: wantLevels, scope: wantScope };
+          if (wantLevels) levelsAt = now;
+          if (wantScope) scopeAt = now;
+        } else {
+          // A browser that cannot read the mip back measures on the CPU, as before.
+          if (wantLevels) { measureLevels(); levelsAt = now; }
+          if (wantScope) { measureScope(); scopeAt = now; }
+        }
+      }
     } catch (error) {
       report(error);
     }
   };
 
   const init = () => {
+    reader = null;
+    shapesTexture = null; shapesFor = '';
     packed = !gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float');
     buildPrograms();
     vertexArray = shared ? host!.vertexArray() : gl.createVertexArray();
@@ -825,6 +895,11 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     if (shared) host!.begin(width, height);
     const fluid = settings.fluid;
     const texelsPerCell = source && textureHeight ? (layout.height / height) * textureHeight * map.scale[1] : 1;
+    const lod = settings.sample === 'point' ? 0 : Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5);
+    if (mipsStale && source && (lod > 0 || settings.backdrop > 0)) {
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sourceTexture); gl.generateMipmap(gl.TEXTURE_2D);
+      mipsStale = false;
+    }
     const target = ensureCells();
     const u = cellProgram!.locations!, p = pixelProgram!.locations!;
     const hover = activeFieldHover(settings);
@@ -858,6 +933,28 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1i(u.uScene, source ? 0 : sceneId(settings.scene));
     gl.uniform1i(u.uMark, FIELD_MARKS.indexOf(settings.mark));
     gl.uniform1f(u.uOrder, settings.glyphOrder === 'text' ? 1 : settings.glyphOrder === 'scatter' && settings.mark === 'glyph' ? 2 : 0);
+    // Shape sampling needs a picture, glyphs read along the ramp, and cells big enough for their parts to differ.
+    const shapeOn = settings.sample === 'shape' && !!source && settings.mark === 'glyph' && settings.glyphOrder !== 'text' && settings.glyphOrder !== 'scatter' && layout.height >= 8;
+    if (shapeOn) {
+      const key = `${atlasKey()}|${shapesFont}`;
+      if (shapesFor !== key || !shapesTexture) {
+        shapesFor = key;
+        const shapes = measureGlyphShapes(settings);
+        gl.activeTexture(gl.TEXTURE9);
+        shapesTexture ??= texture(gl.NEAREST);
+        gl.bindTexture(gl.TEXTURE_2D, shapesTexture);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 16, Math.max(1, shapes.length / 16), 0, gl.RED, gl.UNSIGNED_BYTE, shapes);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      }
+    }
+    gl.activeTexture(gl.TEXTURE9); gl.bindTexture(gl.TEXTURE_2D, (shapeOn && shapesTexture) || sourceTexture); gl.uniform1i(u.uShapes, 9);
+    gl.uniform1f(u.uShapeOn, shapeOn ? 1 : 0);
+    // A part is a fifth of the cell's height, so it reads a level about log2(5) finer than the cell.
+    gl.uniform1f(u.uShapeLod, Math.max(0, Math.log2(Math.max(1, texelsPerCell / 5)) - 0.5));
+    gl.uniform1f(u.uShapeTone, SHAPE_TONE);
+    gl.uniform1f(u.uShapeWindow, SHAPE_WINDOW);
+    gl.uniform1f(u.uShapeGate, SHAPE_GATE);
     const words = settings.glyphOrder === 'text' && settings.textRepeat === 'row' ? fieldWords(settings.charset) : [];
     wordData.fill(0); wordData.set(words);
     gl.uniform2fv(u.uWords, wordData);
@@ -897,7 +994,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform1f(u.uTime, time);
     gl.uniform1f(u.uDrift, motion ? settings.drift : 0);
     gl.uniform1f(u.uFluidOn, fluid && hover === 'fluid' && (fluidTextures.length || stableOn) ? 1 : 0);
-    gl.uniform1f(u.uLod, settings.sample === 'point' ? 0 : Math.max(0, Math.log2(Math.max(1, texelsPerCell)) - 0.5));
+    gl.uniform1f(u.uLod, lod);
     gl.uniform1f(u.uSaturation, settings.saturation);
     gl.uniform1f(u.uShade, settings.shade);
     gl.uniform1f(u.uBackdrop, source ? settings.backdrop : 0);
@@ -1214,6 +1311,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     sourceWidth = loaded.natural?.[0] ?? (element instanceof HTMLVideoElement ? element.videoWidth : element instanceof HTMLImageElement ? element.naturalWidth : element.width);
     sourceHeight = loaded.natural?.[1] ?? textureHeight;
     videoFresh = true;
+    if (fresh) levelsAt = scopeAt = -Infinity;
     if (element instanceof HTMLVideoElement && fresh) watchVideo(element);
     if (!lost) uploadSource();
     dirty = true;
@@ -1351,6 +1449,8 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
         gl.deleteTexture(sourceTexture);
         if (trailTexture) gl.deleteTexture(trailTexture);
         if (scopeTexture) gl.deleteTexture(scopeTexture);
+        reader?.dispose();
+        if (shapesTexture) gl.deleteTexture(shapesTexture);
         if (clearTexture) gl.deleteTexture(clearTexture);
         if (shared) {
           host!.releaseAtlas(atlasEntry, onAtlas);

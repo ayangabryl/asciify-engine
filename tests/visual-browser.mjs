@@ -56,6 +56,7 @@ const CASES = {
   artPanel: ['<figure style="width:360px;height:240px;margin:0"></figure>', `k.artPanel(el, { image: '${img}' })`, null, 40],
   ...Object.fromEntries(['glyph', 'dot', 'pixel', 'led'].map(mark => [`field ${mark}`,
     ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { source: '${img}', mark: '${mark}', hover: 'lantern' })`, [[100, 100], [300, 160]], 40]])),
+  'field shape': ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { source: '${img}', sample: 'shape', charset: f.FIELD_PHOTO_CHARSET, cellSize: 12, glyphScale: 1, hover: 'fluid' })`, [[100, 100], [300, 160]], 40],
   'field scene': ['<canvas style="display:block;width:440px;height:260px"></canvas>', `f.mountGlyphField(el, { scene: 'waves', hover: 'none' })`, null, 40],
 };
 

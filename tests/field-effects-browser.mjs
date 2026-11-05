@@ -132,6 +132,40 @@ try {
     }
     await page.close();
   }
+  {
+    // A playing source is measured from the GPU without waiting on it: after the first measure no small CPU readback at all,
+    // the reads arrive through a pixel buffer, and the levels they give match a still measured on the CPU.
+    const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    await page.goto(origin);
+    const result = await page.evaluate(async () => {
+      const f = await import('/field.js');
+      // A low-contrast picture (greys 90 to 160), so levels stretch it visibly.
+      const make = () => { const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d'); const grd = g.createLinearGradient(0, 0, 320, 0); grd.addColorStop(0, 'rgb(90,90,90)'); grd.addColorStop(1, 'rgb(160,160,160)'); g.fillStyle = grd; g.fillRect(0, 0, 320, 240); g.fillStyle = 'rgb(150,150,150)'; g.fillRect(120, 70, 80, 100); return c; };
+      const original = CanvasRenderingContext2D.prototype.getImageData, buffered = WebGL2RenderingContext.prototype.getBufferSubData;
+      let small = 0, reads = 0;
+      CanvasRenderingContext2D.prototype.getImageData = function (...args) { if (this.canvas.width <= 128) small++; return original.apply(this, args); };
+      WebGL2RenderingContext.prototype.getBufferSubData = function (...args) { reads++; return buffered.apply(this, args); };
+      const host = document.getElementById('c');
+      const field = f.mountGlyphField(host, { source: make(), live: true, hover: 'fluid', scope: 'subject', ink: '#ffffff', levels: 'auto' });
+      await field.ready;
+      small = 0;
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      await wait(1900);
+      const sum = canvas => { const p = document.createElement('canvas'); p.width = 400; p.height = 300; const g = p.getContext('2d'); g.drawImage(canvas, 0, 0); const d = original.call(g, 0, 0, 400, 300).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i]; return s / (d.length / 4); };
+      const live = sum(host), afterSmall = small, afterReads = reads;
+      field.destroy();
+      const other = document.createElement('canvas'); other.style.cssText = 'display:block;width:400px;height:300px'; document.body.appendChild(other);
+      const plain = f.mountGlyphField(other, { source: make(), hover: 'fluid', scope: 'subject', ink: '#ffffff', levels: 'auto' });
+      await plain.ready;
+      const still = sum(other);
+      plain.destroy();
+      return { small: afterSmall, reads: afterReads, live, still };
+    });
+    check('a live source with levels and scope is not read back on the CPU after its first measure', result.small === 0, `${result.small} small CPU readbacks`);
+    check('its levels and scope are read from the GPU', result.reads >= 2, `${result.reads} buffer reads`);
+    check('levels read from the GPU match levels measured on the CPU', Math.abs(result.live - result.still) < 1.5, `${result.live.toFixed(2)} live, ${result.still.toFixed(2)} still`);
+    await page.close();
+  }
 } finally {
   await browser.close();
   server.close();

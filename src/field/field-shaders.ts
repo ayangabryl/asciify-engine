@@ -84,6 +84,9 @@ uniform float uLightRadius, uLightGain, uClock, uFlicker, uTrailAmount;
 uniform sampler2D uTrailMap, uScope;
 uniform float uScopeMode;
 uniform vec2 uLevels;
+// Shape sampling: each cell read in 3 by 5 parts and matched to the glyphs' own ink in those parts (see GlyphFieldOptions.sample).
+uniform float uShapeOn, uShapeLod, uShapeTone, uShapeWindow, uShapeGate;
+uniform sampler2D uShapes;
 uniform int uMark;
 uniform float uScale, uClearFeather, uClearShape, uOrder;
 // Text order by rows: each word's first glyph index and length, and how many words there are (0 reads the charset as one stream).
@@ -281,6 +284,13 @@ vec3 generated(vec2 uv,float aspect){
   }
   return vec3(0.);
 }
+// The source's brightness to the field's tone: levels, contrast and brightness, gamma, invert.
+float transfer(float tone){
+  tone=clamp((tone-uLevels.x)/max(uLevels.y-uLevels.x,.01),0.,1.);
+  tone=clamp((tone-.5)*uContrast+.5+uBrightness,0.,1.);
+  tone=pow(tone,1./uGamma);
+  return uInvert>.5?1.-tone:tone;
+}
 // Hover scope: 1 where the pointer response may act. The map holds the source's soft subject coverage in alpha.
 float hoverScope(vec2 uv){
   if(uScopeMode<.5||uScene!=0)return 1.;
@@ -330,20 +340,29 @@ void main(){
     else spot=exp(-q2*1.6)*uLight.z*min(1.,uLightGain*1.6)*hs;
   }
   vec3 rgb,glow=vec3(0.);
+  float sub[15];float subMean=-1.,subLo=0.,subHi=0.;
   if(uScene==0){
     vec2 s=sampleAt*uSourceMap.xy+uSourceMap.zw;
     bool inside=!(s.x<0.||s.y<0.||s.x>1.||s.y>1.);
     rgb=inside?textureLod(uSource,s,uLod).rgb:vec3(0.);
+    if(uShapeOn>.5){
+      vec2 cu=uCell/uResolution;
+      subMean=0.;subLo=1.;subHi=0.;
+      for(int j=0;j<5;j++)for(int i=0;i<3;i++){
+        vec2 o=(vec2((float(i)+.5)/3.,(float(j)+.5)/5.)-.5)*cu,ss=(sampleAt+o)*uSourceMap.xy+uSourceMap.zw;
+        float v=(ss.x<0.||ss.y<0.||ss.x>1.||ss.y>1.)?transfer(0.):transfer(dot(textureLod(uSource,ss,uShapeLod).rgb,vec3(.2126,.7152,.0722)));
+        sub[j*3+i]=v;subMean+=v;subLo=min(subLo,v);subHi=max(subHi,v);
+      }
+      subMean/=15.;
+    }
     if(uBackdrop>0.){
       vec2 b=(uv-vec2(fluid.x/aspect,-fluid.y)*uRefraction*bend*.5)*uSourceMap.xy+uSourceMap.zw;
       glow=(b.x<0.||b.y<0.||b.x>1.||b.y>1.)?vec3(0.):textureLod(uSource,b,uLod+3.).rgb*uBackdrop;
     }
   } else rgb=generated(sampleAt,aspect);
-  float tone=dot(rgb,vec3(.2126,.7152,.0722));
-  tone=clamp((tone-uLevels.x)/max(uLevels.y-uLevels.x,.01),0.,1.);
-  tone=clamp((tone-.5)*uContrast+.5+uBrightness,0.,1.);
-  tone=pow(tone,1./uGamma);
-  if(uInvert>.5)tone=1.-tone;
+  float tone=transfer(dot(rgb,vec3(.2126,.7152,.0722)));
+  // Shape sampling takes its tone from its parts, so the character's ink matches the cell's.
+  if(subMean>=0.)tone=subMean;
   float flick=0.,trailFold=0.;
   // Reveal: under the spot the characters take the source's own colour and a little more ink.
   if(spot>0.)lift=spot*.22;
@@ -403,6 +422,22 @@ void main(){
   if(uBlend>.5&&tone>.02&&tone<.98){
     ivec2 q=ivec2(mod(gl_FragCoord.xy,4.));
     upper=fract(level)>(BAYER[q.y*4+q.x]+.5)/16.?1.:0.;
+  }
+  if(subMean>=0.&&uOrder<.5&&tone>.008){
+    // Shape: among the characters near the cell's tone, the one whose ink in each part best matches the cell's parts after the
+    // hovers' lift. Each glyph's ink is scaled to its place on the ramp, so shape decides among glyphs and the ramp keeps the tone.
+    float n=uCount-1.,d=tone-subMean,best=1e9,c0=floor(tone*n+.5);
+    upper=0.;
+    level=c0;
+    // A cell without an edge in it keeps the character its tone gives: shape only decides where there is shape to follow.
+    if(subHi-subLo>=uShapeGate)for(int k=-6;k<=6;k++){
+      float g=c0+float(k);
+      if(abs(float(k))>uShapeWindow||g<1.||g>n)continue;
+      float r=g/n,scale=r/max(texelFetch(uShapes,ivec2(15,int(g)),0).r,.004),e=0.;
+      for(int i=0;i<15;i++){float q=clamp(sub[i]+d,0.,1.)-texelFetch(uShapes,ivec2(i,int(g)),0).r*scale;e+=q*q;}
+      e=e/15.+uShapeTone*(tone-r)*(tone-r);
+      if(e<best){best=e;level=g;}
+    }
   }
   float index=min(uCount-1.,floor(level)+upper+(flick>.5&&tone>.02?1.:0.));
   if(uOrder>1.5){
