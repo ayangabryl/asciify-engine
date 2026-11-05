@@ -1,0 +1,326 @@
+[
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 3.1,
+  "mainMaxMs": 9.3,
+  "totalMs": 225
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 8,
+  "mainMaxMs": 10.4,
+  "totalMs": 197
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 0.8,
+  "mainMaxMs": 5.2,
+  "totalMs": 193.2
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 3.5,
+  "mainMaxMs": 19,
+  "totalMs": 178.4
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 160
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 12,
+  "mainMs": 0.6,
+  "mainMaxMs": 1.5,
+  "totalMs": 309.7
+ },
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 3.1,
+  "mainMaxMs": 11.6,
+  "totalMs": 211.9
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 5.3,
+  "mainMaxMs": 12.2,
+  "totalMs": 225.3
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 1.4,
+  "mainMaxMs": 6.4,
+  "totalMs": 240.4
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 1.9,
+  "mainMaxMs": 5.2,
+  "totalMs": 226.9
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.3,
+  "totalMs": 185.3
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 4,
+  "mainMs": 0.8,
+  "mainMaxMs": 1.6,
+  "totalMs": 331.3
+ },
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 3.9,
+  "mainMaxMs": 5.2,
+  "totalMs": 275
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 8.7,
+  "mainMaxMs": 17.2,
+  "totalMs": 266.4
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 3,
+  "mainMaxMs": 10.3,
+  "totalMs": 264.7
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 0.9,
+  "mainMaxMs": 10.2,
+  "totalMs": 248.4
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 158.3
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 1920,
+  "height": 1080,
+  "cell": 1,
+  "mainMs": 0.7,
+  "mainMaxMs": 1.5,
+  "totalMs": 311.2
+ },
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 5.1,
+  "mainMaxMs": 9.4,
+  "totalMs": 847.3
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 5.5,
+  "mainMaxMs": 11.7,
+  "totalMs": 802
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 4.5,
+  "mainMaxMs": 5.5,
+  "totalMs": 764.9
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 4.5,
+  "mainMaxMs": 12.1,
+  "totalMs": 871.7
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 715.1
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 12,
+  "mainMs": 0.7,
+  "mainMaxMs": 1.1,
+  "totalMs": 1182.8
+ },
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 7.3,
+  "mainMaxMs": 11.7,
+  "totalMs": 879.7
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 7.6,
+  "mainMaxMs": 14,
+  "totalMs": 871.5
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 7.1,
+  "mainMaxMs": 14.4,
+  "totalMs": 929.4
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 5.2,
+  "mainMaxMs": 12.4,
+  "totalMs": 975.1
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 659.5
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 4,
+  "mainMs": 0.9,
+  "mainMaxMs": 1.1,
+  "totalMs": 1365.7
+ },
+ {
+  "name": "asciify-engine field (fluid hover, photo charset)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 5.6,
+  "mainMaxMs": 10.3,
+  "totalMs": 883.1
+ },
+ {
+  "name": "asciify-engine field (fluid hover, subject scope)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 7.9,
+  "mainMaxMs": 10,
+  "totalMs": 964
+ },
+ {
+  "name": "asciify-engine field (shape sampling, fluid hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 5.1,
+  "mainMaxMs": 9.2,
+  "totalMs": 999.5
+ },
+ {
+  "name": "asciify-engine field (no hover)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 6,
+  "mainMaxMs": 9,
+  "totalMs": 1010.7
+ },
+ {
+  "name": "2025.unseen.co ASCII pass (rebuilt)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 0.1,
+  "mainMaxMs": 0.2,
+  "totalMs": 691
+ },
+ {
+  "name": "webgl-ascii-hero (vendored)",
+  "width": 3840,
+  "height": 2160,
+  "cell": 1,
+  "mainMs": 0.9,
+  "mainMaxMs": 1.7,
+  "totalMs": 1387.9
+ }
+]

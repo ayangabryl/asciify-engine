@@ -91,7 +91,32 @@ constants were tuned on the 20 training photos, line art and type; the photo sco
 
 `node bench/perf.mjs` draws a live source (a canvas repainted every frame, standing in for a playing video) at 1920×1080 and
 3840×2160 device pixels with 12, 4 and 1 px cells, the pointer moving every frame, and times each frame from the repaint to the
-result being finished on the GPU, less an idle frame. See the section below for the numbers.
+result being finished on the GPU, less an idle frame. Each cell is the median frame in ms / the slowest main-thread frame in
+ms, in Chromium with SwiftShader (the GPU emulated on the CPU), November 5, 2026. Raw numbers:
+[2026-11-05-frame-cost.json](2026-11-05-frame-cost.json).
+
+| | 1080p 12 px | 1080p 4 px | 1080p 1 px | 4K 12 px | 4K 4 px | 4K 1 px |
+| --- | --- | --- | --- | --- | --- | --- |
+| asciify-engine field, no hover | 178 / 19 | 227 / 5.2 | 248 / 10.2 | 872 / 12.1 | 975 / 12.4 | 1011 / 9 |
+| asciify-engine field, fluid hover | 225 / 9.3 | 212 / 11.6 | 275 / 5.2 | 847 / 9.4 | 880 / 11.7 | 883 / 10.3 |
+| asciify-engine field, `sample: 'shape'`, fluid hover | 193 / 5.2 | 240 / 6.4 | 265 / 10.3 | 765 / 5.5 | 929 / 14.4 | 1000 / 9.2 |
+| asciify-engine field, fluid hover, `scope: 'subject'` | 197 / 10.4 | 225 / 12.2 | 266 / 17.2 | 802 / 11.7 | 872 / 14 | 964 / 10 |
+| 2025.unseen.co ASCII pass (its fluid trail left out) | 160 / 0.2 | 185 / 0.3 | 158 / 0.2 | 715 / 0.2 | 660 / 0.2 | 691 / 0.2 |
+| webgl-ascii-hero | 310 / 1.5 | 331 / 1.6 | 311 / 1.5 | 1183 / 1.1 | 1366 / 1.1 | 1388 / 1.7 |
+
+- **Main thread: no stalls.** Before this release a playing source read a canvas copy back on the CPU to measure its levels
+  and hover scope; at 1080p that blocked frames for up to 76 ms (and every frame with `scope: 'subject'`). Those reads now come
+  back from the GPU without waiting, and the slowest main-thread frame above is 5 to 19 ms under emulation, where the field's
+  copy to its canvas also runs on the CPU. The studio shaders draw straight into their own canvas and do less on the main
+  thread (0.1 to 1.7 ms).
+- **GPU work:** the field asks for about 1.1 to 1.6 times the work of the bare 2025.unseen.co pass, which samples one pixel per
+  cell with no hover (its fluid trail is left out of the rebuild), and 0.6 to 0.85 times webgl-ascii-hero's. The field also
+  averages each cell, runs the fluid, and copies each frame to the field's own canvas, which is what lets every field on a page
+  share one WebGL context.
+- **Big hovers cost the same as small ones:** the fluid runs on a fixed grid whatever its radius, and each cell reads it once.
+  Shape sampling adds little at 12 px cells and nothing below 8 device px, where it samples as `area`.
+- Emulated times compare the work asked for; they say nothing about a real GPU's speed, which was not measured.
+
 
 ## cloudflare.com's dot hero
 
