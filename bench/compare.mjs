@@ -15,7 +15,9 @@ const columns = Number(arg('--columns', 100));
 const imageDir = arg('--images', null);
 const only = arg('--only', null);
 
-const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, logLevel: 'error' });
+// The vendored hero keeps its effect class and glyph atlas private; the build exposes them without editing the file.
+const exposeHero = { name: 'expose-hero', setup(b) { b.onLoad({ filter: /webgl-ascii-hero[\\/]ascii-effect\.tsx$/ }, async args => ({ contents: `${await fs.readFile(args.path, 'utf8')}\nexport { AsciiEffectImpl, createGlyphTexture, TERMINAL_SYMBOLS }\n`, loader: 'tsx' })); } };
+const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero], logLevel: 'error' });
 const pictures = [{ name: 'motion-still (photo)', url: '/img/motion-still.jpg', file: path.join(here, '../tests/fixtures/motion-still.jpg') }];
 if (imageDir) for (const file of (await fs.readdir(imageDir)).filter(f => /\.(jpe?g|png|webp)$/i.test(f)).sort()) pictures.push({ name: file.replace(/\.\w+$/, ''), url: `/img/${file}`, file: path.join(imageDir, file) });
 const files = new Map(pictures.map(p => [p.url, p.file]));
@@ -32,6 +34,8 @@ await page.goto(`http://127.0.0.1:${server.address().port}/`);
 await page.waitForFunction(() => window.bench);
 if (arg('--dump', null)) await page.evaluate(() => { window.dump = true; });
 if (arg('--tune', null)) await page.evaluate(tune => { window.tune = tune; }, JSON.parse(arg('--tune', '{}')));
+if (arg('--field', null)) await page.evaluate(o => { window.fieldOptions = o; }, JSON.parse(arg('--field', '{}')));
+if (arg('--pixels-only', null)) await page.evaluate(only => { for (const k of Object.keys(window.bench.PIXEL_RENDERERS)) if (!k.includes(only)) delete window.bench.PIXEL_RENDERERS[k]; for (const k of Object.keys(window.bench.TEXT_RENDERERS)) delete window.bench.TEXT_RENDERERS[k]; }, arg('--pixels-only', ''));
 
 const results = { columns, renderer: await page.evaluate(() => { const g = document.createElement('canvas').getContext('webgl2'); const i = g.getExtension('WEBGL_debug_renderer_info'); return g.getParameter(i ? i.UNMASKED_RENDERER_WEBGL : g.RENDERER); }), pictures: [] };
 const sets = [...pictures.map(p => ({ name: p.name, kind: 'url', url: p.url })), { name: 'synthetic lines', kind: 'lines' }, { name: 'synthetic text', kind: 'text' }];

@@ -15,7 +15,9 @@ import { toAsciiGrid } from '../src/headless.ts';
 import { drawing as asciiRestDrawing } from 'ascii.rest/kit';
 import { tuneHeadless } from '../src/headless/grid.ts';
 import { asciiText } from '../src/core.ts';
-import { mountGlyphField } from '../src/field.ts';
+import { mountGlyphField, FIELD_PHOTO_CHARSET } from '../src/field.ts';
+// webgl-ascii-hero's effect (vendor/, unchanged); compare.mjs's build exposes its class and glyph atlas.
+import { AsciiEffectImpl as HeroAscii, createGlyphTexture as heroGlyphs, TERMINAL_SYMBOLS as HERO_SYMBOLS } from './vendor/webgl-ascii-hero/ascii-effect.tsx';
 
 const FONT = '"DejaVu Sans Mono"';
 const FONT_SIZE = 12;
@@ -162,10 +164,80 @@ export const PIXEL_RENDERERS = {
     const copy = resized(out, w, h); out.remove();
     return copy;
   },
+  // A studio-style WebGL hero: a postprocessing pass that samples one pixel per square cell and picks from a 16-glyph atlas.
+  // As shipped (inverted, purple tint, contrast 1.8) and neutral (white glyphs on dark, the same grid as everyone else).
+  ...Object.fromEntries([['as shipped', { invert: true, tintColor: new THREE.Vector3(0x91 / 255, 0x7a / 255, 1), volumeShading: true, postfx: { contrastAdjust: 1.8, brightnessAdjust: 0 } }],
+    ['neutral', { invert: false, tintColor: new THREE.Vector3(1, 1, 1), volumeShading: false, postfx: {} }]].map(([label, o]) => [`webgl-ascii-hero (${label})`, async (picture, w, h, columns) => {
+    const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+    renderer.setSize(w, h, false);
+    const texture = new THREE.CanvasTexture(picture); texture.colorSpace = THREE.SRGBColorSpace;
+    const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: texture })));
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const atlas = heroGlyphs(HERO_SYMBOLS);
+    composer.addPass(new EffectPass(camera, new HeroAscii({ cellSize: w / columns, color: true, style: 0, resolution: new THREE.Vector2(w, h), glyphAtlas: atlas, glyphTiles: HERO_SYMBOLS.length, ...o })));
+    composer.render(1 / 60);
+    const out = resized(renderer.domElement, w, h);
+    composer.dispose(); renderer.dispose();
+    return out;
+  }])),
+  // 2025.unseen.co's ASCII pass, rebuilt from the shader and settings in its live bundle (js-265ae611.js): one pixel sampled per
+  // square cell, greyscaled, a character chosen by floor((count - 1) * grey) from " .,-+=*UNSEEN2025" drawn in 56px Arial into a
+  // 16 by 16 atlas, in #575757 (no cursor fluid here). As shipped, and neutral (white glyphs, the same grid as everyone else).
+  ...Object.fromEntries([['as shipped', [0x57 / 255, 0x57 / 255, 0x57 / 255]], ['neutral', [1, 1, 1]]].map(([label, color]) => [`2025.unseen.co ASCII pass (${label})`, async (picture, w, h, columns) => {
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
+    const atlas = document.createElement('canvas'); atlas.width = atlas.height = 1024;
+    const a = atlas.getContext('2d'), chars = ' .,-+=*UNSEEN2025', tile = 64;
+    a.font = '56px arial'; a.textAlign = 'center'; a.textBaseline = 'middle'; a.fillStyle = '#fff';
+    for (let i = 0; i < chars.length; i++) a.fillText(chars[i], (i % 16) * tile + tile / 2, Math.floor(i / 16) * tile + tile / 2);
+    const compile = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, `#version 300 es
+      out vec2 vUv; void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2. - 1., 0., 1.); }`));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, `#version 300 es
+      precision highp float; in vec2 vUv; out vec4 o;
+      uniform sampler2D tDiffuse, uCharacters; uniform float uCharactersCount, uCellSize; uniform vec3 uColor; uniform vec2 uResolutionNoDpr;
+      const vec2 SIZE = vec2(16.);
+      void main(){
+        vec2 cell = uResolutionNoDpr / uCellSize; vec2 grid = 1.0 / cell;
+        vec2 pixelizedUV = grid * (0.5 + floor(vUv / grid));
+        vec4 pixelized = texture(tDiffuse, pixelizedUV);
+        float greyscaled = dot(pixelized.rgb, vec3(0.299, 0.587, 0.114));
+        float characterIndex = floor((uCharactersCount - 1.0) * greyscaled);
+        vec2 characterPosition = vec2(mod(characterIndex, SIZE.x), floor(characterIndex / SIZE.y));
+        vec2 offset = vec2(characterPosition.x, -characterPosition.y) / SIZE;
+        vec2 charUV = mod(vUv * (cell / SIZE), 1.0 / SIZE) - vec2(0., 1.0 / SIZE) + offset;
+        o = vec4(uColor * texture(uCharacters, charUV).r, 1.);
+      }`));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    // The atlas repeats, as its CanvasTexture does there: the glyph lookup runs below zero and wraps.
+    const tex = (img, unit, wrap) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap); return t; };
+    tex(resized(picture, w, h), 0, gl.CLAMP_TO_EDGE); tex(atlas, 1, gl.REPEAT);
+    const u = n => gl.getUniformLocation(prog, n);
+    gl.uniform1i(u('tDiffuse'), 0); gl.uniform1i(u('uCharacters'), 1); gl.uniform1f(u('uCharactersCount'), chars.length);
+    gl.uniform1f(u('uCellSize'), w / columns); gl.uniform3f(u('uColor'), ...color); gl.uniform2f(u('uResolutionNoDpr'), w, h);
+    gl.viewport(0, 0, w, h); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const out = resized(canvas, w, h); gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return out;
+  }])),
+  'asciify-engine glyph field (GPU, photo charset)': async (picture, w, h, columns) => {
+    const host = document.createElement('canvas'); host.style.cssText = `display:block;width:${w}px;height:${h}px;position:fixed;left:0;top:0`;
+    document.body.appendChild(host);
+    const field = mountGlyphField(host, { source: picture, hover: 'none', cellSize: (w / columns) * CELL_ASPECT, cellAspect: 1 / CELL_ASPECT, maxPixelRatio: 1, ink: '#ffffff', drift: 0, scene: 'none', font: 'DejaVu Sans Mono', charset: FIELD_PHOTO_CHARSET, glyphScale: 1 });
+    await field.ready; field.redraw();
+    const out = resized(host, w, h);
+    field.destroy(); host.remove();
+    return out;
+  },
   'asciify-engine glyph field (GPU)': async (picture, w, h, columns) => {
     const host = document.createElement('canvas'); host.style.cssText = `display:block;width:${w}px;height:${h}px;position:fixed;left:0;top:0`;
     document.body.appendChild(host);
-    const field = mountGlyphField(host, { source: picture, hover: 'none', cellSize: (w / columns) * CELL_ASPECT, cellAspect: 1 / CELL_ASPECT, maxPixelRatio: 1, ink: '#ffffff', drift: 0, scene: 'none', font: 'DejaVu Sans Mono' });
+    const field = mountGlyphField(host, { source: picture, hover: 'none', cellSize: (w / columns) * CELL_ASPECT, cellAspect: 1 / CELL_ASPECT, maxPixelRatio: 1, ink: '#ffffff', drift: 0, scene: 'none', font: 'DejaVu Sans Mono', ...(window.fieldOptions ?? {}) });
     await field.ready; field.redraw();
     const out = resized(host, w, h);
     field.destroy(); host.remove();

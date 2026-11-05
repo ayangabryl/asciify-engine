@@ -57,6 +57,51 @@ settings" are `dither: 'ordered'` with each frame given the previous one (`previ
 Not measured: TheZoraiz/ascii-image-converter, a popular Go command-line converter, could not be run in the environment the
 benchmark was made in (an unvetted downloaded binary).
 
+## Studio heroes: 2025.unseen.co and an open-source WebGL hero
+
+Big design sites draw their ASCII heroes with a WebGL shader. Two are measured here against asciify-engine's GPU field, on the
+same 20 unseen photos, line art and type:
+
+- **2025.unseen.co** (Unseen Studio): its ASCII pass, rebuilt in `bench/page.js` from the shader and settings in its live bundle
+  (`js-265ae611.js`): one pixel sampled per 12 px square cell, greyscaled, a character picked by brightness from
+  `" .,-+=*UNSEEN2025"` (56 px Arial in a 16 by 16 atlas), in `#575757`, with a fluid trail under the cursor (left out here).
+- **webgl-ascii-hero** (open source, MIT, a React Three Fiber + postprocessing hero): its effect run unchanged from
+  `bench/vendor/`, which samples one pixel per square cell and picks from a 16-character atlas.
+
+Each is scored as shipped and "neutral" (white characters on dark, the same grid as everyone else); neutral is the fair one.
+
+| | Photos (close / far) | Line art | Type |
+| --- | --- | --- | --- |
+| asciify-engine field, `FIELD_PHOTO_CHARSET`, `glyphScale: 1` | **0.579 / 0.917** | **0.783 / 0.889** | 0.875 / **0.954** |
+| asciify-engine field, defaults (tuned for interfaces) | 0.410 / 0.874 | 0.736 / 0.847 | 0.840 / 0.876 |
+| 2025.unseen.co ASCII pass, neutral | 0.535 / 0.811 | 0.759 / 0.674 | 0.870 / 0.814 |
+| 2025.unseen.co ASCII pass, as shipped (grey `#575757` characters) | 0.315 / 0.351 | 0.662 / 0.448 | 0.790 / 0.662 |
+| webgl-ascii-hero, neutral | 0.483 / 0.647 | 0.772 / 0.688 | **0.885** / 0.842 |
+| webgl-ascii-hero, as shipped (inverted, purple) | 0.499 / 0.664 | 0.727 / 0.586 | 0.800 / 0.688 |
+
+Both studio shaders choose a character by brightness alone from one sampled pixel, so they alias and do not follow edges; the
+field averages each cell and, with the measured 24-step charset, holds more of the picture at both distances. The one place it
+is behind is type up close against webgl-ascii-hero (0.875 against 0.885). Smoothness is the same kind for all three: one
+WebGL pass per frame on the GPU (frame times on a real GPU were not measured here).
+
+## cloudflare.com's dot hero
+
+cloudflare.com's home hero ("Build without boundaries") is not drawn live: its field of small ticks with a warm glow is a
+pre-rendered video, `static/hero-background-video.mp4` (2560 by 1600, 8 s, **5.08 MB**), behind a 17.8 kB AVIF poster. The page
+compiles no WebGL shaders for it.
+
+`bench/cf-hero.mjs` draws the same hero live with asciify-engine's glyph field: one tick character per cell on a 9 by 17 grid,
+coloured by the orange ground and glow beneath it, each tick lifted toward white by a four-line custom effect
+(`defineFieldEffect`). Scored against a frame of their video at 1280 by 800, it is near-identical at a distance (SSIM **0.998**;
+mean colour 255, 97, 34 against their 253, 97, 32). Close up the score is low (about 0.35) because a grid of ticks shifted by
+part of a cell scores badly pixel for pixel; it is the same pattern, not the same pixels.
+
+| | cloudflare.com (video) | asciify-engine (live field) |
+| --- | --- | --- |
+| Bytes for the hero | 5.08 MB video + 17.8 kB poster | 43 kB gzipped field code, no media |
+| Resolution | fixed 2560 by 1600, scaled to fit | drawn at the screen's own resolution |
+| Interaction, theme, reduced motion | none (a loop) | cursor responses, CSS-token ink, stills under reduced motion |
+
 ## Pixel renderers (GPU and canvas)
 
 These draw pixels rather than text, each in its own font, so they are scored on what they drew (same metric), photos:

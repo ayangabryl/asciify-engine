@@ -10,6 +10,8 @@ node compare.mjs [--images dir] [--out results.json] [--dump dir]   # fidelity, 
 node size.mjs                                                         # bundle size, Node support (after npm run build)
 node three-live.mjs [--shot file.png]                                 # a three.js scene as a live field source
 node tune.mjs tunes.json [--images dir]                               # parameter search for the headless renderer
+node cf-hero.mjs <their-frame.png> [--out ours.png]                    # cloudflare.com's dot hero, rebuilt live and scored
+node cf-section.mjs <out.png>                                          # the same hero on a phone, from a screenshot
 ```
 
 Needs Playwright's Chromium and DejaVu Sans Mono. `page.js` holds the renderers, the scoring (SSIM after a viewing-distance

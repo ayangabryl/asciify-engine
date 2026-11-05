@@ -5,7 +5,9 @@ import { createRequire } from 'node:module'; import { fileURLToPath } from 'node
 const here = path.dirname(fileURLToPath(import.meta.url)); const require = createRequire(import.meta.url); const { chromium } = require('playwright');
 const arg = (n, f) => { const i = process.argv.indexOf(n); return i < 0 ? f : process.argv[i + 1]; };
 const tunes = JSON.parse(await fs.readFile(process.argv[2], 'utf8'));
-const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], logLevel: 'error' });
+// The vendored hero keeps its effect class and glyph atlas private; the build exposes them without editing the file.
+const exposeHero = { name: 'expose-hero', setup(b) { b.onLoad({ filter: /webgl-ascii-hero[\\/]ascii-effect\.tsx$/ }, async args => ({ contents: `${await fs.readFile(args.path, 'utf8')}\nexport { AsciiEffectImpl, createGlyphTexture, TERMINAL_SYMBOLS }\n`, loader: 'tsx' })); } };
+const bundle = await build({ entryPoints: [path.join(here, 'page.js')], bundle: true, format: 'esm', write: false, nodePaths: [path.join(here, 'node_modules')], loader: { '.ts': 'ts' }, jsx: 'automatic', plugins: [exposeHero], logLevel: 'error' });
 const files = new Map([['/img/0.jpg', path.join(here, '../tests/fixtures/motion-still.jpg')]]);
 const dir = arg('--images', null);
 if (dir) (await fs.readdir(dir)).filter(f => /\.(jpe?g|png|webp)$/i.test(f)).sort().slice(0, Number(arg('--max', 8))).forEach((f, i) => files.set(`/img/${i + 1}${path.extname(f)}`, path.join(dir, f)));

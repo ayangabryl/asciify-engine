@@ -74,6 +74,36 @@
      "far": 0.8408,
      "farCode": 0.9004
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4894,
+     "closeCode": 0.2629,
+     "far": 0.6934,
+     "farCode": 0.3289
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.398,
+     "closeCode": 0.1726,
+     "far": 0.6163,
+     "farCode": 0.2132
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.236,
+     "closeCode": 0.0959,
+     "far": 0.2945,
+     "farCode": 0.1139
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.503,
+     "closeCode": 0.2455,
+     "far": 0.837,
+     "farCode": 0.3366
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.6117,
+     "closeCode": 0.4948,
+     "far": 0.9495,
+     "farCode": 0.7982
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3556,
      "closeCode": 0.2395,
@@ -153,6 +183,36 @@
      "closeCode": 0.4103,
      "far": 0.5849,
      "farCode": 0.6875
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.3191,
+     "closeCode": 0.2087,
+     "far": 0.5754,
+     "farCode": 0.2835
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.2251,
+     "closeCode": 0.1177,
+     "far": 0.3825,
+     "farCode": 0.1341
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.1651,
+     "closeCode": 0.1057,
+     "far": 0.1844,
+     "farCode": 0.1074
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4972,
+     "closeCode": 0.2234,
+     "far": 0.7921,
+     "farCode": 0.2637
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5055,
+     "closeCode": 0.5959,
+     "far": 0.8717,
+     "farCode": 0.8759
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3842,
@@ -234,6 +294,36 @@
      "far": 0.8818,
      "farCode": 0.88
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4987,
+     "closeCode": 0.2813,
+     "far": 0.7319,
+     "farCode": 0.3776
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.4536,
+     "closeCode": 0.208,
+     "far": 0.7057,
+     "farCode": 0.2673
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2278,
+     "closeCode": 0.0987,
+     "far": 0.3079,
+     "farCode": 0.128
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4663,
+     "closeCode": 0.2433,
+     "far": 0.8261,
+     "farCode": 0.3662
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5926,
+     "closeCode": 0.4606,
+     "far": 0.9548,
+     "farCode": 0.8051
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3138,
      "closeCode": 0.2034,
@@ -313,6 +403,36 @@
      "closeCode": 0.8139,
      "far": 0.9279,
      "farCode": 0.9413
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.7789,
+     "closeCode": 0.7159,
+     "far": 0.8164,
+     "farCode": 0.7115
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.8532,
+     "closeCode": 0.7482,
+     "far": 0.9115,
+     "farCode": 0.746
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.703,
+     "closeCode": 0.6726,
+     "far": 0.6687,
+     "farCode": 0.6409
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.8004,
+     "closeCode": 0.7206,
+     "far": 0.8935,
+     "farCode": 0.7283
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.838,
+     "closeCode": 0.8023,
+     "far": 0.9778,
+     "farCode": 0.9547
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.7483,
@@ -394,6 +514,36 @@
      "far": 0.3831,
      "farCode": 0.461
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.6084,
+     "closeCode": 0.5488,
+     "far": 0.683,
+     "farCode": 0.5546
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.5969,
+     "closeCode": 0.5303,
+     "far": 0.639,
+     "farCode": 0.518
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.543,
+     "closeCode": 0.5154,
+     "far": 0.523,
+     "farCode": 0.4945
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.6563,
+     "closeCode": 0.5524,
+     "far": 0.7805,
+     "farCode": 0.5579
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.6786,
+     "closeCode": 0.6827,
+     "far": 0.8629,
+     "farCode": 0.8152
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.6383,
      "closeCode": 0.6303,
@@ -473,6 +623,36 @@
      "closeCode": 0.596,
      "far": 0.6546,
      "farCode": 0.7064
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.6829,
+     "closeCode": 0.6184,
+     "far": 0.7605,
+     "farCode": 0.6285
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.7505,
+     "closeCode": 0.6228,
+     "far": 0.8221,
+     "farCode": 0.6192
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.6029,
+     "closeCode": 0.5807,
+     "far": 0.5812,
+     "farCode": 0.5562
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.7612,
+     "closeCode": 0.629,
+     "far": 0.8411,
+     "farCode": 0.6353
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.776,
+     "closeCode": 0.765,
+     "far": 0.9449,
+     "farCode": 0.8949
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.7216,
@@ -554,6 +734,36 @@
      "far": 0.9419,
      "farCode": 0.8827
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.3626,
+     "closeCode": 0.1681,
+     "far": 0.4693,
+     "farCode": 0.1932
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.6899,
+     "closeCode": 0.3893,
+     "far": 0.8323,
+     "farCode": 0.4443
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2349,
+     "closeCode": 0.1107,
+     "far": 0.2799,
+     "farCode": 0.1186
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.3928,
+     "closeCode": 0.225,
+     "far": 0.7487,
+     "farCode": 0.3307
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5017,
+     "closeCode": 0.2916,
+     "far": 0.9408,
+     "farCode": 0.7901
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.2061,
      "closeCode": 0.1095,
@@ -633,6 +843,36 @@
      "closeCode": 0.5485,
      "far": 0.8774,
      "farCode": 0.9084
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4003,
+     "closeCode": 0.2471,
+     "far": 0.6482,
+     "farCode": 0.3455
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.362,
+     "closeCode": 0.1516,
+     "far": 0.5624,
+     "farCode": 0.1983
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.187,
+     "closeCode": 0.076,
+     "far": 0.2532,
+     "farCode": 0.1004
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4529,
+     "closeCode": 0.2121,
+     "far": 0.7964,
+     "farCode": 0.2938
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.4609,
+     "closeCode": 0.333,
+     "far": 0.8759,
+     "farCode": 0.6293
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.2995,
@@ -714,6 +954,36 @@
      "far": 0.8068,
      "farCode": 0.8975
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.5518,
+     "closeCode": 0.331,
+     "far": 0.817,
+     "farCode": 0.4144
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.2681,
+     "closeCode": 0.122,
+     "far": 0.4812,
+     "farCode": 0.1574
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2454,
+     "closeCode": 0.101,
+     "far": 0.3175,
+     "farCode": 0.1241
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.5112,
+     "closeCode": 0.2574,
+     "far": 0.8946,
+     "farCode": 0.3528
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.53,
+     "closeCode": 0.4779,
+     "far": 0.9331,
+     "farCode": 0.866
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3251,
      "closeCode": 0.2623,
@@ -793,6 +1063,36 @@
      "closeCode": 0.716,
      "far": 0.8579,
      "farCode": 0.898
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.7642,
+     "closeCode": 0.6745,
+     "far": 0.8602,
+     "farCode": 0.7144
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.6802,
+     "closeCode": 0.5678,
+     "far": 0.7788,
+     "farCode": 0.5729
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.5389,
+     "closeCode": 0.4935,
+     "far": 0.518,
+     "farCode": 0.4722
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.7199,
+     "closeCode": 0.5882,
+     "far": 0.883,
+     "farCode": 0.603
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.7446,
+     "closeCode": 0.7407,
+     "far": 0.9654,
+     "farCode": 0.967
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.6423,
@@ -874,6 +1174,36 @@
      "far": 0.8697,
      "farCode": 0.9056
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4074,
+     "closeCode": 0.2333,
+     "far": 0.6243,
+     "farCode": 0.3201
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.427,
+     "closeCode": 0.1774,
+     "far": 0.6712,
+     "farCode": 0.2264
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2064,
+     "closeCode": 0.0807,
+     "far": 0.2776,
+     "farCode": 0.1075
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.481,
+     "closeCode": 0.2254,
+     "far": 0.7811,
+     "farCode": 0.3144
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5338,
+     "closeCode": 0.3932,
+     "far": 0.9403,
+     "farCode": 0.7551
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3061,
      "closeCode": 0.1834,
@@ -953,6 +1283,36 @@
      "closeCode": 0.5834,
      "far": 0.9183,
      "farCode": 0.8605
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.5193,
+     "closeCode": 0.2861,
+     "far": 0.6626,
+     "farCode": 0.3388
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.6444,
+     "closeCode": 0.3584,
+     "far": 0.8262,
+     "farCode": 0.4184
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2446,
+     "closeCode": 0.118,
+     "far": 0.3067,
+     "farCode": 0.1321
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.3901,
+     "closeCode": 0.2311,
+     "far": 0.7899,
+     "farCode": 0.3682
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.528,
+     "closeCode": 0.3348,
+     "far": 0.9666,
+     "farCode": 0.8591
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.2359,
@@ -1034,6 +1394,36 @@
      "far": 0.8253,
      "farCode": 0.9101
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.5115,
+     "closeCode": 0.3187,
+     "far": 0.7568,
+     "farCode": 0.4121
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.295,
+     "closeCode": 0.1156,
+     "far": 0.522,
+     "farCode": 0.1547
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2072,
+     "closeCode": 0.084,
+     "far": 0.2744,
+     "farCode": 0.1095
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.5392,
+     "closeCode": 0.247,
+     "far": 0.8571,
+     "farCode": 0.3186
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5202,
+     "closeCode": 0.4545,
+     "far": 0.9235,
+     "farCode": 0.7848
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.331,
      "closeCode": 0.2548,
@@ -1113,6 +1503,36 @@
      "closeCode": 0.6086,
      "far": 0.9049,
      "farCode": 0.8699
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.3293,
+     "closeCode": 0.1809,
+     "far": 0.4164,
+     "farCode": 0.2222
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.5143,
+     "closeCode": 0.2794,
+     "far": 0.7486,
+     "farCode": 0.3664
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.1939,
+     "closeCode": 0.0867,
+     "far": 0.24,
+     "farCode": 0.1005
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4369,
+     "closeCode": 0.2173,
+     "far": 0.7142,
+     "farCode": 0.2908
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.4868,
+     "closeCode": 0.3293,
+     "far": 0.9403,
+     "farCode": 0.7987
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.2754,
@@ -1194,6 +1614,36 @@
      "far": 0.8065,
      "farCode": 0.8991
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.5423,
+     "closeCode": 0.3388,
+     "far": 0.7399,
+     "farCode": 0.3988
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.2466,
+     "closeCode": 0.1246,
+     "far": 0.418,
+     "farCode": 0.1563
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2699,
+     "closeCode": 0.1134,
+     "far": 0.3278,
+     "farCode": 0.1277
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4987,
+     "closeCode": 0.2759,
+     "far": 0.8945,
+     "farCode": 0.358
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5428,
+     "closeCode": 0.4733,
+     "far": 0.9287,
+     "farCode": 0.8173
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3219,
      "closeCode": 0.2594,
@@ -1273,6 +1723,36 @@
      "closeCode": 0.5043,
      "far": 0.8664,
      "farCode": 0.876
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4749,
+     "closeCode": 0.2581,
+     "far": 0.7172,
+     "farCode": 0.3563
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.4748,
+     "closeCode": 0.2128,
+     "far": 0.735,
+     "farCode": 0.2821
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2057,
+     "closeCode": 0.0932,
+     "far": 0.2854,
+     "farCode": 0.1231
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4591,
+     "closeCode": 0.2369,
+     "far": 0.8236,
+     "farCode": 0.3551
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5408,
+     "closeCode": 0.4453,
+     "far": 0.9491,
+     "farCode": 0.8126
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3164,
@@ -1354,6 +1834,36 @@
      "far": 0.7051,
      "farCode": 0.7595
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.3953,
+     "closeCode": 0.2567,
+     "far": 0.6522,
+     "farCode": 0.3546
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.3272,
+     "closeCode": 0.1575,
+     "far": 0.5504,
+     "farCode": 0.2096
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.1665,
+     "closeCode": 0.0903,
+     "far": 0.2144,
+     "farCode": 0.111
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4789,
+     "closeCode": 0.2316,
+     "far": 0.8034,
+     "farCode": 0.307
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5127,
+     "closeCode": 0.5144,
+     "far": 0.9137,
+     "farCode": 0.8172
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3572,
      "closeCode": 0.3527,
@@ -1433,6 +1943,36 @@
      "closeCode": 0.8512,
      "far": 0.871,
      "farCode": 0.9318
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.8178,
+     "closeCode": 0.7856,
+     "far": 0.803,
+     "farCode": 0.7481
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.8309,
+     "closeCode": 0.7848,
+     "far": 0.8286,
+     "farCode": 0.7485
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.7831,
+     "closeCode": 0.766,
+     "far": 0.7173,
+     "farCode": 0.7151
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.8749,
+     "closeCode": 0.799,
+     "far": 0.9138,
+     "farCode": 0.7675
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.8707,
+     "closeCode": 0.8778,
+     "far": 0.9579,
+     "farCode": 0.9604
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.8313,
@@ -1514,6 +2054,36 @@
      "far": 0.3703,
      "farCode": 0.5318
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.1703,
+     "closeCode": 0.1305,
+     "far": 0.2414,
+     "farCode": 0.1375
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.1135,
+     "closeCode": 0.0876,
+     "far": 0.1331,
+     "farCode": 0.0821
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.1775,
+     "closeCode": 0.1097,
+     "far": 0.1857,
+     "farCode": 0.1054
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.3292,
+     "closeCode": 0.1748,
+     "far": 0.5804,
+     "farCode": 0.1861
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.3417,
+     "closeCode": 0.4674,
+     "far": 0.5977,
+     "farCode": 0.6831
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3091,
      "closeCode": 0.4565,
@@ -1593,6 +2163,36 @@
      "closeCode": 0.5915,
      "far": 0.8484,
      "farCode": 0.8953
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.4641,
+     "closeCode": 0.2258,
+     "far": 0.6296,
+     "farCode": 0.2833
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.4092,
+     "closeCode": 0.1771,
+     "far": 0.6285,
+     "farCode": 0.2255
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.2183,
+     "closeCode": 0.0858,
+     "far": 0.274,
+     "farCode": 0.1039
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.5072,
+     "closeCode": 0.225,
+     "far": 0.8143,
+     "farCode": 0.3093
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5483,
+     "closeCode": 0.4289,
+     "far": 0.942,
+     "farCode": 0.8001
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3122,
@@ -1674,6 +2274,36 @@
      "far": 0.8872,
      "farCode": 0.897
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.3887,
+     "closeCode": 0.2184,
+     "far": 0.6773,
+     "farCode": 0.3496
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.5025,
+     "closeCode": 0.1997,
+     "far": 0.7613,
+     "farCode": 0.2776
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.1816,
+     "closeCode": 0.0714,
+     "far": 0.2852,
+     "farCode": 0.1159
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.4461,
+     "closeCode": 0.2107,
+     "far": 0.789,
+     "farCode": 0.338
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.5313,
+     "closeCode": 0.4023,
+     "far": 0.9465,
+     "farCode": 0.7646
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.3178,
      "closeCode": 0.1824,
@@ -1753,6 +2383,36 @@
      "closeCode": 0.7745,
      "far": 0.878,
      "farCode": 0.8874
+    },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.727,
+     "closeCode": 0.7338,
+     "far": 0.5858,
+     "farCode": 0.6241
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.7723,
+     "closeCode": 0.7448,
+     "far": 0.6876,
+     "farCode": 0.6536
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.6617,
+     "closeCode": 0.7021,
+     "far": 0.4476,
+     "farCode": 0.5599
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.7587,
+     "closeCode": 0.732,
+     "far": 0.674,
+     "farCode": 0.626
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.7829,
+     "closeCode": 0.7923,
+     "far": 0.8895,
+     "farCode": 0.8877
     },
     "asciify-engine glyph field (GPU)": {
      "close": 0.7361,
@@ -1834,6 +2494,36 @@
      "far": 0.9507,
      "farCode": 0.9621
     },
+    "webgl-ascii-hero (as shipped)": {
+     "close": 0.8004,
+     "closeCode": 0.815,
+     "far": 0.6878,
+     "farCode": 0.7313
+    },
+    "webgl-ascii-hero (neutral)": {
+     "close": 0.8854,
+     "closeCode": 0.845,
+     "far": 0.8421,
+     "farCode": 0.7962
+    },
+    "2025.unseen.co ASCII pass (as shipped)": {
+     "close": 0.7896,
+     "closeCode": 0.8118,
+     "far": 0.6624,
+     "farCode": 0.7307
+    },
+    "2025.unseen.co ASCII pass (neutral)": {
+     "close": 0.8699,
+     "closeCode": 0.8326,
+     "far": 0.8142,
+     "farCode": 0.7734
+    },
+    "asciify-engine glyph field (GPU, photo charset)": {
+     "close": 0.8752,
+     "closeCode": 0.874,
+     "far": 0.9542,
+     "farCode": 0.9383
+    },
     "asciify-engine glyph field (GPU)": {
      "close": 0.8396,
      "closeCode": 0.8328,
@@ -1846,39 +2536,39 @@
  "extras": {
   "naive ramp (agent baseline)": {
    "churn": 4.71,
-   "ms": 27.7
+   "ms": 34.4
   },
   "three.js AsciiEffect": {
    "churn": 7.77,
-   "ms": 244.9
+   "ms": 378.7
   },
   "aalib.js": {
    "churn": 33.92,
-   "ms": 106.5
+   "ms": 429.7
   },
   "ascii.rest (logo)": {
    "churn": 0,
-   "ms": 143.6
+   "ms": 165.9
   },
   "ascii.rest (shade)": {
    "churn": 7.06,
-   "ms": 125.5
+   "ms": 167.1
   },
   "asciify-engine core asciiText (4.32)": {
    "churn": 4.99,
-   "ms": 31.2
+   "ms": 41.5
   },
   "asciify-engine headless, tone": {
    "churn": 23.27,
-   "ms": 16.3
+   "ms": 26
   },
   "asciify-engine headless, shape (video settings)": {
    "churn": 8.18,
-   "ms": 18
+   "ms": 49.2
   },
   "asciify-engine headless, shape": {
    "churn": 24.89,
-   "ms": 17.9
+   "ms": 28
   }
  },
  "note": "20 validation photos from the asciify.org looks library (not used in tuning), the motion-still fixture, and the generated line and type images."

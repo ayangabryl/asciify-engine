@@ -69,6 +69,16 @@ Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; h
 
 `update(options)` merges and rebuilds only what changed (the atlas for type changes, the simulation for resolution changes). `setSource(source)` swaps media. `pointer(x, y)` moves the wake in CSS pixels relative to the canvas (`pointer(null)` lifts it), which is useful for an intro stroke. `redraw()` draws immediately, so you can copy the canvas with `drawImage` in the same task, for example to cross-fade between looks.
 
+## Photos, video and 3D: FIELD_PHOTO_CHARSET (4.33)
+
+For a photo, video or live 3D source, `charset: FIELD_PHOTO_CHARSET, glyphScale: 1` keeps the most of the picture: 24 steps of
+printable ASCII ordered by measured ink. Keep the default charset for calm interface fields.
+
+```ts
+import { mountGlyphField, FIELD_PHOTO_CHARSET } from 'asciify-engine/field';
+mountGlyphField(canvas, { source: '/hero.mp4', charset: FIELD_PHOTO_CHARSET, glyphScale: 1 });
+```
+
 ## Custom effects (4.33, experimental)
 
 When a design needs its own hover, reveal or motion, write it as an effect instead of forking the field. An effect is a few

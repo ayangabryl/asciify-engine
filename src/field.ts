@@ -6,7 +6,7 @@ export type { GlyphField, GlyphFieldOptions, FieldSource, FieldClearElement, Fie
 export { defineFieldEffect, MAX_FIELD_EFFECTS, MAX_EFFECT_PARAMS } from './field/field-effects';
 export type { FieldEffect, FieldEffectSpec, FieldEffectParams } from './field/field-effects';
 export {
-  DEFAULT_FIELD_SETTINGS, DEFAULT_FIELD_FLUID, DEFAULT_FIELD_LANTERN, DEFAULT_FIELD_TRAIL, FIELD_HOVERS, FIELD_MARKS, FIELD_SCENES, activeFieldHover, normalizeFieldSettings, fieldClearFromRects, fieldGlyphs, isWideGlyph, isWideCharset, fieldSourceRect, fieldCellLayout, fieldLevels,
+  FIELD_PHOTO_CHARSET, DEFAULT_FIELD_SETTINGS, DEFAULT_FIELD_FLUID, DEFAULT_FIELD_LANTERN, DEFAULT_FIELD_TRAIL, FIELD_HOVERS, FIELD_MARKS, FIELD_SCENES, activeFieldHover, normalizeFieldSettings, fieldClearFromRects, fieldGlyphs, isWideGlyph, isWideCharset, fieldSourceRect, fieldCellLayout, fieldLevels,
 } from './field/field-model';
 export type { HoverScope as FieldHoverScope } from './surface/hover-guide';
 export type { GlyphFieldSettings, GlyphFieldInput, FieldFluidOptions, FieldLanternOptions, FieldTrailOptions, FieldHover, FieldColor, FieldFit, FieldScene, FieldMark, FieldClearZone } from './field/field-model';

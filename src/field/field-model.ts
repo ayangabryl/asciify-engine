@@ -289,6 +289,13 @@ const hex = (value: unknown, fallback: string) =>
 const SINGLE_CODE_POINTS = /^[\u0020-\u007e\u00a0-\u02ff\u0370-\u0482\u048a-\u052f\u2010-\u20cf\u2100-\u2bff]*$/;
 let segmenter: { segment(input: string): Iterable<{ segment: string }> } | null | undefined;
 /** Splits a charset into graphemes so emoji, block elements and accented letters each take one cell. */
+/**
+ * A 24-step charset for photos, video and 3D scenes in a field: printable ASCII ordered by the ink each character measures in a
+ * monospace font, evenly spaced from empty to dense. With `glyphScale: 1` it keeps the most of a picture, close up and at a
+ * distance (see docs/benchmarks). The default charset stays the calmer one for interface fields.
+ */
+export const FIELD_PHOTO_CHARSET = ' _.,:;*!/<[j7Jy23A#0DRNB';
+
 export function fieldGlyphs(charset: string): string[] {
   if (!SINGLE_CODE_POINTS.test(charset) && segmenter === undefined) {
     const Segmenter = (Intl as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => NonNullable<typeof segmenter> }).Segmenter;
