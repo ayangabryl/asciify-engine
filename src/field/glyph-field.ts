@@ -44,7 +44,7 @@ export interface GlyphFieldOptions extends Omit<GlyphFieldInput, 'clear'> {
   live?: boolean;
 }
 
-export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect' }
+export interface FieldClearElement { element: HTMLElement; padding?: number; feather?: number; shape?: 'ellipse' | 'rect'; pointer?: number }
 
 /**
  * A text-shaped clear map: the field quiets right behind these rects (viewport CSS px, such as text line boxes from
@@ -323,8 +323,9 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
   const pulseUniform = new Float32Array(16);
   const measureClear = () => {
     if (!clearElement) return;
-    const { element, padding = 32, feather = 0.16, shape = 'rect' } = clearElement;
-    const zone = fieldClearFromRects(canvas.getBoundingClientRect(), element.getBoundingClientRect(), padding, feather, shape);
+    const { element, padding = 32, feather = 0.16, shape = 'rect', pointer = 0 } = clearElement;
+    const found = fieldClearFromRects(canvas.getBoundingClientRect(), element.getBoundingClientRect(), padding, feather, shape);
+    const zone = found && pointer > 0 ? { ...found, pointer: Math.min(1, Math.max(0, pointer)) } : found;
     const previous = settings.clear;
     if (JSON.stringify(previous) === JSON.stringify(zone)) return;
     settings = { ...settings, clear: zone };
@@ -974,6 +975,7 @@ export function mountGlyphField(canvas: HTMLCanvasElement, options: GlyphFieldOp
     gl.uniform4f(u.uClear, zone ? zone.x : 0, zone ? zone.y : 0, zone ? zone.width : 0, zone ? zone.height : 0);
     gl.uniform1f(u.uClearFeather, zone ? zone.feather : 0.1);
     gl.uniform1f(u.uClearShape, zone && zone.shape === 'rect' ? 1 : 0);
+    gl.uniform1f(u.uClearPointer, zone ? zone.pointer ?? 0 : 0);
     gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D, clearTexture ?? sourceTexture); gl.uniform1i(u.uClearMap, 8);
     const mapOn = clearOn && !!clearRects && !!clearTexture;
     gl.uniform1f(u.uClearMapOn, mapOn ? Math.min(1, Math.max(0, clearRects!.strength ?? 0.85)) : 0);

@@ -88,7 +88,7 @@ uniform vec2 uLevels;
 uniform float uShapeOn, uShapeLod, uShapeTone, uShapeWindow, uShapeGate;
 uniform sampler2D uShapes;
 uniform int uMark;
-uniform float uScale, uClearFeather, uClearShape, uOrder;
+uniform float uScale, uClearFeather, uClearShape, uOrder, uClearPointer;
 // Text order by rows: each word's first glyph index and length, and how many words there are (0 reads the charset as one stream).
 uniform vec2 uWords[8];
 uniform float uWordCount;
@@ -394,6 +394,8 @@ void main(){
     lift=mix(abs(swirl)*.5+speed,swirl+speed*.35,smoothstep(.12,.55,tone))*(.65+.7*grain);
     wake=clamp(lift*1.6,0.,1.);
   }
+  // The resting tone, before the pointer's response: a clear zone may quiet the one and keep part of the other.
+  float calm=tone;
   tone=clamp(tone+lift,0.,1.);
   tone+=(1.-2.*tone)*trailFold;
   // Pulses: rings sent by the interface (field.pulse()), e.g. on a save or a notification.
@@ -417,7 +419,8 @@ void main(){
     float dz;
     if(uClearShape>.5){vec2 e=abs(q)-half_;dz=length(max(e,0.))+min(max(e.x,e.y),0.);}
     else dz=(length(q/max(half_,vec2(1e-4)))-1.)*min(half_.x,half_.y);
-    tone*=smoothstep(0.,uClearFeather,dz);
+    float keepZone=smoothstep(0.,uClearFeather,dz);
+    tone=calm*keepZone+(tone-calm)*mix(keepZone,1.,uClearPointer);
   }
   // Blend: a shade between two characters takes the upper one in the share of cells a 4x4 Bayer pattern gives it.
   float level=tone*(uCount-1.),upper=fract(level)>=.5?1.:0.;

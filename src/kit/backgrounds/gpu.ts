@@ -55,7 +55,8 @@ export const glyphCells = (s: BackgroundSettings): GlyphFieldOptions => ({
 export const dotCells = (s: BackgroundSettings): GlyphFieldOptions => ({ cellSize: s.cellSize, cellAspect: 1, dotScale: 0.68 });
 
 /** A soft oval in the middle, kept quiet for a headline when no `clear` element is given. */
-export const MIDDLE: FieldClearZone = { x: 0.18, y: 0.2, width: 0.64, height: 0.6, feather: 0.3, shape: 'ellipse' };
+// The pointer's response keeps most of its strength inside the quiet middle, so the background answers where people move.
+export const MIDDLE: FieldClearZone = { x: 0.18, y: 0.2, width: 0.64, height: 0.6, feather: 0.3, shape: 'ellipse', pointer: 0.8 };
 
 export interface ScenePreset {
   id: string; name: string; description: string; cellSize: number; speed?: number; cursor?: boolean; opacity?: number;
@@ -87,9 +88,9 @@ export function scenePreset(spec: ScenePreset): BackgroundPreset {
         return {
           scene, color: 'ink', shade: 0, background: 'transparent', vignette: 0, speed: s.speed, maxPixelRatio: 2, levels: 'none', blend: 'on',
           ...(mark === 'dot' ? { mark: 'dot', ...dotCells(s) } : { mark: 'glyph', charset: s.charset ?? charset, ...glyphCells(s) }),
-          hover: hoverOf(s, hover), lantern: { radius: 0.14, strength: 0.45, trail: 0.8, follow: 9 }, trail: { strength: 0.8, radius: 0.35 },
+          hover: hoverOf(s, hover), lantern: { radius: 0.16, strength: 0.75, trail: 0.9, follow: 9 }, trail: { strength: 1, radius: 0.42 },
           fluid: { radius: 0.09, refraction: 0.03, glow: 0.6 },
-          clear: clearOf(s, { padding: 0, feather, shape: 'ellipse' }, middle),
+          clear: clearOf(s, { padding: 0, feather, shape: 'ellipse', pointer: 0.8 }, middle),
           ...spec.tune?.(s, dark),
         };
       }, graphite, own === 'dot' ? s => ({ ...glyphCells(s), charset }) : undefined);

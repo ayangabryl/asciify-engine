@@ -29,7 +29,11 @@ export type FieldMark = typeof FIELD_MARKS[number];
  * An area the field keeps quiet, so content above it stays readable. Coordinates are fractions of the field,
  * from the top left; `feather` is the soft edge, as a fraction of the field's shorter side.
  */
-export interface FieldClearZone { x: number; y: number; width: number; height: number; feather: number; shape: 'ellipse' | 'rect' }
+/**
+ * A zone the field fades out around content. `pointer` (0 to 1, default 0) is how much of the pointer's response (the wake,
+ * the lantern, the trail, pulses and taps) still shows inside it: the resting field stays quiet there, the hover does not.
+ */
+export interface FieldClearZone { x: number; y: number; width: number; height: number; feather: number; shape: 'ellipse' | 'rect'; pointer?: number }
 /**
  * How the field answers the pointer.
  * - `fluid`: an incompressible fluid that bends the image and swirls the characters. Bold, liquid.
@@ -367,6 +371,7 @@ export function normalizeFieldSettings(input: Omit<GlyphFieldInput, 'clear'> & {
     height: clamp(clearInput.height, 0, 2, 0.4),
     feather: clamp(clearInput.feather, 0.005, 1, 0.12),
     shape: clearInput.shape === 'rect' ? 'rect' : 'ellipse',
+    pointer: clamp(clearInput.pointer, 0, 1, 0),
   };
   return {
     charset,
