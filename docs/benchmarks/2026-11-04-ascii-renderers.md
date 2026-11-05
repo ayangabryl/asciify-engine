@@ -124,13 +124,13 @@ a glyph atlas rather than drawn with `fillText`, and Devault's WebGL draw is not
 
 | Main thread per frame, 1080p | 12 px cells | 7 px cells |
 | --- | --- | --- |
-| **asciify-engine GPU field** (shape sampling, bloom, fluid hover) | **4.2 ms** | **4.5 ms** |
+| **asciify-engine GPU field** (shape sampling, bloom, fluid hover) | **0.9–1.5 ms** | **0.9 ms** (4 px cells) |
 | ASCII Magic (convert + draw) | 125 ms | 299 ms |
 | Devault Classic (convert only) | 364 ms | 272 ms |
 | asciify-engine `imageToAsciiGrid` + atlas draw, tone | 206 ms | 463 ms |
 
 The GPU field does its sampling, shape matching, hover and bloom on the GPU, so its main-thread cost stays flat however small
-the cells; drawing characters one by one on a 2D canvas grows with every cell. On the same 20 photos the field with
+the cells (re-measured after the field stopped re-checking its read-back framebuffer every read: 4.2 ms became about 0.9); drawing characters one by one on a 2D canvas grows with every cell. On the same 20 photos the field with
 `sample: 'shape'` scores 0.618 / 0.922 (line art 0.852 / 0.917, type 0.915 / 0.961), ahead of both generators on every
 measure. GPU time under SwiftShader is not a real GPU's and is not compared.
 
