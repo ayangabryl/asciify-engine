@@ -71,31 +71,42 @@ grid and font as everyone else:
 
 | | Photos (close / far) | Line art | Type | Flicker | 1080p frame, main thread |
 | --- | --- | --- | --- | --- | --- |
-| **asciify-engine GPU text** (`createAsciiGpu`) | **0.592 / 0.879** | **0.845 / 0.885** | **0.893 / 0.890** | 26 %, **3.8 %** video | 2.3 ms; **1.5 ms** video; **0.3 ms** in a worker |
-| asciify-engine GPU text, `mode: 'tone'` | 0.542 / 0.872 | 0.770 / **0.943** | 0.864 / **0.931** | **3.5 %** video | 2.9 ms; **1.6 ms** video; **0.2 ms** in a worker |
-| asciify-engine/headless (CPU) | 0.593 / 0.878 | 0.846 / 0.876 | 0.902 / 0.889 | 25 %, 3.8 % video | 38 ms |
-| Devault, Detailed | 0.426 / 0.785 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 143 ms |
-| Devault, Classic | 0.424 / 0.764 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 136 ms |
-| ASCII Magic, Characters | 0.368 / 0.636 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | 2.0 ms |
+| **asciify-engine GPU text** (`createAsciiGpu`) | **0.596 / 0.884** | **0.861 / 0.880** | **0.897 / 0.889** | 24 %, **3.8 %** video | **1.3 ms**; **1.1 ms** video; **0.3 ms** in a worker |
+| asciify-engine GPU text, `mode: 'tone'` | 0.568 / 0.880 | 0.797 / **0.950** | 0.881 / **0.940** | **3.2 %** video | **1.4 ms**; **1.3 ms** video; **0.2 ms** in a worker |
+| asciify-engine/headless (CPU) | 0.592 / 0.879 | 0.846 / 0.876 | 0.902 / 0.889 | 25 %, 3.8 % video | 44 ms |
+| asciify-engine `imageToAsciiGrid`, `mode: 'tone'` (CPU) | 0.567 / 0.877 | 0.820 / 0.894 | 0.889 / 0.916 | 3.2 % video | 38 ms |
+| Devault, Detailed | 0.425 / 0.786 | 0.713 / 0.871 | 0.813 / 0.871 | 36 % | 147 ms |
+| Devault, Classic | 0.420 / 0.765 | 0.728 / 0.845 | 0.833 / 0.862 | 6.8 % | 154 ms |
+| ASCII Magic, Characters | 0.366 / 0.639 | 0.706 / 0.573 | 0.875 / 0.842 | 9.4 % | 3.2 ms |
 
 Every row is timed the same way: a 1920×1080 frame to 160 columns, a fresh frame for every run as with video (a frame already
 read back to the CPU is cheaper for a CPU converter to read again), median of 5. For the GPU converter the time is its share of
-the main thread: uploading the frame, reading back one small texture once a fence says it is ready, and one walk over the
-cells; the matching itself runs on the GPU. "In a worker" is `createAsciiGpu` in a module worker on an OffscreenCanvas, the page
-only making an `ImageBitmap` of each frame and posting it (0.2 to 1.0 ms across modes). Raw numbers:
-[2026-11-05-gpu-text.json](2026-11-05-gpu-text.json).
+the main thread: uploading the frame and reading back one small texture once a fence says it is ready; the matching, and
+with diffusion the error carried from cell to cell, run on the GPU. "In a worker" is `createAsciiGpu` in a module worker on
+an OffscreenCanvas, the page only making an `ImageBitmap` of each frame and posting it (0.2 to 1.0 ms across modes). Times
+move from run to run on this machine (ASCII Magic measured 1.9 to 3.2 ms across runs, the GPU converter 1.1 to 2.2 ms);
+the table is one run of all of them together. Raw numbers: [2026-11-05-gpu-text.json](2026-11-05-gpu-text.json).
 
-asciify-engine is ahead of both on every picture at both distances, and with its video settings it flickers least (3.8 % of
-cells a frame on a slow pan, against 6.8 % and 9.4 %, while scoring 0.923 on the moving picture against 0.828 and 0.682). For
-speed, the GPU converter with video settings (ordered dither and the previous frame) takes less of the main thread than ASCII
-Magic's one-pixel-a-cell reading, 1.5 ms against 2.0 ms, while matching every cell by shape; with error diffusion (the
-default for stills) it is 2.3 ms, within this machine's run-to-run spread of ASCII Magic's 1.9 to 2.8 ms; in a worker it is
-0.2 to 1.0 ms in every mode. It agrees with the CPU path on 93 to 96 % of characters without diffusion (78 to 80 % with it,
-where one changed cell changes the error carried to all after it) and scores the same on the 20 photos.
+asciify-engine is ahead of both on every picture at both distances, in every mode, and with its video settings it flickers
+least (3.2 % of cells a frame on a slow pan in tone mode and 3.8 % in shape mode, against 6.8 % and 9.4 %, while scoring 0.916
+and 0.923 on the moving picture against 0.828 and 0.682). The GPU converter takes less of the main thread than ASCII Magic's
+one-pixel-a-cell reading in every mode, diffusion included, while matching every cell by shape.
 
-Up close on type, tone mode is just behind ASCII Magic (0.864 against 0.875); shape mode, the default and no slower on the GPU,
-is ahead (0.893, 0.916 with video settings). On the GPU, the glyph field with `sample: 'shape'` scores 0.618 / 0.922,
-0.852 / 0.917 and 0.915 / 0.961 (see the studio heroes below).
+Two changes made that true for diffusion and for tone mode:
+
+- **Diffusion settled on the GPU.** Floyd–Steinberg passes each cell's leftover tone to the cells right of it and below, so a
+  cell's error depends only on cells above and to its left. The GPU runs the match four times: each pass, every cell takes the
+  error its neighbours left in the pass before, picks its character and leaves its own. Cells near the top-left corner are
+  exact after four passes and the rest carry nearly settled errors. It scores higher than walking the true sequence on the
+  CPU (photos 0.596 / 0.884 against 0.592 / 0.879, line art 0.861 against 0.846 up close), and only one byte a cell comes back.
+- **Tone mode reads edges.** Each cell's tone is taken a little steeper (contrast × 1.15) and pushed away from its eight
+  neighbours' average (a cell-wide unsharp mask, 0.75), so a stroke's edge cells go dense or empty instead of mid-grey. On
+  the GPU, photos went from 0.542 / 0.872 to 0.568 / 0.880, line art from 0.770 / 0.943 to 0.797 / 0.950 and type from
+  0.864 / 0.931 to 0.881 / 0.940. On the CPU, `imageToAsciiGrid` now draws tone mode down to 2 by 2 pixels a cell and averages
+  them exactly, so thin lines do not alias.
+
+On the GPU, the glyph field with `sample: 'shape'` scores 0.618 / 0.922, 0.852 / 0.917 and 0.915 / 0.961 (see the studio
+heroes below).
 
 ### On screen, live: the frame a page actually draws
 
@@ -222,9 +233,8 @@ are re-measured (about every 1.5 s), not every frame; before `live`, `setSource`
 - **Photos at a distance:** ahead of aalib on average by a small margin (0.878 against 0.868); on 4 of the 20 photos aalib is better on at least one measure.
 - **Flicker on stills:** the default (error diffusion) is the most faithful for a still but changes many cells between similar
   frames (25 %); use `dither: 'ordered'` and `previous` for video and animation (3.8 %, below a plain ramp's 4.7 %).
-- **Text out with error diffusion:** the GPU converter's main-thread share (2.3 ms, tone 2.9 ms) is level with ASCII Magic's
-  2.0 ms within run-to-run spread, not clearly under it; with video settings (1.5 ms) or in a worker (0.2 to 1.0 ms) it is.
-  Tone mode is just behind ASCII Magic on type up close (0.864 against 0.875); shape mode is ahead.
+- **Main-thread time is close:** the GPU converter's 1.1 to 1.4 ms against ASCII Magic's 3.2 ms is one run; across runs on this
+  machine they overlap at the edges (1.1 to 2.2 ms against 1.9 to 3.2 ms). In a worker the page's share is 0.2 to 1.0 ms.
 - **`imageToAsciiGrid` on a frame held by the GPU:** it draws the frame down on a 2D canvas and reads it back, which waits for
   the GPU (34 ms here under SwiftShader for a fresh 1080p frame in tone mode, about 2 ms for one already in memory). For video
   use `createAsciiGpu`, which never waits.

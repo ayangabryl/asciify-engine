@@ -4,32 +4,242 @@
  "columns": 100,
  "method": "Quality: SSIM after a viewing-distance blur (close 0.5 cell, far 1.5 cells), as in 2026-11-04-ascii-renderers.md. Speed: 1920x1080 to 160 columns, a fresh frame for every run, median of 5; GPU converters report their main-thread share (Chromium with SwiftShader, so GPU time is the CPU emulating it).",
  "quality": {
-  "asciify-engine GPU text": {
+  "Devault ASCII generator (Classic)": {
    "photos (20 held-out)": {
-    "close": 0.592,
+    "close": 0.42,
+    "far": 0.765
+   },
+   "synthetic lines": {
+    "close": 0.728,
+    "far": 0.845
+   },
+   "synthetic text": {
+    "close": 0.833,
+    "far": 0.862
+   }
+  },
+  "Devault ASCII generator (Detailed)": {
+   "photos (20 held-out)": {
+    "close": 0.425,
+    "far": 0.786
+   },
+   "synthetic lines": {
+    "close": 0.713,
+    "far": 0.871
+   },
+   "synthetic text": {
+    "close": 0.813,
+    "far": 0.871
+   }
+  },
+  "ASCII Magic (characters)": {
+   "photos (20 held-out)": {
+    "close": 0.366,
+    "far": 0.639
+   },
+   "synthetic lines": {
+    "close": 0.706,
+    "far": 0.573
+   },
+   "synthetic text": {
+    "close": 0.875,
+    "far": 0.842
+   }
+  },
+  "naive ramp (agent baseline)": {
+   "photos (20 held-out)": {
+    "close": 0.423,
+    "far": 0.751
+   },
+   "synthetic lines": {
+    "close": 0.737,
+    "far": 0.674
+   },
+   "synthetic text": {
+    "close": 0.841,
+    "far": 0.81
+   }
+  },
+  "three.js AsciiEffect": {
+   "photos (20 held-out)": {
+    "close": 0.441,
+    "far": 0.778
+   },
+   "synthetic lines": {
+    "close": 0.718,
+    "far": 0.601
+   },
+   "synthetic text": {
+    "close": 0.874,
+    "far": 0.836
+   }
+  },
+  "aalib.js": {
+   "photos (20 held-out)": {
+    "close": 0.532,
+    "far": 0.868
+   },
+   "synthetic lines": {
+    "close": 0.799,
+    "far": 0.798
+   },
+   "synthetic text": {
+    "close": 0.876,
+    "far": 0.868
+   }
+  },
+  "ascii.rest (logo)": {
+   "photos (20 held-out)": {
+    "close": 0.365,
+    "far": 0.728
+   },
+   "synthetic lines": {
+    "close": 0.746,
+    "far": 0.778
+   },
+   "synthetic text": {
+    "close": 0.805,
+    "far": 0.829
+   }
+  },
+  "ascii.rest (shade)": {
+   "photos (20 held-out)": {
+    "close": 0.416,
+    "far": 0.783
+   },
+   "synthetic lines": {
+    "close": 0.686,
+    "far": 0.847
+   },
+   "synthetic text": {
+    "close": 0.786,
+    "far": 0.846
+   }
+  },
+  "asciify-engine core asciiText (4.32)": {
+   "photos (20 held-out)": {
+    "close": 0.419,
+    "far": 0.727
+   },
+   "synthetic lines": {
+    "close": 0.747,
+    "far": 0.662
+   },
+   "synthetic text": {
+    "close": 0.85,
+    "far": 0.803
+   }
+  },
+  "asciify-engine headless, tone": {
+   "photos (20 held-out)": {
+    "close": 0.51,
+    "far": 0.851
+   },
+   "synthetic lines": {
+    "close": 0.808,
+    "far": 0.893
+   },
+   "synthetic text": {
+    "close": 0.883,
+    "far": 0.895
+   }
+  },
+  "asciify-engine headless, shape (video settings)": {
+   "photos (20 held-out)": {
+    "close": 0.594,
+    "far": 0.877
+   },
+   "synthetic lines": {
+    "close": 0.871,
+    "far": 0.864
+   },
+   "synthetic text": {
+    "close": 0.914,
+    "far": 0.886
+   }
+  },
+  "asciify-engine imageToAsciiGrid": {
+   "photos (20 held-out)": {
+    "close": 0.593,
     "far": 0.879
    },
    "synthetic lines": {
-    "close": 0.845,
-    "far": 0.885
+    "close": 0.846,
+    "far": 0.861
    },
    "synthetic text": {
-    "close": 0.893,
-    "far": 0.89
+    "close": 0.901,
+    "far": 0.885
+   }
+  },
+  "asciify-engine imageToAsciiGrid, tone (fast)": {
+   "photos (20 held-out)": {
+    "close": 0.567,
+    "far": 0.877
+   },
+   "synthetic lines": {
+    "close": 0.82,
+    "far": 0.894
+   },
+   "synthetic text": {
+    "close": 0.889,
+    "far": 0.916
+   }
+  },
+  "asciify-engine imageToAsciiGrid, tone (fast, video)": {
+   "photos (20 held-out)": {
+    "close": 0.567,
+    "far": 0.878
+   },
+   "synthetic lines": {
+    "close": 0.819,
+    "far": 0.894
+   },
+   "synthetic text": {
+    "close": 0.888,
+    "far": 0.916
+   }
+  },
+  "asciify-engine imageToAsciiGrid (video settings)": {
+   "photos (20 held-out)": {
+    "close": 0.595,
+    "far": 0.876
+   },
+   "synthetic lines": {
+    "close": 0.864,
+    "far": 0.849
+   },
+   "synthetic text": {
+    "close": 0.913,
+    "far": 0.881
+   }
+  },
+  "asciify-engine GPU text": {
+   "photos (20 held-out)": {
+    "close": 0.596,
+    "far": 0.884
+   },
+   "synthetic lines": {
+    "close": 0.861,
+    "far": 0.88
+   },
+   "synthetic text": {
+    "close": 0.897,
+    "far": 0.889
    }
   },
   "asciify-engine GPU text, tone": {
    "photos (20 held-out)": {
-    "close": 0.542,
-    "far": 0.872
+    "close": 0.568,
+    "far": 0.88
    },
    "synthetic lines": {
-    "close": 0.77,
-    "far": 0.943
+    "close": 0.797,
+    "far": 0.95
    },
    "synthetic text": {
-    "close": 0.864,
-    "far": 0.931
+    "close": 0.881,
+    "far": 0.94
    }
   },
   "asciify-engine GPU text (video settings)": {
@@ -48,122 +258,136 @@
   },
   "asciify-engine GPU text, tone (video)": {
    "photos (20 held-out)": {
-    "close": 0.542,
-    "far": 0.869
+    "close": 0.568,
+    "far": 0.881
    },
    "synthetic lines": {
-    "close": 0.77,
-    "far": 0.943
+    "close": 0.794,
+    "far": 0.95
    },
    "synthetic text": {
-    "close": 0.864,
-    "far": 0.931
+    "close": 0.879,
+    "far": 0.939
+   }
+  },
+  "asciify-engine headless, shape": {
+   "photos (20 held-out)": {
+    "close": 0.592,
+    "far": 0.879
+   },
+   "synthetic lines": {
+    "close": 0.846,
+    "far": 0.876
+   },
+   "synthetic text": {
+    "close": 0.902,
+    "far": 0.889
    }
   }
  },
  "speed": {
   "Devault ASCII generator (Classic)": {
    "churn": 6.81,
-   "ms": 136.2,
+   "ms": 154,
    "pan": 0.828
   },
   "Devault ASCII generator (Detailed)": {
    "churn": 35.61,
-   "ms": 143,
+   "ms": 146.6,
    "pan": 0.845
   },
   "ASCII Magic (characters)": {
    "churn": 9.37,
-   "ms": 2,
+   "ms": 3.2,
    "pan": 0.682
   },
   "naive ramp (agent baseline)": {
    "churn": 4.71,
-   "ms": 27.9,
+   "ms": 27.1,
    "pan": 0.777
   },
   "three.js AsciiEffect": {
    "churn": 7.77,
-   "ms": 363,
+   "ms": 369.7,
    "pan": 0.78
   },
   "aalib.js": {
    "churn": 33.92,
-   "ms": 145.6,
+   "ms": 240,
    "pan": 0.889
   },
   "ascii.rest (logo)": {
    "churn": 0,
-   "ms": 170.2,
+   "ms": 238.9,
    "pan": 0.75
   },
   "ascii.rest (shade)": {
    "churn": 7.06,
-   "ms": 176.2,
+   "ms": 174.4,
    "pan": 0.855
   },
   "asciify-engine core asciiText (4.32)": {
    "churn": 4.99,
-   "ms": 80.6,
+   "ms": 61.4,
    "pan": 0.766
   },
   "asciify-engine headless, tone": {
-   "churn": 23.24,
-   "ms": 43,
-   "pan": 0.87
+   "churn": 21.95,
+   "ms": 39,
+   "pan": 0.888
   },
   "asciify-engine headless, shape (video settings)": {
    "churn": 3.83,
-   "ms": 42.2,
+   "ms": 49.3,
    "pan": 0.923
   },
   "asciify-engine imageToAsciiGrid": {
-   "churn": 24.82,
-   "ms": 60.9,
+   "churn": 24.79,
+   "ms": 53.8,
    "pan": 0.927
   },
   "asciify-engine imageToAsciiGrid, tone (fast)": {
-   "churn": 48.14,
-   "ms": 34.1,
-   "pan": 0.913
+   "churn": 51.58,
+   "ms": 40.5,
+   "pan": 0.925
   },
   "asciify-engine imageToAsciiGrid, tone (fast, video)": {
-   "churn": 3.5,
-   "ms": 35.6,
-   "pan": 0.908
+   "churn": 3.16,
+   "ms": 37.7,
+   "pan": 0.916
   },
   "asciify-engine imageToAsciiGrid (video settings)": {
    "churn": 3.82,
-   "ms": 54.9,
+   "ms": 52.7,
    "pan": 0.924
   },
   "asciify-engine GPU text": {
-   "churn": 26.03,
-   "ms": 2.3,
-   "totalMs": 462.3,
-   "pan": 0.926
+   "churn": 24.08,
+   "ms": 1.3,
+   "totalMs": 354.6,
+   "pan": 0.927
   },
   "asciify-engine GPU text, tone": {
-   "churn": 49.73,
-   "ms": 2.9,
-   "totalMs": 420.4,
-   "pan": 0.914
+   "churn": 51.62,
+   "ms": 1.4,
+   "totalMs": 243.8,
+   "pan": 0.925
   },
   "asciify-engine GPU text (video settings)": {
    "churn": 3.83,
-   "ms": 1.5,
-   "totalMs": 380.6,
+   "ms": 1.1,
+   "totalMs": 350.6,
    "pan": 0.923
   },
   "asciify-engine GPU text, tone (video)": {
-   "churn": 3.54,
-   "ms": 1.6,
-   "totalMs": 319,
-   "pan": 0.909
+   "churn": 3.17,
+   "ms": 1.3,
+   "totalMs": 245.9,
+   "pan": 0.916
   },
   "asciify-engine headless, shape": {
    "churn": 24.63,
-   "ms": 38.2,
+   "ms": 44.3,
    "pan": 0.927
   }
  },
@@ -183,5 +407,6 @@
    "tone, ordered": 1.4,
    "color": 2.5
   }
- }
+ },
+ "notes": "Diffusion on the GPU is Floyd-Steinberg settled in 4 passes; tone mode reads cells with contrast x1.15 and a cell-wide unsharp mask (0.75). Main-thread times vary run to run on this machine: ASCII Magic measured 1.9 to 3.2 ms across runs, the GPU converter 1.1 to 2.2 ms."
 }
