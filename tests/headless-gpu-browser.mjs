@@ -100,7 +100,8 @@ const result = await page.evaluate(async () => {
     supported: true, modes, colorGap, blocks: [...new Set(blocks.lines.join(''))].every(ch => ' ░▒▓█'.includes(ch)) && new Set(blocks.lines.join('')).size >= 3,
     kept: agree(first, again), sized: sized.columns === 37 && sized.rows === 11 && sized.lines.length === 11 && sized.lines.every(l => l.length === 37),
     many: many.columns === 40 && many.lines.every(l => [...l].every(ch => wide.includes(ch))), shared: shared.columns === 50 && shared.lines.length === shared.rows,
-    stats: stats.mainThreadMs > 0 && stats.totalMs >= stats.mainThreadMs, rejected,
+    // The main-thread part of a worker conversion can round to 0: the browser's clock is coarse (about 0.1 ms).
+    stats: Number.isFinite(stats.mainThreadMs) && stats.mainThreadMs >= 0 && stats.totalMs > 0 && stats.totalMs >= stats.mainThreadMs, rejected,
     videoFrame: fromVideo ? agree(fromVideo, onPage) : null, sameEverywhere, workersUsed, blockedSame,
     worker: inWorker ? { ok: inWorker.columns === 64 && inWorker.lines.length === inWorker.rows, agree: agree(inWorker, onPage) } : null,
   };
