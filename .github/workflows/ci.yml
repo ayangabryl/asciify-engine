@@ -40,6 +40,9 @@ jobs:
       - name: Command line (images, GIF, video, 3D, every format)
         run: npm run test:cli
 
+      - name: Agent skill (every documented command, flag and link)
+        run: npm run test:skill
+
   browser:
     name: Visual baselines and browser checks
     runs-on: ubuntu-latest

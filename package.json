@@ -144,6 +144,7 @@
     "test:field-worker": "node tests/field-worker-browser.mjs",
     "test:field-element": "node tests/field-element-browser.mjs",
     "test:cli": "node tests/cli-node.mjs",
+    "test:skill": "node tests/skill-commands.mjs",
     "test:model": "node tests/model-browser.mjs"
   },
   "keywords": [
