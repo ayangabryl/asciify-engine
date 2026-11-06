@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { basename, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { decodeImage, imageFormat } from '../decode';
 import { decodeModelTextures, loadModel, modelFormat, withNormals } from '../model/parse';
 import { MODEL_SHAPES, shapeModel, type ModelShape } from '../model/shapes';
@@ -42,6 +43,27 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+// Bytes that start like a video container (MP4/MOV, Matroska/WebM, AVI, FLV, MPEG-TS and -PS, Ogg).
+function looksLikeVideo(b: Uint8Array) {
+  const text = (at: number, length: number) => String.fromCharCode(...b.subarray(at, at + length));
+  return text(4, 4) === 'ftyp' || text(4, 4) === 'moov' || text(4, 4) === 'mdat' || (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3)
+    || (text(0, 4) === 'RIFF' && text(8, 4) === 'AVI ') || text(0, 3) === 'FLV' || (b[0] === 0x47 && b[188] === 0x47) || (b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0xba)
+    || text(0, 4) === 'OggS';
+}
+
+let scratch: string | null = null;
+/** Bytes from a pipe or the web put in a file, for ffmpeg; removed when the command ends. */
+function asFile(bytes: Uint8Array, name: string): string {
+  scratch ??= mkdtempSync(join(tmpdir(), 'asciify-'));
+  const dir = scratch;
+  process.once('exit', () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* gone */ } });
+  const path = join(dir, (basename(name).replace(/[^\w.-]+/g, '_') || 'input').slice(-80));
+  writeFileSync(path, bytes);
+  return path;
+}
+
+const HINT = 'Install sharp (npm i sharp; with npx: npx -p sharp -p asciify-engine asciify-engine <file>) or ffmpeg for other formats.';
+
 /** Reads the input named on the command line. */
 export async function openSource(input: string, options: { webcam: boolean; maxFrames: number }): Promise<Source> {
   if (options.webcam) return camera();
@@ -51,19 +73,21 @@ export async function openSource(input: string, options: { webcam: boolean; maxF
     if (shape) return { kind: 'model', name: input, model: shapeModel(shape) };
     throw new CliError(`No such file: ${input}`);
   }
-  if (!remote && input !== '-' && VIDEO.test(input)) return video(input);
+  // Video is ffmpeg's: a file or a URL goes to it as it is.
+  const path = remote ? new URL(input).pathname : input;
+  if (input !== '-' && VIDEO.test(path)) return video(input);
   const bytes = input === '-' ? await readStdin() : remote ? await fetchBytes(input) : new Uint8Array(await readFile(input));
   const name = input === '-' ? 'stdin' : input;
   if (!bytes.length) throw new CliError(`${name} is empty.`);
 
   const model = modelFormat(bytes, name === 'stdin' ? undefined : name);
   if (model) {
-    const read = remote
-      ? (uri: string) => fetchBytes(new URL(uri, input).href)
-      : async (uri: string) => {
-        if (input === '-') throw new CliError(`The model refers to ${uri}; read it from a file rather than standard input.`);
-        return new Uint8Array(await readFile(resolve(dirname(input), decodeURIComponent(uri))));
-      };
+    // loadModel resolves what the model refers to against its name (a path or URL) already: read it as given.
+    const read = async (uri: string) => {
+      if (/^https?:\/\//i.test(uri)) return fetchBytes(uri);
+      if (input === '-') throw new CliError(`The model refers to ${uri}; read it from a file rather than standard input.`);
+      return new Uint8Array(await readFile(uri));
+    };
     let loaded = await loadModel(bytes, { format: model, name, read });
     if (!loaded.normals && loaded.indices.length) loaded = withNormals(loaded);
     loaded = decodeModelTextures(loaded, bytes => { try { const image = decodeImage(bytes, { maxFrames: 1 }); return { width: image.width, height: image.height, data: image.frames[0].data }; } catch { return null; } });
@@ -74,18 +98,20 @@ export async function openSource(input: string, options: { webcam: boolean; maxF
     const image = decodeImage(bytes, { maxFrames: options.maxFrames });
     return { kind: 'image', name, width: image.width, height: image.height, frames: image.frames.map(f => ({ ...f, width: image.width, height: image.height })), loop: image.loop };
   }
-  // Formats of our own decoders' reach: sharp if installed, then ffmpeg.
-  const viaSharp = await withSharp(bytes, options.maxFrames);
+  // Beyond our own decoders: sharp if installed, then ffmpeg (a pipe or a download goes to it as a file).
+  const viaSharp = looksLikeVideo(bytes) ? null : await withSharp(bytes, options.maxFrames);
   if (viaSharp) return { ...viaSharp, name };
-  if (hasFfmpeg() && input !== '-' && !remote) {
-    const probed = probe(['-i', input]);
-    if (probed && probed.frames !== 1) return { kind: 'video', name, input: ['-i', input], width: probed.width, height: probed.height, fps: probed.fps, live: false };
+  if (hasFfmpeg()) {
+    const file = input === '-' || remote ? asFile(bytes, remote ? path : 'stdin') : input;
+    const probed = probe(['-i', file]);
+    if (probed?.video) return { kind: 'video', name, input: ['-i', file], width: probed.width, height: probed.height, fps: probed.fps, live: false };
     if (probed) {
-      const frame = await firstFrame(['-i', input], probed.width, probed.height);
+      const frame = await firstFrame(['-i', file], probed.width, probed.height);
       return { kind: 'image', name, width: probed.width, height: probed.height, frames: [{ data: frame, width: probed.width, height: probed.height, delay: 0 }], loop: 1 };
     }
   }
-  throw new CliError(`Cannot read ${name}: not a format asciify-engine decodes (PNG, JPEG, GIF, BMP, PNM, QOI; glTF, OBJ, STL, PLY). Install sharp (npm i sharp) or ffmpeg for others.`);
+  if (looksLikeVideo(bytes)) throw new CliError(`${name} looks like a video: playing video needs ffmpeg on your PATH (https://ffmpeg.org/download.html).`);
+  throw new CliError(`Cannot read ${name}: not a format asciify-engine decodes (PNG, JPEG, GIF, BMP, PNM, QOI; glTF, OBJ, STL, PLY). ${HINT}`);
 }
 
 // sharp, when the user has it: WebP, AVIF, HEIF, TIFF, SVG and animated WebP.
@@ -116,18 +142,25 @@ interface SharpImage {
   toBuffer(options: { resolveWithObject: true }): Promise<{ data: Buffer; info: { width: number; height: number; pageHeight?: number } }>;
 }
 
-interface Probed { width: number; height: number; fps: number; frames: number | null }
+interface Probed { width: number; height: number; fps: number; frames: number | null; video: boolean }
+// Codecs that hold pictures rather than motion: a single frame of one is a still image.
+const STILL_CODECS = /^(png|apng|mjpeg|jpegls|jpeg2000|jpegxl|jpegxr|webp|tiff|bmp|gif|svg|pcx|targa|xbm|xpm|qoi|pam|pgm|ppm|pbm|pgmyuv|psd|exr|hdr|dds|sgi|sunrast|photocd|ptx|xwd|vbn|qdraw|pictor|gem|fits|alias_pix|brender_pix|dpx|cri|phm|pfm)$/;
 function probe(input: string[]): Probed | null {
-  const result = spawnSync('ffprobe', ['-v', 'error', ...input.slice(0, -2), '-select_streams', 'v:0', '-show_entries', 'stream=width,height,avg_frame_rate,r_frame_rate,nb_frames:stream_side_data=rotation:stream_tags=rotate', '-of', 'json', input[input.length - 1]], { encoding: 'utf8' });
+  const result = spawnSync('ffprobe', ['-v', 'error', ...input.slice(0, -2), '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,avg_frame_rate,r_frame_rate,nb_frames:stream_side_data=rotation:stream_tags=rotate:format=duration,format_name', '-of', 'json', input[input.length - 1]], { encoding: 'utf8' });
   if (result.status !== 0) return null;
   try {
-    const stream = JSON.parse(result.stdout).streams?.[0];
+    const json = JSON.parse(result.stdout), stream = json.streams?.[0];
     if (!stream?.width) return null;
     const rate = (text: string | undefined) => { const [a, b] = (text ?? '').split('/').map(Number); return a > 0 && b > 0 ? a / b : 0; };
     const fps = rate(stream.avg_frame_rate) || rate(stream.r_frame_rate) || 25;
     const rotation = Math.abs(Number(stream.side_data_list?.[0]?.rotation ?? stream.tags?.rotate ?? 0)) % 180;
     const turned = rotation === 90;
-    return { width: turned ? stream.height : stream.width, height: turned ? stream.width : stream.height, fps, frames: stream.nb_frames ? Number(stream.nb_frames) : null };
+    const frames = stream.nb_frames ? Number(stream.nb_frames) : null, duration = Number(json.format?.duration ?? 0);
+    // Motion: several frames, or a stream that lasts and is not a picture format (a still read through the image2
+    // demuxer reports no frame count).
+    const still = STILL_CODECS.test(stream.codec_name ?? '') || /image2|_pipe$/.test(json.format?.format_name ?? '');
+    const video = frames !== null ? frames > 1 : !still && duration > 0.2;
+    return { width: turned ? stream.height : stream.width, height: turned ? stream.width : stream.height, fps, frames, video };
   } catch { return null; }
 }
 
@@ -144,7 +177,7 @@ function camera(): Source {
     : process.platform === 'linux' ? ['-f', 'v4l2', '-i', '/dev/video0']
       : null;
   if (!input) throw new CliError('--webcam works on macOS and Linux. Elsewhere, pass ffmpeg\'s camera input as a video file.');
-  const probed = probe(input) ?? { width: 640, height: 480, fps: 30, frames: null };
+  const probed = probe(input) ?? { width: 640, height: 480, fps: 30, frames: null, video: true };
   return { kind: 'video', name: 'webcam', input, width: probed.width, height: probed.height, fps: Math.min(30, probed.fps), live: true };
 }
 
@@ -166,9 +199,10 @@ function firstFrame(input: string[], width: number, height: number): Promise<Uin
  * A video's frames through ffmpeg, scaled to `width` × `height`, at `fps` if given. Ends when the video does (or never,
  * with `loop` or a camera). `stop()` ends it early.
  */
-export function videoFrames(source: Extract<Source, { kind: 'video' }>, width: number, height: number, options: { fps?: number | null; loop?: boolean; limit?: number }) {
-  const filters = [...(options.fps ? [`fps=${options.fps}`] : []), `scale=${width}:${height}:flags=area`].join(',');
-  const args = ['-v', 'error', ...(options.loop && !source.live ? ['-stream_loop', '-1'] : []), ...source.input, '-an', '-vf', filters, ...(options.limit ? ['-frames:v', String(options.limit)] : []), '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'];
+export function videoFrames(source: Extract<Source, { kind: 'video' }>, width: number, height: number, options: { fps?: number | null; loop?: boolean; limit?: number; start?: number; filters?: string[] }) {
+  const filters = [...(options.filters ?? []), ...(options.fps ? [`fps=${options.fps}`] : []), `scale=${width}:${height}:flags=area`].join(',');
+  const seek = options.start && !source.live ? ['-ss', String(options.start)] : [];
+  const args = ['-v', 'error', ...(options.loop && !source.live ? ['-stream_loop', '-1'] : []), ...seek, ...source.input, '-an', '-vf', filters, ...(options.limit ? ['-frames:v', String(options.limit)] : []), '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'];
   const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
   let errors = '';
   child.stderr.on('data', chunk => { errors += chunk; });

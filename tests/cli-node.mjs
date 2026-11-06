@@ -158,6 +158,77 @@ check('errors say what went wrong', () => {
   assert.match(junk.stderr, /Cannot read/);
 });
 
+const { decodeImage } = await import(new URL('../dist/decode.js', import.meta.url).href);
+
+check('pictures: PNG, an animated PNG and a GIF, checked by decoding them', () => {
+  assert.equal(run(['disc.png', '-w', '40', '-o', 'disc-art.png']).status, 0);
+  const png = decodeImage(fs.readFileSync(path.join(dir, 'disc-art.png')));
+  assert.equal(png.width, 40 * 10);
+  assert.equal(png.frames.length, 1);
+  assert.equal(run(['move.gif', '-w', '30', '-o', 'move-art.png']).status, 0);
+  const apng = decodeImage(fs.readFileSync(path.join(dir, 'move-art.png')));
+  assert.equal(apng.frames.length, 4, 'every frame of the GIF');
+  assert.equal(run(['move.gif', '-w', '30', '--half', '-o', 'move-art.gif']).status, 0);
+  const gif = decodeImage(fs.readFileSync(path.join(dir, 'move-art.gif')));
+  assert.equal(gif.frames.length, 4);
+  assert.equal(gif.loop, 0, 'plays forever');
+  // Bigger cells, a transparent ground.
+  assert.equal(run(['disc.png', '-w', '20', '--font-size', '32', '--background', 'transparent', '-o', 'big.png']).status, 0);
+  const big = decodeImage(fs.readFileSync(path.join(dir, 'big.png')));
+  assert.equal(big.width, 20 * 16);
+  assert.equal(big.frames[0].data[3], 0, 'transparent corner');
+  // A PNG is never written to a terminal, and an unknown extension is refused.
+  const unknown = run(['disc.png', '-o', 'art.xyz']);
+  assert.equal(unknown.status, 1);
+  assert.match(unknown.stderr, /Cannot tell what to write/);
+});
+
+check('several inputs: one file each with {name}, or printed under their names', () => {
+  fs.copyFileSync(path.join(dir, 'disc.png'), path.join(dir, 'second.png'));
+  const r = run(['disc.png', 'second.png', '-o', 'many/{name}.svg']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(dir, 'many/disc.svg')) && fs.existsSync(path.join(dir, 'many/second.svg')));
+  const printed = run(['disc.png', 'second.png', '-w', '20']);
+  assert.match(printed.stdout, /==> disc\.png <==[\s\S]*==> second\.png <==/);
+  const bad = run(['disc.png', 'second.png', '-o', 'one.svg']);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /needs \{name\} in it or a folder/);
+});
+
+check('crop, flip, one frame, and the braille threshold', () => {
+  const whole = run(['disc.png', '-w', '40']).stdout, flipped = run(['disc.png', '-w', '40', '--flip', 'h']).stdout;
+  assert.notEqual(whole, flipped);
+  // The left half of the picture, where the disc is: wider than tall at 40 columns, so more rows than the whole.
+  const cropped = run(['disc.png', '-w', '40', '--crop', '0,0,0.5,1']).stdout.trimEnd().split('\n');
+  assert.ok(cropped.length > whole.trimEnd().split('\n').length);
+  const frame = run(['move.gif', '-w', '30', '--frame', '3']);
+  assert.equal(frame.status, 0, frame.stderr);
+  assert.ok(!/first frame/.test(frame.stderr));
+  assert.equal(run(['move.gif', '--frame', '9']).status, 1);
+  const light = run(['disc.png', '-w', '30', '--braille', '--threshold', '0.1']).stdout, dark = run(['disc.png', '-w', '30', '--braille', '--threshold', '0.9']).stdout;
+  const dots = text => [...text].reduce((n, ch) => { const c = ch.codePointAt(0) - 0x2800; let b = 0; for (let v = c; v > 0; v >>= 1) b += v & 1; return n + (c > 0 && c < 256 ? b : 0); }, 0);
+  assert.ok(dots(light) > dots(dark), 'a lower threshold lights more dots');
+  // Contrast reaches the sub-cell modes too.
+  assert.notEqual(run(['disc.png', '-w', '30', '--half']).stdout, run(['disc.png', '-w', '30', '--half', '--contrast', '2']).stdout);
+});
+
+check('--ink means one colour; models in folders find their files; errors are one line', () => {
+  assert.equal(run(['disc.png', '-o', 'ink.svg', '--dark-ink', '#eeeeee']).status, 0);
+  assert.ok(!/<tspan fill/.test(fs.readFileSync(path.join(dir, 'ink.svg'), 'utf8')), 'no per-character colours with --dark-ink');
+  fs.mkdirSync(path.join(dir, 'sub'), { recursive: true });
+  const tri = Buffer.alloc(36); [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((v, i) => tri.writeFloatLE(v, i * 4));
+  fs.writeFileSync(path.join(dir, 'sub/tri.bin'), tri);
+  const gltf = { asset: { version: '2.0' }, buffers: [{ uri: 'tri.bin', byteLength: 36 }], bufferViews: [{ buffer: 0, byteLength: 36 }], accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0] }], meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }], nodes: [{ mesh: 0 }], scenes: [{ nodes: [0] }], scene: 0 };
+  fs.writeFileSync(path.join(dir, 'sub/tri.gltf'), JSON.stringify(gltf));
+  const relative = run(['sub/tri.gltf', '-w', '30']);
+  assert.equal(relative.status, 0, relative.stderr);
+  fs.writeFileSync(path.join(dir, 'draco.gltf'), JSON.stringify({ ...gltf, extensionsUsed: ['KHR_draco_mesh_compression'], extensionsRequired: ['KHR_draco_mesh_compression'] }));
+  const draco = run(['draco.gltf']);
+  assert.equal(draco.status, 1);
+  assert.match(draco.stderr, /re-export it without mesh compression/);
+  assert.ok(!/\n\s+at /.test(draco.stderr), 'no stack trace');
+});
+
 const ffmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 if (ffmpeg) {
   check('video through ffmpeg', () => {
@@ -169,6 +240,21 @@ if (ffmpeg) {
     const still = run(['clip.mp4', '-w', '48']);
     assert.equal(still.status, 0, still.stderr);
     assert.ok(still.stdout.trimEnd().split('\n').every(line => line.length === 48));
+    // From a pipe, as a GIF and an MP4, a start time and one frame.
+    const piped = run(['-', '-o', 'piped.svg', '--frames', '3', '-w', '40'], { input: fs.readFileSync(path.join(dir, 'clip.mp4')), encoding: 'utf8' });
+    assert.equal(piped.status, 0, piped.stderr);
+    assert.equal((fs.readFileSync(path.join(dir, 'piped.svg'), 'utf8').match(/<g class="f f\d/g) ?? []).length, 3);
+    assert.equal(run(['clip.mp4', '--frames', '4', '-w', '32', '-o', 'clip.gif']).status, 0);
+    assert.equal(decodeImage(fs.readFileSync(path.join(dir, 'clip.gif'))).frames.length, 4);
+    assert.equal(run(['torus', '--spin', '--frames', '6', '-w', '32', '-o', 'torus.mp4']).status, 0);
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', path.join(dir, 'torus.mp4')], { encoding: 'utf8' });
+    assert.equal(probe.stdout.trim(), '6');
+    const later = run(['clip.mp4', '--start', '0.5', '--frame', '2', '-w', '32']);
+    assert.equal(later.status, 0, later.stderr);
+    // A still picture ffmpeg reads (WebP here) is a picture, not a one-frame video.
+    spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=1:duration=1', '-frames:v', '1', path.join(dir, 'shot.webp')]);
+    const webp = run(['shot.webp', '-w', '30']);
+    assert.equal(webp.status, 0, webp.stderr);
   });
 } else console.log('skip video (no ffmpeg)');
 
@@ -213,6 +299,31 @@ sys.stderr.write('exit=%d' % os.WEXITSTATUS(status))
     assert.ok(out.includes('\x1b[?25h'), 'shows the cursor again');
     assert.ok((out.match(/\x1b\[\?2026h/g) ?? []).length >= 3, 'draws frames');
     assert.match(out, /triangles/);
+  });
+  check('naming a format in a terminal prints once and exits', () => {
+    const script = `
+import os, pty, sys, time, select
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], [sys.argv[1], sys.argv[2], 'torus', '-f', 'text', '-w', '40'])
+out = b''
+end = time.time() + 10
+while time.time() < end:
+    r, _, _ = select.select([fd], [], [], 0.1)
+    if r:
+        try:
+            data = os.read(fd, 65536)
+            if not data: break
+            out += data
+        except OSError: break
+_, status = os.waitpid(pid, 0)
+sys.stdout.buffer.write(out)
+sys.stderr.write('exit=%d' % os.WEXITSTATUS(status))
+`;
+    const r = spawnSync('python3', ['-c', script, process.execPath, cli], { encoding: 'latin1', timeout: 30000 });
+    assert.match(r.stderr, /exit=0/, r.stderr);
+    assert.ok(!r.stdout.includes('\x1b[?1049h'), 'no alternate screen');
+    assert.ok(r.stdout.replace(/\s/g, '').length > 100, 'the torus as text');
   });
 } else console.log('skip terminal view (no python3 pty)');
 

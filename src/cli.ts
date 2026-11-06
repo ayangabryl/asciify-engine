@@ -1,12 +1,15 @@
-import { writeFile } from 'node:fs/promises';
+import { existsSync, statSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { basename, dirname, extname, join } from 'node:path';
 import { MODEL_GAMMA, modelPixelSize } from './model/ascii';
 import { renderModel, type ModelRenderOptions } from './model/render';
 import type { AsciiModel } from './model/types';
 import type { AsciiGrid } from './headless/grid';
 import { CliError, HELP, formatOf, parseArgs, type CliFormat, type CliOptions } from './cli/args';
 import { openSource, videoFrames, type Picture, type Source } from './cli/media';
-import { formatGrids, pixelsPerCell, toGrid, trimRows, type GridSettings, type WriteSettings } from './cli/render';
+import { formatGrids, pixelsPerCell, shapePicture, toGrid, trimRows, type GridSettings, type WriteSettings } from './cli/render';
+import { encodeGif, encodePng, encodeVideo, rasterize, rgbOf } from './cli/raster';
 import { Player, terminalColors, terminalIsLight, terminalSize, wait } from './cli/terminal';
 
 /* asciify-engine on the command line: see `asciify-engine --help`. */
@@ -14,8 +17,12 @@ import { Player, terminalColors, terminalIsLight, terminalSize, wait } from './c
 const out = process.stdout, err = process.stderr;
 const isBlock = (mode: string) => mode === 'braille' || mode === 'half' || mode === 'quad' || mode === 'sextant';
 
+const RASTER = new Set<CliFormat>(['png', 'gif', 'mp4', 'webm']);
+
 interface Plan {
   o: CliOptions;
+  /** The file this input goes to, or null for standard output. */
+  output: string | null;
   format: CliFormat;
   /** Drawing in place in this terminal, as an animation or a 3D view. */
   live: boolean;
@@ -27,16 +34,20 @@ interface Plan {
   cellAspect: number;
 }
 
-function plan(o: CliOptions): Plan {
-  const tty = !!out.isTTY && !o.output;
-  const format = o.format ?? (o.output ? formatOf(o.output) ?? 'text' : out.isTTY ? 'ansi' : 'text');
+function plan(o: CliOptions, output: string | null, several = false): Plan {
+  if (output && !o.format && !formatOf(output)) throw new CliError(`Cannot tell what to write from ${basename(output)}: use .txt, .ans, .svg, .html, .json, .png, .gif, .mp4 or .webm, or --format.`);
+  const tty = !!out.isTTY && !output;
+  const format = o.format ?? (output ? formatOf(output)! : out.isTTY ? 'ansi' : 'text');
   const terminal = terminalColors();
-  const color = o.color ?? (format === 'svg' || format === 'html' || format === 'json' ? true : format === 'ansi' ? (o.output ? true : terminal !== false) : false);
+  // --ink and --dark-ink ask for one colour: the picture's own are off unless --color says otherwise.
+  const oneInk = !!(o.ink || o.darkInk);
+  const color = o.color ?? (oneInk ? false : format === 'svg' || format === 'html' || format === 'json' || RASTER.has(format) ? true : format === 'ansi' ? (output ? true : terminal !== false) : false);
   const depth = o.colorDepth ?? (format === 'ansi' && terminal ? terminal : 'truecolor');
   const light = o.light ?? (tty ? terminalIsLight() : false);
   const markup = format === 'svg' || format === 'html' || format === 'json';
   const cellAspect = o.cellAspect ?? (markup && !isBlock(o.mode) ? 1.93 : 2);
-  return { o, format, live: tty && (format === 'ansi' || format === 'text') && !o.still, tty, color, depth, light, cellAspect };
+  // Playing in place is for a plain run in a terminal: a named format prints once and exits.
+  return { o, output, format, live: tty && !o.format && !o.still && !several, tty, color, depth, light, cellAspect };
 }
 
 /** The grid's size for a picture of `width` × `height`: as asked, or filling the terminal, or 80 / 100 columns. */
@@ -46,7 +57,7 @@ function gridSize(p: Plan, width: number, height: number, reserve = 0): { column
   if (o.width) return { columns: o.width, rows: Math.max(1, Math.round((o.width * aspect) / cellAspect)) };
   if (o.height) return { columns: Math.max(1, Math.round((o.height * cellAspect) / aspect)), rows: o.height };
   if (!p.tty) {
-    const columns = p.format === 'svg' || p.format === 'html' || p.format === 'json' ? 100 : 80;
+    const columns = p.format === 'text' || p.format === 'ansi' ? 80 : 100;
     return { columns, rows: Math.max(1, Math.round((columns * aspect) / cellAspect)) };
   }
   const term = terminalSize();
@@ -60,7 +71,7 @@ function settings(p: Plan, columns: number, rows: number, extra: Partial<GridSet
   const { o } = p;
   return {
     columns, rows, mode: o.mode, cellAspect: p.cellAspect, charset: o.charset, color: p.color, light: p.light, dither: o.dither,
-    contrast: o.contrast, brightness: o.brightness, gamma: o.gamma, invert: o.invert, ...extra,
+    contrast: o.contrast, brightness: o.brightness, gamma: o.gamma, invert: o.invert, threshold: o.threshold, ...extra,
   };
 }
 
@@ -68,7 +79,7 @@ function writeSettings(p: Plan, fps: number, loop: boolean): WriteSettings {
   const { o } = p;
   return {
     colorDepth: p.depth, color: p.color, fps, loop,
-    ...(o.fontSize ? { fontSize: o.fontSize } : {}), ...(o.title ? { title: o.title } : {}), ...(o.background ? { background: o.background } : {}),
+    ...(o.fontSize ? { fontSize: o.fontSize } : {}), ...(o.title ? { title: o.title } : {}), ...(o.background && o.background !== 'transparent' ? { background: o.background } : {}),
     ...(o.ink ? { ink: o.ink } : {}), ...(o.darkInk ? { dark: { ink: o.darkInk } } : {}),
   };
 }
@@ -80,24 +91,46 @@ function centred(text: string, columns: number) {
 }
 
 async function emit(p: Plan, grids: AsciiGrid[], delays: number[], fps: number, loop: boolean) {
+  const { o, output } = p, size = `${grids[0].columns}×${grids[0].rows}${grids.length > 1 ? `, ${grids.length} frames` : ''}`;
+  if (output) await mkdir(dirname(output), { recursive: true });
+  if (RASTER.has(p.format)) {
+    // A picture: the cells drawn in DejaVu Sans Mono's shapes and exact blocks, over a ground.
+    const ground = o.background === 'transparent' ? null : rgbOf(o.background ?? (p.light ? '#ffffff' : '#000000'));
+    const frames = grids.map(grid => rasterize(grid, { size: o.fontSize ?? 20, ink: rgbOf(o.ink ?? (p.light ? '#111111' : '#eeeeee')), background: ground, color: p.color }));
+    const pixels = `${frames[0].width}×${frames[0].height} px`;
+    if (p.format === 'mp4' || p.format === 'webm') {
+      if (!output) throw new CliError(`Video needs a file: -o art.${p.format}.`);
+      await encodeVideo(frames, Math.max(1, Math.min(60, fps)), output, p.format);
+    } else {
+      const bytes = p.format === 'png' ? encodePng(frames, delays, loop) : await encodeGif(frames, delays, loop);
+      if (output) await writeFile(output, bytes);
+      else if (out.isTTY) throw new CliError(`A ${p.format.toUpperCase()} is not for the terminal: write it to a file with -o art.${p.format}, or pipe it.`);
+      else out.write(bytes);
+    }
+    if (output) err.write(`Wrote ${output} (${size}, ${pixels}).\n`);
+    return;
+  }
   const text = formatGrids(grids, delays, p.format, writeSettings(p, fps, loop));
-  if (p.o.output) {
-    await writeFile(p.o.output, text);
-    err.write(`Wrote ${p.o.output} (${grids[0].columns}×${grids[0].rows}${grids.length > 1 ? `, ${grids.length} frames` : ''}).\n`);
+  if (output) {
+    await writeFile(output, text);
+    err.write(`Wrote ${output} (${size}).\n`);
   } else out.write(text);
 }
 
 // Pictures: one frame, or an animation (GIF, APNG, WebP through sharp).
-async function pictures(p: Plan, frames: Picture[], loopCount: number) {
+async function pictures(p: Plan, all: Picture[], loopCount: number) {
   const { o } = p;
+  if (o.frame !== null && o.frame >= all.length) throw new CliError(`--frame ${o.frame}: there ${all.length === 1 ? 'is one frame' : `are ${all.length} frames`} (0 to ${all.length - 1}).`);
+  const picked = o.frame !== null ? [all[o.frame]] : all;
+  const frames = picked.map(frame => shapePicture(frame, o.crop, o.flip));
   const { columns, rows } = gridSize(p, frames[0].width, frames[0].height);
   const animated = frames.length > 1 && !o.still;
   if (!animated) { await emit(p, [toGrid(frames[0], settings(p, columns, rows))], [0], 12, true); return; }
   const loop = o.loop ?? (loopCount !== 1);
   const steady = settings(p, columns, rows, { dither: o.dither ?? 'ordered' });
   if (!p.live) {
-    if (!p.o.output && !o.frames) {
-      err.write('An animation: writing its first frame. Use -o file.svg (or .json) for every frame, or --frames N.\n');
+    if (!p.output && !o.frames && !RASTER.has(p.format)) {
+      err.write('An animation: writing its first frame. Use -o file.svg (or .gif, .json) for every frame, --frame N for another one, or --frames N.\n');
       await emit(p, [toGrid(frames[0], settings(p, columns, rows))], [0], 12, true);
       return;
     }
@@ -130,13 +163,26 @@ async function pictures(p: Plan, frames: Picture[], loopCount: number) {
 // Video and the camera, through ffmpeg.
 async function movie(p: Plan, source: Extract<Source, { kind: 'video' }>) {
   const { o } = p;
-  const { columns, rows } = gridSize(p, source.width, source.height);
+  // Crop and flip happen in ffmpeg, at the video's full size, before it is scaled down.
+  let width = source.width, height = source.height, crop: [number, number, number, number] | null = null;
+  if (o.crop) {
+    let [x, y, w, h] = o.crop;
+    if (o.crop.every(n => n <= 1)) { x *= width; y *= height; w *= width; h *= height; }
+    x = Math.max(0, Math.min(width - 2, Math.round(x))); y = Math.max(0, Math.min(height - 2, Math.round(y)));
+    w = Math.max(2, Math.min(width - x, Math.round(w))); h = Math.max(2, Math.min(height - y, Math.round(h)));
+    crop = [x, y, w, h]; width = w; height = h;
+  }
+  const filters = [...(crop ? [`crop=${crop[2]}:${crop[3]}:${crop[0]}:${crop[1]}`] : []), ...(o.flip === 'h' || o.flip === 'hv' ? ['hflip'] : []), ...(o.flip === 'v' || o.flip === 'hv' ? ['vflip'] : [])];
+  const { columns, rows } = gridSize(p, width, height);
   const [pw, ph] = pixelsPerCell(o.mode, p.cellAspect);
-  const w = Math.min(source.width, columns * pw) & ~1 || 2, h = Math.min(source.height, rows * ph) & ~1 || 2;
+  const w = Math.min(width, columns * pw) & ~1 || 2, h = Math.min(height, rows * ph) & ~1 || 2;
   const steady = settings(p, columns, rows, { dither: o.dither ?? 'ordered' });
+  // --frame n is the frame n frames in (at the video's own rate), on its own.
+  const seek = (o.start ?? 0) + (o.frame !== null ? o.frame / source.fps : 0);
   if (!p.live) {
-    const fps = o.fps ?? Math.min(12, source.fps), limit = o.still || !o.output ? 1 : o.frames ?? 48;
-    const stream = videoFrames(source, w, h, { fps, limit });
+    const one = o.still || o.frame !== null || (!p.output && !o.frames);
+    const fps = o.fps ?? Math.min(12, source.fps), limit = one ? 1 : o.frames ?? 48;
+    const stream = videoFrames(source, w, h, { fps, limit, start: seek, filters });
     const grids: AsciiGrid[] = [];
     for await (const data of stream.frames) {
       grids.push(toGrid({ data, width: w, height: h }, steady, grids[grids.length - 1] ?? null));
@@ -148,7 +194,7 @@ async function movie(p: Plan, source: Extract<Source, { kind: 'video' }>) {
   }
   const fps = Math.min(o.fps ?? source.fps, 30), step = 1000 / fps;
   const player = new Player({});
-  const stream = videoFrames(source, w, h, { fps, loop: o.loop ?? false });
+  const stream = videoFrames(source, w, h, { fps, loop: o.loop ?? false, start: seek, filters });
   void player.done.then(() => stream.stop());
   let previous: AsciiGrid | null = null, shown = 0, start = performance.now();
   for await (const data of stream.frames) {
@@ -175,6 +221,7 @@ async function model(p: Plan, model: AsciiModel, name: string) {
   const grey = (c: readonly number[]) => Math.abs(c[0] - c[1]) < 0.02 && Math.abs(c[1] - c[2]) < 0.02;
   const colourful = !!o.paint || !!model.colors || model.materials.some(m => !!m.texture?.image || !grey(m.color));
   if (o.color === null && !colourful) p = { ...p, color: false };
+  if (o.crop || o.flip) err.write('--crop and --flip are for pictures and video; a model turns with --yaw and --pitch instead.\n');
   const view = (): ModelRenderOptions => ({
     width: 1, height: 1, yaw: o.yaw ?? 30, pitch: o.pitch ?? 20, zoom: o.zoom ?? 1, ...(o.fov !== null ? { fov: o.fov } : {}),
     ...(o.up ? { up: o.up } : {}), ...(o.shade ? { shading: o.shade } : {}), ...(o.paint ? { paint: o.paint } : {}),
@@ -189,8 +236,8 @@ async function model(p: Plan, model: AsciiModel, name: string) {
   if (!p.live) {
     const { columns, rows } = square();
     const spin = o.spin;
-    if (!spin || o.still || !o.output) {
-      if (spin && !o.output && !o.still) err.write('A turning model needs a file to go to (-o turn.svg) or a terminal.\n');
+    if (!spin || o.still || (!p.output && !RASTER.has(p.format))) {
+      if (spin && !p.output && !o.still) err.write('A turning model needs a file to go to (-o turn.svg) or a terminal.\n');
       await emit(p, trimRows([gridFor(columns, rows, view(), null)]), [0], 12, true);
       return;
     }
@@ -243,25 +290,55 @@ async function banner(p: Plan, text: string) {
   await emit({ ...p, color: false }, [grid], [0], 12, true);
 }
 
-async function main(argv: string[]) {
-  const o = parseArgs(argv);
-  if (o.help) { out.write(HELP); return; }
-  if (o.version) { out.write(`${(createRequire(import.meta.url)('../package.json') as { version: string }).version}\n`); return; }
-  if (!o.input && !o.text && !o.webcam) {
-    if (!process.stdin.isTTY) o.input = '-';
-    else { err.write('Usage: asciify-engine <image, video, 3D model or URL> [options]. Try asciify-engine torus, or --help.\n'); process.exitCode = 1; return; }
-  }
-  const p = plan(o);
-  if (o.text !== null) { await banner(p, o.text); return; }
-  const source = await openSource(o.input ?? '-', { webcam: o.webcam, maxFrames: Math.max(o.frames ?? 0, 500) });
+/** Where one of several inputs goes: the pattern with {name} filled in, or a file in the folder named. */
+function outputFor(pattern: string, input: string, format: CliFormat): string {
+  const name = input === '-' ? 'stdin' : basename(input).replace(/\.[^.]+$/, '') || 'art';
+  if (pattern.includes('{name}')) return pattern.split('{name}').join(name);
+  if (pattern.endsWith('/') || (existsSync(pattern) && statSync(pattern).isDirectory())) return join(pattern, `${name}.${format === 'text' ? 'txt' : format === 'ansi' ? 'ans' : format}`);
+  throw new CliError(`With several inputs, -o needs {name} in it or a folder: -o 'ascii/{name}.svg' or -o ascii/.`);
+}
+
+async function one(o: CliOptions, input: string, output: string | null, several: boolean) {
+  const p = plan(o, output, several);
+  if (isBlock(o.mode) && o.charset) err.write(`--charset is for shape and tone modes; ${o.mode} draws its own characters.\n`);
+  const source = await openSource(input, { webcam: o.webcam, maxFrames: Math.max(o.frames ?? 0, (o.frame ?? 0) + 1, 500) });
   if (source.kind === 'image') await pictures(p, source.frames, source.loop);
   else if (source.kind === 'video') await movie(p, source);
   else await model(p, source.model, source.name);
 }
 
+async function main(argv: string[]) {
+  const o = parseArgs(argv);
+  if (o.help) { out.write(HELP); return; }
+  if (o.version) { out.write(`${(createRequire(import.meta.url)('../package.json') as { version: string }).version}\n`); return; }
+  if (!o.inputs.length && !o.text && !o.webcam) {
+    if (!process.stdin.isTTY) o.inputs.push('-');
+    else { err.write('Usage: asciify-engine <image, video, 3D model or URL> [options]. Try asciify-engine torus, or --help.\n'); process.exitCode = 1; return; }
+  }
+  if (o.text !== null) { await banner(plan(o, o.output), o.text); return; }
+  if (o.webcam || o.inputs.length === 1) { await one(o, o.inputs[0] ?? '-', o.output, false); return; }
+  // Several inputs: one after another, each to its own file (or printed with its name), carrying on past a failure.
+  const format = o.format ?? (o.output ? formatOf(o.output.replace('{name}', 'x')) ?? (o.output.endsWith('/') ? 'text' : null) : null) ?? (out.isTTY ? 'ansi' : 'text');
+  let failed = 0;
+  for (const [i, input] of o.inputs.entries()) {
+    const output = o.output ? outputFor(o.output, input, format) : null;
+    if (!output) out.write(`${i ? '\n' : ''}==> ${input} <==\n`);
+    try { await one({ ...o, input, format: o.format ?? (output ? null : format) }, input, output, true); }
+    catch (error) { failed++; err.write(`asciify-engine: ${input}: ${messageOf(error)}\n`); }
+  }
+  if (failed) process.exitCode = 1;
+}
+
+/** An error as one line: the stack only with ASCIIFY_DEBUG set, since a stack says nothing to someone running a command. */
+function messageOf(error: unknown) {
+  if (error instanceof CliError) return error.message;
+  if (process.env.ASCIIFY_DEBUG) return (error as Error)?.stack ?? String(error);
+  return (error as Error)?.message ?? String(error);
+}
+
 main(process.argv.slice(2)).catch(error => {
   // A closed pipe (asciify-engine big.mp4 | head) is not an error.
   if ((error as NodeJS.ErrnoException)?.code === 'EPIPE') return;
-  err.write(`asciify-engine: ${error instanceof CliError ? error.message : (error as Error)?.stack ?? error}\n`);
+  err.write(`asciify-engine: ${messageOf(error)}\n`);
   process.exitCode = 1;
 });

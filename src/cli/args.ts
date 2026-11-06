@@ -1,10 +1,12 @@
 /* The command line: flags in, settings out. No dependencies. */
 
 export type CliMode = 'shape' | 'tone' | 'braille' | 'half' | 'quad' | 'sextant';
-export type CliFormat = 'text' | 'ansi' | 'svg' | 'html' | 'json';
+export type CliFormat = 'text' | 'ansi' | 'svg' | 'html' | 'json' | 'png' | 'gif' | 'mp4' | 'webm';
 
 export interface CliOptions {
+  /** The first input; `inputs` holds them all. */
   input: string | null;
+  inputs: string[];
   output: string | null;
   format: CliFormat | null;
   width: number | null;
@@ -20,11 +22,19 @@ export interface CliOptions {
   brightness: number | null;
   gamma: number | null;
   invert: boolean;
+  threshold: number | null;
+  flip: 'h' | 'v' | 'hv' | null;
+  /** x, y, width, height: pixels, or fractions of the picture when all are 1 or less. */
+  crop: [number, number, number, number] | null;
   // Animation.
   fps: number | null;
   frames: number | null;
   loop: boolean | null;
   still: boolean;
+  /** Seconds into a video to start. */
+  start: number | null;
+  /** One frame of an animation or video, from 0. */
+  frame: number | null;
   // 3D.
   spin: number | null;
   yaw: number | null;
@@ -52,7 +62,7 @@ export interface CliOptions {
 export const HELP = `asciify-engine: pictures, video and 3D models to ASCII art, in your terminal or as SVG, HTML, text and JSON.
 
 Usage
-  asciify-engine <input> [options]
+  asciify-engine <input…> [options]
   asciify-engine torus                     a spinning donut (also: knot, sphere, cube, icosahedron)
   asciify-engine --text "Hello"            a banner (--font Slant, Big, Doom, 3-D … any figlet font)
 
@@ -62,8 +72,12 @@ Input
   or - to read standard input. --webcam reads the camera through ffmpeg.
 
 Output
-  -o, --output <file>      Write to a file; .txt .ans .svg .html .json pick the format.
-  -f, --format <name>      text | ansi | svg | html | json. Default: ansi in a terminal, text in a pipe.
+  -o, --output <file>      Write to a file: .txt .ans .svg .html .json, or a picture: .png (APNG when it
+                           moves), .gif, .mp4 or .webm (ffmpeg). With several inputs, put {name} in it or
+                           name a folder: -o 'art/{name}.svg'.
+  -f, --format <name>      text | ansi | svg | html | json | png | gif | mp4 | webm. Default: ansi in a
+                           terminal (animations and models play there), text in a pipe. Naming a format
+                           prints once and exits, even in a terminal.
   -w, --width <columns>    Characters across. Default: fits the terminal (80 in a pipe).
   -H, --height <rows>      Rows. Default: from the picture's shape.
       --cell-aspect <n>    Height over width of a character cell. Default 2.
@@ -78,12 +92,17 @@ Look
       --light              Dark characters on a light ground. --dark for the opposite.
       --dither <kind>      diffuse, ordered or none.
       --contrast <n>  --brightness <n>  --gamma <n>  --invert
+      --threshold <0-1>    Where pixels light in braille, half, quad and sextant without colour.
+      --flip <h|v|hv>      Mirror left to right, upside down, or both.
+      --crop <x,y,w,h>     Part of the picture: pixels, or fractions such as 0.25,0,0.5,1.
 
 Animation (GIF, APNG, video, 3D)
       --fps <n>            Frames a second (video, 3D and animated SVG).
       --frames <n>         How many frames to write to a file (default 48 for video, 36 for a model's turn).
       --no-loop            Play once.
       --still              The first frame only (or one view of a 3D model).
+      --frame <n>          One frame (from 0) of an animation or video.
+      --start <time>       Where a video starts: seconds, mm:ss or hh:mm:ss.
 
 3D models
       --spin <deg/s>       Turn the model (default 30 in the terminal; 0 to hold it still).
@@ -95,7 +114,9 @@ Animation (GIF, APNG, video, 3D)
   space to pause, r to reset, q to quit.
 
 SVG and HTML
-      --font-size <px>  --title <text>  --background <#hex>  --ink <#hex>  --dark-ink <#hex>
+      --font-size <px>  --title <text>  --background <#hex|transparent>  --ink <#hex>  --dark-ink <#hex>
+                           --ink and --dark-ink mean one colour: they turn the picture's colours off
+                           unless --color is given. For pictures --font-size is the cell height (20).
 
 Banners
       --text <text>        The text as a banner, in a figlet font.
@@ -110,22 +131,25 @@ Examples
   asciify-engine logo.png --light -o logo.svg --title "Our logo"
   asciify-engine clip.mp4 -w 120
   asciify-engine loop.gif -o loop.svg          an animated SVG that plays in a README
+  asciify-engine photo.jpg --half -o photo.png a picture to post anywhere
+  asciify-engine clip.mp4 --frames 120 -o clip.gif
+  asciify-engine *.jpg -o 'ascii/{name}.svg'   several files at once
   asciify-engine helmet.glb                   turn a 3D model with the mouse
   asciify-engine bunny.ply --spin 45 -o bunny.svg
   curl -s https://example.com/cat.png | asciify-engine - --braille
 `;
 
 const MODES: readonly CliMode[] = ['shape', 'tone', 'braille', 'half', 'quad', 'sextant'];
-const FORMATS: readonly CliFormat[] = ['text', 'ansi', 'svg', 'html', 'json'];
+const FORMATS: readonly CliFormat[] = ['text', 'ansi', 'svg', 'html', 'json', 'png', 'gif', 'mp4', 'webm'];
 
 export class CliError extends Error {}
 
 /** Reads argv (without node and the script). Throws CliError on a bad flag or value. */
 export function parseArgs(argv: readonly string[]): CliOptions {
   const o: CliOptions = {
-    input: null, output: null, format: null, width: null, height: null, cellAspect: null, mode: 'shape', charset: null,
-    color: null, colorDepth: null, light: null, dither: null, contrast: null, brightness: null, gamma: null, invert: false,
-    fps: null, frames: null, loop: null, still: false,
+    input: null, inputs: [], output: null, format: null, width: null, height: null, cellAspect: null, mode: 'shape', charset: null,
+    color: null, colorDepth: null, light: null, dither: null, contrast: null, brightness: null, gamma: null, invert: false, threshold: null, flip: null, crop: null,
+    fps: null, frames: null, loop: null, still: false, start: null, frame: null,
     spin: null, yaw: null, pitch: null, zoom: null, fov: null, up: null, shade: null, paint: null, outline: null,
     fontSize: null, title: null, background: null, ink: null, darkInk: null,
     text: null, font: null, webcam: false, help: false, version: false,
@@ -140,6 +164,12 @@ export function parseArgs(argv: readonly string[]): CliOptions {
     const text = value(flag), n = Number(text);
     if (!Number.isFinite(n) || n < min || n > max) throw new CliError(`${flag} takes a number${Number.isFinite(min) ? ` from ${min}` : ''}${Number.isFinite(max) ? ` to ${max}` : ''}, not "${text}".`);
     return n;
+  };
+  // 90, 1:30 or 00:01:30.5
+  const seconds = (flag: string, text: string) => {
+    const parts = text.split(':').map(Number);
+    if (!parts.length || parts.length > 3 || parts.some(n => !Number.isFinite(n) || n < 0)) throw new CliError(`${flag} takes seconds (90), mm:ss or hh:mm:ss, not "${text}".`);
+    return parts.reduce((total, n) => total * 60 + n, 0);
   };
   const hex = (flag: string) => {
     const text = value(flag);
@@ -185,6 +215,19 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       case '--brightness': o.brightness = number(arg, -1, 1); break;
       case '--gamma': o.gamma = number(arg, 0.1, 5); break;
       case '--invert': o.invert = true; break;
+      case '--threshold': o.threshold = number(arg, 0, 1); break;
+      case '--flip': {
+        const f = value(arg);
+        if (f !== 'h' && f !== 'v' && f !== 'hv' && f !== 'vh') throw new CliError('--flip is h (left to right), v (upside down) or hv.');
+        o.flip = f === 'vh' ? 'hv' : f; break;
+      }
+      case '--crop': {
+        const text = value(arg), parts = text.split(/[,x:]/).map(Number);
+        if (parts.length !== 4 || parts.some(n => !Number.isFinite(n) || n < 0) || parts[2] <= 0 || parts[3] <= 0) throw new CliError(`--crop takes x,y,width,height (pixels, or fractions such as 0.25,0,0.5,1), not "${text}".`);
+        o.crop = parts as [number, number, number, number]; break;
+      }
+      case '--start': o.start = seconds(arg, value(arg)); break;
+      case '--frame': o.frame = Math.round(number(arg, 0, 1e7)); break;
       case '--fps': o.fps = number(arg, 0.1, 120); break;
       case '--frames': o.frames = Math.round(number(arg, 1, 10000)); break;
       case '--loop': o.loop = true; break;
@@ -214,17 +257,21 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       case '--outline': o.outline = number(arg, 0, 1); break;
       case '--font-size': o.fontSize = number(arg, 1, 400); break;
       case '--title': o.title = value(arg); break;
-      case '--background': case '--bg': o.background = hex(arg); break;
+      case '--background': case '--bg': {
+        const next = args[0];
+        if (next === 'transparent' || next === 'none') { args.shift(); o.background = 'transparent'; } else o.background = hex(arg);
+        break;
+      }
       case '--ink': o.ink = hex(arg); break;
       case '--dark-ink': o.darkInk = hex(arg); break;
       case '--text': o.text = value(arg); break;
       case '--font': o.font = value(arg); break;
       case '--webcam': case '--camera': o.webcam = true; break;
-      case '-': o.input = o.input ?? '-'; break;
+      case '-': o.inputs.push('-'); o.input ??= '-'; break;
       default:
         if (arg.startsWith('-') && arg.length > 1) throw new CliError(`Unknown option ${arg}. See asciify-engine --help.`);
-        if (o.input !== null) throw new CliError(`One input at a time (got "${o.input}" and "${arg}").`);
-        o.input = arg;
+        o.inputs.push(arg);
+        o.input ??= arg;
     }
   }
   return o;
@@ -239,6 +286,10 @@ export function formatOf(file: string): CliFormat | null {
     case 'svg': return 'svg';
     case 'html': case 'htm': return 'html';
     case 'json': return 'json';
+    case 'png': case 'apng': return 'png';
+    case 'gif': return 'gif';
+    case 'mp4': case 'm4v': case 'mov': return 'mp4';
+    case 'webm': return 'webm';
     default: return null;
   }
 }

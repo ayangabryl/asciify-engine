@@ -18,7 +18,7 @@ A picture pasted into the conversation with no file behind it: check where this 
 decide (a Claude app saves them in `/mnt/user-data/uploads/`). If there is no file, say in one line that you need the file,
 or its path, to convert it. Never draw a stand-in by hand: it would not be their picture.
 
-Several files: one command each (the command takes one input).
+Several files: one command takes them all, each to its own file (`-o 'ascii/{name}.svg'`), carrying on past any that fail.
 
 ## 2. Run the command
 
@@ -45,6 +45,7 @@ npx -y asciify-engine@latest photo.jpg -f text -w 80                            
 npx -y asciify-engine@latest photo.jpg -o photo.svg --background '#000000'      # a file worth keeping
 npx -y asciify-engine@latest photo.jpg -o photo.html                            # a page to open or share
 npx -y asciify-engine@latest mascot.png -w 60 -o mascot.ans                     # a terminal greeting: cat mascot.ans
+npx -y asciify-engine@latest photo.jpg --half -o photo.png                      # a picture to post (or .gif, .mp4)
 npx -y asciify-engine@latest /mnt/user-data/uploads/photo.jpg -o /mnt/user-data/outputs/photo.svg --background '#000000'
 ```
 
@@ -58,6 +59,9 @@ npx -y asciify-engine@latest /mnt/user-data/uploads/photo.jpg -o /mnt/user-data/
   (`photo-ascii.svg`) unless they named a place, or in `/mnt/user-data/outputs/` in a Claude app, and say where it is.
 - **A terminal.** ANSI colour: `-o art.ans` (24-bit; add `--256` for older terminals), or `-f ansi` to print it. Dark art on
   white, for a dark terminal: add `--invert`. In their own terminal the plain command fits the window and plays animations.
+- **To post or send** (a chat app, social media, slides, an email): a picture of the art, `-o art.png` (an animated PNG when
+  it moves), `-o art.gif` or `-o art.mp4` (ffmpeg). Shape mode in colour looks like ASCII art; `--half` or `--sextant` in colour
+  like a mosaic. `--font-size 28` for bigger characters, `--background transparent` to lay a PNG over something.
 - **A README.** See [README](#readme).
 
 Then say what you made in one line and offer one alternative that suits the picture (braille for line art, colour blocks
@@ -96,8 +100,7 @@ npx -y asciify-engine@latest face.jpg -f text -w 80 --cell-aspect 2.4
 ```
 
 **Pixel art and sprites.** Half blocks in colour at the sprite's own width in pixels draw every pixel exactly (in an SVG,
-as squares). Block modes need at least one picture pixel per dot: on a small picture keep `--half` at or below its width in
-columns, and `--braille`, `--quad` and `--sextant` at or below half of it, or the art comes out striped.
+as squares).
 
 ```sh
 npx -y asciify-engine@latest sprite.png --half --color -w 16 -o sprite.svg
@@ -152,18 +155,23 @@ choice for a chat reply.
 | "classic", "old-school", "like jp2a" | `--tone -c ' .:-=+*#%@'`. |
 | "only symbols", "no letters" | `-c ' .,:;^-_~=+*<>!?/\()[]{}#%@&$'`. |
 | "in our letters", a brand word | `--tone -c ' .:-=+ACME#@'`: light marks first, the word, then the densest. |
-| "matrix", "green on black" | `--no-color --ink '#00ff41' --background '#000000'` in a file. |
+| "matrix", "green on black" | `--ink '#00ff41' --background '#000000'` in a file (one ink turns the picture's colours off). |
 | "negative", "inverted" | `--invert`. |
 | "for a white page", "light background" | `--light`. |
 | "for my README", "dark mode" | The [README](#readme) recipe. |
 | "smaller file" | `--no-color`, fewer columns, `--frames 24`, `--fps 8`. |
-| "more contrast", "brighter", "darker" | `--contrast 1.3`, `--brightness 0.1`, `--gamma 1.3` (shape and tone modes; block modes ignore them). |
+| "more contrast", "brighter", "darker" | `--contrast 1.3`, `--brightness 0.1`, `--gamma 1.3` (every mode). |
 | "smoother", "less noisy" | `--dither ordered`, or `--dither none`. |
 | "slower turn", "faster turn" | `--frames 72` or `--frames 24`: a file always holds one full turn, at `--fps` (12). |
 | "play once" | `--no-loop`. |
 | "flat", "cartoon" (3D) | `--shade toon`; `--outline 0` drops the outlines; `--paint '#ff8800'` paints it one colour. |
 | "from the side", "from above", "closer" (3D) | `--yaw 90`, `--pitch 60`, `--zoom 1.5`; `--up z` for a CAD model lying on its back. |
 | "my name in big letters" | `--text "Ada" --font Slant` (also Standard, Big, Doom, Small, 3-D, "ANSI Shadow", Colossal or any figlet font). |
+| "as an image", "for Instagram", "a GIF", "a video" | `-o art.png`, `-o art.gif`, `-o art.mp4`; `--font-size 28` for bigger characters. |
+| "just the face", "crop it", "the left side" | `--crop` with fractions: `0.3,0,0.4,0.6` (x, y, width, height). |
+| "mirror it", "flip it" | `--flip h` (or `v`, `hv`). |
+| "the bit at 1:30", "that frame" | `--start 1:30` for video; `--frame 12` for one frame of a GIF or video. |
+| "all of these", a folder of pictures | `npx -y asciify-engine@latest *.jpg -o 'ascii/{name}.svg'`. |
 
 ## README
 
@@ -189,15 +197,14 @@ npx -y asciify-engine@latest photo.jpg --background '#0d1117' --title "The offic
 | `could not determine executable to run` | npm has no asciify-engine 4.33 yet: say so. |
 | `npx: command not found`, or Node older than 18 | It needs Node 18 or later (nodejs.org). |
 | No network for npx | Use a copy the project or machine already has; otherwise say it needs npm. |
-| WebP, AVIF, TIFF or SVG: `Cannot read …` or `No frames came out of …` | Run it with sharp: `npx -y -p asciify-engine@latest -p sharp asciify-engine photo.webp`. |
+| WebP, AVIF, TIFF or SVG: `Cannot read …` | Run it with sharp (`npx -y -p asciify-engine@latest -p sharp asciify-engine photo.webp`), or install ffmpeg. |
 | HEIC (iPhone photos) | sharp's prebuilt binaries do not decode it: convert it first (`sips -s format jpeg photo.heic --out photo.jpg` on macOS, `heif-convert photo.heic photo.jpg` on Linux). |
 | `Playing video needs ffmpeg` | Install ffmpeg (`brew install ffmpeg`, `sudo apt install ffmpeg`), or ask for a GIF. |
-| A video from a URL or standard input: `Cannot read …` | Download it to a file first. |
 | `KHR_draco_mesh_compression` or meshopt | The model's meshes are compressed: ask for (or re-export) the model without mesh compression. |
-| `could not read buffer …`, or a model without its textures | Keep a `.gltf` or `.obj` together with its `.bin`, `.mtl` and texture files, and pass the model's absolute path. |
-| A huge picture, a long clip | Pictures are scaled down to `-w` (a 24-megapixel photo takes under a second). For video, `--frames` and `--fps` bound the file; to start later, trim first (`ffmpeg -ss 30 -t 4 -i in.mp4 -an part.mp4`). |
-| Striped braille or block art | The picture is smaller than the dots asked for: see pixel art above. |
-| They asked for a PNG, GIF or MP4 | The command writes text, ANSI, SVG, HTML and JSON (`-o art.png` would put text in that file). Render the SVG with whatever the machine has (`rsvg-convert -o art.png art.svg`, ImageMagick, a headless browser), or use `/studio` in a browser for PNG, GIF and MP4 ([studio-workspace.md](studio-workspace.md)). |
+| `could not read buffer …`, or a model without its textures | Keep a `.gltf` or `.obj` together with its `.bin`, `.mtl` and texture files. |
+| A huge picture, a long clip | Pictures are scaled down to `-w` (a 24-megapixel photo takes under a second). For video, `--frames` and `--fps` bound the file, and `--start 30` starts 30 seconds in; `--frame 120` takes one frame. |
+| Only part of the picture matters, or it faces the wrong way | `--crop 0.25,0,0.5,1` (fractions, or pixels) and `--flip h`. |
+| Braille or block art too dark or too light without colour | `--threshold 0.35` lights more dots, `0.65` fewer; `--contrast`, `--brightness` and `--gamma` work in every mode. |
 
 ## On their site, not a file
 

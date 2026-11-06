@@ -36,7 +36,7 @@ When someone says asciify (or "turn this into ASCII", "make this ASCII art") and
    npx -y asciify-engine@latest helmet.glb --spin -o turn.svg                  # a 3D model: one full turn
    ```
 
-   Logo, line art or a scan, dark on white: add `--light`. A README: `--no-color --ink '#24292f' --dark-ink '#e6edf3' --title "…"`. A terminal: ANSI (`-o art.ans`). Playback and the 3D viewer run only in the user's own terminal: give them the line, such as `npx asciify-engine helmet.glb`.
+   Logo, line art or a scan, dark on white: add `--light`. A README: `--ink '#24292f' --dark-ink '#e6edf3' --title "…"`. A terminal: ANSI (`-o art.ans`). To post or send it: a picture, `-o art.png`, `.gif` or `.mp4`. Several files: `-o 'ascii/{name}.svg'`. Playback and the 3D viewer run only in the user's own terminal: give them the line, such as `npx asciify-engine helmet.glb`.
 4. **Hand it back.** Read the text first; if the subject does not read, try `--light`, `--invert`, a crop or more columns. Then the text in a code block fenced with four backticks, the file and where it is, one line on what you chose, and one alternative (braille, colour blocks, the classic ramp, a wider file), not a menu.
 5. **Live on their website instead?** A hero, background, component or turning model on a page is the kit, a field or `modelSource`, not the command: read on.
 

@@ -16,6 +16,7 @@ export interface GridSettings {
   brightness: number | null;
   gamma: number | null;
   invert: boolean;
+  threshold: number | null;
 }
 
 /** Pixels across and down a cell asks for when a picture is drawn for this grid (3D models, video). */
@@ -35,12 +36,45 @@ function inverted(pixels: AsciiPixels): AsciiPixels {
   return { ...pixels, data };
 }
 
+// Contrast, brightness and gamma for the sub-cell modes, which take no tone options of their own: applied to the pixels.
+function toned(pixels: AsciiPixels, contrast: number, brightness: number, gamma: number): AsciiPixels {
+  const channels = pixels.channels ?? 4, data = Uint8Array.from(pixels.data as ArrayLike<number>), table = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    let t = (v / 255 - 0.5) * contrast + 0.5 + brightness;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    table[v] = Math.round(255 * t ** (1 / gamma));
+  }
+  for (let i = 0; i < data.length; i += channels) for (let k = 0; k < Math.min(3, channels); k++) data[i + k] = table[data[i + k]];
+  return { ...pixels, data };
+}
+
+/** Part of a picture (x, y, width, height in pixels, or fractions when all are 1 or less), mirrored if asked. */
+export function shapePicture<T extends { data: ArrayLike<number>; width: number; height: number; channels?: 1 | 3 | 4 }>(picture: T, crop: [number, number, number, number] | null, flip: 'h' | 'v' | 'hv' | null): T {
+  if (!crop && !flip) return picture;
+  const channels = picture.channels ?? 4, W = picture.width, H = picture.height;
+  let [x, y, w, h] = crop ?? [0, 0, W, H];
+  if (crop && crop.every(n => n <= 1)) { x *= W; y *= H; w *= W; h *= H; }
+  x = Math.max(0, Math.min(W - 1, Math.round(x))); y = Math.max(0, Math.min(H - 1, Math.round(y)));
+  w = Math.max(1, Math.min(W - x, Math.round(w))); h = Math.max(1, Math.min(H - y, Math.round(h)));
+  const out = new Uint8Array(w * h * channels), src = picture.data;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const sx = flip === 'h' || flip === 'hv' ? x + w - 1 - c : x + c, sy = flip === 'v' || flip === 'hv' ? y + h - 1 - r : y + r;
+    const from = (sy * W + sx) * channels, to = (r * w + c) * channels;
+    for (let k = 0; k < channels; k++) out[to + k] = src[from + k];
+  }
+  return { ...picture, data: out, width: w, height: h };
+}
+
 /** One picture as a grid, in the mode asked for. `previous` keeps an animation's characters steady. */
 export function toGrid(pixels: AsciiPixels, s: GridSettings, previous: AsciiGrid | null = null): AsciiGrid {
-  const picture = s.invert ? inverted(pixels) : pixels;
+  let picture = s.invert ? inverted(pixels) : pixels;
   const background = s.light ? 'light' : 'dark';
   if (s.mode === 'braille' || s.mode === 'half' || s.mode === 'quad' || s.mode === 'sextant') {
-    return toBlockGrid(picture, { columns: s.columns, rows: s.rows, mode: s.mode, color: s.color, background, cellAspect: s.cellAspect, ...(s.dither !== null ? { dither: s.dither } : {}) });
+    if (s.contrast !== null || s.brightness !== null || s.gamma !== null) picture = toned(picture, s.contrast ?? 1, s.brightness ?? 0, s.gamma ?? 1);
+    return toBlockGrid(picture, {
+      columns: s.columns, rows: s.rows, mode: s.mode, color: s.color, background, cellAspect: s.cellAspect,
+      ...(s.dither !== null ? { dither: s.dither } : {}), ...(s.threshold !== null ? { threshold: s.threshold } : {}),
+    });
   }
   return toAsciiGrid(picture, {
     columns: s.columns, rows: s.rows, mode: s.mode, color: s.color, background, cellAspect: s.cellAspect,
@@ -101,5 +135,6 @@ export function formatGrids(grids: AsciiGrid[], delays: number[], format: CliFor
         })),
       }) + '\n';
     }
+    default: throw new Error(`formatGrids writes text formats, not ${format}`);
   }
 }

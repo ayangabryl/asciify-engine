@@ -181,6 +181,17 @@ describe('sub-cell grids', () => {
   });
 });
 
+describe('sub-cell grids from small pictures', () => {
+  it('leaves no empty dot columns when the grid has more dots than the picture has pixels', () => {
+    // 16 × 16, all white: every braille dot of a 16-column grid (32 dots across) is lit.
+    const white = picture(16, 16, () => 1);
+    const grid = toBlockGrid(white, { columns: 16, rows: 4, mode: 'braille', dither: false, levels: 'none' });
+    expect(grid.lines.every(line => [...line].every(ch => ch === '⣿'))).toBe(true);
+    const half = toBlockGrid(white, { columns: 32, rows: 8, mode: 'half', dither: false, levels: 'none' });
+    expect(half.lines.every(line => line === '█'.repeat(32))).toBe(true);
+  });
+});
+
 describe('SVG writers', () => {
   const grid = toAsciiGrid(picture(160, 80, (x, y) => (x + y) / 240), { columns: 20, mode: 'tone', charset: ' ░▒▓█' });
   it('keeps the picture\'s proportions', () => {

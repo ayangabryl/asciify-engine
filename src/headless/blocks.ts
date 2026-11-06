@@ -89,6 +89,18 @@ export function toBlockGrid(pixels: AsciiPixels, options: BlockGridOptions = {})
       red[p] += r; green[p] += g; blue[p] += b; count[p]++;
     }
   }
+  // A picture smaller than the grid's sub-pixels leaves some with no pixel in them: they take the pixel under their centre.
+  for (let py = 0; py < ph; py++) for (let px = 0; px < pw; px++) {
+    const p = py * pw + px;
+    if (count[p]) continue;
+    const x = Math.min(width - 1, Math.floor(((px + 0.5) * width) / pw)), y = Math.min(height - 1, Math.floor(((py + 0.5) * height) / ph));
+    const i = (y * width + x) * channels;
+    let r: number, g: number, b: number;
+    if (channels === 1) r = g = b = LINEAR[data[i] & 255];
+    else { r = LINEAR[data[i] & 255]; g = LINEAR[data[i + 1] & 255]; b = LINEAR[data[i + 2] & 255]; }
+    if (channels === 4) { const a = (data[i + 3] & 255) / 255; r = r * a + ground * (1 - a); g = g * a + ground * (1 - a); b = b * a + ground * (1 - a); cover![p] = a; }
+    red[p] = r; green[p] = g; blue[p] = b; count[p] = 1;
+  }
   const tone = new Float32Array(n);
   for (let p = 0; p < n; p++) {
     const k = Math.max(1, count[p]);

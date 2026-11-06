@@ -101,6 +101,11 @@ const BLOCKS = new Map<string, { rects: Rect[]; alpha?: number }>();
   for (let bits = 1; bits < 63; bits++) if (bits !== 21 && bits !== 42) add(String.fromCodePoint(code++), sixth.filter((_, i) => bits & (1 << i)));
 }
 
+/** A block element or shade as rectangles in an 8 × 24 cell, with a coverage for shades; undefined for other characters. @internal */
+export function blockShape(ch: string): { rects: readonly (readonly [number, number, number, number])[]; alpha?: number } | undefined {
+  return BLOCKS.get(ch);
+}
+
 // Runs of cells that share colours, so markup stays a few spans per row rather than one per character.
 function runs(grid: AsciiGrid, r: number, useColor: boolean, skip?: (ch: string) => boolean) {
   const cells = cellsOf(grid.lines[r]), out: { text: string; color: string; back: string }[] = [];
