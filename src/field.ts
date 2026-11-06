@@ -4,6 +4,8 @@
 export { isGlyphFieldSupported, glyphFieldTier } from './field/glyph-field';
 export { mountGlyphField } from './field/mount';
 export { fieldWorkerSupported } from './field/field-offscreen';
+export { defineAsciifyField } from './field/element';
+export type { AsciifyFieldElement } from './field/element';
 export type { GlyphField, GlyphFieldOptions, FieldSource, FieldClearElement, FieldClearRects } from './field/glyph-field';
 export { defineFieldEffect, MAX_FIELD_EFFECTS, MAX_EFFECT_PARAMS } from './field/field-effects';
 export type { FieldEffect, FieldEffectSpec, FieldEffectParams } from './field/field-effects';

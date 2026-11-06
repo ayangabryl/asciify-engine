@@ -195,6 +195,33 @@ ms, in Chromium with SwiftShader (the GPU emulated on the CPU), November 5, 2026
 - Emulated times compare the work asked for; they say nothing about a real GPU's speed, which was not measured.
 
 
+### Footprint: memory and the whole browser's CPU
+
+`node bench/screen.mjs --seconds 5 --runs 3` draws a live 1080p source with each renderer, each in a fresh page, for 5 seconds (3 runs).
+It reads every Chrome process's proportional memory (PSS, from `/proc`, so the GPU and renderer processes count) and the CPU
+time all of Chrome took, alongside the main thread's CPU time per frame. Medians, Chromium with SwiftShader, so CPU time
+includes the emulated GPU's work and frame rates are low. Raw numbers:
+[2026-11-05-footprint-1080.json](2026-11-05-footprint-1080.json).
+
+| 1080p, live source | Memory, all of Chrome | Main thread, CPU ms a frame | Chrome's CPU, cores busy |
+| --- | --- | --- | --- |
+| The page alone (source repainted, nothing drawn) | 345 MB | 0.32 | 1.94 |
+| **asciify-engine field, still image** | **382 MB** | **0.33** | **2.04** |
+| **asciify-engine field in a worker** | **400 MB** | **0.51** | **3.47** |
+| asciify-engine field on the page | 400 MB | 0.76 | 3.48 |
+| ASCII Magic (rebuilt): convert + draw | 379 MB | 17.6 | 3.27 |
+| webgl-ascii-hero | 423 MB | 0.96 | 3.70 |
+| 2025.unseen.co ASCII pass (rebuilt) | 479 MB | 0.57 | 3.65 |
+
+- A still field costs the page almost nothing once drawn: it draws again only when something changes (the pointer, a resize,
+  a theme), so it adds 37 MB and no measurable CPU over the bare page.
+- A live field takes less memory than either studio shader and less of the main thread than any other renderer here. Its
+  whole-browser CPU is within the noise of the others: under emulation it is mostly the GPU's work, which is not a real GPU's.
+  ASCII Magic takes less memory because it draws on a 2D canvas with no WebGL context, at 17.6 ms of main thread a frame.
+- **No leaks** (`node bench/leak.mjs`): 48 mounts and destroys of live 1080p fields (6 a round, 8 rounds) level off after the first round: own
+  context 245 → 258 MB, shared context 299 → 311 MB, worker 270 to 288 MB (garbage collection), about 0.3 MB a mount at most
+  and falling. A field that made its own WebGL context gives it back when it goes.
+
 ## cloudflare.com's dot hero
 
 cloudflare.com's home hero ("Build without boundaries") is not drawn live: its field of small ticks with a warm glow is a

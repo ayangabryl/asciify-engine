@@ -29,6 +29,30 @@ if (isGlyphFieldSupported()) {
 
 Size the canvas with CSS (for example `position:absolute; inset:0; width:100%; height:100%`). The field follows the canvas with a `ResizeObserver` and caps the device pixel ratio at `maxPixelRatio` (2).
 
+
+### As an element: `<asciify-field>` (4.33)
+
+For React 19, Vue, Svelte, Astro, Angular or plain HTML, define the element once on the client and use it like any tag:
+
+```ts
+import { defineAsciifyField } from 'asciify-engine/field';
+defineAsciifyField(); // safe anywhere: returns false without a DOM, and defines once
+```
+
+```html
+<asciify-field src="/media/hero.mp4" hover="fluid" cell-size="10" color="ink" ink="#f3ba32" worker
+               aria-label="Our studio, drawn in our name" style="height: 70vh">
+  <h1>Children are laid over the field</h1>
+</asciify-field>
+```
+
+Every attribute is a field option in kebab case (`cell-size` is `cellSize`). Values are read as numbers, `true`/`false`,
+JSON for objects (`lantern='{"radius":0.2}'`) or text, and a bare attribute means true. `src` is the source, `aria-label`
+names it, and `worker`/`context`/`live` mount it again when changed. Options an attribute cannot hold (an element or canvas
+as source, `effects`, `clear`) go in the `options` property, which is merged over the attributes. `el.field` is the mounted
+`GlyphField` (`pulse()`, `pointer()`, `redraw()`), `el.ready` resolves on the first frame, and a `ready` event fires. The
+element is 320 px tall until CSS sizes it. Moving it within the page keeps its field; removing it destroys it. In React,
+`<asciify-field cell-size={10} ref={el => el && (el.options = { source: canvasRef.current })} />`.
 ## Options
 
 | Option | Default | Notes |

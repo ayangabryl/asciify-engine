@@ -11,8 +11,50 @@ import { toAsciiGrid, gridToText, gridToAnsi, gridToSvg, gridToHtml, ASCII_SYMBO
 const grid = toAsciiGrid({ data, width, height }, { columns: 100 }); // RGBA by default; channels: 3 or 1 for RGB or grey
 gridToText(grid);                 // plain text, rows joined by \n
 gridToAnsi(grid);                 // terminal colour (with color: true), 24-bit or { color: '256' }
-gridToSvg(grid, { fontSize: 12 }); // standalone SVG of text rows
+gridToSvg(grid, { fontSize: 12 }); // standalone SVG: text rows, block characters as exact shapes
 gridToHtml(grid);                 // a <pre>; add aria-hidden or a label where you place it
+gridsToAnimatedSvg(grids, { fps: 12 }); // frames as one animated SVG, CSS only (plays in a README)
+toBlockGrid({ data, width, height }, { mode: 'sextant', color: true }); // sub-cell art, two colours a cell
+```
+
+## SVG for READMEs, docs and design tools
+
+`gridToSvg` sizes each cell from the grid's `cellAspect`, so the SVG keeps the picture's proportions, and spreads characters
+to it with `textLength`, so the art keeps its shape in any monospace font. Block elements (█ ▀ ▄ ▌ ▐, eighths, quadrants,
+sextants) are drawn as exact rectangles, and ░ ▒ ▓ as 25, 50 and 75 % fills, merged into one path per colour. They tile with
+no seams in any font and import cleanly into Figma or Illustrator; `blocks: 'text'` keeps them as characters.
+
+```ts
+// One file for either README theme, named for screen readers:
+gridToSvg(grid, { title: 'Project logo', ink: '#111', dark: { ink: '#eee' } });
+
+// Animated: each frame shown in turn by CSS, no script, so it plays as an <img> on GitHub. Under prefers-reduced-motion it
+// holds the first frame. loop: false plays once and holds the last.
+const frames = pictures.map(p => toAsciiGrid(p, { columns: 80, dither: 'ordered', previous })); // pass previous for calm motion
+fs.writeFileSync('hero.svg', gridsToAnimatedSvg(frames, { fps: 12, dark: { ink: '#eee' } }));
+```
+
+Keep animated SVGs short: every frame is in the file (an 80-column frame is a few kB of text).
+
+## Sub-cell art: `toBlockGrid`
+
+More detail than one character a cell. Each character holds several pixels:
+
+| `mode` | Pixels a cell | Characters | Shows in |
+| --- | --- | --- | --- |
+| `'braille'` (default) | 2 × 4 dots | U+2800–28FF | Nearly every terminal and font |
+| `'half'` | 1 × 2 | ▀ ▄ █ | Everywhere |
+| `'quad'` | 2 × 2 | ▘ ▝ ▖ ▗ ▚ ▞ ▙ … | Everywhere |
+| `'sextant'` | 2 × 3 | 🬀 … (Symbols for Legacy Computing) | Recent terminals and fonts (Kitty, WezTerm, Windows Terminal, Cascadia, Iosevka) |
+
+With `color: true` each cell is split into its lighter and darker pixels, which become its foreground (`colors`) and
+background (`backgrounds`) colours, as terminal image viewers draw it: `half` in colour is effectively two true-colour
+pixels a cell. Without colour, pixels are lit by tone (light pixels on `'dark'`, dark ones on `'light'`), after `levels`, with
+`dither: 'diffuse'` (default), `'ordered'` or `false` and a `threshold`. `cellAspect` defaults to 2, a terminal's cells; use
+the grid's own writers for output (`gridToAnsi` sets the backgrounds; `gridToSvg` draws blocks as shapes).
+
+```ts
+process.stdout.write(gridToAnsi(toBlockGrid(frame, { columns: process.stdout.columns, mode: 'half', color: true })) + '\n');
 ```
 
 ## Getting pixels

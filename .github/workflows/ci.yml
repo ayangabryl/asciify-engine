@@ -78,6 +78,9 @@ jobs:
       - name: Fields drawn in a worker
         run: npm run test:field-worker
 
+      - name: Field element (<asciify-field>) in Chromium
+        run: npm run test:field-element
+
       - name: Upload differences
         if: failure()
         uses: actions/upload-artifact@v4

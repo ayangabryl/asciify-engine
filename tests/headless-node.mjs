@@ -25,6 +25,13 @@ assert.ok(esm.gridToText(grid).trim().length > 0);
 assert.match(esm.gridToAnsi(grid), /\x1b\[38;2;/);
 assert.match(esm.gridToSvg(grid), /^<svg /);
 assert.match(esm.gridToHtml(grid), /^<pre /);
+for (const mode of ['braille', 'half', 'quad', 'sextant']) {
+  const blocks = esm.toBlockGrid({ data, width, height }, { columns: 40, mode, color: true });
+  assert.equal(blocks.lines.length, blocks.rows);
+  assert.ok(blocks.lines.every(line => [...line].length === 40), `${mode}: one character a cell`);
+  assert.match(esm.gridToAnsi(blocks), mode === 'braille' ? /\x1b\[38;2;/ : /;48;2;/);
+}
+assert.match(esm.gridsToAnimatedSvg([grid, grid], { fps: 4 }), /@keyframes s/);
 assert.deepEqual(cjs.toAsciiGrid({ data, width, height }, { columns: 64 }).lines, esm.toAsciiGrid({ data, width, height }, { columns: 64 }).lines, 'ESM and CJS agree');
 console.log(esm.gridToText(esm.toAsciiGrid({ data, width, height }, { columns: 48 })));
 console.log(`\nheadless ok in Node ${process.version}: ${grid.columns}x${grid.rows} in ${ms.toFixed(1)} ms, no DOM, no globals added.`);

@@ -62,7 +62,11 @@ export interface AsciiGrid {
   readonly lines: readonly string[];
   /** With `color`, RGB per cell (row by row); otherwise null. */
   readonly colors: Uint8Array | null;
+  /** A background colour per cell (RGB, row by row), for grids drawn in two colours a cell (`toBlockGrid`); else absent. */
+  readonly backgrounds?: Uint8Array | null;
   readonly background: 'dark' | 'light';
+  /** Height over width of a cell the grid was made for (`cellAspect`), so writers keep the picture's proportions. */
+  readonly cellAspect?: number;
 }
 
 // sRGB transfer, both ways: pixels are averaged as light (right for shrinking a picture), then shaped and matched as seen.
@@ -500,7 +504,7 @@ export function gridParams(options: AsciiGridOptions, width: number, height: num
   const mode: 'shape' | 'tone' = options.mode === 'tone' ? 'tone' : 'shape';
   const contrast = finite(options.contrast, 1, 0, 3), brightness = finite(options.brightness, 0, -1, 1), gamma = finite(options.gamma, 1, 0.1, 5);
   const dither = options.dither ?? 'diffuse', diffuse = dither === true || dither === 'diffuse', ordered = dither === 'ordered';
-  return { columns, rows, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor: !!options.color };
+  return { columns, rows, cellAspect, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor: !!options.color };
 }
 
 /**
@@ -512,7 +516,7 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
   const { width, height, data } = pixels;
   const channels = pixels.channels ?? 4;
   if (!(width > 0 && height > 0) || data.length < width * height * channels) throw new Error('toAsciiGrid needs width × height × channels pixel values.');
-  const { columns, rows, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor } = gridParams(options, width, height);
+  const { columns, rows, cellAspect, light, mode, contrast, brightness, gamma, diffuse, ordered, wantColor } = gridParams(options, width, height);
 
   // Each pixel as linear light, transparent pixels showing the ground the text sits on.
   const ground = light ? 1 : 0;
@@ -602,5 +606,5 @@ export function toAsciiGrid(pixels: AsciiPixels, options: AsciiGridOptions = {})
     previous: options.previous && options.previous.columns === columns && options.previous.rows === rows ? options.previous.lines : null,
     cellRgb: wantColor ? cellRgb : null, stride: toneCells ? 1 : stride,
   });
-  return { columns, rows, lines: out, colors, background: light ? 'light' : 'dark' };
+  return { columns, rows, lines: out, colors, background: light ? 'light' : 'dark', cellAspect };
 }

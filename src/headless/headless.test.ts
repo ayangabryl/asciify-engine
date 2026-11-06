@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { glyphInk, gridToAnsi, gridToHtml, gridToSvg, gridToText, toAsciiGrid } from '../headless';
+import { glyphInk, gridToAnsi, gridToHtml, gridToSvg, gridToText, gridsToAnimatedSvg, toAsciiGrid, toBlockGrid } from '../headless';
 
 const picture = (w: number, h: number, paint: (x: number, y: number) => number, channels: 1 | 3 | 4 = 4) => {
   const data = new Uint8Array(w * h * channels);
@@ -132,5 +132,86 @@ describe('fast paths', () => {
   it('has no GPU converter without a canvas, so callers fall back', async () => {
     const { createAsciiGpu } = await import('../headless');
     expect(createAsciiGpu()).toBeNull();
+  });
+});
+
+describe('sub-cell grids', () => {
+  // Left half black, right half white; a light square at the top left of the black half.
+  const split = picture(80, 80, (x, y) => (x >= 40 ? 1 : x < 10 && y < 20 ? 1 : 0));
+  it('lights braille dots by tone, eight to a cell', () => {
+    const grid = toBlockGrid(split, { columns: 8, rows: 4, mode: 'braille', dither: false, levels: 'none' });
+    expect(grid.lines).toHaveLength(4);
+    expect(grid.lines[0][7]).toBe('⣿');
+    expect(grid.lines[3][0]).toBe('⠀');
+    expect(grid.cellAspect).toBe(2);
+    // Dots are lit where it is light: the square fills the top-left cell.
+    expect(grid.lines[0][0]).toBe('⣿');
+    expect(grid.lines[3][3]).toBe('⠀');
+  });
+  it('draws half, quadrant and sextant blocks', () => {
+    const half = toBlockGrid(picture(40, 40, (_, y) => (y < 20 ? 1 : 0)), { columns: 4, rows: 2, mode: 'half', dither: false, levels: 'none' });
+    expect(half.lines).toEqual(['████', '    ']);
+    const steps = picture(40, 40, (_, y) => (y % 20 < 10 ? 1 : 0));
+    expect(toBlockGrid(steps, { columns: 4, rows: 2, mode: 'half', dither: false, levels: 'none' }).lines).toEqual(['▀▀▀▀', '▀▀▀▀']);
+    const quad = toBlockGrid(picture(20, 20, (x, y) => (x < 10 && y < 10 ? 1 : 0)), { columns: 1, rows: 1, mode: 'quad', dither: false, levels: 'none' });
+    expect(quad.lines).toEqual(['▘']);
+    const sextant = toBlockGrid(picture(20, 30, (x, y) => (x >= 10 && y < 10 ? 1 : 0)), { columns: 1, rows: 1, mode: 'sextant', dither: false, levels: 'none' });
+    expect(sextant.lines).toEqual(['\u{1FB01}']);
+    expect(gridToText(sextant)).toBe('🬁');
+  });
+  it('splits each cell into two colours with color', () => {
+    const red = picture(20, 20, () => 0, 4);
+    for (let i = 0; i < 400; i++) if (Math.floor(i / 20) < 10) { red.data[i * 4] = 255; red.data[i * 4 + 1] = 40; red.data[i * 4 + 2] = 40; }
+    const grid = toBlockGrid(red, { columns: 1, rows: 1, mode: 'half', color: true });
+    expect(grid.lines).toEqual(['▀']);
+    expect([...grid.colors!]).toEqual([255, 40, 40]);
+    expect([...grid.backgrounds!]).toEqual([0, 0, 0]);
+    // Terminal: foreground and background set together.
+    expect(gridToAnsi(grid)).toBe('\x1b[38;2;255;40;40;48;2;0;0;0m▀\x1b[0m');
+    expect(gridToHtml(grid)).toContain('color:#ff2828;background:#000000');
+    const svg = gridToSvg(grid);
+    expect(svg).toContain('<path fill="#000000"');
+    expect(svg).toContain('<path fill="#ff2828"');
+    expect(svg).not.toContain('<text');
+  });
+  it('counts sextants as one cell each in colour output', () => {
+    const grid = toBlockGrid(picture(60, 30, x => (x % 20) / 20), { columns: 3, rows: 1, mode: 'sextant', color: true });
+    const cells = gridToAnsi(grid).replace(/\x1b\[[\d;]*m/g, '');
+    expect([...cells]).toHaveLength(3);
+  });
+});
+
+describe('SVG writers', () => {
+  const grid = toAsciiGrid(picture(160, 80, (x, y) => (x + y) / 240), { columns: 20, mode: 'tone', charset: ' ░▒▓█' });
+  it('keeps the picture\'s proportions', () => {
+    const svg = gridToSvg(toAsciiGrid(picture(400, 200, x => x / 400), { columns: 40 }), { fontSize: 10 });
+    const [, w, h] = svg.match(/width="(\d+)" height="(\d+)"/)!.map(Number);
+    expect(w / h).toBeGreaterThan(1.9);
+    expect(w / h).toBeLessThan(2.1);
+  });
+  it('draws blocks and shades as shapes, or as text when asked', () => {
+    const svg = gridToSvg(grid);
+    expect(svg).toMatch(/<path fill-opacity="0.5" d="M/);
+    expect(svg).not.toMatch(/[░▒▓█]/);
+    expect(gridToSvg(grid, { blocks: 'text' })).toMatch(/[░▒▓█]/);
+  });
+  it('follows the reader\'s scheme and names itself', () => {
+    const svg = gridToSvg(grid, { title: 'A gradient', ink: '#111', dark: { ink: '#eee', background: '#000' } });
+    expect(svg).toContain('role="img"><title>A gradient</title>');
+    expect(svg).toContain('@media (prefers-color-scheme: dark){.i{fill:#eee}.b{fill:#000}}');
+    expect(gridToSvg(grid)).toContain('aria-hidden="true"');
+  });
+  it('animates frames with CSS alone and holds the first under reduced motion', () => {
+    const frames = [0, 1, 2].map(k => toAsciiGrid(picture(80, 40, x => ((x + k * 20) % 80) / 80), { columns: 10 }));
+    const svg = gridsToAnimatedSvg(frames, { fps: 6 });
+    expect(svg.match(/<g class="f f\d/g)).toHaveLength(3);
+    expect(svg).toContain('animation:s 0.5000s infinite');
+    expect(svg).toContain('animation-delay:0.3333s');
+    expect(svg).toContain('@media (prefers-reduced-motion: reduce){.f{animation:none}.f0{visibility:visible}}');
+    expect(svg).not.toContain('<script');
+    const once = gridsToAnimatedSvg(frames, { fps: 6, loop: false });
+    expect(once).toContain('class="f f2 l"');
+    expect(gridsToAnimatedSvg(frames.slice(0, 1))).not.toContain('@keyframes');
+    expect(() => gridsToAnimatedSvg([])).toThrow();
   });
 });

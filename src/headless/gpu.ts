@@ -634,7 +634,7 @@ export function createAsciiGpuHere(): AsciiGpu | null {
       rgb = new Uint8Array(columns * rows * 3);
       for (let i = 0, at = rows * texels * columns * 4; i < columns * rows; i++, at += 4) { rgb[i * 3] = picked[at]; rgb[i * 3 + 1] = picked[at + 1]; rgb[i * 3 + 2] = picked[at + 2]; }
     }
-    return { columns, rows, lines, colors: rgb, background: p.light ? 'light' : 'dark' };
+    return { columns, rows, lines, colors: rgb, background: p.light ? 'light' : 'dark', cellAspect: p.cellAspect };
   };
 
   return {
