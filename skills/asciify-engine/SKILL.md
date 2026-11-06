@@ -19,7 +19,7 @@ Use the published `asciify-engine` npm package. Tested against **4.32.9**. Check
 npm install asciify-engine@latest
 ```
 
-Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/headless` for pixels to text with no DOM (servers, edge, terminals); `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
+Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/headless` for pixels to text with no DOM (servers, edge, terminals); `/decode` for image files to pixels with no dependencies; `/model` for 3D models to ASCII; the `asciify-engine` command for the terminal; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
 
 ## Start here: kit first
 
@@ -45,6 +45,9 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | A three.js / React Three Fiber scene, game or app canvas drawn live as characters | `mountGlyphField(canvas, { source: renderer.domElement, live: true })` ([glyph-field.md](references/glyph-field.md#live-sources-3d-scenes-and-app-canvases-433)) |
 | Their own UI (a card, a form, a view) drawn in characters, live, for a transition or a hover | `elementSource` from `/kit` as a `live` field source ([kit.md](references/kit.md#elementsource-433-experimental)) |
 | ASCII on a server, at the edge or in a terminal: OG images, emails, CLI banners, READMEs, bots | `toAsciiGrid` from `asciify-engine/headless` ([headless.md](references/headless.md)) |
+| A picture, GIF, video or 3D model as ASCII from the command line, or an animated SVG for a README | `npx asciify-engine <file>` ([cli.md](references/cli.md)) |
+| A 3D model (glTF/GLB, OBJ, STL, PLY) as ASCII: in a terminal, an SVG, or a live hero on a page | `asciify-engine/model` ([model.md](references/model.md)) |
+| Image files (PNG, JPEG, GIF, BMP, PNM, QOI) to pixels with no dependencies, at the edge or in Node | `decodeImage` from `asciify-engine/decode` ([headless.md](references/headless.md#getting-pixels)) |
 | A playing video or 3D canvas as text (a string per frame, not drawn on screen) | `createAsciiGpu()` from `asciify-engine/headless` ([headless.md](references/headless.md#on-the-gpu-createasciigpu)) |
 | Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |

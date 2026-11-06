@@ -37,6 +37,9 @@ jobs:
       - name: Headless entry runs in Node without a DOM
         run: npm run test:headless
 
+      - name: Command line (images, GIF, video, 3D, every format)
+        run: npm run test:cli
+
   browser:
     name: Visual baselines and browser checks
     runs-on: ubuntu-latest
@@ -80,6 +83,9 @@ jobs:
 
       - name: Field element (<asciify-field>) in Chromium
         run: npm run test:field-element
+
+      - name: 3D models on the GPU (modelSource)
+        run: npm run test:model
 
       - name: Upload differences
         if: failure()

@@ -14,7 +14,7 @@ const GLOBALS = ['window', 'document', 'navigator', 'matchMedia', 'requestAnimat
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('entry points', () => {
-  for (const entry of ['index', 'core', 'field', 'hover', 'studio', 'kit', 'headless']) {
+  for (const entry of ['index', 'core', 'field', 'hover', 'studio', 'kit', 'headless', 'model', 'decode']) {
     it(`asciify-engine/${entry === 'index' ? '' : entry} does no work at import`, async () => {
       vi.resetModules();
       touched.length = 0;

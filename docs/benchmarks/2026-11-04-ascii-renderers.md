@@ -254,6 +254,26 @@ These draw pixels rather than text, each in its own font, so they are scored on 
 postprocessing tints each glyph by the scene's colour by default, which is why it reads dark here. @sister.software/asciify
 fills each cell with a block and cuts the glyph out of it, a mosaic rather than text, so it is listed apart.
 
+## Command-line tools: jp2a and chafa
+
+`node bench/cli-compare.mjs --images <dir>` runs `asciify-engine`'s command, jp2a 1.1.1 (`--background=dark`) and chafa
+1.14 (`--symbols ascii -c none --stretch`) on the same PNG, each asked for exactly the same columns and rows of plain
+characters, light on dark. The text is scored as every renderer above is: drawn in DejaVu Sans Mono and compared with the
+picture by SSIM up close and at a distance. The pictures are 20 photos from the asciify.org looks library that the engine was
+not tuned on (sorted by name, every third starting from the second), plus the line art and type images. Raw numbers:
+[2026-11-06-cli.json](2026-11-06-cli.json).
+
+| Command, 100 columns | Photos | Line art | Type |
+| --- | --- | --- | --- |
+| **asciify-engine** (shape) | **0.593 / 0.878** | **0.846** / 0.876 | **0.902** / 0.889 |
+| **asciify-engine --tone** | 0.577 / **0.883** | 0.812 / **0.916** | 0.896 / **0.910** |
+| jp2a 1.1.1 | 0.493 / 0.795 | 0.745 / 0.674 | 0.870 / 0.828 |
+| chafa 1.14, ASCII symbols | 0.445 / 0.700 | 0.793 / 0.742 | 0.899 / 0.872 |
+
+One of the engine's modes is best on every picture, up close and at a distance (44 of 44). Chafa is built for colour and for
+terminal graphics protocols (sixel, kitty, iTerm), which this table does not measure; its plain-ASCII mode is what is scored
+here. ascii-image-converter was not measured (its Go build could not be installed here).
+
 ## Live 3D
 
 `node bench/three-live.mjs` renders a three.js torus knot each frame and draws it with a glyph field (`live: true`,

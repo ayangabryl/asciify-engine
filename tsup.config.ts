@@ -61,10 +61,10 @@ const kitEsm: Options = {
 export default defineConfig([
   {
     ...shared,
-    entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/headless.ts'],
+    entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/headless.ts', 'src/model.ts', 'src/decode.ts'],
     format: ['esm', 'cjs'],
     esbuildPlugins: [workerSource, workerChunk],
-    dts: { entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/kit.ts', 'src/headless.ts'] },
+    dts: { entry: ['src/index.ts', 'src/core.ts', 'src/hover.ts', 'src/studio.ts', 'src/field.ts', 'src/kit.ts', 'src/headless.ts', 'src/model.ts', 'src/decode.ts'] },
     clean: true,
     // After the clean build, so nothing races its clean.
     async onSuccess() {
@@ -74,6 +74,8 @@ export default defineConfig([
         build({ ...shared, config: false, entry: { 'field-worker': 'src/field/field-worker-source.ts' }, format: ['esm'], sourcemap: false }),
         build({ ...shared, config: false, entry: ['src/kit.ts'], format: ['cjs'], esbuildPlugins: [workerSource, sharedField(ext => `./field.${ext}`)] }),
         build({ ...kitEsm, config: false }),
+        // The command line, for Node 18 and later: `npx asciify-engine photo.jpg`.
+        build({ ...shared, config: false, entry: { cli: 'src/cli.ts' }, format: ['esm'], platform: 'node', target: 'node18', sourcemap: false, banner: { js: '#!/usr/bin/env node' } }),
       ]);
       for (const name of kitModules) {
         const stub = readFileSync(`dist/kit/${name}.js`, 'utf8').replace(/\/\/# sourceMappingURL=\S+\s*$/, '');

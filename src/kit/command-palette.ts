@@ -257,7 +257,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     panel.dataset.state = 'opening';
     clip([triggerInset(), full()], OPEN_MS);
     if (surface) { busy = true; hideContent(true); fly(false); }
-    timer = setTimeout(() => { timer = 0; delete panel.dataset.state; busy = false; hideContent(false); surface?.kick(); }, OPEN_MS * 0.55);
+    timer = setTimeout(() => { timer = 0; delete panel.dataset.state; busy = false; hideContent(false); surface?.kick(); }, OPEN_MS * 0.55) as unknown as number;
   };
   const close = () => {
     if (!isOpen) return;
@@ -283,7 +283,7 @@ export function commandPalette(panel: HTMLElement, options: CommandPaletteOption
     const anim = clip([full(), triggerInset()], CLOSE_MS, 'forwards');
     // The panel's surface fades out as its clip lands on the trigger, so the trigger shows through instead of a blank pill.
     const fade = typeof panel.animate === 'function' ? panel.animate([{ opacity: 1 }, { opacity: 1, offset: 0.4 }, { opacity: 0 }], { duration: CLOSE_MS, fill: 'forwards' }) : null;
-    timer = setTimeout(() => { done(); anim?.cancel(); fade?.cancel(); }, CLOSE_MS);
+    timer = setTimeout(() => { done(); anim?.cancel(); fade?.cancel(); }, CLOSE_MS) as unknown as number;
   };
   const select = (index: number) => {
     const n = rows().length;

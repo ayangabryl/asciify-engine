@@ -80,7 +80,7 @@ export class FakeElement extends FakeNode {
   addEventListener(type: string, fn: (event: unknown) => void) { if (!this.listeners.has(type)) this.listeners.set(type, new Set()); this.listeners.get(type)!.add(fn); }
   removeEventListener(type: string, fn: (event: unknown) => void) { this.listeners.get(type)?.delete(fn); }
   /** Fires `type` here and on each ancestor, like a bubbling event. */
-  dispatch(type: string, event: Record<string, unknown> = {}) {
+  dispatch(type: string, event: Record<string, unknown> = {}): Record<string, unknown> {
     const path: FakeElement[] = [];
     for (let n: FakeElement | null = this; n; n = n.parentElement) path.push(n);
     const full = { target: this, button: 0, pointerId: 1, clientX: 0, clientY: 0, preventDefault: vi.fn(), stopPropagation() {}, composedPath: () => path, ...event };

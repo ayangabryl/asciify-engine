@@ -6,6 +6,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "asciify-engine": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -35,6 +38,26 @@
       "require": {
         "types": "./dist/headless.d.cts",
         "default": "./dist/headless.cjs"
+      }
+    },
+    "./model": {
+      "import": {
+        "types": "./dist/model.d.ts",
+        "default": "./dist/model.js"
+      },
+      "require": {
+        "types": "./dist/model.d.cts",
+        "default": "./dist/model.cjs"
+      }
+    },
+    "./decode": {
+      "import": {
+        "types": "./dist/decode.d.ts",
+        "default": "./dist/decode.js"
+      },
+      "require": {
+        "types": "./dist/decode.d.cts",
+        "default": "./dist/decode.cjs"
       }
     },
     "./hover": {
@@ -119,7 +142,9 @@
     "test:element": "node tests/element-source-browser.mjs",
     "test:gpu-text": "node tests/headless-gpu-browser.mjs",
     "test:field-worker": "node tests/field-worker-browser.mjs",
-    "test:field-element": "node tests/field-element-browser.mjs"
+    "test:field-element": "node tests/field-element-browser.mjs",
+    "test:cli": "node tests/cli-node.mjs",
+    "test:model": "node tests/model-browser.mjs"
   },
   "keywords": [
     "ascii",
@@ -158,6 +183,7 @@
     "mediabunny": "^1.56.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "playwright": "1.63.0",
     "terser": "^5.46.0",
     "tsup": "^8.4.0",

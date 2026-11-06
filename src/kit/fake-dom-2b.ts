@@ -51,7 +51,7 @@ export class FakeElement extends FakeNode {
   innerHTML = '';
   scrollTop = 0;
   files: unknown[] | null = null;
-  click = vi.fn(() => this.dispatch('click'));
+  click = vi.fn((): Record<string, unknown> => this.dispatch('click'));
   animate = vi.fn();
   focus = vi.fn();
   setPointerCapture = vi.fn();
@@ -80,7 +80,7 @@ export class FakeElement extends FakeNode {
   removeAttribute(name: string) { this.attributes.delete(name); }
   addEventListener(type: string, fn: (event: unknown) => void) { if (!this.listeners.has(type)) this.listeners.set(type, new Set()); this.listeners.get(type)!.add(fn); }
   removeEventListener(type: string, fn: (event: unknown) => void) { this.listeners.get(type)?.delete(fn); }
-  dispatch(type: string, event: Record<string, unknown> = {}) {
+  dispatch(type: string, event: Record<string, unknown> = {}): Record<string, unknown> {
     const e = { currentTarget: this, target: this, button: 0, pointerId: 1, preventDefault: vi.fn(), ...event };
     for (const fn of this.listeners.get(type) ?? []) fn(e);
     return e;

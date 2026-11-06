@@ -59,13 +59,17 @@ process.stdout.write(gridToAnsi(toBlockGrid(frame, { columns: process.stdout.col
 
 ## Getting pixels
 
-- **Node**: `const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });`
+- **Anywhere, no dependencies** (Node, Deno, Bun, workers, Cloudflare Workers and other edge runtimes): `decodeImage(bytes)`
+  from `asciify-engine/decode` reads PNG and APNG, JPEG (baseline and progressive, EXIF orientation applied), GIF (every frame),
+  BMP, PNM and QOI. `const image = decodeImage(bytes); toAsciiGrid({ data: image.frames[0].data, width: image.width, height: image.height })`.
+  Animated files give every frame, composited, with its `delay` in ms and the `loop` count.
+- **Node with sharp**, for WebP, AVIF, HEIC and TIFF: `const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });`
   then `toAsciiGrid({ data, width: info.width, height: info.height }, …)`.
 - **Browser or worker, live video**: `createAsciiGpu()` converts a video, image, canvas (a three.js one included), `ImageBitmap`
   or `VideoFrame` on the GPU, with every option below, and never makes the main thread wait for it (see below).
 - **Browser or worker, a still**: `imageToAsciiGrid(source, options)` draws the frame down on a 2D canvas and reads back only
   that small picture, synchronously. An `ImageData` also works with `toAsciiGrid`.
-- **Edge runtimes**: decode with a WebAssembly image decoder, or pass frames you already have as RGBA.
+- **3D models**: `modelToGrid` from `asciify-engine/model` draws and converts in one call ([model.md](model.md)).
 
 ## Options
 

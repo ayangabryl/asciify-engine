@@ -1,0 +1,757 @@
+{
+ "columns": 100,
+ "tools": [
+  "asciify-engine (shape)",
+  "asciify-engine (tone)",
+  "jp2a 1.1 (--background=dark)",
+  "chafa 1.14 (ASCII symbols)"
+ ],
+ "pictures": [
+  {
+   "name": "alley",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.6171,
+     "closeCode": 0.637,
+     "far": 0.8764,
+     "farCode": 0.7921
+    },
+    "asciify-engine (tone)": {
+     "close": 0.6106,
+     "closeCode": 0.4912,
+     "far": 0.9342,
+     "farCode": 0.6445
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.3912,
+     "closeCode": 0.2101,
+     "far": 0.6709,
+     "farCode": 0.2667
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.4211,
+     "closeCode": 0.4338,
+     "far": 0.7831,
+     "farCode": 0.7676
+    }
+   }
+  },
+  {
+   "name": "cablecar",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5045,
+     "closeCode": 0.3386,
+     "far": 0.8936,
+     "farCode": 0.6505
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5249,
+     "closeCode": 0.3303,
+     "far": 0.8871,
+     "farCode": 0.5597
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4376,
+     "closeCode": 0.2425,
+     "far": 0.8326,
+     "farCode": 0.451
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.4269,
+     "closeCode": 0.2652,
+     "far": 0.7829,
+     "farCode": 0.5493
+    }
+   }
+  },
+  {
+   "name": "catfig",
+   "kind": "photo",
+   "rows": 52,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.8149,
+     "closeCode": 0.7623,
+     "far": 0.935,
+     "farCode": 0.8687
+    },
+    "asciify-engine (tone)": {
+     "close": 0.8248,
+     "closeCode": 0.7603,
+     "far": 0.9449,
+     "farCode": 0.8376
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.7863,
+     "closeCode": 0.725,
+     "far": 0.8938,
+     "farCode": 0.7752
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.8207,
+     "closeCode": 0.7605,
+     "far": 0.9357,
+     "farCode": 0.8636
+    }
+   }
+  },
+  {
+   "name": "dancer",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.6008,
+     "closeCode": 0.7482,
+     "far": 0.7261,
+     "farCode": 0.8615
+    },
+    "asciify-engine (tone)": {
+     "close": 0.6851,
+     "closeCode": 0.6194,
+     "far": 0.8353,
+     "farCode": 0.6731
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.6333,
+     "closeCode": 0.5618,
+     "far": 0.7488,
+     "farCode": 0.5777
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.6408,
+     "closeCode": 0.6338,
+     "far": 0.7885,
+     "farCode": 0.7884
+    }
+   }
+  },
+  {
+   "name": "fern",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.7318,
+     "closeCode": 0.7465,
+     "far": 0.8441,
+     "farCode": 0.8329
+    },
+    "asciify-engine (tone)": {
+     "close": 0.7954,
+     "closeCode": 0.7115,
+     "far": 0.9076,
+     "farCode": 0.7708
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.7398,
+     "closeCode": 0.647,
+     "far": 0.8323,
+     "farCode": 0.6734
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.7508,
+     "closeCode": 0.7248,
+     "far": 0.902,
+     "farCode": 0.8469
+    }
+   }
+  },
+  {
+   "name": "heron",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.4842,
+     "closeCode": 0.2617,
+     "far": 0.8627,
+     "farCode": 0.6443
+    },
+    "asciify-engine (tone)": {
+     "close": 0.4218,
+     "closeCode": 0.232,
+     "far": 0.8549,
+     "farCode": 0.5787
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.3728,
+     "closeCode": 0.2168,
+     "far": 0.8309,
+     "farCode": 0.5379
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.2781,
+     "closeCode": 0.1483,
+     "far": 0.5138,
+     "farCode": 0.3592
+    }
+   }
+  },
+  {
+   "name": "island",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5294,
+     "closeCode": 0.3198,
+     "far": 0.8599,
+     "farCode": 0.5023
+    },
+    "asciify-engine (tone)": {
+     "close": 0.4412,
+     "closeCode": 0.2497,
+     "far": 0.7718,
+     "farCode": 0.4059
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4187,
+     "closeCode": 0.2209,
+     "far": 0.7911,
+     "farCode": 0.3605
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3811,
+     "closeCode": 0.2604,
+     "far": 0.6834,
+     "farCode": 0.4816
+    }
+   }
+  },
+  {
+   "name": "lavender",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5842,
+     "closeCode": 0.4272,
+     "far": 0.9415,
+     "farCode": 0.6731
+    },
+    "asciify-engine (tone)": {
+     "close": 0.551,
+     "closeCode": 0.3703,
+     "far": 0.9425,
+     "farCode": 0.5766
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4427,
+     "closeCode": 0.2431,
+     "far": 0.8512,
+     "farCode": 0.3787
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3588,
+     "closeCode": 0.233,
+     "far": 0.7287,
+     "farCode": 0.4644
+    }
+   }
+  },
+  {
+   "name": "macaw",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.7592,
+     "closeCode": 0.7266,
+     "far": 0.9566,
+     "farCode": 0.9026
+    },
+    "asciify-engine (tone)": {
+     "close": 0.7654,
+     "closeCode": 0.7168,
+     "far": 0.9657,
+     "farCode": 0.8608
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.6734,
+     "closeCode": 0.5819,
+     "far": 0.8354,
+     "farCode": 0.6176
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.6467,
+     "closeCode": 0.629,
+     "far": 0.8281,
+     "farCode": 0.7719
+    }
+   }
+  },
+  {
+   "name": "olive",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5222,
+     "closeCode": 0.3422,
+     "far": 0.855,
+     "farCode": 0.5712
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5241,
+     "closeCode": 0.3082,
+     "far": 0.8638,
+     "farCode": 0.4999
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4358,
+     "closeCode": 0.2271,
+     "far": 0.8147,
+     "farCode": 0.407
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3195,
+     "closeCode": 0.1732,
+     "far": 0.6024,
+     "farCode": 0.3151
+    }
+   }
+  },
+  {
+   "name": "perfume",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5135,
+     "closeCode": 0.2939,
+     "far": 0.8889,
+     "farCode": 0.6809
+    },
+    "asciify-engine (tone)": {
+     "close": 0.462,
+     "closeCode": 0.2677,
+     "far": 0.8754,
+     "farCode": 0.5901
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.3951,
+     "closeCode": 0.2304,
+     "far": 0.8396,
+     "farCode": 0.5207
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.274,
+     "closeCode": 0.149,
+     "far": 0.5066,
+     "farCode": 0.3453
+    }
+   }
+  },
+  {
+   "name": "poppies",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.6041,
+     "closeCode": 0.4524,
+     "far": 0.9194,
+     "farCode": 0.6539
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5905,
+     "closeCode": 0.3859,
+     "far": 0.9208,
+     "farCode": 0.5488
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4448,
+     "closeCode": 0.2319,
+     "far": 0.8055,
+     "farCode": 0.3363
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.2574,
+     "closeCode": 0.1582,
+     "far": 0.5272,
+     "farCode": 0.2808
+    }
+   }
+  },
+  {
+   "name": "radio",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.4991,
+     "closeCode": 0.3171,
+     "far": 0.8309,
+     "farCode": 0.6197
+    },
+    "asciify-engine (tone)": {
+     "close": 0.4591,
+     "closeCode": 0.2894,
+     "far": 0.8388,
+     "farCode": 0.5689
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.3852,
+     "closeCode": 0.2225,
+     "far": 0.7701,
+     "farCode": 0.444
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3662,
+     "closeCode": 0.1946,
+     "far": 0.6567,
+     "farCode": 0.4318
+    }
+   }
+  },
+  {
+   "name": "rider",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5601,
+     "closeCode": 0.4111,
+     "far": 0.9576,
+     "farCode": 0.6876
+    },
+    "asciify-engine (tone)": {
+     "close": 0.498,
+     "closeCode": 0.3463,
+     "far": 0.9159,
+     "farCode": 0.5575
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4746,
+     "closeCode": 0.2736,
+     "far": 0.871,
+     "farCode": 0.392
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.2501,
+     "closeCode": 0.165,
+     "far": 0.497,
+     "farCode": 0.3809
+    }
+   }
+  },
+  {
+   "name": "scooter",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5241,
+     "closeCode": 0.3774,
+     "far": 0.9098,
+     "farCode": 0.696
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5129,
+     "closeCode": 0.3427,
+     "far": 0.9066,
+     "farCode": 0.6028
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4474,
+     "closeCode": 0.2535,
+     "far": 0.8105,
+     "farCode": 0.4192
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.4243,
+     "closeCode": 0.2684,
+     "far": 0.7884,
+     "farCode": 0.5714
+    }
+   }
+  },
+  {
+   "name": "skate",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5698,
+     "closeCode": 0.5463,
+     "far": 0.8998,
+     "farCode": 0.7733
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5537,
+     "closeCode": 0.4294,
+     "far": 0.9113,
+     "farCode": 0.6157
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.3807,
+     "closeCode": 0.2238,
+     "far": 0.7086,
+     "farCode": 0.3335
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3809,
+     "closeCode": 0.2926,
+     "far": 0.7273,
+     "farCode": 0.537
+    }
+   }
+  },
+  {
+   "name": "spheres",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.8901,
+     "closeCode": 0.8643,
+     "far": 0.9375,
+     "farCode": 0.8898
+    },
+    "asciify-engine (tone)": {
+     "close": 0.8869,
+     "closeCode": 0.8428,
+     "far": 0.9561,
+     "farCode": 0.8578
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.8538,
+     "closeCode": 0.8023,
+     "far": 0.9,
+     "farCode": 0.7894
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.8357,
+     "closeCode": 0.8351,
+     "far": 0.868,
+     "farCode": 0.8916
+    }
+   }
+  },
+  {
+   "name": "strip",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.4404,
+     "closeCode": 0.6969,
+     "far": 0.705,
+     "farCode": 0.8626
+    },
+    "asciify-engine (tone)": {
+     "close": 0.3706,
+     "closeCode": 0.307,
+     "far": 0.6542,
+     "farCode": 0.3884
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.2603,
+     "closeCode": 0.1608,
+     "far": 0.4356,
+     "farCode": 0.1783
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.2379,
+     "closeCode": 0.2385,
+     "far": 0.4095,
+     "farCode": 0.4356
+    }
+   }
+  },
+  {
+   "name": "tower",
+   "kind": "photo",
+   "rows": 69,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5749,
+     "closeCode": 0.3843,
+     "far": 0.8883,
+     "farCode": 0.6353
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5338,
+     "closeCode": 0.3122,
+     "far": 0.8914,
+     "farCode": 0.5302
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4599,
+     "closeCode": 0.2302,
+     "far": 0.8325,
+     "farCode": 0.4024
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.3778,
+     "closeCode": 0.2136,
+     "far": 0.6964,
+     "farCode": 0.4297
+    }
+   }
+  },
+  {
+   "name": "village",
+   "kind": "photo",
+   "rows": 39,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.5358,
+     "closeCode": 0.3496,
+     "far": 0.8744,
+     "farCode": 0.5991
+    },
+    "asciify-engine (tone)": {
+     "close": 0.5367,
+     "closeCode": 0.3255,
+     "far": 0.8725,
+     "farCode": 0.5307
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.4308,
+     "closeCode": 0.2363,
+     "far": 0.8166,
+     "farCode": 0.4387
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.4418,
+     "closeCode": 0.2749,
+     "far": 0.7841,
+     "farCode": 0.4856
+    }
+   }
+  },
+  {
+   "name": "synthetic lines",
+   "kind": "lines",
+   "rows": 32,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.8459,
+     "closeCode": 0.8316,
+     "far": 0.8764,
+     "farCode": 0.8615
+    },
+    "asciify-engine (tone)": {
+     "close": 0.8119,
+     "closeCode": 0.803,
+     "far": 0.9157,
+     "farCode": 0.869
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.7445,
+     "closeCode": 0.738,
+     "far": 0.6741,
+     "farCode": 0.6652
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.7935,
+     "closeCode": 0.7812,
+     "far": 0.7418,
+     "farCode": 0.7496
+    }
+   }
+  },
+  {
+   "name": "synthetic text",
+   "kind": "text",
+   "rows": 26,
+   "scores": {
+    "asciify-engine (shape)": {
+     "close": 0.9018,
+     "closeCode": 0.882,
+     "far": 0.8893,
+     "farCode": 0.8751
+    },
+    "asciify-engine (tone)": {
+     "close": 0.8965,
+     "closeCode": 0.8775,
+     "far": 0.9105,
+     "farCode": 0.8845
+    },
+    "jp2a 1.1 (--background=dark)": {
+     "close": 0.8702,
+     "closeCode": 0.8511,
+     "far": 0.8279,
+     "farCode": 0.8145
+    },
+    "chafa 1.14 (ASCII symbols)": {
+     "close": 0.8988,
+     "closeCode": 0.8772,
+     "far": 0.8721,
+     "farCode": 0.8571
+    }
+   }
+  }
+ ],
+ "summary": {
+  "asciify-engine (shape)": {
+   "photo": {
+    "close": 0.593,
+    "far": 0.878
+   },
+   "lines": {
+    "close": 0.846,
+    "far": 0.876
+   },
+   "text": {
+    "close": 0.902,
+    "far": 0.889
+   }
+  },
+  "asciify-engine (tone)": {
+   "photo": {
+    "close": 0.577,
+    "far": 0.883
+   },
+   "lines": {
+    "close": 0.812,
+    "far": 0.916
+   },
+   "text": {
+    "close": 0.896,
+    "far": 0.91
+   }
+  },
+  "jp2a 1.1 (--background=dark)": {
+   "photo": {
+    "close": 0.493,
+    "far": 0.795
+   },
+   "lines": {
+    "close": 0.745,
+    "far": 0.674
+   },
+   "text": {
+    "close": 0.87,
+    "far": 0.828
+   }
+  },
+  "chafa 1.14 (ASCII symbols)": {
+   "photo": {
+    "close": 0.445,
+    "far": 0.7
+   },
+   "lines": {
+    "close": 0.793,
+    "far": 0.742
+   },
+   "text": {
+    "close": 0.899,
+    "far": 0.872
+   }
+  }
+ },
+ "wins": {
+  "asciify-engine (shape)": 23,
+  "asciify-engine (tone)": 21,
+  "jp2a 1.1 (--background=dark)": 0,
+  "chafa 1.14 (ASCII symbols)": 0
+ }
+}

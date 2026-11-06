@@ -1,0 +1,1528 @@
+{
+ "_note": "Made by tests/decode-reference.py --fixtures (Pillow 12.3.0). Lossless formats: sha256 of each RGBA frame. JPEG: a PNG of the reference decode (Pillow, libjpeg-turbo), compared by PSNR.",
+ "_motion-still": {
+  "sha256": "ad3f604ccff9c9ba9248aa4412141e47c0b23ca894bd5e4bcd1d578b724abb6e"
+ },
+ "bmp/16bit-4444.bmp": {
+  "covers": "BMP 16-bit 4-4-4-4 with alpha (V5)",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "cc16ac3808fc875194290424cc7d6669bc76b055724605acff95f57afe246a60"
+  ]
+ },
+ "bmp/16bit-555.bmp": {
+  "covers": "BMP 16-bit BI_RGB (5-5-5)",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "995ab786ed79eb120e78e4e8c80866dcd93dd5dcfa6621b52b2dfef7b5b5e561"
+  ]
+ },
+ "bmp/16bit-565-v2.bmp": {
+  "covers": "BMP 16-bit 5-6-5 with a V2 (52-byte) header",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "cd8e657258c17a136a51755d0b17ad3cabc9226efe16dbf9936d9aae03b81b0b"
+  ]
+ },
+ "bmp/16bit-565.bmp": {
+  "covers": "BMP 16-bit BI_BITFIELDS 5-6-5, masks after a 40-byte header",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "cd8e657258c17a136a51755d0b17ad3cabc9226efe16dbf9936d9aae03b81b0b"
+  ]
+ },
+ "bmp/1bit.bmp": {
+  "covers": "BMP 1-bit, palette",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5b5fd1806bc024b95934f74deb8e4377fe443b9200e2af05b41a33a854cce0fa"
+  ]
+ },
+ "bmp/24bit-topdown.bmp": {
+  "covers": "BMP 24-bit, top-down",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f920aad51348edd1078aff39da4388d239f38224548515e587127bee8dde9dfe"
+  ]
+ },
+ "bmp/24bit.bmp": {
+  "covers": "BMP 24-bit BI_RGB, rows padded to 4 bytes",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f920aad51348edd1078aff39da4388d239f38224548515e587127bee8dde9dfe"
+  ]
+ },
+ "bmp/2bit.bmp": {
+  "covers": "BMP 2-bit (Windows CE)",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5cceea7161f5fcc993ce4f2784dfddd718f8324448ff1fa255c7b760a1d87a76"
+  ]
+ },
+ "bmp/32bit-alphabitfields.bmp": {
+  "covers": "BMP BI_ALPHABITFIELDS: four masks after a 40-byte header",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c7cee15cee59957e3886b1ee98698cbad4505e2fe8ba1cb0d08c33ca936048e1"
+  ]
+ },
+ "bmp/32bit-rgb.bmp": {
+  "covers": "BMP 32-bit BI_RGB: the fourth byte is not alpha (opaque)",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f920aad51348edd1078aff39da4388d239f38224548515e587127bee8dde9dfe"
+  ]
+ },
+ "bmp/32bit-v3-alpha.bmp": {
+  "covers": "BMP 32-bit with a V3 (56-byte) header and an alpha mask",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c7cee15cee59957e3886b1ee98698cbad4505e2fe8ba1cb0d08c33ca936048e1"
+  ]
+ },
+ "bmp/32bit-v4-rgba.bmp": {
+  "covers": "BMP 32-bit V4 header, RGBA byte order masks",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c7cee15cee59957e3886b1ee98698cbad4505e2fe8ba1cb0d08c33ca936048e1"
+  ]
+ },
+ "bmp/32bit-v5-1010102.bmp": {
+  "covers": "BMP 32-bit V5, 10-10-10-2 masks (wider than 8 bits)",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "007834ae1cf28aa6ed5ca4f53e8df6c5dddbea7a008fc0f72c19f66c5e482c3e"
+  ]
+ },
+ "bmp/32bit-v5-alpha.bmp": {
+  "covers": "BMP 32-bit V5 header with alpha",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c7cee15cee59957e3886b1ee98698cbad4505e2fe8ba1cb0d08c33ca936048e1"
+  ]
+ },
+ "bmp/4bit.bmp": {
+  "covers": "BMP 4-bit with a 12-colour palette",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "7d003e731f78bfc5388aec4645f10782c8fadc0c500531c12f1195574fcdc45a"
+  ]
+ },
+ "bmp/8bit-os2.bmp": {
+  "covers": "BMP 8-bit with an OS/2 1.x (12-byte) header and 3-byte palette entries",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5416574a3ba1ec38b32cb480e49369f2b5416e67273823a2e6b6517b2787cbd5"
+  ]
+ },
+ "bmp/8bit-os2v2.bmp": {
+  "covers": "BMP 8-bit with an OS/2 2.x (64-byte) header",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5416574a3ba1ec38b32cb480e49369f2b5416e67273823a2e6b6517b2787cbd5"
+  ]
+ },
+ "bmp/8bit-topdown.bmp": {
+  "covers": "BMP 8-bit, top-down",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "2209d9cddb8f8b21ccfa58c77b740c069884e9713d47a4538264120e997ea696"
+  ]
+ },
+ "bmp/8bit.bmp": {
+  "covers": "BMP 8-bit, 256 colours",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5416574a3ba1ec38b32cb480e49369f2b5416e67273823a2e6b6517b2787cbd5"
+  ]
+ },
+ "bmp/rle4-odd.bmp": {
+  "covers": "BMP RLE4 with odd-length absolute runs",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "81292480db154c7cf7ec48c3b76b930287c842b5a47b2e1f8320410cf6952ff4"
+  ]
+ },
+ "bmp/rle4.bmp": {
+  "covers": "BMP RLE4: runs and even absolute runs",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "1ca952decf8e7ea0d69ddc635703351334b56cd1cbb3769f10498c667fa33bcc"
+  ]
+ },
+ "bmp/rle8-delta.bmp": {
+  "covers": "BMP RLE8 with a delta and early end-of-line: skipped pixels are transparent, as in browsers",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "9dbc4363746f44832ac330bdce097a5579628625005527fab8992a316e8775f0"
+  ]
+ },
+ "bmp/rle8.bmp": {
+  "covers": "BMP RLE8: runs and absolute runs",
+  "width": 13,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c1938b3974c875f0681e4a38830a2093478e88c34dad18d08a67153f214facbf"
+  ]
+ },
+ "gif/animexts.gif": {
+  "covers": "GIF ANIMEXTS1.0 loop count 4 (5 plays)",
+  "width": 32,
+  "height": 24,
+  "loop": 5,
+  "delays": [
+   50,
+   100,
+   100
+  ],
+  "sha256": [
+   "a44507bcdf8b68df7c906dfad9a168ffb7320c4478459d90ccd8c841afc3f07c",
+   "1265cbc9063b6efbaf90c855aa792af94d7bc3978b9783e4b64b3c96c6190037",
+   "023747b7ccc3a775666346ab06602cfa463f5fa1dbeb18c3c167897e463b90dc"
+  ]
+ },
+ "gif/big-first-frame.gif": {
+  "covers": "GIF whose first frame is bigger than the screen (it grows to fit, as in browsers); a later, bigger frame is clipped",
+  "width": 22,
+  "height": 15,
+  "loop": 0,
+  "delays": [
+   100,
+   100
+  ],
+  "sha256": [
+   "160691f4be1ef344d3effae29dabaeaad311cb9e8ecba5679ab0f4ebdf788148",
+   "ffcb33053531d25edfd1158077ceb54aa5bb01ca72fbfdca76b4f88cbe295ab2"
+  ]
+ },
+ "gif/clear-when-full.gif": {
+  "covers": "GIF LZW cleared each time the table fills",
+  "width": 96,
+  "height": 64,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "88d03792316838c31eec0aa83a3d3cf0740297339f89c46a2a085e7c37048010"
+  ]
+ },
+ "gif/deferred-clear.gif": {
+  "covers": "GIF LZW whose table fills and is kept without a clear code (deferred clear), 12-bit codes",
+  "width": 96,
+  "height": 64,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "88d03792316838c31eec0aa83a3d3cf0740297339f89c46a2a085e7c37048010"
+  ]
+ },
+ "gif/disposal.gif": {
+  "covers": "GIF transparency, frame offsets, disposal 1, 2 (clears to transparent), 3 (restores) and 4 (read as 3)",
+  "width": 40,
+  "height": 30,
+  "loop": 0,
+  "delays": [
+   100,
+   100,
+   100,
+   100,
+   100,
+   100
+  ],
+  "sha256": [
+   "5dab5c304382f28d256e3b74fb66701ad028a73d09b1da6fbb39a3a8dae73168",
+   "a153d25cd889d8b6efc479eb3e6ba8a0577b2de7f5503a4e2ad1325d99e3d2bd",
+   "002a7a9e712595df54c39c5265e4970c4f2449c0497a5eedd081689e60928b4d",
+   "14e10618b005e9de5b98959142ffc5fea6f506217b748bdfb0c1f45d86787c68",
+   "41a5e5bd7992dc4f3186bab56fcae83691d78f804db0e5e0b736b766f25b5dec",
+   "dcd590bae9396181db09d9276295bc02c3d824afef462da0f6e1c1e95716c961"
+  ]
+ },
+ "gif/interlaced.gif": {
+  "covers": "GIF interlaced frames (all four passes, odd heights) with local colour tables",
+  "width": 29,
+  "height": 21,
+  "loop": 0,
+  "delays": [
+   70,
+   70
+  ],
+  "sha256": [
+   "dbcf66c07cca609cc1af87e1c2de65c9fefdad6de612ec9ff45cdc3abcfe5c1e",
+   "8de52fddb594cef9a07bfa12060dce95939d59a732ffc95c8b38e9ddbb2de1aa"
+  ]
+ },
+ "gif/local-tables.gif": {
+  "covers": "GIF with no global table: local tables of 2, 16 and 256 colours, LZW code sizes 2, 4 and 8",
+  "width": 24,
+  "height": 16,
+  "loop": 0,
+  "delays": [
+   40,
+   40,
+   40
+  ],
+  "sha256": [
+   "ed742fd6a8bf9a258293939d1e32589b84d6c1ec7ddeec80600df9822d0c9a7a",
+   "1451622b688f07f4ef67263909ce320b141357f0db4f17873f53ce8fa371e94c",
+   "b27d5fa68f24677e82b2d3cb978348dcd281e49f9a4bbb17fcc0182a87d94f4f"
+  ]
+ },
+ "gif/loop-count.gif": {
+  "covers": "GIF NETSCAPE2.0 loop count 2: plays 3 times, as in browsers",
+  "width": 32,
+  "height": 24,
+  "loop": 3,
+  "delays": [
+   50,
+   100
+  ],
+  "sha256": [
+   "a44507bcdf8b68df7c906dfad9a168ffb7320c4478459d90ccd8c841afc3f07c",
+   "1265cbc9063b6efbaf90c855aa792af94d7bc3978b9783e4b64b3c96c6190037"
+  ]
+ },
+ "gif/loop-forever.gif": {
+  "covers": "GIF animation, NETSCAPE2.0 loop 0 (forever); delays 5 cs, then 0 and 1 cs that play as 100 ms",
+  "width": 32,
+  "height": 24,
+  "loop": 0,
+  "delays": [
+   50,
+   100,
+   100
+  ],
+  "sha256": [
+   "a44507bcdf8b68df7c906dfad9a168ffb7320c4478459d90ccd8c841afc3f07c",
+   "1265cbc9063b6efbaf90c855aa792af94d7bc3978b9783e4b64b3c96c6190037",
+   "023747b7ccc3a775666346ab06602cfa463f5fa1dbeb18c3c167897e463b90dc"
+  ]
+ },
+ "gif/no-gce.gif": {
+  "covers": "GIF frames with no graphic control extension: 100 ms each",
+  "width": 32,
+  "height": 24,
+  "loop": 0,
+  "delays": [
+   100,
+   100
+  ],
+  "sha256": [
+   "af5e6aeccef79c6e7ed329a22d35d3799ebdcef5964c7240596b2f6079161e05",
+   "0491f28fa0726cda80cac65aa85c8127083eb589822d0020b155d4a3370b1458"
+  ]
+ },
+ "gif/no-loop.gif": {
+  "covers": "GIF animation without a loop extension: plays once, as in browsers",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   50,
+   100
+  ],
+  "sha256": [
+   "a44507bcdf8b68df7c906dfad9a168ffb7320c4478459d90ccd8c841afc3f07c",
+   "1265cbc9063b6efbaf90c855aa792af94d7bc3978b9783e4b64b3c96c6190037"
+  ]
+ },
+ "gif/still-87a.gif": {
+  "covers": "GIF87a still, global colour table, no extensions",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "e2cacf55fb6679c4112ebba49cabab91d1073e085ea0d29d9262904446a15912"
+  ]
+ },
+ "jpeg/411.jpg": {
+  "covers": "JPEG 4:1:1 (h4v1), 37x29",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/411.ref.png"
+ },
+ "jpeg/440-progressive.jpg": {
+  "covers": "JPEG 4:4:0 progressive, 37x29",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/440-progressive.ref.png"
+ },
+ "jpeg/440.jpg": {
+  "covers": "JPEG 4:4:0 (h1v2, vertical fancy upsampling)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/440.ref.png"
+ },
+ "jpeg/baseline-420-odd.jpg": {
+  "covers": "JPEG baseline 4:2:0, 37x29 (not a multiple of the MCU)",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/baseline-420-odd.ref.png"
+ },
+ "jpeg/baseline-420.jpg": {
+  "covers": "JPEG baseline 4:2:0",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/baseline-420.ref.png"
+ },
+ "jpeg/baseline-422.jpg": {
+  "covers": "JPEG baseline 4:2:2",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/baseline-422.ref.png"
+ },
+ "jpeg/baseline-444.jpg": {
+  "covers": "JPEG baseline 4:4:4",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/baseline-444.ref.png"
+ },
+ "jpeg/cmyk-progressive.jpg": {
+  "covers": "JPEG CMYK progressive",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/cmyk-progressive.ref.png"
+ },
+ "jpeg/cmyk.jpg": {
+  "covers": "JPEG CMYK (Adobe, inverted)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/cmyk.ref.png"
+ },
+ "jpeg/grey-progressive.jpg": {
+  "covers": "JPEG greyscale progressive, 37x29",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/grey-progressive.ref.png"
+ },
+ "jpeg/grey.jpg": {
+  "covers": "JPEG greyscale (one component)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/grey.ref.png"
+ },
+ "jpeg/h3v1.jpg": {
+  "covers": "JPEG 3x1 luma: replicated chroma (libjpeg int_upsample)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/h3v1.ref.png"
+ },
+ "jpeg/mixed-sampling.jpg": {
+  "covers": "JPEG with different factors per chroma component (2x2, 1x2, 1x1)",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/mixed-sampling.ref.png"
+ },
+ "jpeg/orientation-2-ii.jpg": {
+  "covers": "JPEG EXIF orientation 2 (little-endian TIFF)",
+  "width": 24,
+  "height": 16,
+  "reference": "jpeg/orientation-2-ii.ref.png"
+ },
+ "jpeg/orientation-3-mm.jpg": {
+  "covers": "JPEG EXIF orientation 3 (big-endian TIFF)",
+  "width": 24,
+  "height": 16,
+  "reference": "jpeg/orientation-3-mm.ref.png"
+ },
+ "jpeg/orientation-4-ii.jpg": {
+  "covers": "JPEG EXIF orientation 4 (little-endian TIFF)",
+  "width": 24,
+  "height": 16,
+  "reference": "jpeg/orientation-4-ii.ref.png"
+ },
+ "jpeg/orientation-5-mm.jpg": {
+  "covers": "JPEG EXIF orientation 5 (big-endian TIFF)",
+  "width": 16,
+  "height": 24,
+  "reference": "jpeg/orientation-5-mm.ref.png"
+ },
+ "jpeg/orientation-6-ii.jpg": {
+  "covers": "JPEG EXIF orientation 6 (little-endian TIFF)",
+  "width": 16,
+  "height": 24,
+  "reference": "jpeg/orientation-6-ii.ref.png"
+ },
+ "jpeg/orientation-6-mm.jpg": {
+  "covers": "JPEG EXIF orientation 6 (big-endian TIFF)",
+  "width": 16,
+  "height": 24,
+  "reference": "jpeg/orientation-6-mm.ref.png"
+ },
+ "jpeg/orientation-7-mm.jpg": {
+  "covers": "JPEG EXIF orientation 7 (big-endian TIFF)",
+  "width": 16,
+  "height": 24,
+  "reference": "jpeg/orientation-7-mm.ref.png"
+ },
+ "jpeg/orientation-8-ii.jpg": {
+  "covers": "JPEG EXIF orientation 8 (little-endian TIFF)",
+  "width": 16,
+  "height": 24,
+  "reference": "jpeg/orientation-8-ii.ref.png"
+ },
+ "jpeg/progressive-420.jpg": {
+  "covers": "JPEG progressive 4:2:0 (spectral selection and successive approximation)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/progressive-420.ref.png"
+ },
+ "jpeg/progressive-422-odd.jpg": {
+  "covers": "JPEG progressive 4:2:2, 37x29",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/progressive-422-odd.ref.png"
+ },
+ "jpeg/progressive-422.jpg": {
+  "covers": "JPEG progressive 4:2:2 (spectral selection and successive approximation)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/progressive-422.ref.png"
+ },
+ "jpeg/progressive-444.jpg": {
+  "covers": "JPEG progressive 4:4:4 (spectral selection and successive approximation)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/progressive-444.ref.png"
+ },
+ "jpeg/restart-baseline.jpg": {
+  "covers": "JPEG baseline with a restart marker after every MCU",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/restart-baseline.ref.png"
+ },
+ "jpeg/restart-lost.jpg": {
+  "covers": "JPEG with a restart marker missing: resynchronised as libjpeg does",
+  "width": 64,
+  "height": 48,
+  "reference": "jpeg/restart-lost.ref.png"
+ },
+ "jpeg/restart-misnumbered.jpg": {
+  "covers": "JPEG with a restart marker numbered two ahead: an empty segment, as libjpeg reads it",
+  "width": 64,
+  "height": 48,
+  "reference": "jpeg/restart-misnumbered.ref.png"
+ },
+ "jpeg/restart-progressive.jpg": {
+  "covers": "JPEG progressive with restart markers",
+  "width": 37,
+  "height": 29,
+  "reference": "jpeg/restart-progressive.ref.png"
+ },
+ "jpeg/rgb.jpg": {
+  "covers": "JPEG stored as RGB (Adobe transform 0)",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/rgb.ref.png"
+ },
+ "jpeg/standard-tables.jpg": {
+  "covers": "JPEG with no DHT (motion JPEG): the standard Huffman tables",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/standard-tables.ref.png"
+ },
+ "jpeg/truncated.jpg": {
+  "covers": "JPEG cut short at 60%: the rest grey, as libjpeg",
+  "width": 48,
+  "height": 40,
+  "reference": "jpeg/truncated.ref.png"
+ },
+ "jpeg/ycck.jpg": {
+  "covers": "JPEG YCCK (Adobe transform 2), from ImageMagick",
+  "width": 48,
+  "height": 32,
+  "reference": "jpeg/ycck.ref.png"
+ },
+ "png/apng-basic.png": {
+  "covers": "APNG: the default image is frame 1; regions, source and over blends; delays 1/10 s, 1/0 (den 0 means 100, and 10 ms plays as 100), 33/1000; loops forever",
+  "width": 32,
+  "height": 24,
+  "loop": 0,
+  "delays": [
+   100.0,
+   100,
+   33.0
+  ],
+  "sha256": [
+   "ee05fad85060d54116312cf6231b28332f9a8d0400e7fc576f6db6f03ce43c05",
+   "647cdf20b23383d58731579a0ba7c8a47885f5c20de7b0a5688688288470069b",
+   "97fb3a9a14cac7cdef9201ce46cdce811d8ae6683368c6d5fc992e1081c4f119"
+  ]
+ },
+ "png/apng-dispose.png": {
+  "covers": "APNG dispose background and previous, blend over with partial alpha, frame data split over fdAT chunks; plays twice",
+  "width": 32,
+  "height": 24,
+  "loop": 2,
+  "delays": [
+   50.0,
+   50.0,
+   50.0,
+   70.0,
+   70.0
+  ],
+  "sha256": [
+   "ee05fad85060d54116312cf6231b28332f9a8d0400e7fc576f6db6f03ce43c05",
+   "7265f07a6e6404c237f1ed66b90d22e5a7f8e82b51a2387efaf67aff7f2f173d",
+   "f6c16ee491126535b7096f85d8935e9fc1f0c2892a667bce6502aee5824a9b0e",
+   "d77a5327d360272946fb049d299fb70beff19e108bc0aa1b3685fce183249d89",
+   "a418a442c4f04c5370013bc0bb68518731f12cbf073993e4ee55fc5382856782"
+  ]
+ },
+ "png/apng-hidden-default.png": {
+  "covers": "APNG whose default image is not part of the animation (skipped); a first frame disposed to \"previous\" clears instead",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   250.0,
+   250.0,
+   250.0
+  ],
+  "sha256": [
+   "d5b8995e5708c028f0033d06c8cacfba9979d95fea5afbe49ed88939e1cf4dec",
+   "de72018a4692c4ff380a90d466f8952a10490eebc9c232143cf1fc3f0930aac6",
+   "fc7470f0e933c51ac79d679746bbddd9e273882cf597b68a3a0b0b4763c66095"
+  ]
+ },
+ "png/apng-one-frame.png": {
+  "covers": "APNG of a single frame: a still",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "ee05fad85060d54116312cf6231b28332f9a8d0400e7fc576f6db6f03ce43c05"
+  ]
+ },
+ "png/apng-pillow.png": {
+  "covers": "APNG from Pillow's writer (it crops frames to what changed)",
+  "width": 32,
+  "height": 24,
+  "loop": 0,
+  "delays": [
+   40,
+   80,
+   120
+  ],
+  "sha256": [
+   "1b6f60b8292b4c031351c3567c60d43811a2e77611ba5a3f7b7385d5c94c4b1b",
+   "38dbf59ef032a9574438f143305a05c33e60fb5f6715a6650c4fc75f328558cd",
+   "2cd4fc481c0fb3ea0afa99f9ec5b30e62fbf7d14df15466bfa0b8d381fafcb9d"
+  ]
+ },
+ "png/filter0.png": {
+  "covers": "PNG with filter 0 on every row",
+  "width": 31,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f8957cf21ef566ed5d7c9e249afadcc7433bd17c4b38c65062b1704d10163675"
+  ]
+ },
+ "png/filter1.png": {
+  "covers": "PNG with filter 1 on every row",
+  "width": 31,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6d2e317f8cdbc3103f09dea5acc03deac42812a04dc094b9600dcce27f6be982"
+  ]
+ },
+ "png/filter2.png": {
+  "covers": "PNG with filter 2 on every row",
+  "width": 31,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "17bacc378c0fc51c78b74c86fea1611810b35fb4b12ba7c7d4df2141313ad335"
+  ]
+ },
+ "png/filter3.png": {
+  "covers": "PNG with filter 3 on every row",
+  "width": 31,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f5ebdeb28928e7d37ce2845b04a25155acc9a49dae5d0b955fa68eae9e974229"
+  ]
+ },
+ "png/filter4.png": {
+  "covers": "PNG with filter 4 on every row",
+  "width": 31,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "1820231df8f61a0bd5b38ee6178b84c5d985af45550ce7c9f15a1c0de2a03c86"
+  ]
+ },
+ "png/tiny-1x1-adam7.png": {
+  "covers": "PNG 1x1, Adam7 with empty passes",
+  "width": 1,
+  "height": 1,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "d7a421361d630d8ce2f1a4f10ca59f0a29c0cfa886c86a449aaa7ecac2c9cab7"
+  ]
+ },
+ "png/tiny-1x9-adam7.png": {
+  "covers": "PNG 1x9, Adam7 with empty passes",
+  "width": 1,
+  "height": 9,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "44243213b975891d71a7cd329a2a72b61bba0b733c8d43974c381f566ff5a115"
+  ]
+ },
+ "png/tiny-3x3-adam7.png": {
+  "covers": "PNG 3x3, Adam7 with empty passes",
+  "width": 3,
+  "height": 3,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "3a1d45778b76dc8cf8b3fe6f2f9cc7d205d40f2599a946823e9064746989a552"
+  ]
+ },
+ "png/tiny-9x1-adam7.png": {
+  "covers": "PNG 9x1, Adam7 with empty passes",
+  "width": 9,
+  "height": 1,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "fb22bfeb4e8e9dc01c6d1da9b73349ed109cfd8a84dee87cacec9951bc9ba136"
+  ]
+ },
+ "png/trns-type0-16bit.png": {
+  "covers": "PNG tRNS transparency, grey 16-bit",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "881e38e38ee00d0a4fb673b309305ab07e91f3f99669d739520cf8bd4cba78e7"
+  ]
+ },
+ "png/trns-type0-2bit.png": {
+  "covers": "PNG tRNS transparency, grey 2-bit",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "9640c405b2fe626bb0a0076cd90ed9a1871c3debaf8d2dffa529cb002ed698d4"
+  ]
+ },
+ "png/trns-type0-8bit.png": {
+  "covers": "PNG tRNS transparency, grey 8-bit",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "24ac580325143602293a295e3728c49ae47286f1aa5a9cf10c1efa312b716f46"
+  ]
+ },
+ "png/trns-type2-16bit.png": {
+  "covers": "PNG tRNS transparency, RGB 16-bit",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "92c1407a985257efed8bf0027a2cff3fb6e59d12ed655c7592274c3afb7f33e5"
+  ]
+ },
+ "png/trns-type2-8bit.png": {
+  "covers": "PNG tRNS transparency, RGB 8-bit",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "badc2a4e81adad14ffaab050da4cdd64a28139b68594b251e5e47ddac38a405a"
+  ]
+ },
+ "png/trns-type3-4bit.png": {
+  "covers": "PNG tRNS transparency, palette 4-bit, alpha table shorter than the palette",
+  "width": 19,
+  "height": 13,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "4f262ad4a698230aa692f59acfe98262f039e369b12946c856bc2d2627efc8ef"
+  ]
+ },
+ "png/type0-16bit-adam7.png": {
+  "covers": "PNG colour type 0, 16-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "fd4e55e6bf23c25f131dee144a8a9c7c5463e61fa73f59924565b55e19f550b5"
+  ]
+ },
+ "png/type0-16bit.png": {
+  "covers": "PNG colour type 0, 16-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "fd4e55e6bf23c25f131dee144a8a9c7c5463e61fa73f59924565b55e19f550b5"
+  ]
+ },
+ "png/type0-1bit-adam7.png": {
+  "covers": "PNG colour type 0, 1-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "4f39983fbf4cd8a2646166bc03c1e1b5aa9718e2a9f7df7e5a2f645fda01f1a8"
+  ]
+ },
+ "png/type0-1bit.png": {
+  "covers": "PNG colour type 0, 1-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "4f39983fbf4cd8a2646166bc03c1e1b5aa9718e2a9f7df7e5a2f645fda01f1a8"
+  ]
+ },
+ "png/type0-2bit-adam7.png": {
+  "covers": "PNG colour type 0, 2-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6a93398ca3a8488b0b3c01ea97d17ee9fc14ac36270c37eed4cb12e455a4df07"
+  ]
+ },
+ "png/type0-2bit.png": {
+  "covers": "PNG colour type 0, 2-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6a93398ca3a8488b0b3c01ea97d17ee9fc14ac36270c37eed4cb12e455a4df07"
+  ]
+ },
+ "png/type0-4bit-adam7.png": {
+  "covers": "PNG colour type 0, 4-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0603998d8c6e6d58366910b5e317aa8f934be4d2d234d97f459ecbc4b15f2db5"
+  ]
+ },
+ "png/type0-4bit.png": {
+  "covers": "PNG colour type 0, 4-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0603998d8c6e6d58366910b5e317aa8f934be4d2d234d97f459ecbc4b15f2db5"
+  ]
+ },
+ "png/type0-8bit-adam7.png": {
+  "covers": "PNG colour type 0, 8-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "aadc364626b85b7d6ee32a029ccf94fba74bed2bfda32d2c4bb5cb484c613625"
+  ]
+ },
+ "png/type0-8bit.png": {
+  "covers": "PNG colour type 0, 8-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "aadc364626b85b7d6ee32a029ccf94fba74bed2bfda32d2c4bb5cb484c613625"
+  ]
+ },
+ "png/type2-16bit-adam7.png": {
+  "covers": "PNG colour type 2, 16-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6de5580eb54c07796c5080d1cc9f77d08bbcb26a6f06f5322e78c3fb763c7d02"
+  ]
+ },
+ "png/type2-16bit.png": {
+  "covers": "PNG colour type 2, 16-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6de5580eb54c07796c5080d1cc9f77d08bbcb26a6f06f5322e78c3fb763c7d02"
+  ]
+ },
+ "png/type2-8bit-adam7.png": {
+  "covers": "PNG colour type 2, 8-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "36aea435114f76fe68af0e5bcb9a370485c1f7ffaf4418968daa4f26a16d0435"
+  ]
+ },
+ "png/type2-8bit.png": {
+  "covers": "PNG colour type 2, 8-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "36aea435114f76fe68af0e5bcb9a370485c1f7ffaf4418968daa4f26a16d0435"
+  ]
+ },
+ "png/type3-1bit-adam7.png": {
+  "covers": "PNG colour type 3, 1-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c17e5a20f5ecf1472548fc0c7dd08517cc74a0f130280f39cee1a469fabbd7a6"
+  ]
+ },
+ "png/type3-1bit.png": {
+  "covers": "PNG colour type 3, 1-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "ecf8f6a1d683dd0f80ec7c41fa2a354f907a5818e46586bdfecfac4c0497df48"
+  ]
+ },
+ "png/type3-2bit-adam7.png": {
+  "covers": "PNG colour type 3, 2-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5995ece73615f57210a64344c5fc5aa9aead936f09839c31969ed0bdd20bb458"
+  ]
+ },
+ "png/type3-2bit.png": {
+  "covers": "PNG colour type 3, 2-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "8ab78542ea4c11409a4bf385d55c5c289be40be1757ee5d05327e2138c5c0cf9"
+  ]
+ },
+ "png/type3-4bit-adam7.png": {
+  "covers": "PNG colour type 3, 4-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e24dd89d052dd9ee88005369bc50434cea07227891d4344d3e29c97ff5e5662"
+  ]
+ },
+ "png/type3-4bit.png": {
+  "covers": "PNG colour type 3, 4-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "e62c5db63c05c22b98be4f10d0ddc60867481bb1a137db51c33027bc71aa67f9"
+  ]
+ },
+ "png/type3-8bit-adam7.png": {
+  "covers": "PNG colour type 3, 8-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "1ae2e3710286f5df266205baafe93b98d2b6c2e884f59f99f62435d745f4e691"
+  ]
+ },
+ "png/type3-8bit.png": {
+  "covers": "PNG colour type 3, 8-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "6985c59bf020d4a202321b4d69506f7852c5fb0e516e73f151ecd8f2b82a4f30"
+  ]
+ },
+ "png/type4-16bit-adam7.png": {
+  "covers": "PNG colour type 4, 16-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "96b364066dd24afce2f7499a8ec39599321dfa573b643f9e06f24f68da767b7c"
+  ]
+ },
+ "png/type4-16bit.png": {
+  "covers": "PNG colour type 4, 16-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "96b364066dd24afce2f7499a8ec39599321dfa573b643f9e06f24f68da767b7c"
+  ]
+ },
+ "png/type4-8bit-adam7.png": {
+  "covers": "PNG colour type 4, 8-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f62c7530c39a7a74068df8d3c019d437feb497cd6300894ed0f326a601942227"
+  ]
+ },
+ "png/type4-8bit.png": {
+  "covers": "PNG colour type 4, 8-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "f62c7530c39a7a74068df8d3c019d437feb497cd6300894ed0f326a601942227"
+  ]
+ },
+ "png/type6-16bit-adam7.png": {
+  "covers": "PNG colour type 6, 16-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e186c2d515cdc7f28c3a0f1a18060070bdd7021977d897562ebb8ce3f2c5f43"
+  ]
+ },
+ "png/type6-16bit.png": {
+  "covers": "PNG colour type 6, 16-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e186c2d515cdc7f28c3a0f1a18060070bdd7021977d897562ebb8ce3f2c5f43"
+  ]
+ },
+ "png/type6-8bit-adam7.png": {
+  "covers": "PNG colour type 6, 8-bit, Adam7 interlaced, 61-byte IDAT chunks, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "de44d0e175e5bced8768e0301bc373efc63dd6f949958628344ff11969352aa0"
+  ]
+ },
+ "png/type6-8bit.png": {
+  "covers": "PNG colour type 6, 8-bit, all five filters",
+  "width": 23,
+  "height": 17,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "de44d0e175e5bced8768e0301bc373efc63dd6f949958628344ff11969352aa0"
+  ]
+ },
+ "pnm/p1.pbm": {
+  "covers": "PBM plain (P1): comments, digits with and without spaces between them",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "036ac73085094d1c6b34be5939382825e50afe2ac6c0efdbb8bfec9be58134a5"
+  ]
+ },
+ "pnm/p2-maxval15.pgm": {
+  "covers": "PGM plain (P2), maxval 15 (scaled with rounding), comments in the data",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "c3bb8db3ad604e7b956bf85767c7210875d635c672866372c7eda9bdcbce9b4e"
+  ]
+ },
+ "pnm/p3-maxval1000.ppm": {
+  "covers": "PPM plain (P3), maxval 1000",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "pnm/p3.ppm": {
+  "covers": "PPM plain (P3), maxval 255",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "pnm/p4.pbm": {
+  "covers": "PBM raw (P4), rows padded to whole bytes",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "036ac73085094d1c6b34be5939382825e50afe2ac6c0efdbb8bfec9be58134a5"
+  ]
+ },
+ "pnm/p5-maxval1000.pgm": {
+  "covers": "PGM raw (P5), 16-bit samples, maxval 1000",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e01c4182a69ef7b00621d97b4ee5f047e2c729dbc32ee3a4434cecd0bf73e1f"
+  ]
+ },
+ "pnm/p5-maxval65535.pgm": {
+  "covers": "PGM raw (P5), maxval 65535",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e01c4182a69ef7b00621d97b4ee5f047e2c729dbc32ee3a4434cecd0bf73e1f"
+  ]
+ },
+ "pnm/p5.pgm": {
+  "covers": "PGM raw (P5), maxval 255",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e01c4182a69ef7b00621d97b4ee5f047e2c729dbc32ee3a4434cecd0bf73e1f"
+  ]
+ },
+ "pnm/p6-maxval65535.ppm": {
+  "covers": "PPM raw (P6), 16-bit, maxval 65535",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "pnm/p6-maxval7.ppm": {
+  "covers": "PPM raw (P6), maxval 7",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "a048baf3ca686c5f98452648c322b7122bd51934cc41739d008213b2e26b9ffb"
+  ]
+ },
+ "pnm/p6.ppm": {
+  "covers": "PPM raw (P6), maxval 255",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "pnm/p7-blackandwhite-alpha.pam": {
+  "covers": "PAM BLACKANDWHITE_ALPHA",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "5bb5d6a03a938899c5a6d636fd6dc2b3d9323f4620c6d2a21d76b255544f2b1b"
+  ]
+ },
+ "pnm/p7-blackandwhite.pam": {
+  "covers": "PAM BLACKANDWHITE (1 is white)",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "ff34c05064646d3d6ef7d275ad3076f93c135da5f1085521c530455cff944e49"
+  ]
+ },
+ "pnm/p7-grayscale-alpha.pam": {
+  "covers": "PAM GRAYSCALE_ALPHA",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "3ca58d4bd6ca6efb06cdbcd7aad1fabb4951ea1d8bc8709855fad2574201bc78"
+  ]
+ },
+ "pnm/p7-grayscale.pam": {
+  "covers": "PAM GRAYSCALE",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "0e01c4182a69ef7b00621d97b4ee5f047e2c729dbc32ee3a4434cecd0bf73e1f"
+  ]
+ },
+ "pnm/p7-no-tupltype.pam": {
+  "covers": "PAM with no TUPLTYPE: read by its depth",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "pnm/p7-rgb-alpha-16bit.pam": {
+  "covers": "PAM RGB_ALPHA, 16-bit",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "e2331528f3d1d8dc6fcc97ef6db98f086adcd4fc02eaf3fb4464b28dbedeae00"
+  ]
+ },
+ "pnm/p7-rgb.pam": {
+  "covers": "PAM RGB",
+  "width": 11,
+  "height": 7,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "047074eedcf860908893bfbc593b08380a94ddf74b04d89de6a42ca86c018b5f"
+  ]
+ },
+ "qoi/pillow.qoi": {
+  "covers": "QOI from Pillow's writer",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "87d27abe5aa9bd47eee10579fbe9d2d312d8ecbc478cd53fa7fbac27cabae93f"
+  ]
+ },
+ "qoi/rgb.qoi": {
+  "covers": "QOI, 3 channels",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "904d95d418c2cc00f91fcdd6476b9b71b77a21f560c92012c4e603b2d17bf588"
+  ]
+ },
+ "qoi/rgba.qoi": {
+  "covers": "QOI RGBA: RUN, INDEX, DIFF, LUMA, RGB and RGBA chunks",
+  "width": 32,
+  "height": 24,
+  "loop": 1,
+  "delays": [
+   0
+  ],
+  "sha256": [
+   "87d27abe5aa9bd47eee10579fbe9d2d312d8ecbc478cd53fa7fbac27cabae93f"
+  ]
+ }
+}

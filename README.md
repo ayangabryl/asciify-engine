@@ -42,6 +42,15 @@ Asciify is a framework-agnostic engine for ASCII on the web. Use it for interfac
 npm i asciify-engine
 ```
 
+Or try it in a terminal, with nothing installed:
+
+```bash
+npx asciify-engine photo.jpg
+npx asciify-engine torus
+```
+
+<p align="center"><img src=".github/assets/cli-knot.svg" width="448" alt="A torus knot turning, drawn in characters: the animated SVG that npx asciify-engine knot --spin -o knot.svg writes"></p>
+
 Building with a coding agent? Add the skill, then describe what you want:
 
 ```bash
@@ -72,6 +81,8 @@ const stop = await asciify('/photo.jpg', document.querySelector('canvas')!, {
 - **Media** (`asciify-engine`, `/core`): images, GIFs, video, webcam and text to ASCII on a canvas, with scroll-scrubbed video, chroma key and source crop.
 - **GPU fields** (`/field`): full-bleed WebGL2 character fields with trail, fluid and lantern cursor responses, in any font and charset. Heroes and video can draw **in a worker** (`worker: true`), leaving the page's main thread free. Or drop in **`<asciify-field>`** (`defineAsciifyField()`), one element for React, Vue, Svelte, Astro or plain HTML. Bring your own design with **custom effects** (a few lines of GLSL for your own hovers, reveals and motion, tweenable with GSAP or Motion), and draw **live 3D**: a three.js or React Three Fiber canvas becomes characters every frame.
 - **Headless** (`/headless`): pixels to text with no DOM, in Node, workers and edge runtimes, for OG images, emails, CLIs and READMEs. Shape-aware: edges become `/ \ | _ ( )`, not just denser dots. Text, ANSI colour, SVG and HTML output, **animated SVG** that plays in a README with no script, and **braille, half-block, quadrant and sextant** art in two colours a cell for terminals. In the browser, `createAsciiGpu()` converts live video on the GPU, in a worker of its own, for about 0.5 ms of main thread a 1080p frame in every mode.
+- **3D models** (`/model`): glTF/GLB, OBJ, STL and PLY as ASCII, drawn on the CPU in any runtime or on the GPU as a live field source that turns and follows the pointer.
+- **Command line**: `npx asciify-engine photo.jpg`. Pictures, GIFs, video (through ffmpeg) and 3D models in your terminal, or as SVG, HTML, text and JSON; turn a model with the mouse. Images decode with no dependencies (`/decode`), in Node and at the edge.
 - **Hover and motion** (`/hover`): pointer effects and still-image motions for media on your page.
 - **Studio** (`/studio`): render styles, tonal curves, source warps, layered projects and PNG, JPEG, GIF, MP4 and WebM export.
 - **Agent skill**: the house design, every component's prompt and snippet, and the full API, for Claude Code, Cursor, Codex and other agents.

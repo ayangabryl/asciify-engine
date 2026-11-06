@@ -15,3 +15,4 @@ dist/
 
 # Visual test output on failure
 tests/visual/baselines/*.actual.png
+__pycache__/
