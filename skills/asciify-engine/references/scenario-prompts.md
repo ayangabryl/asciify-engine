@@ -101,3 +101,11 @@ The website uses the published renderer's native Trail. A chain-shaped tonal ove
 ## 23. An interactive hero background with a mode switcher
 
 “Build an interactive ASCII hero background visitors can stir, click and grow, with a mode switcher: `background(hero, { preset: estuary, clear: headline })` from `asciify-engine/kit`, and three pills (Estuary, Capillary, Shockwave) as a real radio group that call `bg.setPreset(estuary | capillary | shockwave)`. Keep it faint behind the headline in [our text token] (`palette: { light, dark }` if we need a tint), the headline and CTA real HTML, the pills keyboard-reachable and labelled, a `poster` for the first viewport in both themes, and one still frame under reduced motion. Check light and dark, a 390px phone, touch, and WebGL off.”
+
+## 24. Asciify an attachment
+
+“Asciify [the attached photo, GIF, video or 3D model]. Show it here as text and give me a file to keep: an SVG, animated for a GIF, video or model. Pick the options yourself from the picture, then offer one alternative.” See [convert-attachments.md](convert-attachments.md).
+
+## 25. ASCII art for a README
+
+“Turn [logo.png / the model / the GIF] into an SVG for our README that follows GitHub's light and dark themes, with a title for screen readers, and keep the file small.”

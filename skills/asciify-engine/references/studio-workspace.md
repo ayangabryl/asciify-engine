@@ -249,4 +249,4 @@ The catalog adds six print treatments with fine square cells and an optional `pr
 
 ## Animation starting points (4.10)
 
-Fourteen hover responses and fourteen local still-image motions are available through the public catalogs. The editor's Effects panel and layered editor's Motion panel share all choices, independent size/strength/speed controls and six editable starting combinations from `STUDIO_ANIMATION_PRESETS`. See [lively images](studio-effects.md#lively-images-410). Existing defaults stay unchanged; animate a photograph deliberately rather than enabling motion for every upload.
+Fourteen hover responses and fourteen local still-image motions are available through the public catalogs. The editor's Effects panel and layered editor's Motion panel share all choices, independent size/strength/speed controls and six editable starting combinations from `STUDIO_ANIMATION_PRESETS`. See [lively images](studio-effects.md#lively-images). Existing defaults stay unchanged; animate a photograph deliberately rather than enabling motion for every upload.

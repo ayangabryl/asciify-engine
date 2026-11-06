@@ -4,9 +4,10 @@
 Bun, Web Workers and edge runtimes (Cloudflare Workers, Vercel Edge) as well as the browser, and importing it touches nothing.
 Use it for ASCII in places a canvas cannot go: OG images and emails rendered on a server, CLI banners and terminal output,
 READMEs, static site builds, chat bots, and server-rendered pages. For art on a live page, use `/field` or the kit instead.
+From a shell, the `asciify-engine` command does the same for files, URLs and 3D models ([cli.md](cli.md)).
 
 ```ts
-import { toAsciiGrid, gridToText, gridToAnsi, gridToSvg, gridToHtml, ASCII_SYMBOLS } from 'asciify-engine/headless';
+import { toAsciiGrid, toBlockGrid, gridToText, gridToAnsi, gridToSvg, gridToHtml, gridsToAnimatedSvg } from 'asciify-engine/headless';
 
 const grid = toAsciiGrid({ data, width, height }, { columns: 100 }); // RGBA by default; channels: 3 or 1 for RGB or grey
 gridToText(grid);                 // plain text, rows joined by \n

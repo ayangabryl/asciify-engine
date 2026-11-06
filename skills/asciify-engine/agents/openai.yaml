@@ -1,8 +1,8 @@
 interface:
   display_name: "Asciify Engine"
-  short_description: "Build fast ASCII media effects"
+  short_description: "Asciify images, GIFs, video and 3D, and build ASCII UI"
   brand_color: "#F3BA32"
-  default_prompt: "Use $asciify-engine to build interactive ASCII media or layered compositions, keeping HTML controls readable, rendering budgets explicit, and media lifecycles isolated."
+  default_prompt: "Use $asciify-engine to turn the attached image, GIF, video or 3D model into ASCII art (text for the reply and an SVG to keep), or to build ASCII components, backgrounds and media for a site with readable HTML, explicit rendering budgets and clean lifecycles."
 
 policy:
   allow_implicit_invocation: true

@@ -207,7 +207,7 @@ field = mountGlyphField(overlay, { source: source.canvas, live: true });
 A page can hold every kit component at once. The shared core keeps the GPU cost to what is on screen:
 
 - **Lazy mounting.** A field mounts when its element comes within half a viewport of the screen and is released, freeing its GPU memory, beyond one viewport. Mounts that cost more than about 4 ms in a frame wait for the next one, nearest the screen first. The handle survives release and remount: its methods keep working, `update()` calls made while released apply on the next mount, `pause()` holds, and the component paints its current state when it mounts again. `handle.field` stays the same object throughout. A remount draws into the same canvas (a field with a context of its own swaps in a copy, with its attributes and inline styles). `lazy: false` mounts at once, anywhere on the page, and is never released by distance.
-- **One context, and a budget for the rest.** Kit fields draw through the page's one shared WebGL2 context and hold none of their own. `setFieldBudget(n)` (default 12) limits fields that fall back to a context of their own (a canvas in another document, or one already holding a WebGL context; browsers drop the oldest past about 16): past it the live one farthest off screen is released first. `getFieldBudget()` reads it.
+- **One context, and a budget for the rest.** Kit fields draw through the page's one shared WebGL2 context; from 4.33 a field of about 720p or more in device pixels (a full-bleed hero or background, two at most a page) draws with a context of its own instead, straight to its canvas. `setFieldBudget(n)` (default 12) limits fields that fall back to a context of their own (a canvas in another document, or one already holding a WebGL context; browsers drop the oldest past about 16): past it the live one farthest off screen is released first. `getFieldBudget()` reads it.
 - **Posters.** `poster: '/stills/hero.webp'` puts an `<img>` under the canvas (`update({ poster })` points it at another still, such as the other theme's), placed exactly where the field draws. It fades out (280 ms, none under reduced motion) when the first GPU frame lands, shows again while the field is released, and stays as the fallback without WebGL or after the field fails, until `destroy()`. `update({ poster })` swaps the still in place, for a theme change, on every component including the page helpers and `asciiVideo`. `asciiVideo` keeps its own poster.
 - **Pausing.** As before, a field draws nothing while the page is hidden or its element is off screen.
 
@@ -233,7 +233,7 @@ orb.update({ ink: '--brand', look: { cellSize: 6 } });
 
 Each change sweeps: a field that has drawn its first frame holds that frame over itself and wipes it away left to right in 200ms (after a 40ms beat, `cubic-bezier(.23,1,.32,1)`), led by a 2px scan line, as the new characters land under it. The line is `--ascii-sweep` (default amber `#f3ba32`, at 35% with a soft glow); the held frame and the line are an `aria-hidden` canvas and span marked `data-ascii-sweep`, placed exactly over the field (style them alongside the field, for example with the same mask) and removed when the sweep ends. Under reduced motion (the visitor's, or `reducedMotion: true`), and for a field still on its poster, the characters change at once.
 
-For your own `mountSurface` or `mountPageField` component, pass the options box as `kit` (`kit: state`) and the same box to `handle()`, so `lazy`, `poster` and `globalLook` apply and the poster is removed on `destroy()`.
+For your own `mountSurface` component, pass the component's options box as `kit` (`kit: { current: options }`), so `lazy`, `poster` and `globalLook` apply to it.
 
 ## Phase 2c: page and field helpers
 
@@ -589,14 +589,14 @@ Options: `colors` (two to six CSS colours or tokens, faintest light first, the c
 
 ### globe
 
-A globe of dots: land, a faint ocean, latitude and longitude lines and the far side's land showing through, turning slowly. Drag turns it with a little momentum; `points` mark places with a ring that keeps spreading. It carries a built-in world map (Natural Earth 1:50m land, public domain, 2.7 KB).
+A globe of dots: land, a faint ocean, latitude and longitude lines and the far side's land showing through, turning slowly, lit from the upper left with a soft terminator and a thin atmosphere. Drag turns it with a little momentum; `points` mark places, each a bright dot in a soft halo with a ring that keeps spreading, joined in order by great-circle arcs lifted off the surface with a pulse travelling along each. It carries a built-in world map (Natural Earth 1:50m land, public domain, 2.7 KB).
 
 ```ts
 const earth = globe(el, { ink: '--brand', points: [{ lat: 37.8, lon: -122.4 }, { lat: 51.5, lon: -0.1 }], label: 'Our network of 330 cities' });
 regionSelect.onchange = () => earth.rotateTo(Number(regionSelect.value));
 ```
 
-Options: `speed` (degrees a second, default 6; 0 holds it, and with no points it then draws once and idles), `lon` (longitude facing the viewer, default -30), `tilt` (degrees, default 18), `land` (`(lat, lon) => number | boolean` for your own map, such as a coverage map), `graticule` (degrees between lines, default 15; 0 none), `points` (`{ lat, lon }[]`), `backside` (0–1, default 0.22), `size` (share of the shorter side, default 0.92), `drag` (default true; sets `touch-action: pan-y` so the page still scrolls), `label`. Methods: `rotateTo(lon, lat?)`; getter `lon`. Default look: `mark: 'dot'`, `cellSize: 5`; `charset: 'kanji'` (or any set) writes it in characters.
+Options: `speed` (degrees a second, default 6; 0 holds it, and with no points it then draws once and idles), `lon` (longitude facing the viewer, default -30), `tilt` (degrees, default 18), `land` (`(lat, lon) => number | boolean` for your own map, such as a coverage map), `graticule` (degrees between lines, default 15; 0 none), `points` (`{ lat, lon }[]`), `backside` (0–1, default 0.22), `size` (share of the shorter side, default 0.92), `drag` (default true; sets `touch-action: pan-y` so the page still scrolls), `label`, `dots` (`'sphere'`, the default, sets the land's dots on the globe itself in rows along the latitudes, each sized by how squarely it faces you; `'field'` draws the globe as tones through the field's marks on the screen's grid), `spacing` (`'sphere'`: CSS px between neighbouring dots facing you, default 2.4% of the radius, at least 4). Methods: `rotateTo(lon, lat?)`; getter `lon`. Default look: the sphere drawn finished, shown a CSS pixel a cell in the ink (`mark: 'pixel'`, `cellSize: 1`); with `dots: 'field'`, `mark: 'dot'`, `cellSize: 5`; `charset: 'kanji'` (or any set) writes it in characters.
 
 ### ditherImage
 

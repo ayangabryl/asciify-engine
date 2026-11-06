@@ -57,11 +57,13 @@ over the character ramp (`MODEL_GAMMA`). Both take:
 | `light`, `ambient`, `rim`, `specular`, `exposure` | upper left, 0.04, 0.3, 0.3, 1 | The light. A low ambient keeps the shadowed side dark, so it reads as depth in characters. |
 | `outline` | 0.65 | Dark lines where a surface passes in front of another and along sharp creases, which shape mode turns into edge characters. |
 | `background` | transparent | `renderModel` only: a hex colour behind the model. |
-| `samples` | 1 | `renderModel` only: supersampling each way. |
+| `samples` | 1 | Supersampling each way: smoother edges, slower. |
+| `pointSize` | from the cloud's density | A point cloud's points, in pixels across. |
 
 `modelToGrid` also takes the grid's options: `columns`, `rows` (default a square view), `cellAspect` (default 2, a terminal),
 `mode` (`'shape'`, `'tone'`, `'braille'`, `'half'`, `'quad'`, `'sextant'`), `charset`, `color`, `background: 'light'`, `dither`,
-`previous`. `modelToGrids(model, { frames, turn })` makes a turn, each frame steadied by the one before.
+`previous`. `modelToGrids(model, { frames, turn })` makes a turn, each frame steadied by the one before; `modelFrames` gives the
+same turn as RGBA pictures, for your own converter or encoder.
 
 A 120 × 40 view takes about 15–20 ms to draw and 10–15 ms to convert on a laptop core.
 
@@ -88,5 +90,8 @@ const field = mountGlyphField(heroCanvas, { source: model.canvas, live: true, sa
 
 ## In a terminal
 
-`npx asciify-engine model.glb` opens a live view: drag with the mouse or use the arrow keys to turn it, `+`/`-` to zoom, space
-to pause, `q` to quit. `--spin 45 -o turn.svg` writes a turn. See [cli.md](cli.md).
+`npx asciify-engine model.glb` opens a live view: drag with the mouse or use the arrow keys to turn it, `+`/`-` or the wheel
+to zoom, space to pause, `r` to reset, `q` to quit. `--spin -o turn.svg` writes one full turn as an animated SVG
+(`--frames`, default 36, at `--fps`, default 12), and `--still` prints one view, as it does in a pipe. Pass a model with
+separate files (`.gltf` with `.bin`, `.obj` with `.mtl`, textures) by its absolute path. See [cli.md](cli.md), and
+[convert-attachments.md](convert-attachments.md) for a model someone attached.

@@ -152,7 +152,7 @@ decode(headline, { duration: 800, settle: 'text' }); // decorative, under the 80
 
 ## 7. Performance
 
-- **Fields share one context.** Every field on the page draws through one WebGL2 context, so the count of fields is bounded by what is animating on screen, not by contexts. Static fields draw once and stop. Sharing still helps: one `pill()` call over a list draws every pill with one field.
+- **Fields share one context.** Fields on the page draw through one shared WebGL2 context (from 4.33 up to two heroes of about 720p or more draw with a context of their own, which saves a copy each frame), so the count of fields is bounded by what is animating on screen, not by contexts. Static fields draw once and stop. Sharing still helps: one `pill()` call over a list draws every pill with one field.
 - **Lazy by default.** Fields mount within half a viewport and release beyond one. Use `lazy: false` only for the hero in the first viewport.
 - **Posters.** Give every field above the fold, and every field that matters without WebGL, a still per theme, and swap it on theme change with `update({ poster })` rather than remounting.
 - **Canvas presets cost CPU, not contexts.** Count them toward the page anyway; one animated ground per viewport.

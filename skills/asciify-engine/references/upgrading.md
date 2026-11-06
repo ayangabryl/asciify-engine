@@ -14,7 +14,7 @@ Version 1.4.0 adds the optional `/studio` composition and export API. Its settin
 
 ## Installed agent skill
 
-Inspect `npx skills list --json` for project installs or `npx skills list -g --json` for global installs. Refresh this skill in the same scope:
+Inspect `npx skills list` for project installs or `npx skills ls -g` for global installs (`npx skills check` reports available updates). Refresh this skill in the same scope:
 
 ```sh
 # Existing project installation
@@ -24,7 +24,7 @@ npx skills update asciify-engine --project --yes
 npx skills update asciify-engine --global --yes
 ```
 
-Use the scoped command matching the existing installation. Do not run an unqualified bulk update of every installed skill. If this skill is absent, install it with `npx skills add ayangabryl/asciify-engine --skill asciify-engine` and the appropriate scope/agent flags. Preserve agent selection; do not add `--all` unless requested. Inspect `npx skills --help` if CLI flags differ in the installed version. A manually copied skill can be refreshed from the same repository or the matching npm tarball's `skills/asciify-engine` directory; preserve unrelated files.
+Use the scoped command matching the existing installation. Do not run an unqualified bulk update of every installed skill. In a project that depends on asciify-engine, `npx skills experimental_sync -y` (experimental in the Skills CLI) links the copy of this skill shipped inside the installed package, so the skill always matches the installed version. If this skill is absent, install it with `npx skills add ayangabryl/asciify-engine --skill asciify-engine` and the appropriate scope/agent flags. Preserve agent selection; do not add `--all` unless requested. Inspect `npx skills --help` if CLI flags differ in the installed version. A manually copied skill can be refreshed from the same repository or the matching npm tarball's `skills/asciify-engine` directory; preserve unrelated files.
 
 After updating, read the installed SKILL.md and its linked references, confirm its source/version and resource links, and report both the resolved npm version and whether the installed skill was refreshed. If an offline/registry/authentication error prevents either step, report the actual partial result; do not silently fall back to an unverified version. These consumer upgrade instructions do not authorize publishing npm packages or deploying a site.
 
@@ -55,6 +55,10 @@ Use `CHARACTER_SETS` from root or `/core` for the same eight choices as the edit
 
 This requested minor version contains breaking API removals: `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESETS`, `CharsetKey`, `CharsetSequenceKey`, and `LivingStylePresetKey`. Search source, saved settings, generated snippets, and documentation before upgrading. Use `/studio`'s 15 `STUDIO_STYLES` for render styles; use `/core`'s curated `CHARACTER_SETS` for ASCII alphabets. Replace old shorthand `artStyle` names with actual Studio rendering or explicit core charset/renderMode/colorMode options. Core only accepts `artStyle: 'classic'`. Custom `charset` and `charsetFrames` remain supported. Fine-dither hover integration uses explicit `fineDither: true`, not the removed terminal preset.
 
+## 4.2 fine dither and creative controls
+
+Studio adds `hex`, `led` and `cmyk` render styles, directional and radial dither patterns, more palettes, luminance mapping, RGB split, sharpening and adjustable still-image motion strength. Read [studio-workspace.md](studio-workspace.md#fine-detail-and-controls-42) for exact options, density budgets and preview/export consistency. These are local Canvas/WebGL effects, not AI generation or a claim of parity with every competing catalog.
+
 ## 4.3 and 4.3.1
 
 4.3 adds Magnetic Pull and Scatter hover (`magnetic`, `scatter`) and Sheen, Tidal Rings and Living Grain motion (`sheen`, `tidal`, `grain`). Old defaults remain. 4.3.1 fixes CMYK tonal interactions and idle-frame work, caches stationary compositions, and accelerates ordered dithering without changing its output. Read [project-integration.md](project-integration.md) for one-owner live integration and independent PNG/video export.
@@ -64,11 +68,11 @@ This requested minor version contains breaking API removals: `CHARSETS`, `ART_ST
 Adds Emboss, Elastic and Rake hover; Parallax, Woven Flow, Print Shift and Contour Light motion. Existing IDs, defaults, saved projects and v1 settings remain valid. `STUDIO_HOVERS` and `STUDIO_MOTIONS` are now shared public catalogs in `/studio` and `/hover`; generate selection controls from them. The four new ambient IDs are also accepted by core `animationStyle`. Keep only one owner for motion.
 ### 4.5 tonal controls and blue noise
 
-Adds the `blue-noise` dither algorithm and optional Studio `color.blackPoint`, `whitePoint`, `gamma`, `shadows`, and `highlights` fields. Existing render defaults and existing dither output are unchanged. The serialized settings version remains 1; older engines will ignore these new choices, so check the installed package before using them. Refresh the agent skill separately from the npm dependency. These are Studio features, not additional core `AsciiOptions`.
+Adds the `blue-noise` dither algorithm and optional Studio `color.blackPoint`, `whitePoint`, `gamma`, `shadows`, and `highlights` fields. Existing render defaults and existing dither output are unchanged. The serialized settings version remains 1; older engines will ignore these new choices, so check the installed package before using them. Refresh the agent skill separately from the npm dependency. These are Studio features, not additional core `AsciiOptions`; see [tonal detail and blue noise](studio-workspace.md#tonal-detail-and-blue-noise-45).
 
 ### 4.6 channel curves and source noise
 
-Adds Studio `color.curves` and `color.denoise` with neutral defaults. Curves support independently editable RGB/red/green/blue control points; incremental updates merge channels, replacing only supplied point arrays. `player.settings` returns a detached current snapshot for persistence/export. Settings version remains 1; older packages ignore the new fields and do not expose the getter. Read the installed types, update the runtime dependency and refresh the agent skill together when adopting these APIs. Root/core/hover behavior is unchanged.
+Adds Studio `color.curves` and `color.denoise` with neutral defaults. Curves support independently editable RGB/red/green/blue control points; incremental updates merge channels, replacing only supplied point arrays. `player.settings` returns a detached current snapshot for persistence/export. Settings version remains 1; older packages ignore the new fields and do not expose the getter. Read the installed types, update the runtime dependency and refresh the agent skill together when adopting these APIs. Root/core/hover behavior is unchanged. Point limits, update semantics and the processing budget: [channel curves and source noise](studio-workspace.md#channel-curves-and-source-noise-46); do not turn noise reduction on by default.
 
 ### 4.7 ordered source warps
 
@@ -84,10 +88,23 @@ Six additional `STUDIO_STYLES` use optional `print` settings. Existing v1 settin
 
 ## 4.10 interaction expansion
 
-Adds `lens`, `smudge`, `ripple` hover and `relight`, `shimmer`, `breeze`, `unfold` ambient motion. No IDs are removed and existing defaults remain. `STUDIO_ANIMATION_PRESETS` is exported by Studio and hover; its nested settings are shaped for `player.update`. Core accepts the new ambient IDs through `animationStyle`, with its existing simpler opacity treatment. Do not pass the new surface hover IDs to core `hoverEffect`. Update the npm dependency and refresh the agent skill separately; older packages do not implement these IDs.
+Adds `lens`, `smudge`, `ripple` hover and `relight`, `shimmer`, `breeze`, `unfold` ambient motion. No IDs are removed and existing defaults remain. `STUDIO_ANIMATION_PRESETS` is exported by Studio and hover; its nested settings are shaped for `player.update`. Core accepts the new ambient IDs through `animationStyle`, with its existing simpler opacity treatment. Do not pass the new surface hover IDs to core `hoverEffect`. Update the npm dependency and refresh the agent skill separately; older packages do not implement these IDs. Apply `motion` and `hover` to an existing Studio player to keep its source and style; the pairings are not extra art styles ([lively images](studio-effects.md#lively-images)).
 
 ## Photo-aware motion and finish (after 4.21)
 
 The still-image motions are rebuilt to read the photograph's own light, relief, highlights, detail and depth instead of laying a pattern over it. The catalog is `relight`, `sheen` (Specular sweep), `glow` (Highlight bloom, new), `shimmer` (Glints), `parallax`, `push` (Slow push, new), `focus` (Focus pull, new), `mist` (new), `current` (Drift) and `develop` (new), plus `none`. Retired IDs keep working everywhere (Studio settings, share links, `mountHover` `motion`, core `animationStyle`) and load as their closest replacement, listed in `DEPRECATED_STUDIO_MOTIONS`: `caustics` → `sheen`, `grain` → `shimmer`, `trace` → `relight`, `tidal`, `weave`, `breeze` → `current`, `reform`, `print`, `unfold` → `develop`. Normalized settings store the new ID. Depth motions now move the image through a fixed character grid instead of moving glyphs; the core renderer (`animationStyle`) draws them the same way as the Studio, sharing its motion code, and light motions change tone, colour and density there rather than only opacity. Drift moves only detected water and sky. `STUDIO_ANIMATION_PRESETS` keeps its six IDs with new pairings and adds `depth-study`; the `wallpaper` look uses Relight.
 
 The optical finish's `bloom` is now a wide, soft-kneed halation screened over the image (no offset ghosts), and `grain` is fine triangular film grain weighted to the midtones. IDs and ranges are unchanged; existing looks render slightly softer and cleaner.
+
+## 4.11 to 4.13: fields and the kit
+
+`asciify-engine/field` adds `mountGlyphField`, `isGlyphFieldSupported` and `glyphFieldTier` in 4.11, and `mark`, `clear` and `pulse()` in 4.12. `asciify-engine/kit` arrives in 4.13; `background()` and its presets, `lazy`, `poster`, `setFieldBudget` and `setGlobalLook` follow in 4.14, and `halo`, `ripple`, `mesh`, `interference`, `constellation`, `cascade`, the GPU `caustics` and `contour` and the `mark` option in 4.19. Older installs do not have these entries; upgrade before using them.
+
+## 4.33: the command line, headless, 3D models and decoding
+
+Additive. Visual baselines are unchanged except the looks the changelog lists (the `globe`, the scene backgrounds' pointer response inside their quiet middle, `previous` no longer leaving trails, SVG spacing and proportions).
+
+- **The `asciify-engine` command** (`npx asciify-engine photo.jpg`). Earlier releases have no command, so npx answers `could not determine executable to run`: use `npx -y asciify-engine@latest`, or upgrade the project. See [cli.md](cli.md) and [convert-attachments.md](convert-attachments.md).
+- **New entries:** `/headless` (pixels to text, sub-cell art, SVG and animated SVG, `createAsciiGpu`; [headless.md](headless.md)), `/model` (glTF/GLB, OBJ, STL and PLY to ASCII, `modelSource`; [model.md](model.md)) and `/decode` (image files to pixels in any runtime). `/headless` and `/model` are experimental: output may improve in minor releases (STABILITY.md).
+- **Fields:** `worker: true` (experimental), `context`, `live: true` sources, `sample: 'shape'` with `FIELD_PHOTO_CHARSET`, `post`, custom `effects` with `defineFieldEffect` (experimental), `clear.pointer`, and the `<asciify-field>` element (`defineAsciifyField()`); see [glyph-field.md](glyph-field.md). `elementSource` on `/kit` (experimental; [kit.md](kit.md#elementsource-433-experimental)).
+- **Contexts:** a field of about 720p or more in device pixels now draws with a WebGL context of its own by default (`context: 'auto'`, at most two a page). Pass `context: 'shared'` to keep a field on the page's shared context, as before.

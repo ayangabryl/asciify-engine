@@ -10,7 +10,7 @@ Releases follow [semantic versioning](https://semver.org):
 - **Minor** (4.34.0): new APIs and options, and deliberate visual changes, each listed in the changelog. Existing code keeps working.
 - **Major** (5.0.0): removals and breaking changes, each with a migration note in `CHANGELOG.md` and the agent skill's `references/upgrading.md`.
 
-The public API is everything exported from the package's entry points (`asciify-engine`, `/core`, `/headless`, `/field`, `/hover`, `/studio`, `/kit`) and documented in their type declarations. Exports marked `@internal` are not part of it and may change in any release.
+The public API is everything exported from the package's entry points (`asciify-engine`, `/core`, `/headless`, `/model`, `/decode`, `/field`, `/hover`, `/studio`, `/kit`) and documented in their type declarations. Exports marked `@internal` are not part of it and may change in any release.
 
 ### Experimental APIs
 
@@ -20,6 +20,8 @@ New APIs may ship marked **experimental** in their doc comment and in the change
 | --- | --- | --- |
 | `defineFieldEffect` and `effects` on `/field` | 4.33.0 | The GLSL inputs and outputs may gain members; existing ones keep their meaning. |
 | `asciify-engine/headless` | 4.33.0 | Output for a given input may improve in minor releases (see below). |
+| `asciify-engine/model` | 4.33.0 | As `/headless`: the characters drawn for a given model and view may improve in minor releases. |
+| `worker` on `/field` | 4.33.0 | Which options keep a field on the page instead of the worker may change. |
 | `elementSource` on `/kit` | 4.33.0 | Follows the HTML-in-Canvas API, which is still changing in browsers. |
 
 ## How things look is part of the API
@@ -52,7 +54,7 @@ These hold for every entry point and are checked in tests:
 - **No requests of its own.** The engine fetches only the sources you pass it (an image or video URL). It loads no fonts, scripts or telemetry.
 - **CSP friendly.** No `eval` or `new Function`. The Studio's optional render worker starts from a `blob:` URL; a Content Security Policy needs `worker-src blob:` for it.
 - **Accessible by default.** Fields and kit canvases are `aria-hidden` or labelled, honour `prefers-reduced-motion`, pause off screen, and leave the page's own HTML working when WebGL2 is unavailable.
-- **One GPU context per page.** However many fields and kit components a page mounts, they share one WebGL2 context and one frame loop.
+- **One shared GPU context per page.** However many fields and kit components a page mounts, they share one WebGL2 context and one frame loop, except that by default (`context: 'auto'`) up to two large fields, of about 720p or more in device pixels, draw with contexts of their own, and a field drawn in a worker uses the worker's.
 
 ## If a promise is broken
 

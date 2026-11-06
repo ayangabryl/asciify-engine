@@ -1,14 +1,14 @@
 ---
 name: asciify-engine
-description: Apply Asciify the way asciify.org does - ASCII components and backgrounds that belong in a real interface, inked from the theme, clear around text, inside the page's radii and motion. Use for UI components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated ASCII backgrounds, and also photo, video and GIF conversion, GPU character fields, artwork looks for wallpapers, posters and prints, art styles and export, hover and motion, layered typography and rendering performance.
+description: "Asciify attached or linked images, GIFs, video and 3D models: convert them to ASCII art with the asciify-engine command (text for a reply, ANSI for a terminal, SVG or animated SVG for a README), and build ASCII components and backgrounds for websites. Use when someone says asciify or asks for ASCII, text, braille or block art of a photo, logo, file or URL, a text banner, or ASCII in a terminal; and for interface components in characters (loading, status, toasts, tabs, AI states, charts, transitions, pages), animated backgrounds and heroes inked from the site's theme, live image, video and 3D fields on the GPU, artwork looks and art styles for wallpapers, posters and prints, hover and motion, type layered over media, export, rendering performance, and ASCII on servers and at the edge."
 metadata:
-  tested-engine: "4.32.9"
-  updated: "2026-10-17"
+  tested-engine: "4.33.0"
+  updated: "2026-11-06"
 ---
 
 # Asciify Engine
 
-Use the published `asciify-engine` npm package. Tested against **4.32.9**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
+Use the published `asciify-engine` npm package. Tested against **4.33.0**. Check the application's installed version and its public types before using newer options; a local checkout can contain unpublished changes.
 
 - Agent entry: https://asciify.org/skill (redirects to this Markdown document).
 - Components: https://asciify.org/components · Looks: https://asciify.org/looks · Backgrounds: https://asciify.org/backgrounds
@@ -19,11 +19,30 @@ Use the published `asciify-engine` npm package. Tested against **4.32.9**. Check
 npm install asciify-engine@latest
 ```
 
-Entries: `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion; `/headless` for pixels to text with no DOM (servers, edge, terminals); `/decode` for image files to pixels with no dependencies; `/model` for 3D models to ASCII; the `asciify-engine` command for the terminal; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
+Entries: the `asciify-engine` command for files (a chat reply, a terminal, an SVG for a README); `/kit` for interface components and backgrounds, one call each; `asciify-engine` and `/core` for media and text conversion on a page; `/headless` for pixels to text with no DOM (servers, edge, terminals); `/decode` for image files to pixels with no dependencies; `/model` for 3D models to ASCII; `/hover` for the website hovers and living-image motion; `/studio` for art styles, looks and export; `/field` for raw GPU character fields. Each optional entry loads only when imported. GIF decoding loads `gifuct-js` when a GIF API is called.
 
-## Start here: kit first
+## Asciify an attachment
 
-Most requests are a feeling ("make the loading state feel alive", "a calm background behind pricing", "like asciify.org") rather than an API. Work in this order:
+When someone says asciify (or "turn this into ASCII", "make this ASCII art") and attaches or names an image, GIF, video, 3D model or URL, convert it now with the command and hand back the result; ask nothing about flags first. Per-media defaults, their words mapped to flags, READMEs and failures: [convert-attachments.md](references/convert-attachments.md).
+
+1. **Find the file.** A path in the message (Claude Code pastes dropped files as paths); `/mnt/user-data/uploads/` in Claude apps, which expect what you hand back in `/mnt/user-data/outputs/`; the workspace in Cursor and Codex. Pass image, GIF and model URLs straight in; download a video first. A picture pasted with no file behind it: look where this environment keeps uploads, and if there is no file, say in one line that you need the file or its path. Never draw a stand-in by hand.
+2. **Check the command.** `npx -y asciify-engine@latest --version` must print 4.33.0 or later (Node 18 or later); a project that depends on 4.33 or later can run its own `npx asciify-engine`. `could not determine executable to run` means npm has no 4.33 yet: say so.
+3. **Convert for where it goes.** Text for your reply (`-f text`, and `--still` for a GIF, video or model so nothing plays), and a file worth keeping:
+
+   ```sh
+   npx -y asciify-engine@latest photo.jpg -f text -w 80 --cell-aspect 2.4     # the reply (leave out --cell-aspect in a terminal)
+   npx -y asciify-engine@latest photo.jpg -o photo.svg --background '#000000'  # the file: in colour, sharp at any size
+   npx -y asciify-engine@latest loop.gif -o loop.svg                           # a GIF or video (ffmpeg): an animated SVG
+   npx -y asciify-engine@latest helmet.glb --spin -o turn.svg                  # a 3D model: one full turn
+   ```
+
+   Logo, line art or a scan, dark on white: add `--light`. A README: `--no-color --ink '#24292f' --dark-ink '#e6edf3' --title "…"`. A terminal: ANSI (`-o art.ans`). Playback and the 3D viewer run only in the user's own terminal: give them the line, such as `npx asciify-engine helmet.glb`.
+4. **Hand it back.** Read the text first; if the subject does not read, try `--light`, `--invert`, a crop or more columns. Then the text in a code block fenced with four backticks, the file and where it is, one line on what you chose, and one alternative (braille, colour blocks, the classic ramp, a wider file), not a menu.
+5. **Live on their website instead?** A hero, background, component or turning model on a page is the kit, a field or `modelSource`, not the command: read on.
+
+## For a website: kit first
+
+Most web requests are a feeling ("make the loading state feel alive", "a calm background behind pricing", "like asciify.org") rather than an API. Work in this order:
 
 1. **Is it a UI component or a background?** Almost always, yes. Read [applying-asciify.md](references/applying-asciify.md) (the house design: when characters earn a place, ink, the clear zone and veil, density, radii, motion, performance, accessibility, which background suits which surface), then take the call from [components.md](references/components.md) and its options from [kit.md](references/kit.md). Stop there unless the kit has no option for the look.
 2. **Read the request.** Subject (their media, a word, or nothing), placement (hero, card, control, background behind text), mood words, interaction, any reference site.
@@ -45,14 +64,14 @@ Most requests are a feeling ("make the loading state feel alive", "a calm backgr
 | A three.js / React Three Fiber scene, game or app canvas drawn live as characters | `mountGlyphField(canvas, { source: renderer.domElement, live: true })` ([glyph-field.md](references/glyph-field.md#live-sources-3d-scenes-and-app-canvases-433)) |
 | Their own UI (a card, a form, a view) drawn in characters, live, for a transition or a hover | `elementSource` from `/kit` as a `live` field source ([kit.md](references/kit.md#elementsource-433-experimental)) |
 | ASCII on a server, at the edge or in a terminal: OG images, emails, CLI banners, READMEs, bots | `toAsciiGrid` from `asciify-engine/headless` ([headless.md](references/headless.md)) |
-| A picture, GIF, video or 3D model as ASCII from the command line, or an animated SVG for a README | `npx asciify-engine <file>` ([cli.md](references/cli.md)) |
-| A 3D model (glTF/GLB, OBJ, STL, PLY) as ASCII: in a terminal, an SVG, or a live hero on a page | `asciify-engine/model` ([model.md](references/model.md)) |
+| A picture, GIF, video or 3D model someone attached or linked, as text for a reply, ANSI for a terminal, SVG, or an animated SVG for a README | The `asciify-engine` command ([convert-attachments.md](references/convert-attachments.md), [cli.md](references/cli.md)) |
+| A 3D model (glTF/GLB, OBJ, STL, PLY) as ASCII in code, or a live hero on a page | `asciify-engine/model`, `modelSource` ([model.md](references/model.md)) |
 | Image files (PNG, JPEG, GIF, BMP, PNM, QOI) to pixels with no dependencies, at the edge or in Node | `decodeImage` from `asciify-engine/decode` ([headless.md](references/headless.md#getting-pixels)) |
 | A playing video or 3D canvas as text (a string per frame, not drawn on screen) | `createAsciiGpu()` from `asciify-engine/headless` ([headless.md](references/headless.md#on-the-gpu-createasciigpu)) |
 | Their photo or video as finished artwork in a named look: a wallpaper, poster, cover, print or hero artwork ("newsprint", "riso", "phosphor", "engraving", "Lego") | `mountStudio` / `exportStudio` from `/studio` with a look from [looks.md](references/looks.md) |
 | Art styles, saved looks, masks, effects, PNG/MP4/GIF export | Advanced: `mountStudio` from `/studio` ([studio-workspace.md](references/studio-workspace.md)) |
 | Several media and text layers in one artwork | Advanced: `mountStudioProject` from `/studio` ([layered-projects.md](references/layered-projects.md)) |
-| A text banner or lettering | Advanced: `asciifyText` / `renderTextToCanvas` |
+| A text banner or lettering | In a terminal, a reply or a README: `npx asciify-engine --text "Hi" --font Slant` ([cli.md](references/cli.md)); on a page: `asciifyText` / `renderTextToCanvas` |
 | Headline text visible through media art | Advanced: layered HTML ([layered-hero.md](references/layered-hero.md)) |
 
 ## The kit in one paragraph
@@ -98,7 +117,7 @@ Do not import nonexistent helpers such as `createRecorder` or `recordAndDownload
 
 # Advanced: the lower-level APIs
 
-Use these when the request is media conversion, art styles or export, or a field look the kit cannot give. They do not handle theme ink, posters, the context budget or fallbacks for you; the rules in applying-asciify.md still apply to the result.
+Use these when the request is media converted on a page, art styles or export, or a field look the kit cannot give. They do not handle theme ink, posters, the context budget or fallbacks for you; the rules in applying-asciify.md still apply to the result.
 
 ## Choose the integration
 
@@ -197,7 +216,7 @@ Keep these as sibling layers. A transformed or isolated content wrapper can trap
 
 ## Studio composition and export
 
-For a finished artwork in a ready look (wallpaper, poster, cover, print), start from [references/looks.md](references/looks.md): 22 looks, each with the prompt, exact settings, and wallpaper/poster/loop export sizes. For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). `/studio` is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop.
+For a finished artwork in a ready look (wallpaper, poster, cover, print), start from [references/looks.md](references/looks.md): 22 looks, each with the prompt, exact settings, and wallpaper/poster/loop export sizes. For optional wallpaper/backdrops, alternate renderers, palettes, masks, saved looks, text fonts, or deterministic MP4/GIF export, read [references/studio-workspace.md](references/studio-workspace.md). `/studio` is separate from `/hover` and `AsciiOptions`; do not replace an existing hero pipeline just to add a backdrop. Print and illustration styles (stipple, engraving, crosshatch, woodblock, risograph, pointillism): [print-styles.md](references/print-styles.md); source warps: [source-shaping.md](references/source-shaping.md).
 
 ## GPU glyph fields
 
@@ -211,33 +230,9 @@ Legacy `CHARSETS`, `ART_STYLE_PRESETS`, `CHARSET_SEQUENCES`, `LIVING_STYLE_PRESE
 
 ## Version notes
 
-Read these when the installed version is older than the tested one, or when a user names a specific feature.
+What each release added, from 4.2 to 4.33, and what to check in an older install: [upgrading.md](references/upgrading.md). Check that the installed version exports an API before using it.
 
-### Fine dither and creative controls (4.2)
-
-Studio adds `hex`, `led`, and `cmyk` render styles, directional/radial dither patterns, additional palettes, luminance mapping, RGB split, sharpening, and adjustable still-image motion strength. Read [studio-workspace.md](references/studio-workspace.md#fine-detail-and-controls-42) for exact options, density budgets and preview/export consistency. These are local Canvas/WebGL effects, not AI generation or a claim of parity with every competing catalog.
-
-From 4.5, `dither.algorithm: 'blue-noise'` uses a precomputed dispersed threshold tile, separate from white `noise`. Studio `color` also accepts `blackPoint`, `whitePoint`, `gamma`, `shadows` and `highlights` to shape detail before conversion. All are neutral by default. Read [tonal detail and blue noise](references/studio-workspace.md#tonal-detail-and-blue-noise-45) before adding these controls; they belong to `/studio`, not core `AsciiOptions`.
-
-From 4.6, Studio adds `color.curves` (RGB, red, green, blue) and optional edge-preserving `color.denoise`. `player.settings` returns a detached snapshot for saving or exporting after updates. Read [channel curves and source noise](references/studio-workspace.md#channel-curves-and-source-noise-46) for point limits, update semantics and the processing budget. Do not turn noise reduction on by default or apply it again to the already-rendered characters.
-
-From 4.7, Studio supports up to eight ordered source warps: Twirl, Pinch, Spherize, Ripple, Zigzag, Shear, Smudge, Polar and Fragment. Build controls from `STUDIO_WARPS`, retain array order, and read [source shaping](references/source-shaping.md) for bounds, alpha/edge policy and cached-map performance. These shape the source; use `motion.type` to bring a still image to life and `hover.effect` for pointer interaction. Keep them independent, with an empty warp stack by default.
-
-From 4.9, optional Studio adds Stipple, Engraving, Crosshatch, Woodblock, Risograph and Pointillism with a shared `print` settings group. Read [print and illustration](references/print-styles.md) for exact controls, light-ink versus dark-ink polarity, still-motion integration and dense-render limits. These are genuine additional render paths; do not substitute dither presets for their IDs.
-
-### Lively images and interaction starting points (4.10)
-
-`STUDIO_ANIMATION_PRESETS` provides six editable motion/hover pairings through `/studio` and `/hover`. Apply `motion` and `hover` to an existing Studio player to keep the source and art style; do not treat the pairings as additional art styles. Read [studio-effects.md](references/studio-effects.md#lively-images-410) for exact new IDs, loop limits and the live component example.
-
-### Headless, custom effects and live sources (4.33)
-
-`asciify-engine/headless` converts pixels to text with no DOM (Node, workers, edge), matching glyph shapes rather than tone
-alone, and in the browser on the GPU (`createAsciiGpu`) for live video. `/field` gains `defineFieldEffect` (the brand's own hovers and motion, in GLSL) and `live: true` sources (3D and app
-canvases, every frame). Both new APIs are experimental for now; see STABILITY.md in the package.
-
-### GPU glyph fields (4.11) and the kit (4.13)
-
-`asciify-engine/field` adds `mountGlyphField`, `isGlyphFieldSupported` and `glyphFieldTier` in 4.11; `mark`, `clear` and `pulse()` in 4.12. `asciify-engine/kit` arrives in 4.13; `background()` and its presets, `lazy`, `poster`, the context budget and the global look follow it. Older installs do not have these entries; upgrade before using them.
+4.33 adds the `asciify-engine` command ([cli.md](references/cli.md)); `/headless` (pixels to text with no DOM, sub-cell art, animated SVG, and `createAsciiGpu` for live video in the browser); `/model` for 3D models; and `/decode` for image files in any runtime. `/field` gains `worker: true`, `context`, `live: true` sources, `sample: 'shape'` with `FIELD_PHOTO_CHARSET`, `post`, custom effects (`defineFieldEffect`) and `<asciify-field>`; `/kit` gains `elementSource`. `/headless`, `/model`, `worker`, custom effects and `elementSource` are experimental for now (STABILITY.md in the package).
 
 ## Scenario prompts
 
