@@ -178,7 +178,7 @@ int pick(float base[15],float offset,int c,int r,int keep,out bool structured,ou
     }
     if(lo<0)best=hi;else if(hi<0||hi==lo)best=lo;
     else best=(want-g(lo,49))/(g(hi,49)-g(lo,49))>(uBayer[(r&3)*4+(c&3)]+.5)/16.?hi:lo;
-    if(keep>=0&&keep!=best&&g(keep,50)>.5&&abs(g(keep,49)-want)<=uKeepTone)best=keep;
+    if(keep>=0&&keep!=best&&want>0.&&g(keep,50)>.5&&abs(g(keep,49)-want)<=uKeepTone)best=keep;
   } else {
     float bestDelta=1e30;
     for(int n=0;n<256;n++){
@@ -187,7 +187,7 @@ int pick(float base[15],float offset,int c,int r,int keep,out bool structured,ou
       float d=abs(g(i,49)-want);
       if(d<bestDelta){bestDelta=d;best=i;}
     }
-    if(keep>=0&&keep!=best&&g(keep,50)>.5&&abs(g(keep,49)-want)<=bestDelta+uKeepTone)best=keep;
+    if(keep>=0&&keep!=best&&want>0.&&g(keep,50)>.5&&abs(g(keep,49)-want)<=bestDelta+uKeepTone)best=keep;
   }
   return best;
 }

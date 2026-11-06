@@ -76,6 +76,7 @@ export function toBlockGrid(pixels: AsciiPixels, options: BlockGridOptions = {})
   const pw = columns * sx, ph = rows * sy, n = pw * ph;
   // Each sub-pixel the average light of its box of picture pixels (transparency shows the ground).
   const red = new Float32Array(n), green = new Float32Array(n), blue = new Float32Array(n), count = new Float32Array(n);
+  const cover = channels === 4 ? new Float32Array(n) : null;
   const ground = light ? 1 : 0;
   for (let y = 0; y < height; y++) {
     const py = Math.min(ph - 1, Math.floor((y * ph) / height));
@@ -84,7 +85,7 @@ export function toBlockGrid(pixels: AsciiPixels, options: BlockGridOptions = {})
       let r: number, g: number, b: number;
       if (channels === 1) r = g = b = LINEAR[data[i] & 255];
       else { r = LINEAR[data[i] & 255]; g = LINEAR[data[i + 1] & 255]; b = LINEAR[data[i + 2] & 255]; }
-      if (channels === 4) { const a = (data[i + 3] & 255) / 255; r = r * a + ground * (1 - a); g = g * a + ground * (1 - a); b = b * a + ground * (1 - a); }
+      if (channels === 4) { const a = (data[i + 3] & 255) / 255; r = r * a + ground * (1 - a); g = g * a + ground * (1 - a); b = b * a + ground * (1 - a); cover![p] += a; }
       red[p] += r; green[p] += g; blue[p] += b; count[p]++;
     }
   }
@@ -98,10 +99,40 @@ export function toBlockGrid(pixels: AsciiPixels, options: BlockGridOptions = {})
   const lines: string[] = [], fg = color ? new Uint8Array(columns * rows * 3) : null, bg = color && mode !== 'braille' ? new Uint8Array(columns * rows * 3) : null;
   if (color && mode !== 'braille') {
     // Two colours a cell: the pixels above the cell's mean tone light the glyph in their mean colour; the rest are the
-    // background, in theirs.
+    // background, in theirs. A cell the picture does not cover at all is left empty and unpainted.
+    let alpha: Uint8Array | null = null;
     for (let r = 0; r < rows; r++) {
       let line = '';
       for (let c = 0; c < columns; c++) {
+        if (cover) {
+          let covered = 0, seen = 0;
+          for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) { const p = (r * sy + y) * pw + c * sx + x; covered += cover[p]; seen += count[p]; }
+          const share = seen ? covered / seen : 0;
+          if (share < 1 - 1e-6) {
+            // Partly covered (an edge of the picture): the covered pixels make the glyph, in their own colour, and the
+            // rest of the cell is left unpainted, so the edge is crisp on any ground. Not covered at all: an empty cell.
+            alpha ??= new Uint8Array(columns * rows).fill(255);
+            const at = (r * columns + c) * 3, cell = r * columns + c;
+            let bits = 0, on = 0, sr = 0, sg = 0, sb = 0;
+            for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) {
+              const p = (r * sy + y) * pw + c * sx + x, a = count[p] ? cover[p] / count[p] : 0;
+              if (a < 0.5) continue;
+              bits |= 1 << (y * sx + x); on++;
+              // The pixel's own colour, without the ground it was laid over.
+              sr += (red[p] - ground * (1 - a)) / a; sg += (green[p] - ground * (1 - a)) / a; sb += (blue[p] - ground * (1 - a)) / a;
+            }
+            if (!on) {
+              alpha[cell] = 0;
+              fg![at] = fg![at + 1] = fg![at + 2] = bg![at] = bg![at + 1] = bg![at + 2] = light ? 255 : 0;
+              line += ' ';
+              continue;
+            }
+            alpha[cell] = Math.max(1, Math.min(254, Math.round(share * 255)));
+            fg![at] = bg![at] = toSrgb(sr / on); fg![at + 1] = bg![at + 1] = toSrgb(sg / on); fg![at + 2] = bg![at + 2] = toSrgb(sb / on);
+            line += glyphOf(mode, bits);
+            continue;
+          }
+        }
         let mean = 0;
         for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) mean += tone[(r * sy + y) * pw + c * sx + x];
         mean /= sx * sy;
@@ -121,7 +152,7 @@ export function toBlockGrid(pixels: AsciiPixels, options: BlockGridOptions = {})
       }
       lines.push(line);
     }
-    return { columns, rows, lines, colors: fg, backgrounds: bg, background: light ? 'light' : 'dark', cellAspect };
+    return { columns, rows, lines, colors: fg, backgrounds: bg, alpha, background: light ? 'light' : 'dark', cellAspect };
   }
   // One colour: each pixel lit by tone, after levels, dithered.
   const [lo, hi] = options.levels === 'none' ? [0, 1] : levelsOf(tone);

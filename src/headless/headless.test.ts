@@ -205,13 +205,47 @@ describe('SVG writers', () => {
     const frames = [0, 1, 2].map(k => toAsciiGrid(picture(80, 40, x => ((x + k * 20) % 80) / 80), { columns: 10 }));
     const svg = gridsToAnimatedSvg(frames, { fps: 6 });
     expect(svg.match(/<g class="f f\d/g)).toHaveLength(3);
-    expect(svg).toContain('animation:s 0.5000s infinite');
-    expect(svg).toContain('animation-delay:0.3333s');
+    expect(svg).toContain('animation-duration:0.5000s;animation-iteration-count:infinite');
+    expect(svg).toContain('@keyframes s0{0%{visibility:visible}33.3333%{visibility:hidden}');
+    expect(svg).toContain('animation-name:s0;animation-delay:0.3333s');
+    // A GIF's own timing: frames held for different lengths.
+    const timed = gridsToAnimatedSvg(frames, { delays: [100, 300, 100] });
+    expect(timed).toContain('animation-duration:0.5000s');
+    expect(timed).toContain('@keyframes s1{0%{visibility:visible}60.0000%{visibility:hidden}');
+    expect(timed).toContain('animation-name:s0;animation-delay:0.4000s');
     expect(svg).toContain('@media (prefers-reduced-motion: reduce){.f{animation:none}.f0{visibility:visible}}');
     expect(svg).not.toContain('<script');
     const once = gridsToAnimatedSvg(frames, { fps: 6, loop: false });
     expect(once).toContain('class="f f2 l"');
     expect(gridsToAnimatedSvg(frames.slice(0, 1))).not.toContain('@keyframes');
     expect(() => gridsToAnimatedSvg([])).toThrow();
+  });
+});
+
+describe('transparent pictures in two colours', () => {
+  it('leaves cells the picture does not cover unpainted', () => {
+    // An opaque red square in the left half; the right half fully transparent.
+    const data = new Uint8Array(40 * 20 * 4);
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) data.set([255, 0, 0, 255], (y * 40 + x) * 4);
+    const grid = toBlockGrid({ data, width: 40, height: 20 }, { columns: 4, rows: 2, mode: 'half', color: true });
+    expect(grid.lines).toEqual(['██  ', '██  ']);
+    expect(Array.from(grid.alpha!)).toEqual([255, 255, 0, 0, 255, 255, 0, 0]);
+    const ansi = gridToAnsi(grid);
+    expect(ansi.split('\n')[0]).toBe('\x1b[38;2;255;0;0;48;2;255;0;0m██\x1b[0m  ');
+    expect(gridToSvg(grid).match(/<path fill="#ff0000"/g)?.length).toBe(2);
+    expect(gridToSvg(grid)).not.toContain('#000000');
+    expect(gridToHtml(grid)).not.toContain('background:#000000');
+  });
+  it('draws a partly covered cell as its covered pixels, over the terminal\'s own background', () => {
+    // The top half of the picture red, the bottom half transparent: one ▀ in red with no background.
+    const data = new Uint8Array(10 * 20 * 4);
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) data.set([255, 0, 0, 255], (y * 10 + x) * 4);
+    const grid = toBlockGrid({ data, width: 10, height: 20 }, { columns: 1, rows: 1, mode: 'half', color: true });
+    expect(grid.lines).toEqual(['▀']);
+    expect(grid.alpha![0]).toBe(128);
+    expect(gridToAnsi(grid)).toBe('\x1b[49;38;2;255;0;0m▀\x1b[0m');
+    const svg = gridToSvg(grid);
+    expect(svg).toContain('<path fill="#ff0000"');
+    expect(svg.match(/<path/g)?.length).toBe(1);
   });
 });

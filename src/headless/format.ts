@@ -26,7 +26,7 @@ const ansi = (mode: 'truecolor' | '256', colors: Uint8Array, at: number, layer: 
  * `backgrounds` (`toBlockGrid` with `color`) sets each cell's background too.
  */
 export function gridToAnsi(grid: AsciiGrid, options: AnsiOptions = {}): string {
-  const backs = grid.backgrounds ?? null, colors = grid.colors;
+  const backs = grid.backgrounds ?? null, colors = grid.colors, alpha = grid.alpha ?? null;
   const mode = options.color === undefined ? (colors || backs ? 'truecolor' : false) : options.color;
   if (!mode || (!colors && !backs)) return gridToText(grid);
   return grid.lines.map((line, r) => {
@@ -36,11 +36,13 @@ export function gridToAnsi(grid: AsciiGrid, options: AnsiOptions = {}): string {
       const at = (r * grid.columns + c) * 3, ch = cells[c];
       // Without backgrounds a space shows nothing, so the colour is left as it is across it.
       if (!backs && ch === ' ') { out += ch; continue; }
-      const code = [colors ? ansi(mode, colors, at, 38) : '', backs ? ansi(mode, backs, at, 48) : ''].filter(Boolean).join(';');
-      if (code !== open) { out += `\x1b[${code}m`; open = code; }
+      // Where the picture does not cover a cell, the terminal's own background shows: all of it, or around the glyph.
+      const cover = alpha ? alpha[r * grid.columns + c] : 255;
+      const code = cover === 0 ? '0' : cover < 255 ? `49;${colors ? ansi(mode, colors, at, 38) : '39'}` : [colors ? ansi(mode, colors, at, 38) : '', backs ? ansi(mode, backs, at, 48) : ''].filter(Boolean).join(';');
+      if (code !== open && !(code === '0' && open === '')) { out += `\x1b[${code}m`; open = code; }
       out += ch;
     }
-    return open ? `${out}\x1b[0m` : out;
+    return open && open !== '0' ? `${out}\x1b[0m` : out;
   }).join('\n');
 }
 
@@ -107,7 +109,8 @@ function runs(grid: AsciiGrid, r: number, useColor: boolean, skip?: (ch: string)
     let ch = cells[c];
     if (skip?.(ch)) ch = ' ';
     const at = (r * grid.columns + c) * 3;
-    const color = colors && ch !== ' ' ? hex(colors, at) : NO_COLOR, back = backs ? hex(backs, at) : NO_COLOR;
+    const clear = grid.alpha ? grid.alpha[r * grid.columns + c] < 255 : false;
+    const color = colors && ch !== ' ' ? hex(colors, at) : NO_COLOR, back = backs && !clear ? hex(backs, at) : NO_COLOR;
     const last = out[out.length - 1];
     if (last && last.back === back && (last.color === color || ch === ' ')) last.text += ch;
     else if (last && last.back === back && last.text.trim() === '') { last.text += ch; last.color = color; }
@@ -123,15 +126,17 @@ function svgBody(grid: AsciiGrid, options: MarkupOptions, width: number) {
   const shapes = options.blocks !== 'text';
   let out = '';
   // Cell backgrounds: one rectangle per run of a colour in a row, joined into a path per colour.
-  const backs = useColor ? grid.backgrounds ?? null : null;
+  const backs = useColor ? grid.backgrounds ?? null : null, alpha = grid.alpha ?? null;
   if (backs) {
     const paths = new Map<string, string>();
+    // A cell's background colour, or '' where the picture leaves it clear.
+    const backAt = (r: number, c: number) => (alpha && alpha[r * grid.columns + c] < 255 ? '' : hex(backs, (r * grid.columns + c) * 3));
     for (let r = 0; r < grid.rows; r++) {
       let start = 0;
       for (let c = 1; c <= grid.columns; c++) {
-        if (c < grid.columns && hex(backs, (r * grid.columns + c) * 3) === hex(backs, (r * grid.columns + start) * 3)) continue;
-        const color = hex(backs, (r * grid.columns + start) * 3);
-        paths.set(color, (paths.get(color) ?? '') + `M${(start * advance).toFixed(2)} ${(r * lead).toFixed(2)}h${((c - start) * advance).toFixed(2)}v${lead.toFixed(2)}h${(-(c - start) * advance).toFixed(2)}z`);
+        if (c < grid.columns && backAt(r, c) === backAt(r, start)) continue;
+        const color = backAt(r, start);
+        if (color) paths.set(color, (paths.get(color) ?? '') + `M${(start * advance).toFixed(2)} ${(r * lead).toFixed(2)}h${((c - start) * advance).toFixed(2)}v${lead.toFixed(2)}h${(-(c - start) * advance).toFixed(2)}z`);
         start = c;
       }
     }
@@ -188,7 +193,8 @@ function svgBody(grid: AsciiGrid, options: MarkupOptions, width: number) {
   for (let r = 0; r < grid.rows; r++) {
     const parts = runs(grid, r, textUses, shapes ? ch => BLOCKS.has(ch) : undefined);
     if (parts.every(run => run.text.trim() === '')) continue;
-    const spans = parts.map(run => run.color ? `<tspan fill="${run.color}">${escapeXml(run.text)}</tspan>` : escapeXml(run.text)).join('');
+    // Spaces as no-break spaces: an SVG placed inside HTML collapses ordinary ones whatever xml:space says.
+    const spans = parts.map(run => { const text = escapeXml(run.text).replace(/ /g, '\u00a0'); return run.color ? `<tspan fill="${run.color}">${text}</tspan>` : text; }).join('');
     out += `<text x="0" y="${((r + 0.8) * lead).toFixed(2)}" textLength="${width}" lengthAdjust="spacing">${spans}</text>`;
   }
   return out;
@@ -215,7 +221,7 @@ function svgOpen(grid: AsciiGrid, options: MarkupOptions, width: number, height:
   const fill = options.background || dark?.background ? `<rect class="b" width="100%" height="100%" fill="${escapeXml(options.background ?? 'none')}"/>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" ${options.title ? 'role="img"' : 'aria-hidden="true"'}>`
     + label + (css ? `<style>${css.replace(/</g, '')}</style>` : '') + fill
-    + `<g class="i" font-family="${escapeXml(options.fontFamily ?? FONT)}" font-size="${size}" fill="${escapeXml(ink)}" xml:space="preserve">`;
+    + `<g class="i" font-family="${escapeXml(options.fontFamily ?? FONT)}" font-size="${size}" fill="${escapeXml(ink)}" xml:space="preserve" style="white-space:pre">`;
 }
 
 /**
@@ -228,8 +234,10 @@ export function gridToSvg(grid: AsciiGrid, options: MarkupOptions = {}): string 
 }
 
 export interface AnimatedSvgOptions extends MarkupOptions {
-  /** Frames a second. Default 12. */
+  /** Frames a second, when `delays` does not say. Default 12. */
   fps?: number;
+  /** How long each frame shows, in ms (a GIF's own timing); default 1000 / fps for every frame. */
+  delays?: readonly number[];
   /** Play forever (default), or once and hold the last frame. */
   loop?: boolean;
 }
@@ -243,14 +251,21 @@ export function gridsToAnimatedSvg(grids: readonly AsciiGrid[], options: Animate
   const fps = options.fps && options.fps > 0 ? options.fps : 12, loop = options.loop !== false, n = grids.length;
   const frames = grids.map(grid => svgFrame(grid, options));
   const width = Math.max(...frames.map(f => f.width)), height = Math.max(...frames.map(f => f.height));
-  const period = n / fps, share = (100 / n).toFixed(4);
-  const style = n === 1 ? '' : `.f{visibility:hidden;animation:s ${period.toFixed(4)}s ${loop ? 'infinite' : '1'}}`
-    + `@keyframes s{0%{visibility:visible}${share}%{visibility:hidden}100%{visibility:hidden}}`
+  const durations = grids.map((_, i) => { const d = options.delays?.[i]; return d !== undefined && d > 0 ? Math.max(10, d) : 1000 / fps; });
+  const total = durations.reduce((a, b) => a + b, 0), seconds = (ms: number) => `${(ms / 1000).toFixed(4)}s`;
+  // One keyframe rule for each length a frame shows: visible for its share of the loop, hidden for the rest.
+  const rules = new Map<number, string>();
+  for (const d of durations) if (!rules.has(d)) rules.set(d, `s${rules.size}`);
+  const style = n === 1 ? '' : `.f{visibility:hidden;animation-duration:${seconds(total)};animation-iteration-count:${loop ? 'infinite' : '1'}}`
+    + [...rules].map(([d, name]) => `@keyframes ${name}{0%{visibility:visible}${((d / total) * 100).toFixed(4)}%{visibility:hidden}100%{visibility:hidden}}`).join('')
     + (loop ? '' : `.l{animation:h 1s 1 forwards}@keyframes h{0%,100%{visibility:visible}}`)
     + `@media (prefers-reduced-motion: reduce){.f{animation:none}.f0{visibility:visible}}`;
+  let start = 0;
   const body = grids.map((grid, i) => {
-    const delay = `animation-delay:${(i / fps).toFixed(4)}s`;
-    const cls = n === 1 ? '' : ` class="f f${i}${!loop && i === n - 1 ? ' l' : ''}" style="${delay}"`;
+    const last = !loop && i === n - 1;
+    const css = `${last ? '' : `animation-name:${rules.get(durations[i])};`}animation-delay:${seconds(start)}`;
+    start += durations[i];
+    const cls = n === 1 ? '' : ` class="f f${i}${last ? ' l' : ''}" style="${css}"`;
     return `<g${cls}>${svgBody(grid, options, frames[i].width)}</g>`;
   }).join('');
   return `${svgOpen(grids[0], options, width, height, frames[0].size, style)}${body}</g></svg>`;

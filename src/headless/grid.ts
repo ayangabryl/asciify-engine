@@ -64,6 +64,11 @@ export interface AsciiGrid {
   readonly colors: Uint8Array | null;
   /** A background colour per cell (RGB, row by row), for grids drawn in two colours a cell (`toBlockGrid`); else absent. */
   readonly backgrounds?: Uint8Array | null;
+  /**
+   * How much of each cell the picture covers, 0 to 255, when it had transparent parts (`toBlockGrid` in colour). Writers
+   * leave a cell at 0 unpainted, and paint only the glyph of a cell below 255 (its background stays the page's or terminal's).
+   */
+  readonly alpha?: Uint8Array | null;
   readonly background: 'dark' | 'light';
   /** Height over width of a cell the grid was made for (`cellAspect`), so writers keep the picture's proportions. */
   readonly cellAspect?: number;
@@ -396,7 +401,8 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
         const lo = down >= 0 ? sortedFill[down] : -1;
         if (lo < 0) best = hi; else if (hi < 0 || hi === lo) best = lo;
         else best = (want - toneOf[lo]) / (toneOf[hi] - toneOf[lo]) > (BAYER[(r & 3) * 4 + (c & 3)] + 0.5) / 16 ? hi : lo;
-        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= keepTone) best = keep;
+        // An empty cell is always empty: no character is kept over nothing.
+        if (keep !== undefined && keep !== best && want > 0 && inFill[keep] && Math.abs(toneOf[keep] - want) <= keepTone) best = keep;
       } else {
         // The nearest fill tone either side; on a tie, the one that comes first in fill order, as a scan would choose.
         const up = firstAtLeast(want), down = up - 1;
@@ -407,7 +413,7 @@ function matchCells(m: MatchInput): { out: string[]; colors: Uint8Array | null }
           const g = sortedFill[i], d = Math.abs(sortedTone[i] - want);
           if (d < bestDelta || (d === bestDelta && fillOrder[g] < fillOrder[best])) { bestDelta = d; best = g; }
         }
-        if (keep !== undefined && keep !== best && inFill[keep] && Math.abs(toneOf[keep] - want) <= bestDelta + keepTone) best = keep;
+        if (keep !== undefined && keep !== best && want > 0 && inFill[keep] && Math.abs(toneOf[keep] - want) <= bestDelta + keepTone) best = keep;
       }
       picked[c] = best;
       if (diffuse) spreadError(target, columns, rows, c, r, want - (structured ? strokeTone : toneOf)[best], stride);
