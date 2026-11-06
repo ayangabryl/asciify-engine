@@ -3,8 +3,9 @@ import { inflateInto } from './inflate';
 
 /*
  * PNG and APNG: every colour type and bit depth, PLTE and tRNS transparency, Adam7 interlacing, all five filters, and APNG
- * animation (frame regions, dispose and blend operations, delays, play counts). 16-bit samples keep their high byte, as
- * libpng's strip and Pillow do. Image data cut short decodes as far as it goes; the rest stays transparent.
+ * animation (frame regions, dispose and blend operations, delays, play counts; a delay of 10 ms or less plays as 100 ms, as in
+ * browsers). 16-bit samples keep their high byte, as libpng's strip and Pillow do. Image data cut short decodes as far as it
+ * goes; the rest stays transparent.
  * Not supported: colour management (gAMA, cHRM, sRGB and iCCP are ignored) and Apple's CgBI variant. CRCs are not checked.
  */
 
@@ -241,7 +242,10 @@ function pixels(h: Header, parts: Range[], width: number, height: number, out: U
     const pw = Math.ceil((width - x0) / dx), ph = Math.ceil((height - y0) / dy);
     if (pw > 0 && ph > 0) total += ph * (rowBytes(h, pw) + 1);
   }
-  const raw = new Uint8Array(total);
+  // DEFLATE expands at most 1032 to 1, so a frame that claims many pixels but carries little data gets a small buffer.
+  let input = 0;
+  for (const [a, b] of parts) input += b - a;
+  const raw = new Uint8Array(Math.min(total, input * 1032 + 1024));
   let got: number;
   try {
     got = inflateInto(h.bytes, parts.flat(), raw);

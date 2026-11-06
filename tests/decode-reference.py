@@ -597,7 +597,7 @@ class Decoder:
     """The TypeScript decoders, bundled with the repo's esbuild and run in Node on a list of files."""
 
     RUNNER = r'''
-import { decodeImage, inflate } from './decode.mjs';
+import { decodeImage } from './decode.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [mode, out, ...files] = process.argv.slice(2);
 if (mode === 'decode') {
@@ -613,16 +613,16 @@ if (mode === 'decode') {
     }
   });
 } else {
-  // Timing: warm runs; the median and the best.
-  const out = {};
+  // Timing: 25 runs, the first 5 as warm-up; the median and the best of the rest, and the first (cold) run.
+  const results = {};
   for (const f of files) {
     const bytes = readFileSync(f), times = [];
     let img;
     for (let i = 0; i < 25; i++) { const t = performance.now(); img = decodeImage(bytes); times.push(performance.now() - t); }
     const warm = times.slice(5).sort((a, b) => a - b);
-    out[f] = { median: warm[10], best: warm[0], first: times[0], width: img.width, height: img.height };
+    results[f] = { median: warm[10], best: warm[0], first: times[0], width: img.width, height: img.height };
   }
-  writeFileSync(process.env.TIMING_OUT, JSON.stringify(out));
+  writeFileSync(process.env.TIMING_OUT, JSON.stringify(results));
 }
 '''
 
@@ -648,9 +648,13 @@ if (mode === 'decode') {
         return results
 
     def time(self, paths):
-        out = os.path.join(self.dir, 'timing.json')
-        subprocess.run(['node', os.path.join(self.dir, 'run.mjs'), 'time', self.dir, *paths], check=True, env={**os.environ, 'TIMING_OUT': out})
-        return json.load(open(out))
+        # One process a file, so one file's garbage is not collected in another's timing.
+        results = {}
+        for p in paths:
+            out = os.path.join(self.dir, 'timing.json')
+            subprocess.run(['node', os.path.join(self.dir, 'run.mjs'), 'time', self.dir, p], check=True, env={**os.environ, 'TIMING_OUT': out})
+            results.update(json.load(open(out)))
+        return results
 
     def close(self):
         shutil.rmtree(self.dir, ignore_errors=True)

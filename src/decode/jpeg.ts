@@ -6,9 +6,11 @@ import { checkSize, limitsOf, still, type DecodedImage, type DecodeOptions } fro
  * CMYK read as Adobe's inverted CMYK, as Pillow and Chrome do); EXIF orientation. Each step is libjpeg-turbo's default: the
  * accurate integer IDCT, "fancy" triangle-filter upsampling for 2× chroma, its fixed-point colour conversion, the standard
  * Huffman tables for motion-JPEG frames that leave them out. So the output matches libjpeg-turbo, usually exactly. A file
- * cut short decodes as far as it goes and the rest is grey, as in libjpeg; junk between markers is skipped.
+ * cut short decodes as far as it goes and the rest is grey, damaged restart markers resynchronise, and junk between markers
+ * is skipped, all as in libjpeg.
  * Not supported (these throw): arithmetic coding, 12- and 16-bit precision, lossless and hierarchical JPEG, a height given
- * only by a DNL marker. Progressive files missing their final refinement scans skip libjpeg's block smoothing.
+ * only by a DNL marker, more than 1000 scans. Progressive files missing their last scans skip libjpeg's block smoothing, so
+ * their unfinished parts look blockier than libjpeg's.
  */
 
 // Zigzag order to natural order, with 16 spare entries so a corrupt run cannot index past the block.
@@ -61,6 +63,15 @@ const STD_AC_VALUES = [
     0xf9, 0xfa,
   ],
 ];
+
+const standard: (Huffman | null)[] = [null, null, null, null];
+/** Standard table 0 (luminance) or 1 (chrominance), built once; null for other numbers. */
+function standardTable(ac: boolean, id: number): Huffman | null {
+  if (id > 1) return null;
+  const k = (ac ? 2 : 0) + id;
+  if (!standard[k]) standard[k] = new Huffman(ac ? STD_AC[id] : STD_DC[id], ac ? STD_AC_VALUES[id] : STD_DC_VALUES, ac);
+  return standard[k];
+}
 
 /** True if the bytes start with a JPEG SOI marker. */
 export const isJpeg = (b: Uint8Array): boolean => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
@@ -211,9 +222,12 @@ interface Component {
   bh: number;
   /** Blocks across in storage (whole MCUs). */
   stride: number;
-  coefs: Int16Array;
+  /** Progressive files: every block's coefficients until the last scan, taken at the component's first scan. */
+  coefs: Int16Array | null;
   /** Per block: 1 once any AC coefficient is non-zero, so DC-only blocks skip the IDCT. */
-  nz: Uint8Array;
+  nz: Uint8Array | null;
+  /** Sequential files: the samples, each block put through the IDCT as it is decoded (grey until then). */
+  samples: Uint8Array | null;
   /** The quantisation table in natural order, taken at the component's first scan. */
   quant: Int32Array | null;
   dc: Huffman | null;
@@ -233,6 +247,7 @@ interface Frame {
 }
 
 const BASELINE = 0, DC_FIRST = 1, DC_REFINE = 2, AC_FIRST = 3, AC_REFINE = 4;
+const MAX_SCANS = 1000;
 
 /** Decodes a JPEG. */
 export function decodeJpeg(bytes: Uint8Array, options?: DecodeOptions): DecodedImage {
@@ -287,6 +302,8 @@ export function decodeJpeg(bytes: Uint8Array, options?: DecodeOptions): DecodedI
         break;
       case 0xda: {
         if (!frame) throw new Error('JPEG: scan before the frame header');
+        // Each scan walks the whole image, so a file of many tiny scans could take very long; real ones have a few dozen.
+        if (scans >= MAX_SCANS) throw new Error(`JPEG: more than ${MAX_SCANS} scans`);
         const r = new Bits(bytes, Math.min(pos, n));
         scan(frame, bytes, s, e, dcTables, acTables, quant, restart, r);
         scans++;
@@ -321,7 +338,7 @@ function frameHeader(b: Uint8Array, s: number, e: number, progressive: boolean, 
     if (h < 1 || h > 4 || v < 1 || v > 4) throw new Error('JPEG: bad sampling factors');
     maxH = Math.max(maxH, h);
     maxV = Math.max(maxV, v);
-    comps.push({ id: b[p], h, v, tq: b[p + 2] & 3, sw: 0, sh: 0, bw: 0, bh: 0, stride: 0, coefs: new Int16Array(0), nz: new Uint8Array(0), quant: null, dc: null, ac: null, pred: 0 });
+    comps.push({ id: b[p], h, v, tq: b[p + 2] & 3, sw: 0, sh: 0, bw: 0, bh: 0, stride: 0, coefs: null, nz: null, samples: null, quant: null, dc: null, ac: null, pred: 0 });
   }
   const mcusX = Math.ceil(width / (8 * maxH)), mcusY = Math.ceil(height / (8 * maxV));
   for (const c of comps) {
@@ -330,9 +347,6 @@ function frameHeader(b: Uint8Array, s: number, e: number, progressive: boolean, 
     c.bw = Math.ceil(c.sw / 8);
     c.bh = Math.ceil(c.sh / 8);
     c.stride = mcusX * c.h;
-    const blocks = c.stride * mcusY * c.v;
-    c.coefs = new Int16Array(blocks * 64);
-    c.nz = new Uint8Array(blocks);
   }
   return { progressive, width, height, comps, maxH, maxV, mcusX, mcusY };
 }
@@ -397,8 +411,8 @@ function scan(f: Frame, b: Uint8Array, s: number, e: number, dcTables: (Huffman 
     const td = tables >> 4, ta = tables & 15;
     if (td > 3 || ta > 3) throw new Error('JPEG: bad Huffman table number');
     // A missing table is taken from the standard ones, as libjpeg-turbo does for motion JPEG.
-    c.dc = dcTables[td] ?? (td < 2 ? new Huffman(STD_DC[td], STD_DC_VALUES, false) : null);
-    c.ac = acTables[ta] ?? (ta < 2 ? new Huffman(STD_AC[ta], STD_AC_VALUES[ta], true) : null);
+    c.dc = dcTables[td] ?? standardTable(false, td);
+    c.ac = acTables[ta] ?? standardTable(true, ta);
     if (!c.quant) {
       const q = quant[c.tq];
       if (!q) throw new Error('JPEG: missing quantisation table');
@@ -419,15 +433,23 @@ function scan(f: Frame, b: Uint8Array, s: number, e: number, dcTables: (Huffman 
     }
     if (al > 13 || (ah && al !== ah - 1)) throw new Error('JPEG: bad progressive scan');
   }
-  for (const c of comps) {
-    if (!c.dc && mode !== AC_FIRST && mode !== AC_REFINE && mode !== DC_REFINE) throw new Error('JPEG: missing Huffman table');
-    if (!c.ac && (mode === BASELINE || mode === AC_FIRST || mode === AC_REFINE)) throw new Error('JPEG: missing Huffman table');
-    c.pred = 0;
-  }
   if (count > 1) {
     let blocks = 0;
     for (const c of comps) blocks += c.h * c.v;
     if (blocks > 10) throw new Error('JPEG: too many blocks in an MCU');
+  }
+  for (const c of comps) {
+    if (!c.dc && mode !== AC_FIRST && mode !== AC_REFINE && mode !== DC_REFINE) throw new Error('JPEG: missing Huffman table');
+    if (!c.ac && (mode === BASELINE || mode === AC_FIRST || mode === AC_REFINE)) throw new Error('JPEG: missing Huffman table');
+    c.pred = 0;
+    // Storage, made when a scan first needs it, so a header alone allocates nothing.
+    if (mode === BASELINE) {
+      if (!c.samples) c.samples = new Uint8Array(c.bw * 8 * c.bh * 8).fill(128);
+    } else if (!c.coefs) {
+      const blocks = c.stride * f.mcusY * c.v;
+      c.coefs = new Int16Array(blocks * 64);
+      c.nz = new Uint8Array(blocks);
+    }
   }
 
   const single = count === 1, one = comps[0];
@@ -446,16 +468,17 @@ function scan(f: Frame, b: Uint8Array, s: number, e: number, dcTables: (Huffman 
       }
       toGo--;
     }
-    if (r.short) continue;
+    if (r.short) {
+      // Nothing more comes before a restart marker; with none due, or another marker ahead, the scan is over.
+      if (!interval || !restartAhead(r)) break;
+      continue;
+    }
     const mx = m % across, my = (m - mx) / across;
     if (single) {
-      block(mode, r, one, (my * one.stride + mx) * 64, ss, se, al, eob);
+      block(mode, r, one, mx, my, ss, se, al, eob);
     } else {
       for (const c of comps) {
-        for (let v = 0; v < c.v; v++) {
-          const row = (my * c.v + v) * c.stride + mx * c.h;
-          for (let h = 0; h < c.h; h++) block(mode, r, c, (row + h) * 64, ss, se, al, eob);
-        }
+        for (let v = 0; v < c.v; v++) for (let h = 0; h < c.h; h++) block(mode, r, c, mx * c.h + h, my * c.v + v, ss, se, al, eob);
       }
     }
   }
@@ -507,19 +530,42 @@ function restartMarker(r: Bits, expected: number): number {
   return (expected + 1) & 7;
 }
 
-function block(mode: number, r: Bits, c: Component, off: number, ss: number, se: number, al: number, eob: { run: number }): void {
+/** True if the marker the data stopped at could be a restart marker (or an invalid one, which libjpeg looks past). */
+function restartAhead(r: Bits): boolean {
+  const b = r.data;
+  let p = r.pos;
+  while (p + 1 < b.length && b[p + 1] === 0xff) p++;
+  return p + 1 < b.length && b[p] === 0xff && (b[p + 1] < 0xc0 || (b[p + 1] >= 0xd0 && b[p + 1] <= 0xd7));
+}
+
+const scratch = new Int16Array(64), workspace = new Int32Array(64);
+
+/** Decodes block (bx, by) of a component: straight to its samples in a sequential scan, else into its coefficients. */
+function block(mode: number, r: Bits, c: Component, bx: number, by: number, ss: number, se: number, al: number, eob: { run: number }): void {
+  if (mode === BASELINE) {
+    const any = baseline(r, c, scratch, 0);
+    // Blocks that only pad out the last MCUs are decoded (the data must be read) and dropped.
+    if (bx < c.bw && by < c.bh) {
+      const stride = c.bw * 8, o = by * 8 * stride + bx * 8, q = c.quant as Int32Array, out = c.samples as Uint8Array;
+      if (any) idct(scratch, 0, q, out, o, stride, workspace);
+      else {
+        const v = LIMIT[((scratch[0] * q[0] + 4) >> 3) & 1023];
+        for (let y = 0, p = o; y < 8; y++, p += stride) out.fill(v, p, p + 8);
+      }
+    }
+    scratch.fill(0);
+    return;
+  }
+  const off = (by * c.stride + bx) * 64, coefs = c.coefs as Int16Array;
   switch (mode) {
-    case BASELINE:
-      baseline(r, c, off);
-      return;
     case DC_FIRST: {
       const s = r.decode(c.dc as Huffman);
       if (s) c.pred += r.receive(s);
-      c.coefs[off] = c.pred * (1 << al);
+      coefs[off] = c.pred * (1 << al);
       return;
     }
     case DC_REFINE:
-      if (r.get(1)) c.coefs[off] |= 1 << al;
+      if (r.get(1)) coefs[off] |= 1 << al;
       return;
     case AC_FIRST:
       acFirst(r, c, off, ss, se, al, eob);
@@ -529,8 +575,9 @@ function block(mode: number, r: Bits, c: Component, off: number, ss: number, se:
   }
 }
 
-function baseline(r: Bits, c: Component, off: number): void {
-  const coefs = c.coefs, ac = c.ac as Huffman;
+/** A sequential block's coefficients into coefs[off..]; returns 1 if any AC coefficient is non-zero. */
+function baseline(r: Bits, c: Component, coefs: Int16Array, off: number): number {
+  const ac = c.ac as Huffman;
   const s = r.decode(c.dc as Huffman);
   if (s) c.pred += r.receive(s);
   coefs[off] = c.pred;
@@ -582,7 +629,7 @@ function baseline(r: Bits, c: Component, off: number): void {
     any = 1;
   }
   r.bits = bits;
-  if (any) c.nz[off >> 6] = 1;
+  return any;
 }
 
 function acFirst(r: Bits, c: Component, off: number, ss: number, se: number, al: number, eob: { run: number }): void {
@@ -590,7 +637,7 @@ function acFirst(r: Bits, c: Component, off: number, ss: number, se: number, al:
     eob.run--;
     return;
   }
-  const coefs = c.coefs, ac = c.ac as Huffman, fast = ac.fast, scale = 1 << al;
+  const coefs = c.coefs as Int16Array, nz = c.nz as Uint8Array, ac = c.ac as Huffman, fast = ac.fast, scale = 1 << al;
   for (let k = ss; k <= se; k++) {
     if (r.bits < 16) r.fill();
     const f = fast[(r.buf >>> (r.bits - 9)) & 511];
@@ -598,14 +645,14 @@ function acFirst(r: Bits, c: Component, off: number, ss: number, se: number, al:
       k += (f >> 8) & 15;
       r.bits -= f & 255;
       coefs[off + ZIGZAG[k]] = (f >> 16) * scale;
-      c.nz[off >> 6] = 1;
+      nz[off >> 6] = 1;
       continue;
     }
     const rs = r.decode(ac), run = rs >> 4, s = rs & 15;
     if (s) {
       k += run;
       coefs[off + ZIGZAG[k]] = r.receive(s) * scale;
-      c.nz[off >> 6] = 1;
+      nz[off >> 6] = 1;
     } else if (run === 15) {
       k += 15;
     } else {
@@ -618,7 +665,7 @@ function acFirst(r: Bits, c: Component, off: number, ss: number, se: number, al:
 }
 
 function acRefine(r: Bits, c: Component, off: number, ss: number, se: number, al: number, eob: { run: number }): void {
-  const coefs = c.coefs, ac = c.ac as Huffman, p1 = 1 << al, m1 = -1 << al;
+  const coefs = c.coefs as Int16Array, ac = c.ac as Huffman, p1 = 1 << al, m1 = -1 << al;
   let k = ss;
   if (eob.run === 0) {
     for (; k <= se; k++) {
@@ -646,7 +693,7 @@ function acRefine(r: Bits, c: Component, off: number, ss: number, se: number, al
       }
       if (value) {
         coefs[off + ZIGZAG[k]] = value;
-        c.nz[off >> 6] = 1;
+        (c.nz as Uint8Array)[off >> 6] = 1;
       }
     }
   }
@@ -766,16 +813,25 @@ interface Plane {
 
 const FULL = 0, H2V1 = 1, H1V2 = 2, H2V2 = 3, H2V1_BOX = 4, H2V2_BOX = 5, GENERIC = 6;
 
-function plane(c: Component, f: Frame, ws: Int32Array): Plane {
-  const stride = c.bw * 8, data = new Uint8Array(stride * c.bh * 8), q = c.quant ?? new Int32Array(64).fill(1);
-  for (let by = 0; by < c.bh; by++) {
-    for (let bx = 0; bx < c.bw; bx++) {
-      const blk = by * c.stride + bx, off = blk * 64, o = by * 8 * stride + bx * 8;
-      if (c.nz[blk]) idct(c.coefs, off, q, data, o, stride, ws);
-      else {
-        // DC only: the IDCT gives one value, exactly.
-        const v = LIMIT[((c.coefs[off] * q[0] + 4) >> 3) & 1023];
-        for (let y = 0, p = o; y < 8; y++, p += stride) data.fill(v, p, p + 8);
+function plane(c: Component, f: Frame): Plane {
+  const stride = c.bw * 8;
+  let data = c.samples;
+  if (!data) {
+    // Progressive: the IDCT of every block now. A component no scan reached is grey, as all-zero coefficients give.
+    data = new Uint8Array(stride * c.bh * 8);
+    const coefs = c.coefs, nz = c.nz, q = c.quant;
+    if (!coefs || !nz || !q) data.fill(128);
+    else {
+      for (let by = 0; by < c.bh; by++) {
+        for (let bx = 0; bx < c.bw; bx++) {
+          const blk = by * c.stride + bx, off = blk * 64, o = by * 8 * stride + bx * 8;
+          if (nz[blk]) idct(coefs, off, q, data, o, stride, workspace);
+          else {
+            // DC only: the IDCT gives one value, exactly.
+            const v = LIMIT[((coefs[off] * q[0] + 4) >> 3) & 1023];
+            for (let y = 0, p = o; y < 8; y++, p += stride) data.fill(v, p, p + 8);
+          }
+        }
       }
     }
   }
@@ -864,8 +920,8 @@ const muldiv255 = (a: number, b: number) => {
 
 /** IDCT, upsampling and colour conversion to RGBA. */
 function render(f: Frame, adobe: number, jfif: boolean): { data: Uint8Array; width: number; height: number } {
-  const { width, height, comps } = f, ws = new Int32Array(64);
-  const planes = comps.map(c => plane(c, f, ws));
+  const { width, height, comps } = f;
+  const planes = comps.map(c => plane(c, f));
   const out = new Uint8Array(width * height * 4), clamped = new Uint8ClampedArray(out.buffer);
   const count = comps.length;
   // libjpeg's choice of colour space.

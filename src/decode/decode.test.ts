@@ -239,6 +239,15 @@ describe('JPEG', () => {
     expect(() => decodeJpeg(base.subarray(0, sof))).toThrow('JPEG: no frame header');
   });
 
+  it('refuses a file of more than 1000 scans, each of which would walk the whole image', () => {
+    let sos = 0;
+    for (let i = 2; i < base.length; i++) if (base[i] === 0xff && base[i + 1] === 0xda) { sos = i; break; }
+    const header = base.subarray(sos, sos + 2 + ((base[sos + 2] << 8) | base[sos + 3]));
+    const scans = (n: number) => join(base.subarray(0, sos), ...Array(n).fill(header), new Uint8Array([0xff, 0xd9]));
+    expect(decodeJpeg(scans(1000)).width).toBe(48);
+    expect(() => decodeJpeg(scans(1001))).toThrow('JPEG: more than 1000 scans');
+  });
+
   it('leaves the picture as stored with orientation: false', () => {
     const bytes = read('jpeg/orientation-6-ii.jpg');
     const upright = decodeImage(bytes), stored = decodeImage(bytes, { orientation: false });
@@ -277,6 +286,19 @@ describe('GIF', () => {
     expect(sha(cut.frames[0].data)).toBe(sha(full.frames[0].data));
   });
 
+  it('decodes a frame far bigger than the screen from its few bytes, without a frame-sized buffer', () => {
+    const head = [...Array.from('GIF89a', c => c.charCodeAt(0)), 2, 0, 2, 0, 0x80, 0, 0, 0, 0, 0, 255, 255, 255];
+    // LZW, 2-bit: clear, 1, 1, end.
+    const lzw = [2, 2, 0x4c, 0x0a, 0];
+    const small = [0x21, 0xf9, 4, 0, 10, 0, 0, 0, 0x2c, 0, 0, 0, 0, 2, 0, 2, 0, 0, ...lzw];
+    const huge = [0x21, 0xf9, 4, 3 << 2, 10, 0, 0, 0, 0x2c, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0, ...lzw];
+    const started = performance.now();
+    const img = decodeGif(new Uint8Array([...head, ...small, ...huge, ...small, 0x3b]));
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(img.frames).toHaveLength(3);
+    expect(Array.from(img.frames[1].data.subarray(0, 8))).toEqual([255, 255, 255, 255, 255, 255, 255, 255]);
+  });
+
   it('throws for a file with no image, or a bad LZW code size', () => {
     expect(() => decodeImage(new Uint8Array([...Array.from('GIF89a', c => c.charCodeAt(0)), 4, 0, 4, 0, 0, 0, 0, 0x3b]))).toThrow('GIF: no image data');
     const bad = new Uint8Array([...Array.from('GIF89a', c => c.charCodeAt(0)), 1, 0, 1, 0, 0x80, 0, 0, 0, 0, 0, 1, 1, 1, 0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, 15, 1, 0, 0, 0x3b]);
@@ -294,6 +316,8 @@ describe('BMP, PNM and QOI', () => {
     expect(() => decodeImage(jpegBmp)).toThrow('BMP: embedded JPEG and PNG data are not supported');
     expect(() => decodeImage(new TextEncoder().encode('P5 2 2 0\n\0\0\0\0'))).toThrow('PNM: maxval 0 is out of range');
     expect(() => decodeImage(new TextEncoder().encode('P7\nWIDTH 2\nHEIGHT 2\nDEPTH 3\nMAXVAL 255\nTUPLTYPE GRAYSCALE\nENDHDR\n'))).toThrow(/^PNM: PAM tuple type GRAYSCALE needs depth 1/);
+    // A header word of megabytes is only a bad header.
+    expect(() => decodeImage(new TextEncoder().encode('P7\n' + 'W'.repeat(3_000_000)))).toThrow('PNM: PAM header has no ENDHDR');
   });
 
   it('decode files cut short as far as they go', () => {

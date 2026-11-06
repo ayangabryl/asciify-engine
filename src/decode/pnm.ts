@@ -143,6 +143,13 @@ function put(out: Uint8Array, i: number, s: Uint8Array, depth: number): void {
   out[o + 3] = depth === 2 || depth === 4 ? s[depth - 1] : 255;
 }
 
+/** A header word as text; anything longer than a header word could be is cut, as it cannot match one anyway. */
+function text(b: Uint8Array, start: number, end: number): string {
+  let s = '';
+  for (let i = start; i < Math.min(end, start + 64); i++) s += String.fromCharCode(b[i]);
+  return s;
+}
+
 function pamHeader(b: Uint8Array, t: Tokens): { width: number; height: number; depth: number; maxval: number } {
   let width = -1, height = -1, depth = -1, maxval = -1, tuple = '';
   for (;;) {
@@ -150,7 +157,7 @@ function pamHeader(b: Uint8Array, t: Tokens): { width: number; height: number; d
     if (t.pos >= b.length) throw new Error('PNM: PAM header has no ENDHDR');
     let start = t.pos;
     while (t.pos < b.length && !SPACE[b[t.pos]]) t.pos++;
-    const key = String.fromCharCode(...b.subarray(start, t.pos));
+    const key = text(b, start, t.pos);
     if (key === 'ENDHDR') {
       // The raster starts after the end of this line.
       while (t.pos < b.length && b[t.pos] !== 10) t.pos++;
@@ -165,7 +172,7 @@ function pamHeader(b: Uint8Array, t: Tokens): { width: number; height: number; d
       while (t.pos < b.length && (b[t.pos] === 32 || b[t.pos] === 9)) t.pos++;
       start = t.pos;
       while (t.pos < b.length && b[t.pos] !== 10 && b[t.pos] !== 13) t.pos++;
-      tuple = String.fromCharCode(...b.subarray(start, t.pos)).trim();
+      tuple = text(b, start, t.pos).trim();
     } else {
       // Unknown header lines are skipped.
       while (t.pos < b.length && b[t.pos] !== 10) t.pos++;

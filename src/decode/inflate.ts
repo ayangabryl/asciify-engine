@@ -276,7 +276,8 @@ interface Run {
  */
 function run(src: Uint8Array, ranges: ArrayLike<number>, out: Uint8Array, fixed: boolean, zlib: boolean): Run {
   const t = tables();
-  const s: State = { src, ranges, range: 0, ip: ranges[0], end: ranges[1], hold: 0, bits: 0, over: 0, out, op: 0, fixed, status: 0 };
+  const first = ranges.length >= 2;
+  const s: State = { src, ranges, range: 0, ip: first ? ranges[0] : 0, end: first ? ranges[1] : 0, hold: 0, bits: 0, over: 0, out, op: 0, fixed, status: 0 };
   if (zlib) {
     if (!need(s, 16) || s.over) return { out, size: 0, status: SHORT_INPUT };
     const cmf = take(s, 8), flg = take(s, 8);

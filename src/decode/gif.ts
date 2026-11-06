@@ -55,8 +55,8 @@ export function decodeGif(bytes: Uint8Array, options?: DecodeOptions): DecodedIm
   let canvas: Uint8Array | null = null, canvas32: Uint32Array | null = null, limit = 1;
   const frames: DecodedFrame[] = [];
   let more = false; // a frame was left out by the limits
-  // The last frame's region and disposal, and what was under it for disposal 3.
-  let lx = 0, ly = 0, lw = 0, lh = 0, ldispose = 0, saved: Uint32Array | null = null;
+  // The last frame's region on the canvas (clipped to it) and disposal, and what was under it for disposal 3.
+  let lx0 = 0, ly0 = 0, lx1 = 0, ly1 = 0, ldispose = 0, saved: Uint32Array | null = null;
   while (pos < n) {
     const block = bytes[pos++];
     if (block === 0x3b) break;
@@ -107,19 +107,27 @@ export function decodeGif(bytes: Uint8Array, options?: DecodeOptions): DecodedIm
     const dataStart = pos;
     pos = skipBlocks(bytes, pos);
     if (minSize < 1 || minSize > 11) throw new Error(`GIF: bad LZW code size ${minSize}`);
-    checkSize('GIF', fw, fh, limits.maxPixels);
-    const indices = new Uint8Array(fw * fh);
-    const count = lzw(gather(bytes, dataStart, pos), minSize, indices);
+    const data = gather(bytes, dataStart, pos);
+    // k codes give at most about k² / 2 indices (each new string is one longer than one before it), so a frame that
+    // claims many pixels but carries little data gets a small buffer.
+    const codes = Math.floor((data.length * 8) / (minSize + 1)) + 1;
+    const indices = new Uint8Array(Math.min(fw * fh, (codes * (codes + 3)) / 2 + 1));
+    const count = lzw(data, minSize, indices);
 
     const c32 = canvas32 as Uint32Array;
     if (frames.length) {
-      if (ldispose === 2) clearRect(c32, width, height, lx, ly, lw, lh);
-      else if (ldispose === 3 && saved) putRect(c32, width, height, lx, ly, lw, lh, saved);
+      if (ldispose === 2) for (let y = ly0; y < ly1; y++) c32.fill(0, y * width + lx0, y * width + lx1);
+      else if (ldispose === 3 && saved) for (let y = ly0; y < ly1; y++) c32.set(saved.subarray((y - ly0) * (lx1 - lx0), (y - ly0 + 1) * (lx1 - lx0)), y * width + lx0);
     }
-    saved = dispose === 3 ? getRect(c32, width, height, fx, fy, fw, fh) : null;
+    const x0 = Math.min(fx, width), y0 = Math.min(fy, height), x1 = Math.min(fx + fw, width), y1 = Math.min(fy + fh, height);
+    saved = null;
+    if (dispose === 3) {
+      saved = new Uint32Array((x1 - x0) * (y1 - y0));
+      for (let y = y0; y < y1; y++) saved.set(c32.subarray(y * width + x0, y * width + x1), (y - y0) * (x1 - x0));
+    }
     if (table) draw(c32, width, height, indices, count, fx, fy, fw, fh, (packed & 0x40) !== 0, table, transparent);
     frames.push({ data: (canvas as Uint8Array).slice(), delay: playDelay(delay) });
-    lx = fx; ly = fy; lw = fw; lh = fh; ldispose = dispose;
+    lx0 = x0; ly0 = y0; lx1 = x1; ly1 = y1; ldispose = dispose;
     delay = 0; dispose = 0; transparent = -1;
   }
   if (!canvas || !frames.length) throw new Error('GIF: no image data');
@@ -230,20 +238,4 @@ function draw(c: Uint32Array, width: number, height: number, idx: Uint8Array, co
       if (v !== transparent && v < colours) c[d] = table[v];
     }
   }
-}
-
-function clearRect(c: Uint32Array, width: number, height: number, x: number, y: number, w: number, h: number): void {
-  const xEnd = Math.min(x + w, width), yEnd = Math.min(y + h, height);
-  for (let r = y; r < yEnd; r++) if (x < xEnd) c.fill(0, r * width + x, r * width + xEnd);
-}
-
-function getRect(c: Uint32Array, width: number, height: number, x: number, y: number, w: number, h: number): Uint32Array {
-  const rect = new Uint32Array(w * h), xEnd = Math.min(x + w, width), yEnd = Math.min(y + h, height);
-  for (let r = y; r < yEnd; r++) if (x < xEnd) rect.set(c.subarray(r * width + x, r * width + xEnd), (r - y) * w);
-  return rect;
-}
-
-function putRect(c: Uint32Array, width: number, height: number, x: number, y: number, w: number, h: number, rect: Uint32Array): void {
-  const xEnd = Math.min(x + w, width), yEnd = Math.min(y + h, height);
-  for (let r = y; r < yEnd; r++) if (x < xEnd) c.set(rect.subarray((r - y) * w, (r - y) * w + (xEnd - x)), r * width + x);
 }
